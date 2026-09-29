@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0",
+  "runtime": "agy",
+  "runtimeVersion": "1.2.13",
+  "transport": "print-stream-json",
+  "capturedAt": "2026-09-29",
+  "command": "agy -p <prompt> --output-format stream-json --mode accept-edits --model gemini-3.8-flash-low --print-timeout 200s",
+  "resumeCommand": "agy -p <prompt> --conversation <id> --output-format stream-json --model gemini-3.8-flash-low",
+  "requestedModel": "gemini-3.8-flash-low",
+  "reportedModel": "gemini-3.8-flash-low",
+  "exitCode": 0,
+  "eventTypes": [
+    "init",
+    "step_update",
+    "result"
+  ],
+  "stepTypes": [
+    "user_input",
+    "agent_response",
+    "tool"
+  ],
+  "stepStates": [
+    "ACTIVE",
+    "DONE",
+    "ERROR"
+  ],
+  "toolsObserved": [
+    "view_file",
+    "write_to_file",
+    "run_command"
+  ],
+  "usageReported": "por paso agent_response y total en result: input_tokens, output_tokens, thinking_tokens, cache_read_tokens, total_tokens",
+  "costReported": false,
+  "contextWindowReported": false,
+  "resultStatusOnDeniedCommand": "SUCCESS",
+  "deniedActionsField": "result.denied_actions: [{ action: \"command\", display_name: \"RunCommand\" }]",
+  "stderrOnDeniedCommand": "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(<target>)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.",
+  "resume": {
+    "sameConversationId": true,
+    "rememberedPriorTurn": true,
+    "durationSeconds": 126.3,
+    "numTurns": 2
+  },
+  "captureNotes": [
+    "Leer (view_file) y escribir (write_to_file) funcionan con --mode accept-edits en modo -p.",
+    "Correr comandos (run_command) se rechaza solo en modo -p: el paso queda en ERROR, stderr lo explica, el proceso sale 0 y result.status dice SUCCESS con denied_actions. La respuesta final queda vacía.",
+    "--sandbox no cambia el rechazo de comandos (medido aparte, misma salida).",
+    "La documentación oficial (antigravity.google/docs/cli/headless) dice que permissions.allow en ~/.gemini/antigravity-cli/settings.json concede comandos; el issue 548 de google-antigravity/antigravity-cli (abierto) dice que -p lo ignora. No se probó: requiere tocar la configuración global de la persona.",
+    "Retomar con --conversation conserva el id y el contexto; tardó 126 s contra 30 s de la corrida inicial.",
+    "Salida cruda fuera del repositorio; rutas e ids reemplazados por <repo>, <home> y <redacted-id-n>."
+  ]
+}

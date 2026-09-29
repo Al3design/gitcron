@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "runtime": "opencode",
+  "runtimeVersion": "1.18.33",
+  "transport": "acp-ndjson-stdio",
+  "capturedAt": "2026-09-29",
+  "environment": {
+    "OPENCODE_CONFIG": "<ruta a un gitcron.json con el proveedor gitcron-prueba>"
+  },
+  "requests": [
+    { "method": "initialize", "params": { "protocolVersion": 1, "clientCapabilities": {}, "clientInfo": { "name": "gitcron-probe", "version": "0" } } },
+    { "method": "session/new", "params": { "cwd": "<carpeta vacía>", "mcpServers": [] } },
+    { "method": "session/set_config_option", "params": { "sessionId": "<redacted-id>", "configId": "model", "value": "gitcron-prueba/modelo-uno" } }
+  ],
+  "responses": {
+    "initialize": { "protocolVersion": 1, "agentInfo": { "name": "OpenCode", "version": "1.18.33" } },
+    "session/new": {
+      "keys": ["sessionId", "configOptions"],
+      "configOptions": [
+        {
+          "id": "model",
+          "name": "Model",
+          "category": "model",
+          "type": "select",
+          "currentValue": "opencode/big-pickle",
+          "optionCount": 443,
+          "includesGitcronProvider": true,
+          "optionsSample": [
+            { "value": "gitcron-prueba/modelo-uno", "name": "GitCron prueba/Modelo uno" },
+            { "value": "unslothpclocal/unsloth/Qwen3.8-27B-GGUF", "name": "Unsloth CASA Local/Qwen 3.8 27B · XL · local" }
+          ]
+        }
+      ]
+    },
+    "session/set_model": {},
+    "session/set_config_option": { "configOptions[model].currentValue": "gitcron-prueba/modelo-uno" }
+  },
+  "captureNotes": [
+    "OPENCODE_CONFIG (ruta, admite comentarios) y OPENCODE_CONFIG_CONTENT (contenido) agregan configuración encima de la del usuario: los proveedores de ~/.config/opencode/opencode.json siguen disponibles.",
+    "Sin la variable, el proveedor de GitCron no existe para OpenCode (\"Provider not found\").",
+    "session/new no trae models ni modes; el modelo es una configOption id=model. Sin elegir, arranca con opencode/big-pickle, no con la elección de la persona.",
+    "session/set_config_option con configId=model cambia el modelo y devuelve el valor vigente; session/set_model responde {} sin confirmar nada: se usa el primero.",
+    "OpenCode en tiempo de ejecución acepta claves que su esquema publicado rechaza (additionalProperties: false en el nivel superior): el esquema es el contrato; el lector es tolerante.",
+    "~/.config/opencode/opencode.json con el mismo hash antes y después. No se pidió inferencia: sin prompt."
+  ]
+}

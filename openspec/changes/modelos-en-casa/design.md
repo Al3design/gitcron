@@ -104,6 +104,13 @@ fuera de las claves de conexión + `model.options` + la variante elegida, en ese
 copia del esquema empaquetada: un campo desconocido es advertencia, nunca error ni borrado. La copia se
 actualiza con cada versión de GitCron; no se baja en tiempo de ejecución.
 
+*Medido en la tarea 1.4 (2026-09-29):* el esquema es draft 2020-12 y el único validador del repo (ajv 6,
+transitivo) no lo soporta. No se suma dependencia: GitCron compara las claves de cada nivel que usa
+(superior, `provider`, modelo, `limit`, `agent`) con las listas de propiedades del esquema empaquetado
+(`electron/ai/config/opencode-config.schema.json`, con fecha y sha256 en su `.meta.json`), y valida los
+tipos de los campos que consume. `gitcron.example.jsonc` y el `opencode.json` de Ale pasan; una clave
+propia en el nivel superior se detecta. OpenCode, al leer, es tolerante: acepta esa clave igual.
+
 ### D5. Secretos
 Sustitución de `{env:NOMBRE}` y `{file:ruta}` en cualquier valor de texto, con la sintaxis de OpenCode.
 `{env:}` se resuelve con `process.env` y, si falta, con las variables guardadas en `key-store` bajo un
@@ -120,7 +127,17 @@ rompería la compatibilidad del archivo.
 - CLI de suscripción: identificadores reservados `claude-code`, `codex` y `antigravity` como proveedor en
   `model` (`codex/gpt-5.5`, por ejemplo); no se declaran en `provider`. Para texto se corre el CLI en modo no
   interactivo en un directorio temporal vacío, sin herramientas de escritura, prompt por stdin y salida
-  JSON (forma exacta según tarea 1.3). Para agente, el runtime del hub.
+  JSON. Para agente, el runtime del hub.
+
+*Medido en la tarea 1.3 (2026-09-29), carpeta temporal vacía, pedido de una línea:*
+
+| CLI | Orden | Salida | Tiempo | Contexto | Notas |
+|---|---|---|---|---|---|
+| Claude Code 2.1.284 | `claude -p --output-format json --tools "" --no-session-persistence --setting-sources "" --strict-mcp-config --disable-slash-commands --model <m>`, prompt por stdin | un JSON: `result`, `is_error`, `usage`, `total_cost_usd`, `modelUsage` | 4,5 s | ~7 mil tokens | Sin `--setting-sources ""` y `--strict-mcp-config` carga CLAUDE.md, skills y MCP de la persona: 131 mil tokens, 0,26 USD y 10 s por la misma línea. `--bare` no sirve: ignora la sesión de suscripción («Not logged in»). |
+| Codex 0.144.4 | `codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -m <m> -`, prompt por stdin | JSONL: `item.completed` con `agent_message.text`, `turn.completed` con `usage` | 13 s | ~21 mil tokens | **`-m` es obligatorio en la máquina de Ale:** su `~/.codex/config.toml` fija `gpt-6.1-sol`, que no está en su catálogo y da 400 «not supported when using Codex with a ChatGPT account». Catálogo vivo: `codex debug models` (campo `visibility: "list"`); `models_cache.json` puede estar viejo. |
+| Antigravity 1.2.13 | `agy -p <prompt> --output-format json --mode plan --model <m> --print-timeout <n>s` | un JSON: `response`, `status`, `usage`, `conversation_id` | 16 s | ~13 mil tokens | Lista de modelos: `agy models` (id y nombre separados por tabulación). |
+
+Ninguno escribió en la carpeta temporal.
 `resolveModelFor(uso)` devuelve `{provider, model, params, destination, source}`; `destination` es
 `this-machine | own-server | external-service` por la dirección resuelta (localhost; IP privada; resto), y
 las suscripciones cuentan como `external-service`.
@@ -133,16 +150,37 @@ destino no elegido); un campo de «dirección alternativa» dentro del proveedor
 
 ### D8. Agente sobre un servidor propio: OpenCode lee la misma definición
 Como `gitcron.json` tiene el formato de OpenCode, el proceso `opencode acp` recibe la configuración de GitCron
-por la vía que OpenCode ofrezca para una configuración adicional (variable de entorno con ruta o contenido;
-se mide en la tarea 1.2), y las variables guardadas en GitCron se pasan en el entorno de ese proceso. El
-modelo de la sesión se elige como `<providerId>/<modelo>`. No se escribe nada en la configuración de
-OpenCode.
+con `OPENCODE_CONFIG=<ruta de gitcron.json>`, y las variables guardadas en GitCron se pasan en el entorno de
+ese proceso. No se escribe nada en la configuración de OpenCode.
+
+*Medido en la tarea 1.2 (2026-09-29, captura `opencode-1.18.33-acp-config.sanitized.json`):*
+`OPENCODE_CONFIG` (ruta, admite comentarios) y `OPENCODE_CONFIG_CONTENT` suman la configuración encima de la
+del usuario, sin reemplazarla ni tocar su archivo. `session/new` no trae `models`: el modelo es una
+`configOption` con `id: "model"` que arranca en `opencode/big-pickle`; se fija con
+`session/set_config_option` (`configId: "model"`, `value: "<providerId>/<modelo>"`), que devuelve el valor
+vigente. `session/set_model` responde `{}` sin confirmar: no se usa. Si `set_config_option` no devuelve el
+modelo pedido, la sesión no arranca y se dice por qué.
 
 ### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
 accept-edits`, con reanudación por `--conversation`. El formato de eventos se fija con una captura real
 saneada (tarea 1.1). Sin `--dangerously-skip-permissions`: si un comando necesita aprobación en modo no
 interactivo, el adaptador lo reporta como motivo de detención.
+
+*Medido en la tarea 1.1 (2026-09-29, capturas `agy-1.2.13-*`):* eventos `init` (modelo, cwd, herramientas),
+`step_update` (`user_input`, `agent_response` con `usage`, `tool` con `ACTIVE`/`DONE`/`ERROR` y
+parámetros) y `result` (`status`, `response`, `usage`, `denied_actions`). Leer y escribir funcionan con
+`accept-edits`. **Correr comandos no:** en `-p` se rechazan solos, el paso queda en `ERROR`, stderr lo
+explica, el proceso sale 0 y `result.status` dice `SUCCESS` con `denied_actions: [{action: "command"}]`.
+`--sandbox` no lo cambia. Por eso el adaptador SHALL leer `denied_actions`: con un comando rechazado, la
+corrida es `success: false` con ese motivo, aunque el estado diga `SUCCESS`. Retomar con
+`--conversation` conserva el contexto (126 s contra 30 s de la corrida inicial).
+
+**Decisión pendiente de Ale** (cambia qué promete el lanzador): la documentación oficial dice que una regla
+`permissions.allow` (por ejemplo `command(git)`) en `~/.gemini/antigravity-cli/settings.json` concede
+comandos en `-p`; el issue 548 de google-antigravity/antigravity-cli (abierto) dice que `-p` la ignora.
+Probarlo toca la configuración global de Antigravity de la persona. Hasta decidirlo, Antigravity se declara
+con `runsCommands: false`: se ofrece para explorar y escribir, no para implementar con pruebas.
 
 ### D10. Migración sin cambio de comportamiento
 Primer arranque sin `gitcron.json`: se crea con `$schema`, `provider.lmstudio` (`localhost:1234`),

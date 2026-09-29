@@ -1,0 +1,95 @@
+{
+  // Ejemplo de ~/.config/gitcron/gitcron.json. Mismo formato que opencode.json:
+  // un bloque `provider` se puede copiar entre los dos archivos sin cambios.
+  "$schema": "https://opencode.ai/config.json",
+
+  // Elección general y rápida. Los CLI de suscripción usan ids reservados
+  // (claude-code, codex, antigravity) y no se declaran en `provider`.
+  "model": "unslothpclocal/unsloth/Qwen3.8-27B-GGUF",
+  "small_model": "codex/gpt-5.6-luna",
+
+  "provider": {
+    // Servidor en esta máquina.
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio",
+      "options": { "baseURL": "http://localhost:1234/v1" },
+      "models": { "qwen/qwen3.5-9b": { "name": "Qwen 3.5 9B" } }
+    },
+    // El mismo Unsloth por la red de la casa y por el túnel: dos proveedores
+    // con los mismos modelos. Si uno no responde, GitCron ofrece el otro.
+    "unslothpclocal": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Unsloth CASA Local",
+      "options": {
+        "baseURL": "http://192.168.1.7:8888/v1",
+        "apiKey": "{env:UNSLOTH_API_KEY}",
+        "headers": {
+          "CF-Access-Client-Id": "{env:CF_ACCESS_CLIENT_ID}",
+          "CF-Access-Client-Secret": "{env:CF_ACCESS_CLIENT_SECRET}"
+        }
+      },
+      "models": {
+        "unsloth/Qwen3.8-27B-GGUF": {
+          "name": "Qwen 3.8 27B · local",
+          "limit": { "context": 65536, "output": 8192 },
+          // Nombre y valores del estándar de OpenAI: minimal | low | medium | high.
+          "options": { "reasoning_effort": "high" }
+        }
+      }
+    },
+    "unslothpc": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Unsloth CASA (túnel)",
+      "options": {
+        "baseURL": "https://llm.aledesign.dev/v1",
+        "apiKey": "{env:UNSLOTH_API_KEY}",
+        "headers": {
+          "CF-Access-Client-Id": "{env:CF_ACCESS_CLIENT_ID}",
+          "CF-Access-Client-Secret": "{env:CF_ACCESS_CLIENT_SECRET}"
+        }
+      },
+      "models": {
+        "unsloth/Qwen3.8-27B-GGUF": {
+          "name": "Qwen 3.8 27B · túnel",
+          "limit": { "context": 65536, "output": 8192 },
+          "options": { "reasoning_effort": "high" }
+        }
+      }
+    },
+    // Servicio externo.
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "apiKey": "{env:OPENROUTER_API_KEY}"
+      },
+      "models": { "google/gemini-3.1-pro": { "name": "Gemini 3.1 Pro" } }
+    }
+  },
+
+  // Una entrada por uso de GitCron. Sin `model`, el uso sigue la elección
+  // general; con `model` u otros parámetros, es una excepción visible.
+  "agent": {
+    "gitcron-commit": {
+      "description": "GitCron: redacción del mensaje de commit",
+      "model": "unslothpclocal/unsloth/Qwen3.8-27B-GGUF",
+      "temperature": 0.2
+    },
+    "gitcron-cartography": {
+      "description": "GitCron: explicaciones y preguntas de Cartografía"
+    },
+    "gitcron-openspec-analysis": {
+      "description": "GitCron: análisis de una versión nueva de OpenSpec"
+    },
+    "gitcron-temporal": {
+      "description": "GitCron: predicciones de Temporal Agent",
+      "model": "claude-code/haiku"
+    },
+    "gitcron-sdd": {
+      "description": "GitCron: agente lanzado desde SDD",
+      "model": "codex/gpt-5.6-sol"
+    }
+  }
+}
