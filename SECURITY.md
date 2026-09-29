@@ -70,6 +70,15 @@ Para saber qué herramientas de OpenSpec hay en un repositorio, GitCron ejecuta 
 - **Sólo el paquete que ya responde.** El paquete se ubica desde la copia del repositorio (`node_modules/@fission-ai/openspec`, resuelto con `realpath`) o desde el lanzador del motor del sistema que GitCron ya ejecuta; se usa sólo si su `package.json` se llama `@fission-ai/openspec` y su versión coincide con la que responde `openspec --version`. Más de una candidata en el lanzador → no se usa.
 - **Sólo lectura del repositorio.** Las funciones invocadas leen el sistema de archivos; lo que devuelven se valida con un esquema estricto y, si no coincide, GitCron usa su propia copia de la lista y lo avisa en pantalla.
 
+### 9. IAs lanzadas desde SDD que escriben y corren comandos (v1.19.0)
+
+Desde esta versión, toda IA lanzable desde SDD puede leer, escribir y correr comandos dentro del repositorio, igual que desde su propia aplicación o la terminal. Antes GitCron las recortaba al lanzarlas. Mitigaciones:
+
+- **Confirmación explícita antes de lanzar.** El lanzador dice que la IA «va a poder modificar archivos y correr comandos» y no arranca sin una acción humana.
+- **Sin opciones que quiten la contención.** Codex corre con `exec --sandbox workspace-write`: escribe y ejecuta dentro del repositorio, con la red bloqueada por su sandbox. Claude corre con `--permission-mode acceptEdits` y `--allowedTools=Read,Grep,Glob,Edit,Write,Bash`. Se descartan `--dangerously-bypass-approvals-and-sandbox` y `--dangerously-skip-permissions` (`electron/pipeline/runtime-adapters/codex-adapter.ts`, `claude-adapter.ts`).
+- **Disponibilidad por capacidades declaradas**, no por el nombre de la IA (`pipeline-intent-capabilities.ts`): una IA sin `runsCommands` no se ofrece para implementar.
+- **Nada de lo que se muestra como aviso manda comandos.** «Ver evidencia» abre el archivo del reporte con el sistema; no se envía nada al canal de control de la sesión.
+
 ## ⚠️ Vulnerabilidades conocidas en dependencias
 
 Estado actual en `v1.2.0`:

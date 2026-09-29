@@ -1,6 +1,6 @@
 # Plan de integración de GitCron
 
-Actualizado el 2026-09-29. La base del relevamiento fue GitCron 1.18.0 / HEAD `6336fdc`, con OpenSpec 1.13.2. Esta entrega separa la planificación de la primera conexión implementada por la IA local. El seguimiento del código está en el cambio de conexiones operativas; plan preparado no significa función terminada.
+Actualizado el 2026-09-29. La base del relevamiento fue GitCron 1.18.0 / HEAD `6336fdc`, con OpenSpec 1.13.2. El primer cambio quedó archivado con GitCron 1.19.0; el siguiente es `modelos-en-casa`, propuesto en su propia rama. Plan preparado no significa función terminada.
 
 ## Qué conservamos y qué cambia
 
@@ -14,8 +14,8 @@ WebMCP/MCP Apps no son dependencias de estos cambios: añadir un protocolo no re
 
 | Prioridad | Cambio | Resultado y estado |
 |---|---|---|
-| 1 | [Cerrar conexiones operativas](changes/cerrar-conexiones-operativas-de-sdd/proposal.md) | Primer incremento en curso: inspector conectado al envío IPC. Siguen pendientes efecto real de decisiones, feedback, capacidades, sync aislado y recorrido Git. |
-| 2 | [Modelos en casa](changes/modelos-en-casa/proposal.md) | Propuesta escrita el 2026-09-29 en su rama: archivo propio `gitcron.json` en el formato de OpenCode (editable a mano y reflejado en la pantalla, secretos por variables, MCP conservados), suscripciones por CLI y servidores por API en una misma elección con excepciones por uso y destino declarado. Empieza por mediciones. |
+| 1 | [Cerrar conexiones operativas](changes/archive/2026-09-29-cerrar-conexiones-operativas-de-sdd/proposal.md) | Archivado el 2026-09-29 con GitCron 1.19.0: avisos en lugar de decisiones sin destino, toda IA lanzable con las mismas capacidades, navegación y recorrido preparar→confirmar→Graph auditados, inspector de SDD con las operaciones Git de Graph. La sincronización de specs sin archivar pasó a cobertura operativa. |
+| 2 | [Modelos en casa](changes/modelos-en-casa/proposal.md) | En curso desde el 2026-09-29, en su rama: `gitcron.json` propio en el formato de OpenCode (editable a mano y reflejado en la pantalla, secretos por variables), MCP en `mcp.json` con la notación compartida, suscripciones por CLI y servidores por API con el estándar de OpenAI en una misma elección, pedido efectivo visible con su procedencia. Empieza por mediciones y un recorrido angosto con Unsloth local y Codex. |
 | 3 | [Retomar con asistencia contextual](changes/retomar-trabajo-con-asistencia-contextual/proposal.md) | Contexto/conversación durables, orientación breve y flotante pertinente, consumiendo la gestión de modelos compartida. Candidato para decisiones reales pedidas por una IA durante una sesión (anotado 2026-09-29 en cerrar-conexiones design.md). |
 | Intercalable después de 1 | [Retirar cambios obsoletos](changes/retirar-cambios-openspec-obsoletos/proposal.md) | Retiro explícito sin consolidar deltas e historia honesta. |
 | Intercalable después de 1 | [Configuración global](changes/administrar-configuracion-global-de-openspec/proposal.md) | Un editor global, alcance claro y estado efectivo por repo. |
@@ -53,7 +53,7 @@ Hallazgo adicional del 2026-09-29: `electron/ipc/pipeline-control.ts` delega en 
 
 La rutina común de tandas, validación y reporte está en [config.yaml](config.yaml). Los execution.md conservan mapas de responsabilidades y dependencias; los criterios observables están en specs y tasks.
 
-El prompt 2 inicial se ejecutó antes del 1. Los dos archivos en prompts/ quedan como notas históricas, no como instrucciones vigentes. La próxima tanda parte del diff auditado: falta completar la regresión, resolver el efecto de la decisión en main y presentar su estado/error sin confundir acuse con aplicación.
+El prompt 2 inicial se ejecutó antes del 1. Los dos archivos en prompts/ quedan como notas históricas, no como instrucciones vigentes. El efecto de la decisión no se implementó: la medición mostró que las únicas «decisiones» eran avisos informativos, y se presentaron como tales.
 
 La planificación y el código se registran en commits separados, sobre `change/cerrar-conexiones-operativas-de-sdd`. Los artefactos de futuros cambios guardados en esa rama son planificación; tener una rama con su nombre no significa que contenga una implementación propia.
 

@@ -78,15 +78,23 @@ function writeStoredSections(repoPath: string | null, next: SectionRecord): void
   }
 }
 
-export function openSidebarSection(repoPath: string | null, sectionId: string): void {
+export function setSidebarSectionOpen(repoPath: string | null, sectionId: string, shouldOpen: boolean): void {
   if (!repoPath) return;
   const currentStored = readStoredSections(repoPath);
-  if (currentStored[sectionId] === true) return;
+  if (currentStored[sectionId] === shouldOpen) return;
   const next: SectionRecord = {
     ...currentStored,
-    [sectionId]: true,
+    [sectionId]: shouldOpen,
   };
   writeStoredSections(repoPath, next);
+}
+
+export function openSidebarSection(repoPath: string | null, sectionId: string): void {
+  setSidebarSectionOpen(repoPath, sectionId, true);
+}
+
+export function closeSidebarSection(repoPath: string | null, sectionId: string): void {
+  setSidebarSectionOpen(repoPath, sectionId, false);
 }
 
 export function useSidebarSectionState(

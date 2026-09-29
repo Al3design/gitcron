@@ -1546,7 +1546,9 @@ describe('Fase 4 · Rediseño del panel derecho como lista de secciones plegable
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
     expect(screen.getByText('pipeline.openspec.attention.title')).toBeDefined();
     expect(screen.getByText('pipeline.openspec.rail.tools')).toBeDefined();
-    expect(screen.queryByText('staging.commitSectionTitle')).toBeNull();
+    expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
+    expect(screen.getByText('staging.stagedTitle')).toBeDefined();
+    expect(screen.getByText('staging.commitSectionTitle')).toBeDefined();
     expect(screen.queryByText('commit.detailsTitle')).toBeNull();
 
     // 3.4 SDD preparando
@@ -1574,9 +1576,10 @@ describe('Fase 4 · Rediseño del panel derecho como lista de secciones plegable
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
     expect(screen.getByText('pipeline.openspec.attention.title')).toBeDefined();
     expect(screen.getByText('pipeline.openspec.rail.tools')).toBeDefined();
+    expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
     expect(screen.getByText('staging.stagedTitle')).toBeDefined();
     expect(screen.getByText('staging.commitSectionTitle')).toBeDefined();
-    expect(screen.queryByText('staging.unstagedTitle')).toBeNull();
+    expect(screen.queryByText('commit.detailsTitle')).toBeNull();
   });
 
   it('4. Que la migración desde un array viejo ([\'local\', \'remoto\']) en localStorage funciona y persiste como Record', () => {

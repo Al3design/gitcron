@@ -76,6 +76,7 @@ Se descarta construir un subsistema paralelo porque las operaciones y evidencias
 
 - Los adaptadores disponibles no ofrecen lo mismo: no anunciar implementación o pruebas cuando falta soporte; una prueba de integración debe demostrar cada capacidad nueva.
 - Sync puede producir cambios fuera de alcance: confinar outputs y rechazar rutas/estado cambiados; no aplicar parcialmente un plan vencido.
+- Una marca de «montado» que se apaga al desmontar tiene que volver a prenderse al montar. La app corre en desarrollo con el modo estricto de React (`reactStrictMode: true`), que monta, desmonta y remonta cada efecto; las pruebas con `render` sin `StrictMode` no lo reproducen. Medido el 2026-09-29 en la auditoría 4.2: el arreglo del cruce entre repositorios dejaba `isMountedRef` en `false` desde el primer montaje y «Preparar» quedaba girando en la pantalla de Ale, con 2336 pruebas en verde. La prueba de aislamiento monta ahora también en `StrictMode`.
 
 ## Migration Plan
 

@@ -245,7 +245,6 @@ describe('OpenSpec Instructions (Group 2)', () => {
         fixtureActive: false,
         selectedChange: changeSummary,
         selectedArchivedChangeId: null,
-        decisions: [],
         projection: null,
         engineInstructions: {
           instruction: null,

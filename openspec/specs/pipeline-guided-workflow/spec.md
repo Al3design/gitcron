@@ -13,8 +13,12 @@ La guía contextual SHALL calcularse con una función pura y determinística que
 - **THEN** devuelve el mismo siguiente paso, sin depender de reloj, orden de render ni estado previo
 
 #### Scenario: Estados superpuestos resuelven por prioridad declarada
-- **WHEN** coinciden una decisión pendiente, una sesión activa y una tarea pendiente
-- **THEN** se aplica el orden decisión > sesión activa > fallo o reintento > tarea pendiente > validación > archivo, y se expone un solo siguiente paso
+- **WHEN** coinciden una sesión activa, un reintento y una tarea pendiente
+- **THEN** se aplica el orden sesión activa > fallo o reintento > tarea pendiente > validación > archivo, y se expone un solo siguiente paso
+
+#### Scenario: Un aviso no detiene el siguiente paso
+- **WHEN** existe un aviso en el repositorio y una tarea pendiente en el cambio seleccionado
+- **THEN** el siguiente paso derivado sigue siendo aplicar la tarea y el aviso se ofrece aparte, sin detener el flujo principal
 
 ### Requirement: Datos de vista previa nunca ejecutan procesos reales
 Con un fixture de desarrollo en pantalla, el siguiente paso SHALL declararse como vista previa y SHALL NOT ofrecer ninguna acción capaz de iniciar, detener o controlar una sesión real. El estado de fixture SHALL propagarse hasta el lanzador, no sólo hasta la proyección.
@@ -103,7 +107,7 @@ La acción de archivar SHALL habilitarse únicamente con validación aprobada. C
 validación desconocida, la guía SHALL pedir comprobar el cambio. Con validación fallida, SHALL
 dirigir a corregir y SHALL NOT habilitar el archivo.
 
-La validación aprobada SHALL ser la **única** condición del archivado. Tareas pendientes y sesiones
+La validación aprobada SHALL ser necesaria junto con las precondiciones Git y de concurrencia vigentes; SHALL NOT habilitar archivo sobre la rama principal ni con un plan vencido. Tareas pendientes y sesiones
 persistidas SHALL NOT bloquearlo: la convención de trabajo cierra cada cambio con una tarea de
 handoff humano que ningún runtime tilda, así que condicionar el archivo a que no queden tareas lo
 vuelve inalcanzable. Cuando queden tareas sin tildar, el control SHALL declarar cuántas son, para
@@ -121,23 +125,27 @@ que la decisión se tome con el dato a la vista y no por omisión.
 
 #### Scenario: Validación aprobada
 
-- **WHEN** la validación es aprobada y el cambio no está archivado
+- **WHEN** la validación es aprobada, el cambio no está archivado y se cumplen las precondiciones Git y de concurrencia
 - **THEN** la acción primaria ofrece archivar el cambio
 
 #### Scenario: Validación aprobada con tareas pendientes
 
-- **WHEN** la validación es aprobada y quedan tareas sin tildar
+- **WHEN** la validación es aprobada, se cumplen las precondiciones y quedan tareas sin tildar
 - **THEN** el control de archivado está disponible y declara cuántas tareas quedan pendientes
 
 #### Scenario: Validación aprobada con una sesión persistida sobre una tarea pendiente
 
-- **WHEN** existe una sesión cerrada que apunta a una tarea que sigue sin tildar y la validación es aprobada
+- **WHEN** existe una sesión cerrada que apunta a una tarea que sigue sin tildar y la validación es aprobada y se cumplen las precondiciones Git y de concurrencia
 - **THEN** el control de archivado sigue disponible, sin que la sesión lo bloquee
 
 #### Scenario: Cambio ya archivado
 
 - **WHEN** el cambio seleccionado está archivado
 - **THEN** el control de archivado no se ofrece
+
+#### Scenario: Rama principal o plan vencido
+- **WHEN** la validación pasa pero la rama está protegida para el archivo o el plan quedó vencido
+- **THEN** se mantiene el bloqueo con su causa concreta y una salida para resolverlo
 
 ### Requirement: Sin runtime lanzable la salida es accionable
 Cuando ningún runtime resulta lanzable, la guía SHALL mostrar los diagnósticos reales del descubrimiento, indicando qué runtime falta o es incompatible y cómo volver a comprobarlo. SHALL NOT simular una instalación ni ejecutar shells arbitrarios desde el renderer.
@@ -146,9 +154,13 @@ Cuando ningún runtime resulta lanzable, la guía SHALL mostrar los diagnóstico
 - **WHEN** el descubrimiento no devuelve runtimes lanzables
 - **THEN** se muestran los diagnósticos por runtime y una forma de reintentar la comprobación, sin ofrecer un arranque que fallaría
 
+#### Scenario: Runtime instalado sin fixture de esa versión
+- **WHEN** un runtime está instalado y es lanzable pero su versión queda fuera de la base auditada
+- **THEN** aparece con evidencia no verificada sin bloquear su lanzamiento sólo por faltar fixture; cada operación verifica sus capacidades requeridas
+
 #### Scenario: Runtime instalado pero incompatible
-- **WHEN** un runtime está instalado y su versión queda fuera de la base auditada
-- **THEN** aparece deshabilitado con el motivo declarado por el adaptador
+- **WHEN** un runtime está instalado pero hay evidencia de incompatibilidad del protocolo o faltan capacidades necesarias para la operación solicitada
+- **THEN** esa operación no se inicia, se explica la incompatibilidad comprobada y se ofrecen sólo alternativas compatibles; la ausencia de fixture no constituye por sí sola esa evidencia
 
 ### Requirement: Guía densa, contextual y traducida
 La guía SHALL adoptar la forma mínima que el contexto ya permita. Con un cambio activo, donde el ciclo de vida ya indica la etapa y la acción nombra su tarea, SHALL reducirse a una sola frase sobre la barra de acciones, sin bloque ni encabezado propios. Sin cambio activo o con uno archivado, donde no hay ni ciclo ni tareas que mostrar, SHALL presentarse como bloque compacto con a lo sumo etiqueta de estado, título corto, una frase, una acción primaria y una secundaria. En ningún caso SHALL introducir onboarding permanente ni textos explicativos extensos, ni duplicar un control que ya exista en pantalla. Cuando la acción primaria derivada ya ofrezca archivar el cambio, SHALL NOT renderizarse además el botón de archivar siempre visible, porque ambos tendrían mismo texto y mismo efecto. Toda string nueva SHALL existir en español, inglés y chino.
@@ -243,23 +255,19 @@ de carga SHALL reservarse para cuando todavía no hay nada que mostrar.
 
 ### Requirement: El arranque respeta el destino de la acción que lo abrió
 
-Al abrir el lanzador de runtime, el cambio y la tarea asociados SHALL ser los de la acción que lo
-abrió, y SHALL NOT volver a derivarse del estado de la evidencia. Una acción de archivado SHALL
-arrancar sin tarea asociada aunque existan tareas pendientes.
-
-Derivar el destino por segunda vez permite que lo ejecutado deje de coincidir con lo mostrado: una
-sesión de archivado que quedara atada a una tarea pendiente se registraría como intento sobre esa
-tarea y volvería a trabar el cambio.
+Al abrir el lanzador de runtime, el cambio y la tarea asociados SHALL ser los de la acción que lo abrió, y SHALL NOT volver a derivarse de una selección posterior. Si el contexto ya no es válido, SHALL pedirse renovar la acción. El archivado SHALL usar la operación del proceso principal sin crear una sesión de agente.
 
 #### Scenario: Archivado con tareas pendientes
-
-- **WHEN** se confirma el archivado de un cambio que todavía tiene tareas sin tildar
-- **THEN** la sesión arranca sin tarea asociada y con la etiqueta de archivado
+- **WHEN** se confirma el archivado de un cambio con tareas pendientes y precondiciones satisfechas
+- **THEN** se ejecuta el archivado main con su cambio explícito y sin sesión ni tarea de runtime
 
 #### Scenario: Continuación de tarea
-
 - **WHEN** se confirma continuar una tarea pendiente
 - **THEN** la sesión arranca asociada a esa tarea y con la etiqueta de continuación
+
+#### Scenario: Selección cambió
+- **WHEN** la selección actual difiere del destino preparado
+- **THEN** se conserva el destino explícito si sigue válido y se lo muestra; si no, se invalida la acción
 
 ### Requirement: La lista de cambios activos es acotada y navegable
 
@@ -953,8 +961,7 @@ seleccionado, y cuando un artefacto esté `blocked` SHALL declarar qué dependen
 La superficie del grafo SHALL mostrarse junto a los artefactos del cambio seleccionado. Cuando el
 grafo no exista —`status` ausente, o `available: false` por un CLI que no pudo correr— la superficie
 SHALL NOT renderizarse, y SHALL NOT inventarse un estado derivado de las tareas o la validación como
-sustituto. La barra de fases del encabezado y el contador «Paso N de 5» SHALL NOT modificarse en
-esta pasada.
+sustituto. SHALL NOT conservarse una barra de fases fijas ni un contador «Paso N de 5»; el error del motor se declara junto al lugar de inspección.
 
 Lo que se rompe si no se cumple: el dato que `consume-openspec-status` cableó hasta el renderer
 sigue sin consumirse, y el panel continúa mostrando progreso por un modelo de fases que OpenSpec

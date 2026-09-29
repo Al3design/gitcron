@@ -24,5 +24,5 @@ Trasladado el 2026-09-29 a completar-cobertura-operativa-de-openspec (grupo 5), 
 
 ## 4. Integración
 
-- [ ] 4.1 **IA local:** Cubrir navegación entre objetivo, tarea, artefactos y revisión alternando flotante/fijo. **Comprobación:** Se conserva selección, el menú global sigue accesible y ninguna acción queda únicamente en un panel oculto.
-- [ ] 4.2 **Orquestador/auditor:** Auditar el recorrido SDD preparar→inspector confirmar→Graph y la evidencia de capacidades/sync en composición productiva. **Comprobación:** Stage/commit usan operaciones Git existentes; aislar dos repos, cancelación y selección obsoleta. Ejecutar validación integrada del proyecto y revisión visual, sin completar tareas por mocks aislados.
+- [x] 4.1 **IA local:** Cubrir navegación entre objetivo, tarea, artefactos y revisión alternando flotante/fijo. **Comprobación:** Se conserva selección, el menú global sigue accesible y ninguna acción queda únicamente en un panel oculto.
+- [x] 4.2 **Orquestador/auditor:** Auditar el recorrido SDD preparar→inspector confirmar→Graph y la evidencia de capacidades/sync en composición productiva. **Comprobación:** Stage/commit usan operaciones Git existentes; aislar dos repos, cancelación y selección obsoleta. Ejecutar validación integrada del proyecto y revisión visual, sin completar tareas por mocks aislados.

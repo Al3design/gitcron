@@ -6,7 +6,7 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { SidebarSection } from '@/components/RepoSidebarParts';
-import { DEFAULT_OPEN_RIGHT_PANEL, useSidebarSectionState, type SidebarSectionState } from '@/hooks/use-sidebar-section-state';
+import { DEFAULT_OPEN_RIGHT_PANEL, openSidebarSection, useSidebarSectionState, type SidebarSectionState } from '@/hooks/use-sidebar-section-state';
 import type { OpenSpecEngineStatus, OpenSpecRegistryCheck, RuntimeProjection } from '@/types/pipeline';
 import { DecisionInbox } from './DecisionInbox';
 import { INTEGRATION_STATE_KEY_MAP } from './OpenSpecEngineCard';
@@ -107,6 +107,33 @@ export function OpenSpecInspector({
   const openSpec = snapshot?.openSpec;
   const openChangeId = storeSelectedId ?? openSpec?.selectedChangeId ?? null;
   const attentionRef = useRef<HTMLElement | null>(null);
+  const attentionRequest = usePipelineStore((s) => s.attentionRequest);
+  const prevAttentionRequestRef = useRef(attentionRequest);
+  const pendingFocusOnAttentionRef = useRef(false);
+
+  useEffect(() => {
+    if (attentionRequest > prevAttentionRequestRef.current) {
+      prevAttentionRequestRef.current = attentionRequest;
+      pendingFocusOnAttentionRef.current = true;
+      if (!sectionState.isOpen('details-attention')) {
+        sectionState.open('details-attention');
+        openSidebarSection(repoPath, 'details-attention');
+      }
+      if (attentionRef.current) {
+        attentionRef.current.focus();
+        pendingFocusOnAttentionRef.current = false;
+      }
+    } else {
+      prevAttentionRequestRef.current = attentionRequest;
+    }
+  }, [attentionRequest, repoPath, sectionState]);
+
+  useEffect(() => {
+    if (pendingFocusOnAttentionRef.current && attentionRef.current) {
+      attentionRef.current.focus();
+      pendingFocusOnAttentionRef.current = false;
+    }
+  });
 
   // OpenSpec engine and tools state
   const [engineStatus, setEngineStatus] = useState<OpenSpecEngineStatus | null>(null);

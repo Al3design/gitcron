@@ -126,8 +126,6 @@ function getSecondaryActionIcon(intent: PipelineActionIntent): React.ReactNode |
       return <Play size={13} />;
     case 'start-archive':
       return <FolderOpen size={13} />;
-    case 'focus-decision':
-      return <BrainCircuit size={13} />;
     case 'refresh-validation':
       return <RotateCcw size={13} />;
     default:
@@ -467,7 +465,6 @@ export function OpenSpecDashboard({
   const openFlow = (mode: PipelineNewChangeMode) => patchDraft(repoPath, { open: true, mode });
   /** «Cerrar sin empezar» sí descarta: es la persona diciendo que no lo quiere. */
   const dismissFlow = () => clearDraft(repoPath);
-  const attentionRef = useRef<HTMLElement>(null);
 
   type StartView = 'in-progress' | 'archived' | 'new-change';
   const [activeStartView, setActiveStartView] = useState<StartView>(() => (draft.open ? 'new-change' : 'in-progress'));
@@ -874,7 +871,6 @@ export function OpenSpecDashboard({
     fixtureActive,
     selectedChange,
     selectedArchivedChangeId: selectedArchive?.changeId ?? null,
-    decisions: snapshot.decisions,
     projection,
     hasActiveChanges: activeChanges.length > 0,
     hasDiffs: hasDiffEvidence(snapshot),
@@ -1508,8 +1504,9 @@ export function OpenSpecDashboard({
     }
   };
 
-  const cancelAiDraft = () => {
-    aiAbort.current?.abort();
+  const abortInFlightAiDraft = () => {
+    if (!aiAbort.current) return;
+    aiAbort.current.abort();
     aiAbort.current = null;
     // El rail deja de decir «en vivo». Lo pensado hasta acá se queda: se canceló
     // la redacción, no lo que se había visto.
@@ -1517,12 +1514,35 @@ export function OpenSpecDashboard({
     // Corta la petición del otro lado, no sólo descarta la respuesta: antes el
     // modelo seguía trabajando después de apretar «Cancelar».
     void window.api?.commitAi?.cancel();
+  };
+
+  const cancelAiDraft = () => {
+    abortInFlightAiDraft();
     setAiBusy(false);
     setAiNotice(null);
   };
 
+  /**
+   * Cambiar de repositorio desmonta este panel (el workspace lleva `key` por
+   * repo). Sin cortar acá, una redacción en vuelo terminaba escribiendo su
+   * asunto en el campo de commit del repositorio al que se cambió, y el modelo
+   * seguía trabajando: medido en la auditoría 4.2 del 2026-09-29.
+   */
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    // Se vuelve a marcar al montar: en desarrollo React monta, desmonta y
+    // remonta cada efecto, y sin esto el panel quedaba creyéndose desmontado
+    // —«Preparar» con el spinner para siempre—, visto por Ale el 2026-09-29.
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      abortInFlightAiDraft();
+    };
+  }, []);
+
   const draftWithAi = async () => {
     if (aiBusy || !repoPath || !aiModel || chosen.length === 0) return;
+    const originRepoPath = repoPath;
     setAiBusy(true);
     setAiNotice(null);
     const controller = new AbortController();
@@ -1534,7 +1554,7 @@ export function OpenSpecDashboard({
     startDraftLog(draftId);
     try {
       const result = await window.api?.commitAi?.draft({
-        repoPath,
+        repoPath: originRepoPath,
         paths: chosen,
         changeId: soleChangeId(chosen, branchAttribution),
         intent: selectedChange?.intent ?? null,
@@ -1542,19 +1562,25 @@ export function OpenSpecDashboard({
         draftId,
       });
       // Cancelar mientras estaba en vuelo: lo que llegue después ya no se aplica.
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || !isMountedRef.current) return;
       const draft = result?.data;
       if (!result?.success || !draft) {
-        setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
+        if (isMountedRef.current) {
+          setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
+        }
         return;
       }
       if (draft.status === 'drafted') {
+        // Montado implica que el repositorio activo sigue siendo el de origen.
         setCommitMessage(draft.subject);
         // Se nombra el modelo: quien confirma tiene que poder ver que esto lo
         // escribió un modelo y no la aplicación.
-        setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
+        if (isMountedRef.current) {
+          setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
+        }
         return;
       }
+      if (!isMountedRef.current) return;
       if (draft.status === 'no-answer') {
         // «No contestó» y no «contestó vacío»: con el razonamiento comiéndose el
         // presupuesto, decir que devolvió un mensaje vacío haría pensar que la
@@ -1584,7 +1610,7 @@ export function OpenSpecDashboard({
       setAiNotice(consejo ? t(`pipeline.openspec.prepare.${consejo}`) : draft.detail);
     } finally {
       if (aiAbort.current === controller) aiAbort.current = null;
-      if (!controller.signal.aborted) setAiBusy(false);
+      if (!controller.signal.aborted && isMountedRef.current) setAiBusy(false);
       // Se terminó, con cuadro de cierre o sin él: un servidor que corta a mitad
       // dejaría el rail diciendo «en vivo» para siempre. Lo que se pensó queda a
       // la vista —recién se limpia cuando empieza otra redacción o se cierra el
@@ -1594,23 +1620,39 @@ export function OpenSpecDashboard({
   };
 
   const prepareCommit = async () => {
-    if (prepareBusy || fixtureActive || chosen.length === 0) return;
+    if (prepareBusy || fixtureActive || chosen.length === 0 || !repoPath) return;
+    const originRepoPath = repoPath;
     setPrepareBusy(true);
     try {
       const staged = await stageFiles(chosen, true);
       if (!staged) return;
       // El mensaje se compone sobre el conjunto que realmente se envía, no sobre
       // todo lo modificado: la sugerencia describe el commit que se va a hacer.
-      if (!commitMessage.trim()) setCommitMessage(suggestCommitMessage(chosen, branchAttribution));
+      // Montado, el repositorio activo es el de origen. Si se cambió de repo
+      // mientras se preparaba, el stage ya quedó en el de origen y la sugerencia
+      // va ahí, por ruta; si ese repo se cerró, no se escribe en ningún lado.
+      if (isMountedRef.current) {
+        if (!commitMessage.trim()) setCommitMessage(suggestCommitMessage(chosen, branchAttribution));
+      } else {
+        const originRepo = useGitStore.getState().openRepos.find((repo) => repo.path === originRepoPath);
+        if (originRepo && !originRepo.commitMessage.trim()) {
+          useGitStore.getState().updateRepoByPath(originRepoPath, {
+            commitMessage: suggestCommitMessage(chosen, branchAttribution),
+          });
+        }
+        return;
+      }
       setLastPreparedCount(chosen.length);
       // Lo elegido ya viajó: dejarlo marcado haría que una segunda preparación
       // volviera a incluir archivos que ya no están en la lista.
       setChosenFiles([]);
       setSuccess(tCount('pipeline.openspec.prepare.done', chosen.length));
     } catch (error: unknown) {
-      setAiNotice(error instanceof Error ? error.message : t('pipeline.openspec.prepare.aiFailed', { detail: '—' }));
+      if (isMountedRef.current) {
+        setAiNotice(error instanceof Error ? error.message : t('pipeline.openspec.prepare.aiFailed', { detail: '—' }));
+      }
     } finally {
-      setPrepareBusy(false);
+      if (isMountedRef.current) setPrepareBusy(false);
     }
   };
 
@@ -1810,14 +1852,6 @@ export function OpenSpecDashboard({
         }
         break;
       }
-      case 'focus-decision':
-        // El centro no duplica la decisión: lleva el foco al control real, que
-        // vive en el panel de actividad.
-        if (!rightOpen && onEnsureRightOpen) {
-          onEnsureRightOpen();
-        }
-        attentionRef.current?.focus();
-        break;
       case 'view-activity':
         setActiveChangeView('activity');
         setCenterTab('activity');
@@ -1930,7 +1964,29 @@ export function OpenSpecDashboard({
       </button>
     ) : null;
 
-    const actionCount = (cancelBtn ? 1 : 0) + (continueBtn ? 1 : 0) + (secondaryBtn ? 1 : 0) + (archiveBtn ? 1 : 0);
+    const decisionCount = snapshot.decisions?.length ?? 0;
+    const noticesBtn = decisionCount > 0 ? (
+      <button
+        type="button"
+        className={styles.railActionItem}
+        data-view-id="openspec-attention"
+        onClick={() => {
+          if (!rightOpen && onEnsureRightOpen) {
+            onEnsureRightOpen();
+          }
+          usePipelineStore.getState().requestAttentionFocus();
+        }}
+      >
+        <span className={styles.railItemIcon} aria-hidden="true">
+          <AlertTriangle size={13} />
+        </span>
+        <span className={styles.railItemLabel}>
+          {t('pipeline.inbox.title')} ({decisionCount})
+        </span>
+      </button>
+    ) : null;
+
+    const actionCount = (cancelBtn ? 1 : 0) + (continueBtn ? 1 : 0) + (secondaryBtn ? 1 : 0) + (archiveBtn ? 1 : 0) + (noticesBtn ? 1 : 0);
 
     if (!mismatchNotice && actionCount === 0) return null;
 
@@ -1950,6 +2006,7 @@ export function OpenSpecDashboard({
               {continueBtn}
               {secondaryBtn}
               {archiveBtn}
+              {noticesBtn}
             </div>
           </div>
         )}

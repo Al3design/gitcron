@@ -8,12 +8,30 @@ import { RepoSidebar } from '../../RepoSidebar';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { useGitStore } from '@/lib/git-store';
 import { useNewChangeDraftStore } from '@/lib/new-change-draft-store';
-import { openSidebarSection } from '@/hooks/use-sidebar-section-state';
+import { openSidebarSection, closeSidebarSection } from '@/hooks/use-sidebar-section-state';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
+const testTranslations: Record<string, string> = {
+  'pipeline.inbox.title': 'Avisos',
+  'pipeline.openspec.attention.title': 'Necesita atención',
+  'pipeline.decision.viewEvidence': 'Ver evidencia',
+  'pipeline.next.task.action': 'Aplicar {{task}}',
+};
+
 vi.mock('@/hooks/use-translation', () => ({
-  useT: () => (key: string, params?: Record<string, string | number>) =>
-    params ? `${key}:${JSON.stringify(params)}` : key,
+  useT: () => (key: string, params?: Record<string, string | number>) => {
+    const val = testTranslations[key];
+    if (val !== undefined) {
+      if (params) {
+        return Object.entries(params).reduce(
+          (acc, [k, v]) => acc.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v)),
+          val
+        );
+      }
+      return val;
+    }
+    return params ? `${key}:${JSON.stringify(params)}` : key;
+  },
 }));
 
 beforeEach(() => {
@@ -430,15 +448,17 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     expect(screen.getByRole('region', { name: 'pipeline.openspec.start.title' })).toBeTruthy();
   });
 
-  it('4. Ninguna acción queda únicamente en un panel oculto: focus-decision abre el inspector fijo cuando está cerrado', () => {
-    const snapshotWithDecision = mockSnapshot({
+  it('4. Los avisos no detienen el flujo: el riel mantiene la tarea pendiente y ofrece entrada a los avisos', () => {
+    closeSidebarSection('C:/repo-test', 'details-attention');
+
+    const snapshotWithNotice = mockSnapshot({
       selectedChangeId: 'cambio-operativo',
       decisions: [
         {
           decisionId: 'dec-1',
           changeId: 'cambio-operativo',
-          title: 'Decisión pendiente requerida',
-          prompt: '¿Desea avanzar con la integración?',
+          title: 'Aviso sobre evidencia rechazada',
+          prompt: 'Se rechazó la auditoría de evidencia',
           evidenceRefs: ['docs/reports/eval.md'],
           options: [
             {
@@ -452,30 +472,39 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
       ],
     });
 
-    usePipelineStore.getState().setSnapshot(snapshotWithDecision);
+    usePipelineStore.getState().setSnapshot(snapshotWithNotice);
     const { container } = render(
-      <SddHarness snapshot={snapshotWithDecision} initialRightOpen={false} />
+      <SddHarness snapshot={snapshotWithNotice} initialRightOpen={false} />
     );
 
     // Entrar al cambio para acceder al contexto activo
     fireEvent.click(screen.getByRole('button', { name: /openspec\.start\.enter/ }));
 
-    // Con rightOpen: false, el inspector derecho está oculto
+    // Con initialRightOpen: false, el inspector derecho está oculto
     const detailsPanel = container.querySelector('[data-testid="repo-details-panel"]') as HTMLElement;
     expect(detailsPanel.style.visibility).toBe('hidden');
 
-    // La acción primaria en el riel flotante ofrece responder/atender la decisión
-    const focusDecisionBtn = screen.getByRole('button', { name: /pipeline\.next\.decision\.action/ });
-    expect(focusDecisionBtn).toBeTruthy();
+    // (a) El riel sigue ofreciendo la acción de aplicar la tarea 1.1
+    const applyTaskBtn = screen.getByRole('button', { name: /Aplicar 1\.1/ });
+    expect(applyTaskBtn).toBeTruthy();
 
-    // Al pulsar la acción, se llama a onEnsureRightOpen(), abriendo el panel inspector
-    fireEvent.click(focusDecisionBtn);
+    // (b) Existe «Avisos (1)» en el riel
+    const noticesBtn = screen.getByRole('button', { name: /Avisos \(1\)/ });
+    expect(noticesBtn).toBeTruthy();
 
-    // El panel inspector se hace visible y muestra DecisionInbox con la opción accesible
+    // La sección quedó plegada desde el montaje: el aviso todavía no está a mano
+    expect(screen.queryByRole('button', { name: /Ver evidencia/ })).toBeNull();
+
+    // (c) Tocar «Avisos» deja el inspector visible, la sección desplegada y document.activeElement es la sección «Necesita atención»
+    fireEvent.click(noticesBtn);
+
     expect(detailsPanel.style.visibility).toBe('visible');
-    expect(screen.getByRole('region', { name: 'pipeline.openspec.attention.title' })).toBeTruthy();
-    expect(screen.getByText('Decisión pendiente requerida')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /pipeline\.decision\.viewEvidence/ })).toBeTruthy();
+    const attentionSection = screen.getByRole('region', { name: 'Necesita atención' });
+    expect(attentionSection).toBeTruthy();
+    expect(document.activeElement).toBe(attentionSection);
+
+    // (d) «Ver evidencia» está visible
+    expect(screen.getByRole('button', { name: /Ver evidencia/ })).toBeTruthy();
   });
 
   it('5. La preparación y commit abren el inspector fijo asegurando que la acción de confirmación no quede oculta', () => {

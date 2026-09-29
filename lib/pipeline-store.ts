@@ -14,6 +14,7 @@ export type PipelineStoreState = {
   lastPreparedCount: number | null;
   aiNotice: string | null;
   engineChangeToken: number;
+  attentionRequest: number;
 
   setSnapshot: (snapshot: PipelineSnapshot | null) => void;
   setProjection: (projection: RuntimeProjection | null) => void;
@@ -28,6 +29,7 @@ export type PipelineStoreState = {
   setLastPreparedCount: (count: number | null) => void;
   setAiNotice: (notice: string | null) => void;
   notifyEngineChanged: () => void;
+  requestAttentionFocus: () => void;
   reset: () => void;
 };
 
@@ -43,6 +45,7 @@ export const usePipelineStore = create<PipelineStoreState>((set) => ({
   lastPreparedCount: null,
   aiNotice: null,
   engineChangeToken: 0,
+  attentionRequest: 0,
 
   setSnapshot: (snapshot) => set({ snapshot }),
   setProjection: (projection) => set({ projection }),
@@ -63,6 +66,7 @@ export const usePipelineStore = create<PipelineStoreState>((set) => ({
   setLastPreparedCount: (lastPreparedCount) => set({ lastPreparedCount }),
   setAiNotice: (aiNotice) => set({ aiNotice }),
   notifyEngineChanged: () => set((state) => ({ engineChangeToken: state.engineChangeToken + 1 })),
+  requestAttentionFocus: () => set((state) => ({ attentionRequest: state.attentionRequest + 1 })),
   reset: () =>
     set({
       snapshot: null,
@@ -76,5 +80,6 @@ export const usePipelineStore = create<PipelineStoreState>((set) => ({
       lastPreparedCount: null,
       aiNotice: null,
       engineChangeToken: 0,
+      attentionRequest: 0,
     }),
 }));

@@ -27,9 +27,9 @@ const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 
  * actualiza acá con causa. Medidos el 2026-09-21.
  */
 const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1104 }, // corrido de 1105 al retirar onRespondDecision de OpenSpecDashboard
-  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 135 }, // corrido de 131 al agregar prop repoPath a DecisionInbox
-  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 191 }, // corrido de 187
+  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1100 }, // corrido de 1104 al retirar attentionRef muerto y foco de decisiones en tanda 07
+  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 162 }, // corrido de 135 al agregar efecto de atención/foco en tanda 07
+  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 218 }, // corrido de 191 al agregar efecto de atención/foco en tanda 07
 ];
 
 /** Errores de eslint de la salida, menos los preexistentes. */

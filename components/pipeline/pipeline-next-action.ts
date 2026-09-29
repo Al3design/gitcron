@@ -1,5 +1,4 @@
 import type { RuntimeProjection } from '@/types/pipeline';
-import type { DecisionRequest } from './pipeline-domain';
 import type { OpenSpecChangeSummary } from './pipeline-view-state';
 
 /**
@@ -36,7 +35,6 @@ export type PipelineActionIntent =
   | { kind: 'open-explore-flow' }
   | { kind: 'start-apply'; changeId: string; taskId: string }
   | { kind: 'start-archive'; changeId: string }
-  | { kind: 'focus-decision'; decisionId: string }
   | { kind: 'view-activity' }
   | { kind: 'view-evidence' }
   | { kind: 'view-diff' }
@@ -62,7 +60,6 @@ export type PipelineNextActionButton = {
 
 export type PipelineNextActionKind =
   | 'fixture-preview'
-  | 'decision-pending'
   | 'session-running'
   | 'archiving'
   | 'session-retry'
@@ -107,7 +104,6 @@ export type PipelineNextActionInput = {
   fixtureActive: boolean;
   selectedChange: OpenSpecChangeSummary | null;
   selectedArchivedChangeId: string | null;
-  decisions: DecisionRequest[];
   projection: RuntimeProjection | null;
   /**
    * Instrucciones y contexto devueltos por el motor OpenSpec.
@@ -353,11 +349,10 @@ export function deriveArchiveAvailability(
  *
  * 1. El fixture va primero porque es una restricción de seguridad, no un estado
  *    de trabajo: cualquier otra rama podría devolver una acción ejecutable.
- * 2. La decisión pendiente va antes que la sesión activa porque bloquea el avance.
- * 3. Recién después se miran sesión, tareas, validación y archivo.
+ * 2. Recién después se miran sesión, tareas, validación y archivo.
  */
 export function derivePipelineNextAction(input: PipelineNextActionInput): PipelineNextAction {
-  const { fixtureActive, selectedChange, selectedArchivedChangeId, decisions, projection } = input;
+  const { fixtureActive, selectedChange, selectedArchivedChangeId, projection } = input;
 
   // 1 · Vista previa: se declara como tal y no ofrece ninguna acción.
   if (fixtureActive) {
@@ -371,20 +366,7 @@ export function derivePipelineNextAction(input: PipelineNextActionInput): Pipeli
     };
   }
 
-  // 2 · Una decisión humana pendiente detiene todo lo demás.
-  const pendingDecision = decisions[0] ?? null;
-  if (pendingDecision) {
-    return {
-      kind: 'decision-pending',
-      titleKey: 'pipeline.next.decision.title',
-      helpKey: 'pipeline.next.decision.help',
-      primary: button({ kind: 'focus-decision', decisionId: pendingDecision.decisionId }, 'pipeline.next.decision.action'),
-      secondary: null,
-      instruction: null,
-    };
-  }
-
-  // 3 · Sesión viva. Archivar y trabajar una tarea se ven distintos aunque
+  // 2 · Sesión viva. Archivar y trabajar una tarea se ven distintos aunque
   //     ambos sean "hay un proceso corriendo".
   if (projection?.active === true) {
     const archiving = projection.taskId === null && selectedChange?.validation === 'passed';

@@ -223,15 +223,17 @@ describe('OpenSpecDashboard / RepoDetailsPanel — Única fuente de verdad para 
   it('1. Abrir la preparación desde la franja -> el panel derecho muestra el flujo de commit', () => {
     render(<IntegratedPipelineView />);
 
-    // Inicialmente: panel derecho con secciones de SDD (sin caja de commit)
+    // Inicialmente: panel derecho con secciones de SDD y flujo Git unificado; cuerpo sin vista de preparación
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
-    expect(screen.queryByPlaceholderText('staging.commitMsgPlaceholder')).toBeNull();
+    expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
+    expect(screen.queryByText('pipeline.openspec.prepare.close')).toBeNull();
 
     // Abrir preparación desde el botón de la franja
     const stripButton = screen.getByTitle('pipeline.openspec.prepare.open');
     fireEvent.click(stripButton);
 
-    // El panel derecho suma el flujo de commit (caja de commit y lista staged)
+    // Se abre la vista de preparación en el cuerpo y el panel derecho mantiene el flujo de commit
+    expect(screen.getByText('pipeline.openspec.prepare.close')).toBeDefined();
     expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
     expect(screen.getByText(/staging\.stagedTitle/)).toBeDefined();
     expect(usePipelineStore.getState().prepareOpen).toBe(true);
@@ -244,16 +246,18 @@ describe('OpenSpecDashboard / RepoDetailsPanel — Única fuente de verdad para 
     const stripButton = screen.getByTitle('pipeline.openspec.prepare.open');
     fireEvent.click(stripButton);
 
-    // Verificar que abrió flujo de commit en panel derecho
+    // Verificar que abrió flujo de preparación en el cuerpo central
+    expect(screen.getByText('pipeline.openspec.prepare.close')).toBeDefined();
     expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
 
     // Cerrar preparación usando el botón «Cerrar» del cuerpo central
     const closeButton = screen.getByText('pipeline.openspec.prepare.close');
     fireEvent.click(closeButton);
 
-    // El panel derecho vuelve a mostrar sólo secciones de SDD sin caja de commit
+    // El cuerpo central cierra la preparación; el panel derecho conserva el inspector con operaciones Git
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
-    expect(screen.queryByPlaceholderText('staging.commitMsgPlaceholder')).toBeNull();
+    expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
+    expect(screen.queryByText('pipeline.openspec.prepare.close')).toBeNull();
     expect(usePipelineStore.getState().prepareOpen).toBe(false);
   });
 
@@ -273,7 +277,8 @@ describe('OpenSpecDashboard / RepoDetailsPanel — Única fuente de verdad para 
     const prepareCommitFromReviewBtn = await screen.findByText('pipeline.openspec.engine.review.prepareCommit');
     fireEvent.click(prepareCommitFromReviewBtn);
 
-    // El panel derecho muestra el flujo de commit
+    // La preparación se abre en el cuerpo central
+    expect(screen.getByText('pipeline.openspec.prepare.close')).toBeDefined();
     expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
     expect(usePipelineStore.getState().prepareOpen).toBe(true);
 
@@ -281,9 +286,10 @@ describe('OpenSpecDashboard / RepoDetailsPanel — Única fuente de verdad para 
     const stripButton = screen.getByTitle('pipeline.openspec.prepare.open');
     fireEvent.click(stripButton);
 
-    // El panel derecho vuelve al inspector
+    // Se cierra la preparación en el cuerpo central; el panel derecho conserva el inspector
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
-    expect(screen.queryByPlaceholderText('staging.commitMsgPlaceholder')).toBeNull();
+    expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
+    expect(screen.queryByText('pipeline.openspec.prepare.close')).toBeNull();
     expect(usePipelineStore.getState().prepareOpen).toBe(false);
   });
 

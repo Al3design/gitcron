@@ -2,6 +2,21 @@
 
 ## MODIFIED Requirements
 
+### Requirement: Siguiente paso derivado por función pura
+La guía contextual SHALL calcularse con una función pura y determinística que reciba el snapshot observado, la selección y la proyección de runtime, y devuelva un único siguiente paso. La UI SHALL NOT derivar el estado con condicionales repartidos en JSX ni con estado local que no provenga de la evidencia.
+
+#### Scenario: Misma evidencia produce la misma guía
+- **WHEN** la función recibe dos veces el mismo snapshot, selección y proyección
+- **THEN** devuelve el mismo siguiente paso, sin depender de reloj, orden de render ni estado previo
+
+#### Scenario: Estados superpuestos resuelven por prioridad declarada
+- **WHEN** coinciden una sesión activa, un reintento y una tarea pendiente
+- **THEN** se aplica el orden sesión activa > fallo o reintento > tarea pendiente > validación > archivo, y se expone un solo siguiente paso
+
+#### Scenario: Un aviso no detiene el siguiente paso
+- **WHEN** existe un aviso en el repositorio y una tarea pendiente en el cambio seleccionado
+- **THEN** el siguiente paso derivado sigue siendo aplicar la tarea y el aviso se ofrece aparte, sin detener el flujo principal
+
 ### Requirement: Validación y archivo aparecen sólo en su momento
 
 La acción de archivar SHALL habilitarse únicamente con validación aprobada. Con tareas completas y

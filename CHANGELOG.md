@@ -4,6 +4,33 @@ Changes are listed from newest to oldest.
 
 ---
 
+## [v1.19.0] - 2026-09-29 - SDD conectado de punta a punta
+
+Primer cambio del plan de integración: lo que SDD mostraba ahora llega a algo real. Las «decisiones» que no tenían a quién responder pasan a ser avisos, toda IA que se lanza desde SDD puede hacer el trabajo completo, y preparar y confirmar un commit desde SDD tiene las mismas operaciones Git que Graph.
+
+### 🤖 Pipeline & Workspace OpenSpec
+
+#### Added
+- **Avisos en lugar de decisiones sin destino.** Las auditorías rechazadas de `docs/reports` se muestran en «Avisos» con su resumen y «Ver evidencia», que abre el archivo. Ya no prometen una respuesta que ninguna sesión podía recibir.
+- **Entrada «Avisos (n)» en el riel de SDD.** Abre el panel derecho, despliega la sección aunque esté plegada y deja el foco en el aviso.
+- **Toda IA lanzable desde SDD lee, escribe y corre comandos**, con una confirmación explícita y sin opciones «dangerously…»: Codex con `--sandbox workspace-write`, Claude con `Bash`. Ver SECURITY.md §9.
+- **El inspector de SDD tiene las operaciones Git de Graph:** cambios sin preparar con Stage all, Limpiar y descartar, Unstage all, Commit, Amend, Squash, Deshacer último rebase, Stash y el aviso de rebase en curso. Es el mismo bloque en las dos vistas, con el plegado compartido.
+
+#### Fixed
+- **Un aviso ya no frena el siguiente paso.** Con una auditoría rechazada en el repositorio, el riel seguía diciendo «Necesita tu decisión» y dejaba de ofrecer Aplicar y Archivar.
+- **La disponibilidad por intención se decide por capacidades declaradas**, no por el nombre de la IA; se retiran «sólo puede leer» y «no puede correr pruebas».
+- **La preparación no cruza mensajes entre repositorios.** Cambiar de repo durante una redacción con IA dejaba el mensaje en el campo de commit del otro y el modelo seguía trabajando; ahora la redacción se corta y la sugerencia queda en el repositorio de origen.
+- **«Preparar» ya no queda girando en desarrollo.** El doble montaje del modo estricto de React dejaba el panel creyéndose desmontado.
+- **Pruebas que dependían de la máquina** (qué runtimes había instalados) comparan contra el motor.
+
+#### Changed
+- **Sincronizar specs sin archivar** pasa al cambio `completar-cobertura-operativa-de-openspec`.
+- **Plan de integración** en `openspec/EXECUTION.md`; la rutina de tandas vive sólo en `openspec/config.yaml`. Se retira `explicar-el-ciclo-sin-tecnicismos` sin consolidar sus specs.
+
+**Validación:** `build` en 0 · `tsc --noEmit` en 0 · 217 archivos y 2340 pruebas en verde (dos pasadas) · `eslint` limpio sobre lo tocado · `openspec validate --strict` válido · revisión en pantalla sobre gitCronos y odontoPro.
+
+---
+
 ## [v1.18.0] - 2026-09-26 - Las herramientas de OpenSpec las decide el motor
 
 GitCron deja de llevar a mano la lista de herramientas de OpenSpec: le pregunta al motor de cada repositorio qué herramientas hay, cuáles están configuradas y cuáles necesitan actualizarse. Con eso desaparecen los «sin configurar» y «desactualizado» que el motor no sostenía, y la pantalla de configuración se lee sin sobresaltos.

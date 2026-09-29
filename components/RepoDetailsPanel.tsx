@@ -2,8 +2,8 @@
 
 // Panel derecho de detalles: muestra una lista única de secciones plegables
 // (SidebarSection) según la circunstancia activa (grafo con commit, grafo sin
-// commit, SDD sin preparar o SDD preparando). Flota en la vista chronometric y
-// es inline en la clásica. Extraído de app/page.tsx.
+// commit o SDD inspector con operaciones Git compartidas). Flota en la vista
+// chronometric y es inline en la clásica. Extraído de app/page.tsx.
 //
 // Es dueño de la carga de archivos del commit (gitShowFiles). Lo que abre
 // modales/menus de la página o navega al diff llega por props.
@@ -77,7 +77,6 @@ export function RepoDetailsPanel({
     continueInteractiveRebase, abortInteractiveRebase, undoInteractiveRebase,
   } = useGitActions();
 
-  const prepareOpen = usePipelineStore((s) => s.prepareOpen);
   const reviewOpen = usePipelineStore((s) => s.reviewOpen);
   const toggleReviewOpen = usePipelineStore((s) => s.toggleReviewOpen);
   const aiNotice = usePipelineStore((s) => s.aiNotice);
@@ -164,48 +163,217 @@ export function RepoDetailsPanel({
               ? t('staging.commitWithCountBtn', { count: staged.length })
               : t('staging.commitBtn')}
         </button>
-        {!isPipeline && (
-          <>
-            <div className="flex gap-2 mt-1">
-              <button
-                type="button"
-                onClick={onRequestAmend}
-                disabled={isLoading}
-                className="flex-1 py-1.5 px-2 bg-bg-surface/75 border border-border-subtle/15 hover:bg-border-subtle/50 text-text-secondary hover:text-text-primary rounded text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
-                title={t('staging.amendTooltip')}
-              >
-                <RotateCcw size={12} />
-                {t('staging.amendBtn')}
-              </button>
-              <button
-                type="button"
-                onClick={onRequestSquash}
-                disabled={isLoading}
-                className="flex-1 py-1.5 px-2 bg-bg-surface/75 border border-border-subtle/15 hover:bg-border-subtle/50 text-text-secondary hover:text-text-primary rounded text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
-                title={t('staging.squashTooltip')}
-              >
-                <Layers size={12} />
-                {t('staging.squashBtn')}
-              </button>
-            </div>
-            <div className="mt-1 text-right">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (confirm(t('rebase.banner.btn.undo') + '?')) {
-                    await undoInteractiveRebase('refs/gitcron/pre-rebase');
-                  }
-                }}
-                disabled={isLoading}
-                className="text-[length:var(--font-size-xs)] text-text-secondary hover:text-secondary hover:underline transition-colors disabled:opacity-40 font-semibold"
-              >
-                {t('rebase.banner.btn.undo')}
-              </button>
-            </div>
-          </>
-        )}
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={onRequestAmend}
+            disabled={isLoading}
+            className="flex-1 py-1.5 px-2 bg-bg-surface/75 border border-border-subtle/15 hover:bg-border-subtle/50 text-text-secondary hover:text-text-primary rounded text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+            title={t('staging.amendTooltip')}
+          >
+            <RotateCcw size={12} />
+            {t('staging.amendBtn')}
+          </button>
+          <button
+            type="button"
+            onClick={onRequestSquash}
+            disabled={isLoading}
+            className="flex-1 py-1.5 px-2 bg-bg-surface/75 border border-border-subtle/15 hover:bg-border-subtle/50 text-text-secondary hover:text-text-primary rounded text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+            title={t('staging.squashTooltip')}
+          >
+            <Layers size={12} />
+            {t('staging.squashBtn')}
+          </button>
+        </div>
+        <div className="mt-1 text-right">
+          <button
+            type="button"
+            onClick={async () => {
+              if (confirm(t('rebase.banner.btn.undo') + '?')) {
+                await undoInteractiveRebase('refs/gitcron/pre-rebase');
+              }
+            }}
+            disabled={isLoading}
+            className="text-[length:var(--font-size-xs)] text-text-secondary hover:text-secondary hover:underline transition-colors disabled:opacity-40 font-semibold"
+          >
+            {t('rebase.banner.btn.undo')}
+          </button>
+        </div>
       </div>
     </SidebarSection>
+  );
+
+  const renderWorkingTreeBlock = () => (
+    <>
+      {/* Alerta de rebase interactivo en curso */}
+      {rebaseInProgress && (
+        <div className="p-3 bg-git-mod/10 border-b border-git-mod/30 flex flex-col gap-2 shrink-0">
+          <div className="flex items-start gap-2 text-git-mod">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-bold block">{t('rebase.banner.title')}</span>
+              <span className="text-[length:var(--font-size-xs)] text-text-secondary leading-normal block mt-0.5">
+                {t('rebase.banner.desc')}
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={async () => {
+                await abortInteractiveRebase();
+              }}
+              disabled={isLoading}
+              className="px-2.5 py-1 text-[length:var(--font-size-xs)] font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded transition-colors disabled:opacity-40"
+            >
+              {t('rebase.banner.btn.abort')}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await continueInteractiveRebase();
+              }}
+              disabled={isLoading}
+              className="px-2.5 py-1 text-[length:var(--font-size-xs)] font-bold bg-git-mod hover:bg-git-mod/90 text-bg-base rounded transition-colors disabled:opacity-40 flex items-center gap-1"
+            >
+              {isLoading ? (
+                <div className="w-3 h-3 rounded-full border border-black border-t-transparent animate-spin" />
+              ) : (
+                <Play size={10} className="fill-black" />
+              )}
+              {t('rebase.banner.btn.continue')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <SidebarSection
+        title={t('staging.unstagedTitle')}
+        count={unstaged.length}
+        icon={<FileDiff size={13} aria-hidden="true" />}
+        extra={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenStashModal}
+              disabled={isLoading}
+              className="text-[length:var(--font-size-xs)] font-bold text-git-mod hover:text-bg-base hover:bg-git-mod px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+              title={t('commit.stashTooltip')}
+            >
+              Stash
+            </button>
+            {untrackedCount > 0 && (
+              <button
+                type="button"
+                onClick={onRequestCleanUntracked}
+                disabled={isLoading}
+                className="text-[length:var(--font-size-xs)] text-warning hover:text-bg-base px-2 py-0.5 rounded border border-warning/40 hover:bg-warning transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title={t('staging.cleanUntrackedTooltip')}
+              >
+                {t('staging.cleanUntrackedBtn')}
+              </button>
+            )}
+            {modifiedFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={onRequestResetAll}
+                className="p-1 text-text-secondary hover:text-error hover:bg-error/10 rounded transition-colors"
+                title={t('staging.discardAllTooltip')}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+            {unstaged.length > 0 && (
+              <button
+                type="button"
+                onClick={stageAll}
+                className="text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
+              >
+                {t('staging.stageAllBtn')}
+              </button>
+            )}
+          </div>
+        }
+        isOpen={sectionState.isOpen('details-unstaged')}
+        onToggle={() => sectionState.toggle('details-unstaged')}
+      >
+        {unstaged.length === 0 ? (
+          <p className="px-4 py-3 text-xs text-text-secondary/70 italic">{t('staging.noUnstagedChanges')}</p>
+        ) : (
+          <div className="p-1">
+            {unstaged.map((file) => (
+              <StagingFileRow
+                key={file.path}
+                file={file}
+                selected={selectedFile?.path === file.path}
+                direction="stage"
+                onClick={() => onSelectFile(file)}
+                onAction={() => stageFile(file.path, true)}
+                onDiscard={() => onDiscardRequest(file)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  onFileContextMenu({ x: event.clientX, y: event.clientY, file });
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </SidebarSection>
+
+      <SidebarSection
+        title={t('staging.stagedTitle')}
+        count={staged.length}
+        icon={<PackageCheck size={13} aria-hidden="true" />}
+        extra={
+          staged.length > 0 && (
+            <button
+              type="button"
+              onClick={unstageAll}
+              className="text-[length:var(--font-size-xs)] text-text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-border-subtle hover:bg-border-subtle transition-colors"
+            >
+              {t('staging.unstageAllBtn')}
+            </button>
+          )
+        }
+        isOpen={sectionState.isOpen('details-staged')}
+        onToggle={() => sectionState.toggle('details-staged')}
+      >
+        {staged.length === 0 ? (
+          <p className="px-4 py-3 text-xs text-text-secondary/70 italic">{t('staging.noStagedChanges')}</p>
+        ) : (
+          <div className="p-1">
+            {staged.map((file) => (
+              <StagingFileRow
+                key={file.path}
+                file={file}
+                selected={selectedFile?.path === file.path}
+                direction="unstage"
+                onClick={() => onSelectFile(file)}
+                onAction={() => stageFile(file.path, false)}
+                onDiscard={() => onDiscardRequest(file)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  onFileContextMenu({ x: event.clientX, y: event.clientY, file });
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </SidebarSection>
+
+      {hasDraftLog && (
+        <SidebarSection
+          title={t('pipeline.openspec.prepare.aiLogTitle')}
+          icon={<Brain size={13} aria-hidden="true" />}
+          isOpen={sectionState.isOpen('details-draft-log')}
+          onToggle={() => sectionState.toggle('details-draft-log')}
+        >
+          <CommitDraftLog notice={aiNotice} />
+        </SidebarSection>
+      )}
+
+      {renderCommitBox()}
+    </>
   );
 
   return (
@@ -239,45 +407,7 @@ export function RepoDetailsPanel({
           controlNotice={decisionNotice}
           sendingDecisions={sendingDecisions}
         >
-          {prepareOpen && (
-            <>
-              <SidebarSection
-                title={t('staging.stagedTitle')}
-                count={staged.length}
-                icon={<PackageCheck size={13} aria-hidden="true" />}
-                isOpen={sectionState.isOpen('details-staged')}
-                onToggle={() => sectionState.toggle('details-staged')}
-              >
-                {staged.length === 0 ? (
-                  <p className="px-4 py-3 text-xs text-text-secondary/70 italic">{t('staging.noStagedChanges')}</p>
-                ) : (
-                  <div className="p-1">
-                    {staged.map((file) => (
-                      <StagingFileRow
-                        key={file.path}
-                        file={file}
-                        selected={selectedFile?.path === file.path}
-                        onClick={() => onSelectFile(file)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </SidebarSection>
-
-              {hasDraftLog && (
-                <SidebarSection
-                  title={t('pipeline.openspec.prepare.aiLogTitle')}
-                  icon={<Brain size={13} aria-hidden="true" />}
-                  isOpen={sectionState.isOpen('details-draft-log')}
-                  onToggle={() => sectionState.toggle('details-draft-log')}
-                >
-                  <CommitDraftLog notice={aiNotice} />
-                </SidebarSection>
-              )}
-
-              {renderCommitBox()}
-            </>
-          )}
+          {renderWorkingTreeBlock()}
         </OpenSpecInspector>
       ) : selectedCommit ? (
         <div className="flex flex-col h-full">
@@ -428,166 +558,8 @@ export function RepoDetailsPanel({
         </div>
       ) : (
         <div className="flex flex-col h-full">
-          {/* Alerta de rebase interactivo en curso */}
-          {rebaseInProgress && (
-            <div className="p-3 bg-git-mod/10 border-b border-git-mod/30 flex flex-col gap-2 shrink-0">
-              <div className="flex items-start gap-2 text-git-mod">
-                <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-bold block">{t('rebase.banner.title')}</span>
-                  <span className="text-[length:var(--font-size-xs)] text-text-secondary leading-normal block mt-0.5">
-                    {t('rebase.banner.desc')}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await abortInteractiveRebase();
-                  }}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 text-[length:var(--font-size-xs)] font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded transition-colors disabled:opacity-40"
-                >
-                  {t('rebase.banner.btn.abort')}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await continueInteractiveRebase();
-                  }}
-                  disabled={isLoading}
-                  className="px-2.5 py-1 text-[length:var(--font-size-xs)] font-bold bg-git-mod hover:bg-git-mod/90 text-bg-base rounded transition-colors disabled:opacity-40 flex items-center gap-1"
-                >
-                  {isLoading ? (
-                    <div className="w-3 h-3 rounded-full border border-black border-t-transparent animate-spin" />
-                  ) : (
-                    <Play size={10} className="fill-black" />
-                  )}
-                  {t('rebase.banner.btn.continue')}
-                </button>
-              </div>
-            </div>
-          )}
-
           <div className="flex-1 overflow-y-auto min-h-0">
-            <SidebarSection
-              title={t('staging.unstagedTitle')}
-              count={unstaged.length}
-              icon={<FileDiff size={13} aria-hidden="true" />}
-              extra={
-                <div className="flex items-center gap-2">
-                  {untrackedCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={onRequestCleanUntracked}
-                      disabled={isLoading}
-                      className="text-[length:var(--font-size-xs)] text-warning hover:text-bg-base px-2 py-0.5 rounded border border-warning/40 hover:bg-warning transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={t('staging.cleanUntrackedTooltip')}
-                    >
-                      {t('staging.cleanUntrackedBtn')}
-                    </button>
-                  )}
-                  {modifiedFiles.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={onRequestResetAll}
-                      className="p-1 text-text-secondary hover:text-error hover:bg-error/10 rounded transition-colors"
-                      title={t('staging.discardAllTooltip')}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-                  {unstaged.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={stageAll}
-                      className="text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
-                    >
-                      {t('staging.stageAllBtn')}
-                    </button>
-                  )}
-                </div>
-              }
-              isOpen={sectionState.isOpen('details-unstaged')}
-              onToggle={() => sectionState.toggle('details-unstaged')}
-            >
-              {unstaged.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-text-secondary/70 italic">{t('staging.noUnstagedChanges')}</p>
-              ) : (
-                <div className="p-1">
-                  {unstaged.map((file) => (
-                    <StagingFileRow
-                      key={file.path}
-                      file={file}
-                      selected={selectedFile?.path === file.path}
-                      direction="stage"
-                      onClick={() => onSelectFile(file)}
-                      onAction={() => stageFile(file.path, true)}
-                      onDiscard={() => onDiscardRequest(file)}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        onFileContextMenu({ x: event.clientX, y: event.clientY, file });
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </SidebarSection>
-
-            <SidebarSection
-              title={t('staging.stagedTitle')}
-              count={staged.length}
-              icon={<PackageCheck size={13} aria-hidden="true" />}
-              extra={
-                staged.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={unstageAll}
-                    className="text-[length:var(--font-size-xs)] text-text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-border-subtle hover:bg-border-subtle transition-colors"
-                  >
-                    {t('staging.unstageAllBtn')}
-                  </button>
-                )
-              }
-              isOpen={sectionState.isOpen('details-staged')}
-              onToggle={() => sectionState.toggle('details-staged')}
-            >
-              {staged.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-text-secondary/70 italic">{t('staging.noStagedChanges')}</p>
-              ) : (
-                <div className="p-1">
-                  {staged.map((file) => (
-                    <StagingFileRow
-                      key={file.path}
-                      file={file}
-                      selected={selectedFile?.path === file.path}
-                      direction="unstage"
-                      onClick={() => onSelectFile(file)}
-                      onAction={() => stageFile(file.path, false)}
-                      onDiscard={() => onDiscardRequest(file)}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        onFileContextMenu({ x: event.clientX, y: event.clientY, file });
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </SidebarSection>
-
-            {hasDraftLog && (
-              <SidebarSection
-                title={t('pipeline.openspec.prepare.aiLogTitle')}
-                icon={<Brain size={13} aria-hidden="true" />}
-                isOpen={sectionState.isOpen('details-draft-log')}
-                onToggle={() => sectionState.toggle('details-draft-log')}
-              >
-                <CommitDraftLog notice={aiNotice} />
-              </SidebarSection>
-            )}
-
-            {renderCommitBox()}
+            {renderWorkingTreeBlock()}
           </div>
         </div>
       )}

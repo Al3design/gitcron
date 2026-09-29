@@ -88,14 +88,14 @@ describe('RepoDetailsPanel — Flujo de Commit Unificado y Cuatro Estados (Fase 
   });
 
   it('1. Cubre los cuatro estados del panel derecho con rerender real sobre DOM montado', () => {
-    // ESTADO 1: SDD con prepareOpen: false -> Monta secciones de SDD (actividad, atención, herramientas)
+    // ESTADO 1: SDD con prepareOpen: false -> Monta secciones de SDD (actividad, atención, herramientas) y operaciones Git
     usePipelineStore.setState({ prepareOpen: false });
     useGitStore.setState({ selectedCommit: null });
     const { rerender } = renderPanel('Pipeline');
 
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
     expect(screen.getByText('pipeline.openspec.rail.tools')).toBeDefined();
-    expect(screen.queryByPlaceholderText('staging.commitMsgPlaceholder')).toBeNull();
+    expect(screen.getByPlaceholderText('staging.commitMsgPlaceholder')).toBeDefined();
 
     // ESTADO 2: SDD con prepareOpen: true -> Monta secciones de SDD + flujo de commit
     act(() => {

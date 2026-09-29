@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { translate } from '@/lib/i18n';
 import type { RuntimeProjection } from '@/types/pipeline';
-import type { DecisionRequest } from '../pipeline-domain';
 import type { OpenSpecChangeSummary } from '../pipeline-view-state';
 import {
   composeApplyInstruction,
@@ -69,29 +68,11 @@ function projection(overrides: Partial<RuntimeProjection> = {}): RuntimeProjecti
   } as RuntimeProjection;
 }
 
-function decision(overrides: Partial<DecisionRequest> = {}): DecisionRequest {
-  return {
-    decisionId: 'decision-1',
-    kind: 'clarification',
-    title: 'Hace falta una definición',
-    why: null,
-    options: [],
-    risk: 'medium',
-    riskProvenance: null,
-    evidenceRefs: [],
-    technicalContext: null,
-    provenance: 'repo',
-    evidenceStatus: 'observed',
-    ...overrides,
-  } as DecisionRequest;
-}
-
 function input(overrides: Partial<PipelineNextActionInput> = {}): PipelineNextActionInput {
   return {
     fixtureActive: false,
     selectedChange: null,
     selectedArchivedChangeId: null,
-    decisions: [],
     projection: null,
     ...overrides,
   };
@@ -200,13 +181,6 @@ describe('derivePipelineNextAction · matriz de estados', () => {
     expect(result.secondary?.intent.kind).toBe('pause-after-task');
   });
 
-  it('una decisión pendiente lleva el foco a la decisión real', () => {
-    const result = derivePipelineNextAction(input({ selectedChange: change(), decisions: [decision()] }));
-    expect(result.kind).toBe('decision-pending');
-    expect(result.primary?.intent).toEqual({ kind: 'focus-decision', decisionId: 'decision-1' });
-    expect(result.secondary).toBeNull();
-  });
-
   it('una sesión fallida ofrece reintentar la misma tarea', () => {
     const result = derivePipelineNextAction(input({
       selectedChange: change(),
@@ -297,19 +271,9 @@ describe('derivePipelineNextAction · prioridad entre estados superpuestos', () 
     const result = derivePipelineNextAction(input({
       fixtureActive: true,
       selectedChange: change(),
-      decisions: [decision()],
       projection: projection({ active: true, outcome: 'running' }),
     }));
     expect(result.kind).toBe('fixture-preview');
-  });
-
-  it('la decisión gana sobre la sesión activa y la tarea pendiente', () => {
-    const result = derivePipelineNextAction(input({
-      selectedChange: change(),
-      decisions: [decision()],
-      projection: projection({ active: true, outcome: 'running' }),
-    }));
-    expect(result.kind).toBe('decision-pending');
   });
 
   it('la sesión activa gana sobre la tarea pendiente', () => {
@@ -335,7 +299,6 @@ describe('derivePipelineNextAction · honestidad de la evidencia', () => {
       input({ fixtureActive: true, selectedChange: change() }),
       input({ fixtureActive: true, selectedChange: change({ tasks: [task('1.1', true)], validation: 'passed' }) }),
       input({ fixtureActive: true, selectedArchivedChangeId: 'viejo' }),
-      input({ fixtureActive: true, decisions: [decision()] }),
       input({ fixtureActive: true, projection: projection({ active: true, outcome: 'running' }) }),
     ];
     for (const scenario of scenarios) {
@@ -465,7 +428,6 @@ describe('interpolación de textos', () => {
     ['archivado', input({ selectedArchivedChangeId: 'viejo' })],
     ['tarea pendiente', input({ selectedChange: change() })],
     ['sesión activa', input({ selectedChange: change(), projection: projection({ active: true, outcome: 'running' }) })],
-    ['decisión', input({ selectedChange: change(), decisions: [decision()] })],
     ['reintento', input({ selectedChange: change(), projection: projection({ outcome: 'failed' }) })],
     ['validación desconocida', input({ selectedChange: change({ tasks: [task('1.1', true)], validation: 'unknown' }) })],
     ['validación fallida', input({ selectedChange: change({ tasks: [task('1.1', true)], validation: 'failed' }) })],
