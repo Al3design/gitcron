@@ -29,6 +29,36 @@ models`; `provider.options` = `apiKey, baseURL, timeout, headerTimeout, chunkTim
 options, headers, variants…`; `agent.<nombre>` = `model, variant, temperature, top_p, prompt, tools,
 disable, description, mode, options, steps, permission…`; `allowComments: true`.
 
+### Cómo lo resuelven otras herramientas (relevado el 2026-09-29)
+
+| Herramienta | Modelos | Protocolo | MCP | Secretos |
+|---|---|---|---|---|
+| OpenCode | Bloque `provider` en `opencode.json`, esquema público | Chat Completions vía `@ai-sdk/openai-compatible` (u otros paquetes) | Bloque `mcp` propio (`type: local\|remote`, `command` lista) | `{env:X}`, `{file:ruta}` |
+| VS Code (Copilot) | `chatLanguageModels.json`: grupos con `vendor`, `apiKey`, `apiType` y modelos con `id, name, url, maxInputTokens, maxOutputTokens, toolCalling, vision, thinking, requestHeaders, modelOptions` | Elegible por grupo: Chat Completions, Responses o Messages | `.vscode/mcp.json` con `servers`; usuario `~/.copilot/mcp-config.json` con `mcpServers` | `${input:id}` (almacén seguro), `${env:X}`, `envFile` |
+| Cursor | Sólo pantalla: clave y «Override OpenAI Base URL» | Chat Completions | `~/.cursor/mcp.json` y `.cursor/mcp.json` con `mcpServers` | `${env:X}`, `envFile`, `${userHome}`, `${workspaceFolder}` |
+| LM Studio | Es el servidor | `/v1/models`, `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/completions`; API nativa aparte para cargar/expulsar | `mcp.json` con `mcpServers` («sigue la notación de Cursor») | — |
+| Unsloth | Es el servidor (puerto 8888 por omisión) | `/v1/models` (sólo cargados), `/v1/chat/completions`, `/v1/responses`, `/v1/messages`; Bearer `sk-unsloth-…` | — | — |
+
+Conclusiones que fijan las decisiones:
+- **Protocolo:** todos convergen en Chat Completions de OpenAI; Responses y Messages son opcionales. →
+  D11b.
+- **Archivo de modelos:** no hay uno común. VS Code y OpenCode tienen el suyo con campos equivalentes
+  (`maxInputTokens`/`limit.context`, `maxOutputTokens`/`limit.output`, `requestHeaders`/`headers`,
+  `modelOptions`/`options`); Cursor no tiene archivo. El de OpenCode es el único con esquema público que Ale
+  ya usa. → D1 se mantiene; importar desde `chatLanguageModels.json` de VS Code queda como mejora posterior,
+  porque los campos se corresponden uno a uno.
+- **MCP:** la notación mayoritaria es `mcpServers` en un `mcp.json` aparte (Cursor, LM Studio, Claude Code,
+  el archivo portable de VS Code). La de OpenCode es minoritaria. → D12: MCP no va en `gitcron.json`.
+- **Secretos:** cada herramienta referencia en vez de escribir el valor; VS Code guarda en su almacén
+  seguro lo que el archivo nombra como `${input:…}`. Las «variables guardadas en GitCron» de D5 son la misma
+  idea con la sintaxis del formato de cada archivo.
+
+Fuentes: [LM Studio MCP](https://lmstudio.ai/docs/app/mcp), [LM Studio OpenAI compat](https://lmstudio.ai/docs/developer/openai-compat),
+[VS Code MCP](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration),
+[VS Code modelos](https://code.visualstudio.com/docs/agent-customization/language-models),
+[Cursor MCP](https://cursor.com/docs/context/mcp), [Unsloth API](https://unsloth.ai/docs/basics/api),
+[Unsloth issue 5047](https://github.com/unslothai/unsloth/issues/5047).
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -70,7 +100,7 @@ temporal + renombrar); si el archivo cambió en disco desde la última lectura, 
 ### D4. Parámetros abiertos
 Petición = parámetros conocidos (`temperature`, `limit.output` como `max_tokens`) + `provider.options`
 fuera de las claves de conexión + `model.options` + la variante elegida, en ese orden de precedencia, y el
-`agent.<uso>` encima. Lo desconocido se pasa tal cual en el cuerpo de la petición. Validación contra una
+`agent.<uso>` encima. Lo desconocido se pasa tal cual en el cuerpo de la petición. `stream` va siempre explícito: Unsloth transmite en eventos si se omite. Validación contra una
 copia del esquema empaquetada: un campo desconocido es advertencia, nunca error ni borrado. La copia se
 actualiza con cada versión de GitCron; no se baja en tiempo de ejecución.
 
@@ -136,6 +166,15 @@ Se usa Chat Completions y no Responses porque es lo que implementan todos los se
 Unsloth/llama.cpp, OpenRouter); si un proveedor declara la API Responses, queda como mejora posterior.
 Los valores de parámetros se validan contra el estándar (advertencia con el valor esperado, D4); no se
 normalizan en silencio.
+
+### D12. MCP en `mcp.json` con la notación `mcpServers`
+`~/.config/gitcron/mcp.json` y `<raíz>/.gitcron/mcp.json`, con `mcpServers` y los campos de Cursor
+(`command`, `args`, `env`, `envFile`; `url`, `headers`) y `${env:NOMBRE}`. Misma lectura, escritura
+puntual y observación que `gitcron.json` (D3). La conversión desde OpenCode: `type: "local"` +
+`command: [cmd, ...args]` → `command` + `args`; `environment` → `env`; `type: "remote"` → `url` +
+`headers`; `{env:X}` → `${env:X}`; `enabled: false` se conserva como comentario porque `mcpServers` no
+tiene ese campo. *Alternativa descartada:* el bloque `mcp` de OpenCode dentro de `gitcron.json`; lo lee sólo
+OpenCode.
 
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos

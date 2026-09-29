@@ -16,8 +16,8 @@ repositorio abierto que se superpone al global, con la misma regla de mezcla que
 archivos global y de proyecto. El archivo SHALL seguir el esquema de configuración publicado de OpenCode
 (`$schema: https://opencode.ai/config.json`), admitir comentarios y comas finales como ese esquema declara,
 y usar sus campos sin agregar claves propias de GitCron: `provider` (proveedores y modelos), `model` y
-`small_model` (elección general y rápida), `agent` (una entrada por uso de GitCron) y `mcp`. Un bloque
-`provider` o `mcp` copiado entre `opencode.json` y `gitcron.json` SHALL significar lo mismo en los dos.
+`small_model` (elección general y rápida) y `agent` (una entrada por uso de GitCron). Un bloque
+`provider` copiado entre `opencode.json` y `gitcron.json` SHALL significar lo mismo en los dos.
 
 El fundamento es que la persona ya mantiene su configuración en ese formato, y un formato a medida de
 GitCron quedaría incompatible con cualquier otra herramienta el día que cambie. Medido el 2026-09-29: el
@@ -59,7 +59,8 @@ y SHALL NOT sobrescribir el archivo.
 Todo proveedor del bloque `provider` que no sea de protocolo propio SHALL usarse con la API de OpenAI tal
 como está publicada: modelos por `GET {baseURL}/models`, generación por `POST {baseURL}/chat/completions`
 con `messages`, autenticación `Authorization: Bearer <clave>`, streaming por eventos SSE terminados en
-`[DONE]`, y parámetros con sus nombres y valores de esa API (`temperature`, `top_p`, `max_tokens` o
+`[DONE]` —con `stream` enviado siempre de forma explícita, `true` o `false`—, y parámetros con sus nombres
+y valores de esa API (`temperature`, `top_p`, `max_tokens` o
 `max_completion_tokens`, `stop`, `reasoning_effort` con `minimal | low | medium | high`, entre otros). Lo
 que el servidor agregue por encima (cabeceras de Cloudflare Access, carga de modelos de LM Studio) SHALL
 tratarse como extensión opcional, detectada y nunca requerida. Las variables de entorno convencionales de
@@ -70,7 +71,16 @@ valor esperado, y SHALL enviarse tal como está escrito salvo que la persona ace
 El fundamento es que es el único contrato que cumplen a la vez OpenRouter, LM Studio, Unsloth, llama.cpp,
 vLLM y la propia OpenAI: construir sobre él y no sobre particularidades de un servidor es lo que evita que
 un cambio de servidor rompa GitCron. Medido el 2026-09-29: `opencode.json` de Ale declara
-`reasoning_effort: "High"`, fuera de los valores del estándar.
+`reasoning_effort: "High"`, fuera de los valores del estándar. LM Studio y Unsloth exponen `/v1/models`,
+`/v1/chat/completions` y además `/v1/responses` y `/v1/messages`; Cursor sólo admite un servidor con Chat
+Completions; VS Code deja elegir entre Chat Completions, Responses y Messages por proveedor. Unsloth
+responde en streaming cuando el pedido omite `stream` (issue 5047 de unslothai/unsloth), al revés del
+estándar: mandarlo siempre evita depender de ese comportamiento. Unsloth lista en `/v1/models` sólo los
+modelos cargados, y LM Studio también los descargados.
+
+#### Scenario: Pedido sin streaming a Unsloth
+- **WHEN** GitCron pide una respuesta completa a un servidor Unsloth
+- **THEN** el pedido lleva `stream: false` y la respuesta se lee como JSON, no como eventos
 
 #### Scenario: Servidor compatible cualquiera
 - **WHEN** la persona declara un servidor compatible con OpenAI que GitCron no conoce por nombre
@@ -125,7 +135,7 @@ pasarlo a una variable guardada, sin hacerlo sin confirmación.
 - **THEN** GitCron usa la dirección que la variable tenga en ese momento y la muestra resuelta
 
 ### Requirement: Importar desde la configuración de OpenCode
-GitCron SHALL ofrecer copiar a `gitcron.json` bloques `provider`, `agent` y `mcp` de
+GitCron SHALL ofrecer copiar a `gitcron.json` bloques `provider` y `agent` de
 `~/.config/opencode/opencode.json`, con una vista previa de qué entra y qué cambia. Las referencias
 `{env:…}` y `{file:…}` SHALL copiarse como referencias. SHALL NOT modificar `opencode.json`.
 
@@ -229,11 +239,31 @@ como si faltara algo.
 - **WHEN** el modelo elegido es de OpenRouter o de un CLI de suscripción
 - **THEN** el panel no muestra los controles de carga y expulsión
 
-### Requirement: Los servidores MCP se conservan y se muestran
-El bloque `mcp` de `gitcron.json` SHALL leerse con el formato de OpenCode, mostrarse en la pantalla de
-ajustes con su tipo y si está habilitado, y conservarse intacto en toda escritura. Mientras ningún uso de
-GitCron consuma MCP, la pantalla SHALL decirlo en vez de sugerir que están en uso.
+### Requirement: Los servidores MCP van en un `mcp.json` con la notación compartida
+Los servidores MCP de GitCron SHALL declararse en un archivo `mcp.json` aparte, global
+(`~/.config/gitcron/mcp.json`) y opcional por repositorio (`<raíz>/.gitcron/mcp.json`), con la notación
+`mcpServers` que comparten Cursor, LM Studio y Claude Code: por servidor, `command`, `args`, `env` y
+`envFile` para los locales, y `url` y `headers` para los remotos, con variables `${env:NOMBRE}`. SHALL
+mostrarse en la pantalla con su tipo, conservarse intacto en toda escritura y reflejar los cambios hechos
+a mano, igual que `gitcron.json`. GitCron SHALL ofrecer importar servidores desde `~/.cursor/mcp.json`,
+el `mcp.json` de LM Studio y el bloque `mcp` de `opencode.json`, convirtiendo este último a la notación
+compartida. Mientras ningún uso de GitCron consuma MCP, la pantalla SHALL decirlo. Un bloque `mcp` dentro
+de `gitcron.json` SHALL advertirse con la oferta de moverlo a `mcp.json`, sin leerlo como fuente.
+
+El fundamento está medido el 2026-09-29: Cursor (`~/.cursor/mcp.json`, `.cursor/mcp.json`), LM Studio
+(«sigue la notación `mcp.json` de Cursor») y Claude Code usan `mcpServers`; VS Code usa `servers` en
+`.vscode/mcp.json` y `mcpServers` en su archivo de usuario portable; OpenCode usa un bloque `mcp` propio,
+con `type: local | remote` y el comando como lista. La notación de la mayoría es la que sobrevive a un
+cambio de herramienta.
 
 #### Scenario: MCP declarados
-- **WHEN** el archivo declara servidores MCP locales y remotos
-- **THEN** la pantalla los lista con tipo y estado y aclara que GitCron todavía no los usa
+- **WHEN** `mcp.json` declara servidores locales y remotos
+- **THEN** la pantalla los lista con tipo y aclara que GitCron todavía no los usa
+
+#### Scenario: Importar desde OpenCode
+- **WHEN** se importan los servidores del bloque `mcp` de `opencode.json`
+- **THEN** `mcp.json` los recibe en la notación `mcpServers`, con las referencias de variables convertidas a `${env:NOMBRE}`, y `opencode.json` no cambia
+
+#### Scenario: Copiar desde Cursor
+- **WHEN** la persona pega en `mcp.json` un servidor copiado de `~/.cursor/mcp.json`
+- **THEN** GitCron lo muestra tal cual, sin conversión

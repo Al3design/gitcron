@@ -34,14 +34,16 @@ declara no lanzable porque en 1.1.x no tenía salida estructurada. OpenCode 1.18
   - `model` / `small_model`: elección general y rápida.
   - `agent.<uso>`: una entrada por uso de GitCron (redacción de commit, Cartografía, análisis de versión,
     Temporal Agent, agente de SDD) para excepciones de modelo y parámetros.
-  - `mcp`: se conserva y se muestra; GitCron todavía no lo usa.
+- **`mcp.json` aparte, con la notación `mcpServers`** que comparten Cursor, LM Studio y Claude Code (global y
+  por repositorio, variables `${env:NOMBRE}`). Se muestra y se conserva; GitCron todavía no lo usa. Importa
+  desde Cursor, LM Studio y el bloque `mcp` de OpenCode, que se convierte.
 - **El archivo y la pantalla dicen lo mismo**: GitCron observa el archivo, lo refleja al guardarlo a mano
   y, cuando se cambia algo desde la pantalla, escribe sólo ese valor, conservando comentarios y campos que no
   conoce. Un archivo roto se informa con línea y motivo y nunca se sobrescribe.
 - **Secretos por referencia**: `{env:NOMBRE}` y `{file:ruta}` en cualquier valor, incluida la URL base
   (así se elige túnel o red local por variable, como hoy). Una variable se toma del sistema y, si no está,
   de las que la persona guardó cifradas en GitCron. El archivo nunca lleva el valor.
-- **Importar desde `opencode.json`**: copia bloques `provider`, `agent` y `mcp` con vista previa,
+- **Importar desde `opencode.json`**: copia bloques `provider` y `agent` con vista previa,
   conservando las referencias. `opencode.json` no se modifica.
 - **Dos familias en la misma elección**: suscripción por CLI (Claude, Codex, Antigravity; sirven como agente
   y para texto, por ejemplo Temporal Agent sin OpenRouter) y API o servidor propio (lo del bloque `provider`).

@@ -17,7 +17,7 @@ Rutina de trabajo: [config.yaml](../../config.yaml). Secuencia del producto: [EX
 | 1.3 | orquestador | Tabla en design.md (D6) |
 | 1.4 | orquestador | Copia del esquema de OpenCode y `gitcron.json` de ejemplo |
 | 2.1–2.5 | local | Módulo nuevo de configuración en `electron/ai/` y sus tests; `electron/ai/key-store.ts`; `electron/ipc/ai.ts`; `electron/preload.ts`; `types/electron.d.ts` |
-| 2.6 | local | Importador en el módulo de configuración y su test con fixture saneado |
+| 2.6, 2.6b | local | Importador en el módulo de configuración y su test con fixture saneado |
 | 2.7 | local | Módulo de configuración; `lib/ai-model-memory.ts` y ajustes actuales como fuente |
 | 3.1, 3.1b | local | `electron/ai/commit-message/local-provider.ts` (catálogo), módulo de configuración |
 | 3.2 | local | Cliente de texto por CLI en `electron/ai/` y su test |
