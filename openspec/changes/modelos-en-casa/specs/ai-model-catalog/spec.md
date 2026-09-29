@@ -216,7 +216,8 @@ ofrecer usarlo en ese momento, con un toque.
 Al lanzar un agente desde SDD, GitCron SHALL pasarle el modelo efectivo del uso «agente de SDD». Los
 proveedores del bloque `provider` SHALL lanzarse como agente a través de OpenCode, entregándole esa misma
 definición de proveedor sin escribirla en la configuración de OpenCode. La confirmación de lanzamiento
-SHALL nombrar el motor y el modelo.
+SHALL nombrar el modelo, su proveedor y quién ejecuta las herramientas (el propio CLI de suscripción, u
+OpenCode cuando el modelo es de un servidor).
 
 #### Scenario: Agente de suscripción con modelo elegido
 - **WHEN** se lanza Codex con un modelo elegido
@@ -229,6 +230,45 @@ SHALL nombrar el motor y el modelo.
 #### Scenario: OpenCode ausente
 - **WHEN** el modelo elegido es de un servidor propio y OpenCode no está instalado
 - **THEN** el lanzador informa que hace falta OpenCode para usarlo como agente, sin lanzar otro motor
+
+### Requirement: Se ve quién conversa y quién ejecuta
+Para cada uso, la pantalla SHALL distinguir el modelo que produce el texto de quién ejecuta herramientas
+(leer y escribir archivos, correr comandos), cuando las hay. Los usos de texto (redacción de commit,
+Cartografía, análisis de versión, Temporal Agent) SHALL correr sin herramientas y decirlo. En el agente de
+SDD, las herramientas las ejecuta el CLI de suscripción elegido o, para un modelo de servidor, OpenCode; un
+servidor compatible con OpenAI sólo conversa. Esto no reparte roles entre las IAs: cualquier modelo puede
+ocupar cualquier uso, y lo que se muestra es qué pieza hace qué en ese uso.
+
+El fundamento, sugerido por Codex y aceptado el 2026-09-29: un modelo de Unsloth no lee ni escribe
+archivos por sí mismo; si la pantalla dice sólo «Unsloth · Qwen», la persona no puede saber qué programa va
+a tocar su repositorio.
+
+#### Scenario: Modelo de servidor como agente
+- **WHEN** el agente de SDD usa un modelo de Unsloth
+- **THEN** la confirmación dice que conversa ese modelo y que las herramientas las ejecuta OpenCode
+
+#### Scenario: Uso de texto
+- **WHEN** se redacta un mensaje de commit con cualquier modelo
+- **THEN** la pantalla dice que ese uso no ejecuta herramientas
+
+### Requirement: El pedido efectivo se puede ver con su procedencia
+Para cada uso, GitCron SHALL mostrar el último pedido tal como se envió al proveedor —dirección, modelo y
+cada parámetro— con la procedencia de cada valor (archivo global o del repositorio, proveedor, modelo,
+variante, entrada del uso en `agent`, o valor por omisión de GitCron), sin secretos ni contenido del
+repositorio. Si el proveedor rechaza el pedido, el error SHALL nombrar los parámetros enviados que no son
+del estándar, con su procedencia, y GitCron SHALL NOT quitarlos en silencio para reintentar.
+
+El fundamento, sugerido por Codex y aceptado el 2026-09-29: que los parámetros nuevos pasen sin cambiar
+GitCron no garantiza que cada proveedor los acepte; lo que sí se puede garantizar es ver exactamente qué
+se mandó y de dónde salió cada valor.
+
+#### Scenario: Revisar lo enviado
+- **WHEN** la persona abre el detalle del último pedido de la redacción de commit
+- **THEN** ve la dirección, el modelo y cada parámetro con el archivo y el bloque de donde salió, sin la clave
+
+#### Scenario: Parámetro rechazado
+- **WHEN** el proveedor responde error a un pedido que llevaba `options.foo` del archivo del repositorio
+- **THEN** el error nombra `foo` y su procedencia, y no se reintenta sin él
 
 ### Requirement: Los controles de carga aparecen sólo donde el proveedor los tiene
 Cargar, expulsar y elegir contexto y tiempo de vida de un modelo SHALL ofrecerse sólo para proveedores que
@@ -247,7 +287,10 @@ Los servidores MCP de GitCron SHALL declararse en un archivo `mcp.json` aparte, 
 mostrarse en la pantalla con su tipo, conservarse intacto en toda escritura y reflejar los cambios hechos
 a mano, igual que `gitcron.json`. GitCron SHALL ofrecer importar servidores desde `~/.cursor/mcp.json`,
 el `mcp.json` de LM Studio y el bloque `mcp` de `opencode.json`, convirtiendo este último a la notación
-compartida. Mientras ningún uso de GitCron consuma MCP, la pantalla SHALL decirlo. Un bloque `mcp` dentro
+compartida. Mientras ningún uso de GitCron consuma MCP, la pantalla SHALL decirlo, y SHALL decir por servidor quién lo
+conecta y lo ejecuta cuando alguno lo haga. Para llevar un servidor a otra herramienta, GitCron SHALL
+ofrecer copiarlo convertido al formato de VS Code (`servers`), Claude Code (`mcpServers`) u OpenCode
+(`mcp`), sin escribir los archivos de esas herramientas. Un bloque `mcp` dentro
 de `gitcron.json` SHALL advertirse con la oferta de moverlo a `mcp.json`, sin leerlo como fuente.
 
 El fundamento está medido el 2026-09-29: Cursor (`~/.cursor/mcp.json`, `.cursor/mcp.json`), LM Studio
@@ -263,6 +306,10 @@ cambio de herramienta.
 #### Scenario: Importar desde OpenCode
 - **WHEN** se importan los servidores del bloque `mcp` de `opencode.json`
 - **THEN** `mcp.json` los recibe en la notación `mcpServers`, con las referencias de variables convertidas a `${env:NOMBRE}`, y `opencode.json` no cambia
+
+#### Scenario: Copiar para otra herramienta
+- **WHEN** la persona pide un servidor de `mcp.json` en el formato de VS Code, de Claude Code o de OpenCode
+- **THEN** GitCron muestra el bloque convertido para copiar, y no escribe la configuración de esa herramienta
 
 #### Scenario: Copiar desde Cursor
 - **WHEN** la persona pega en `mcp.json` un servidor copiado de `~/.cursor/mcp.json`

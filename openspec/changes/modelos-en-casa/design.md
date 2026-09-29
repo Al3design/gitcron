@@ -176,6 +176,32 @@ puntual y observación que `gitcron.json` (D3). La conversión desde OpenCode: `
 tiene ese campo. *Alternativa descartada:* el bloque `mcp` de OpenCode dentro de `gitcron.json`; lo lee sólo
 OpenCode.
 
+### D13. Quién conversa y quién ejecuta (sugerencia de Codex, aceptada el 2026-09-29)
+Una sola elección para la persona, adaptadores distintos por detrás:
+
+| Uso | Conversa | Ejecuta herramientas |
+|---|---|---|
+| Redacción, Cartografía, análisis de versión, Temporal Agent | el modelo elegido (servidor o CLI) | nadie: se corren sin herramientas |
+| Agente de SDD con CLI de suscripción | el modelo del CLI | el mismo CLI (Claude Code, Codex, Antigravity) |
+| Agente de SDD con modelo de servidor | el modelo del servidor | OpenCode, con la configuración de GitCron (D8) |
+
+No son roles: cualquier modelo va a cualquier uso. Es la respuesta a «¿qué programa toca mi repositorio?»,
+y la pantalla la muestra en la confirmación.
+
+### D14. Pedido efectivo con procedencia (sugerencia de Codex, aceptada)
+Cada uso guarda en memoria el último pedido armado (dirección resuelta, modelo, parámetros) con la
+procedencia de cada valor, calculada en la misma mezcla de D4 (archivo y bloque de donde salió). Se muestra
+a pedido, sin secretos ni contenido del repositorio. No se persiste en disco. Si el proveedor rechaza el
+pedido, el error lista los parámetros enviados fuera del estándar con su procedencia; no hay reintento que
+los quite en silencio. La «versión» de la configuración es su `$schema` más la copia fechada del esquema
+con la que valida GitCron (tarea 1.4): el formato no admite un campo de versión propio (D1).
+
+### D15. Primero un recorrido completo angosto (sugerencia de Codex, aceptada)
+Antes de generalizar, un recorrido de punta a punta con un servidor local (Unsloth por la red de la casa)
+y un CLI (Codex): `gitcron.json` mínimo, redacción de commit con cada uno, pedido efectivo visible,
+cancelar, cambiar de vista y volver con la elección conservada. Si la unificación falla en una de las dos
+familias, se ve ahí y no después de construir importación, MCP y ajustes. Las tareas quedan ordenadas así.
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
