@@ -19,7 +19,7 @@ Rutina de trabajo: [config.yaml](../../config.yaml). Secuencia del producto: [EX
 | 2.1–2.5 | local | Módulo nuevo de configuración en `electron/ai/` y sus tests; `electron/ai/key-store.ts`; `electron/ipc/ai.ts`; `electron/preload.ts`; `types/electron.d.ts` |
 | 2.6 | local | Importador en el módulo de configuración y su test con fixture saneado |
 | 2.7 | local | Módulo de configuración; `lib/ai-model-memory.ts` y ajustes actuales como fuente |
-| 3.1 | local | `electron/ai/commit-message/local-provider.ts` (catálogo), módulo de configuración |
+| 3.1, 3.1b | local | `electron/ai/commit-message/local-provider.ts` (catálogo), módulo de configuración |
 | 3.2 | local | Cliente de texto por CLI en `electron/ai/` y su test |
 | 3.3 | local | `electron/ipc/commit-message-ai.ts`; `electron/ai/carto/*`; `electron/pipeline/openspec-version-analysis.ts`; `electron/ai/providers/*`; `electron/ai/text-client.ts` |
 | 3.4 | local | `components/pipeline/AiModelControls.tsx`; pantallas de cada uso; `lib/i18n.ts` |

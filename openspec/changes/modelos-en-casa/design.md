@@ -121,6 +121,22 @@ de la redacción, y entradas `agent.gitcron-temporal` y `agent.gitcron-cartograp
 Nada cambia hasta que la persona toca algo, y lo que estaba escondido en ajustes queda escrito. Si el
 archivo ya existe, no se toca.
 
+### D11b. El estándar de OpenAI como piso, las extensiones como capas
+Pedido de Ale: que cumpla con el estándar de OpenAI. Se separan dos cosas que suelen confundirse:
+- **El protocolo** es el de la API de OpenAI (`/models`, `/chat/completions`, Bearer, SSE, nombres y
+  valores de parámetros). `text-client.ts` ya habla Chat Completions con Bearer y `max_tokens`; lo que hoy
+  se sale del estándar es el catálogo de la redacción, que lee la API nativa de LM Studio (tipo de modelo,
+  carga, contexto cargado, dispositivo) como si fuera la única fuente. Eso pasa a ser una capa opcional:
+  primero `GET /models` estándar; si el servidor además responde la API nativa de LM Studio, se suman
+  estado de carga y los controles de carga.
+- **El archivo** no tiene estándar de OpenAI: OpenAI no publica un formato de configuración de clientes.
+  El bloque `provider` con `npm: "@ai-sdk/openai-compatible"` de OpenCode es justamente la declaración de
+  un endpoint con la API de OpenAI (`baseURL`, `apiKey`, `headers`), y por eso se mantiene D1.
+Se usa Chat Completions y no Responses porque es lo que implementan todos los servidores de Ale (LM Studio,
+Unsloth/llama.cpp, OpenRouter); si un proveedor declara la API Responses, queda como mejora posterior.
+Los valores de parámetros se validan contra el estándar (advertencia con el valor esperado, D4); no se
+normalizan en silencio.
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /

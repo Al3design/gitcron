@@ -55,6 +55,35 @@ y SHALL NOT sobrescribir el archivo.
 - **WHEN** el archivo tiene un error de sintaxis
 - **THEN** la pantalla muestra dónde está el error, sigue con la última configuración válida y dice que lo está haciendo
 
+### Requirement: Los proveedores por API hablan el estándar de la API de OpenAI
+Todo proveedor del bloque `provider` que no sea de protocolo propio SHALL usarse con la API de OpenAI tal
+como está publicada: modelos por `GET {baseURL}/models`, generación por `POST {baseURL}/chat/completions`
+con `messages`, autenticación `Authorization: Bearer <clave>`, streaming por eventos SSE terminados en
+`[DONE]`, y parámetros con sus nombres y valores de esa API (`temperature`, `top_p`, `max_tokens` o
+`max_completion_tokens`, `stop`, `reasoning_effort` con `minimal | low | medium | high`, entre otros). Lo
+que el servidor agregue por encima (cabeceras de Cloudflare Access, carga de modelos de LM Studio) SHALL
+tratarse como extensión opcional, detectada y nunca requerida. Las variables de entorno convencionales de
+OpenAI (`OPENAI_API_KEY`, `OPENAI_BASE_URL`) SHALL reconocerse para el proveedor `openai`. Un valor que no
+coincide con el estándar (por ejemplo `reasoning_effort: "High"`) SHALL mostrarse como advertencia con el
+valor esperado, y SHALL enviarse tal como está escrito salvo que la persona acepte la corrección.
+
+El fundamento es que es el único contrato que cumplen a la vez OpenRouter, LM Studio, Unsloth, llama.cpp,
+vLLM y la propia OpenAI: construir sobre él y no sobre particularidades de un servidor es lo que evita que
+un cambio de servidor rompa GitCron. Medido el 2026-09-29: `opencode.json` de Ale declara
+`reasoning_effort: "High"`, fuera de los valores del estándar.
+
+#### Scenario: Servidor compatible cualquiera
+- **WHEN** la persona declara un servidor compatible con OpenAI que GitCron no conoce por nombre
+- **THEN** GitCron lista sus modelos y redacta con él usando sólo la API estándar
+
+#### Scenario: Valor fuera del estándar
+- **WHEN** un modelo declara `reasoning_effort: "High"`
+- **THEN** la pantalla advierte que el estándar espera `high` y ofrece corregirlo en el archivo, sin cambiarlo solo
+
+#### Scenario: Variables convencionales de OpenAI
+- **WHEN** el sistema define `OPENAI_API_KEY` y el archivo declara el proveedor `openai` sin clave
+- **THEN** GitCron usa esa variable y la pantalla dice que sale del sistema
+
 ### Requirement: Los parámetros nuevos se toman sin cambiar GitCron
 GitCron SHALL pasar al proveedor los parámetros declarados en el archivo aunque no los conozca: `options`
 del proveedor y del modelo (por ejemplo `reasoning_effort`), `headers`, `temperature`, `limit` (contexto y
