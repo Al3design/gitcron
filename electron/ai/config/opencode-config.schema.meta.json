@@ -3,5 +3,6 @@
   "fetchedAt": "2026-09-29",
   "opencodeVersionAtFetch": "1.18.33",
   "sha256": "e8cb6e287a3852ee3403f4803be5ad6b19db94948037eaa9672125c333427922",
-  "note": "Copia con la que GitCron valida gitcron.json. Se actualiza con cada versión de GitCron, nunca en tiempo de ejecución (design.md D4/D14 de modelos-en-casa)."
+  "note": "Copia con la que GitCron valida gitcron.json. Se actualiza con cada versión de GitCron, nunca en tiempo de ejecución (design.md D4/D14 de modelos-en-casa).",
+  "sha256Basis": "contenido con saltos de línea LF, como se bajó; Git puede dejarlo con CRLF en Windows: normalizar antes de comparar"
 }
