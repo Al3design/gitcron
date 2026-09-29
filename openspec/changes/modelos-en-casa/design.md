@@ -179,7 +179,10 @@ corrida es `success: false` con ese motivo, aunque el estado diga `SUCCESS`. Ret
 **Decisión pendiente de Ale** (cambia qué promete el lanzador): la documentación oficial dice que una regla
 `permissions.allow` (por ejemplo `command(git)`) en `~/.gemini/antigravity-cli/settings.json` concede
 comandos en `-p`; el issue 548 de google-antigravity/antigravity-cli (abierto) dice que `-p` la ignora.
-Probarlo toca la configuración global de Antigravity de la persona. Hasta decidirlo, Antigravity se declara
+*Medido el 2026-09-29 con autorización de Ale* (su archivo respaldado y restaurado con el mismo sha256): con
+`permissions.allow: ["command(git)"]` el comando `git status --short` se rechazó igual en `-p`. Confirma el issue
+548: en modo sin pantalla la única vía para correr comandos es `--dangerously-skip-permissions`. Una regla que
+aprueba todo se descartó por la misma razón: quita la contención. Hasta que Ale decida, Antigravity se declara
 con `runsCommands: false`: se ofrece para explorar y escribir, no para implementar con pruebas.
 
 ### D10. Migración sin cambio de comportamiento
