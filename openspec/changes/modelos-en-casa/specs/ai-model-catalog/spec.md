@@ -3,123 +3,181 @@
 ## Purpose
 
 Que la persona elija una vez con qué motores y modelos trabaja GitCron —suscripciones por CLI o servidores
-por API, propios o externos— y que esa elección valga en todos los usos de IA de la aplicación, con los
-secretos cifrados y el destino del contexto siempre declarado.
+por API, propios o externos— en un archivo propio de GitCron con el formato estándar de configuración de
+OpenCode, editable a mano y reflejado en la pantalla, con los secretos fuera del archivo y el destino del
+contexto siempre declarado.
 
 ## ADDED Requirements
 
-### Requirement: Un catálogo común con dos familias de proveedores
-GitCron SHALL presentar en un solo catálogo los proveedores de dos familias: *suscripción por CLI*
-(Claude Code, Codex y Antigravity, que usan la cuenta con la que la persona inició sesión en cada CLI) y
-*API o servidor propio* (OpenRouter, LM Studio, Unsloth y cualquier servidor compatible con la API de
-OpenAI). Cada proveedor SHALL declarar a qué familia pertenece, si está disponible en esta máquina y, si
-no, el motivo medido. Un CLI no instalado o sin sesión iniciada SHALL figurar con ese motivo, no omitirse.
+### Requirement: GitCron tiene su propio archivo de configuración en el formato de OpenCode
+GitCron SHALL leer su configuración de IA de un archivo propio, `gitcron.json`, en la carpeta de
+configuración del usuario (`~/.config/gitcron/`), y opcionalmente de un `gitcron.json` en la raíz del
+repositorio abierto que se superpone al global, con la misma regla de mezcla que OpenCode aplica a sus
+archivos global y de proyecto. El archivo SHALL seguir el esquema de configuración publicado de OpenCode
+(`$schema: https://opencode.ai/config.json`), admitir comentarios y comas finales como ese esquema declara,
+y usar sus campos sin agregar claves propias de GitCron: `provider` (proveedores y modelos), `model` y
+`small_model` (elección general y rápida), `agent` (una entrada por uso de GitCron) y `mcp`. Un bloque
+`provider` o `mcp` copiado entre `opencode.json` y `gitcron.json` SHALL significar lo mismo en los dos.
 
-El fundamento es que la persona ya eligió sus motores fuera de GitCron y hoy la aplicación los conoce por
-separado: cada uso tiene su proveedor fijo y el agente de SDD usa lo que su CLI tenga configurado.
+El fundamento es que la persona ya mantiene su configuración en ese formato, y un formato a medida de
+GitCron quedaría incompatible con cualquier otra herramienta el día que cambie. Medido el 2026-09-29: el
+esquema rechaza claves desconocidas en el nivel superior, y todo lo que GitCron necesita entra en campos
+que ya existen.
 
-#### Scenario: Máquina con suscripciones y servidores propios
-- **WHEN** están instalados Claude Code, Codex y Antigravity, y hay proveedores de LM Studio y Unsloth configurados
-- **THEN** el catálogo los lista a todos, agrupados por familia, cada uno con su disponibilidad
+#### Scenario: Primer arranque sin archivo
+- **WHEN** no existe `~/.config/gitcron/gitcron.json`
+- **THEN** GitCron lo crea con `$schema` y la configuración que hoy tiene en uso, y lo informa con la ruta
 
-#### Scenario: CLI instalado sin sesión
-- **WHEN** un CLI de suscripción está instalado pero su cuenta no tiene sesión iniciada
-- **THEN** figura como no disponible con el motivo y la orden para iniciar sesión, sin ocultarse
+#### Scenario: Bloque copiado desde OpenCode
+- **WHEN** la persona pega en `gitcron.json` el bloque `provider.unslothpc` de su `opencode.json`
+- **THEN** GitCron muestra ese proveedor con su URL, sus modelos y sus parámetros, sin conversión
 
-### Requirement: Importar proveedores desde la configuración de OpenCode
-GitCron SHALL ofrecer importar los proveedores declarados en el bloque `provider` de
-`~/.config/opencode/opencode.json`: nombre, URL base, cabeceras, clave y modelos declarados. Antes de
-importar SHALL mostrar qué proveedores encontró y qué va a guardar, sin mostrar el valor de ningún secreto.
-SHALL NOT modificar el archivo de OpenCode. Un proveedor también SHALL poder darse de alta a mano con los
-mismos campos.
+#### Scenario: Archivo del repositorio
+- **WHEN** el repositorio abierto tiene un `gitcron.json` que elige otro modelo para un uso
+- **THEN** en ese repositorio vale la elección del archivo del repositorio y la pantalla dice de qué archivo sale
 
-#### Scenario: Importación con secretos
-- **WHEN** el archivo declara un proveedor con clave y cabeceras de Cloudflare Access
-- **THEN** la vista previa lista el proveedor, su URL y los nombres de las cabeceras, con los valores enmascarados, y la importación guarda los secretos cifrados
+### Requirement: El archivo y la pantalla dicen lo mismo
+GitCron SHALL observar el archivo: un cambio guardado a mano SHALL reflejarse en la pantalla sin
+reiniciar. Un cambio hecho desde la pantalla SHALL escribirse en el archivo conservando comentarios,
+orden, formato y todo campo que GitCron no conozca. Si el archivo no se puede interpretar, GitCron SHALL
+mostrar el error con archivo, línea y motivo, SHALL seguir con la última configuración válida declarándolo,
+y SHALL NOT sobrescribir el archivo.
 
-#### Scenario: Archivo ausente o ilegible
-- **WHEN** el archivo no existe o no es JSON válido
-- **THEN** se informa cuál de los dos casos es y se ofrece el alta manual, sin afirmar que no hay proveedores
+#### Scenario: Edición a mano
+- **WHEN** la persona cambia la temperatura de un modelo en el archivo y guarda
+- **THEN** la pantalla muestra la temperatura nueva y el próximo pedido la usa
+
+#### Scenario: Edición desde la pantalla
+- **WHEN** la persona elige otro modelo para un uso desde GitCron
+- **THEN** el archivo cambia sólo en ese valor y sus comentarios siguen donde estaban
+
+#### Scenario: Archivo roto
+- **WHEN** el archivo tiene un error de sintaxis
+- **THEN** la pantalla muestra dónde está el error, sigue con la última configuración válida y dice que lo está haciendo
+
+### Requirement: Los parámetros nuevos se toman sin cambiar GitCron
+GitCron SHALL pasar al proveedor los parámetros declarados en el archivo aunque no los conozca: `options`
+del proveedor y del modelo (por ejemplo `reasoning_effort`), `headers`, `temperature`, `limit` (contexto y
+salida) y la variante elegida en `variants`. Los que GitCron conoce SHALL editarse con controles propios;
+los demás SHALL verse y editarse como campos avanzados. Un campo que el esquema empaquetado no conoce SHALL
+mostrarse como advertencia y SHALL NOT borrarse ni bloquear el uso.
+
+#### Scenario: Parámetro que GitCron no conoce
+- **WHEN** un modelo declara en `options` un parámetro que GitCron no tiene como control
+- **THEN** el pedido al modelo lo incluye y la pantalla lo muestra entre los campos avanzados
+
+#### Scenario: Límite de contexto declarado
+- **WHEN** un modelo declara `limit.context`
+- **THEN** GitCron usa ese límite para avisar cuando el contenido a mandar no entra
+
+### Requirement: Los secretos se referencian, no se escriben en el archivo
+Claves y cabeceras secretas SHALL escribirse en el archivo como referencias con la sintaxis del formato:
+`{env:NOMBRE}` o `{file:ruta}`, y la sustitución SHALL aplicarse en cualquier valor del archivo, incluida
+la URL base. GitCron SHALL resolver `{env:NOMBRE}` primero con el entorno del sistema y, si no está
+definida, con las variables que la persona guardó cifradas en GitCron con el almacenamiento seguro del
+sistema operativo. La pantalla SHALL decir de dónde sale cada variable (sistema, guardada en GitCron o
+falta) y SHALL NOT mostrar su valor. Si GitCron encuentra un secreto literal en el archivo, SHALL ofrecer
+pasarlo a una variable guardada, sin hacerlo sin confirmación.
+
+#### Scenario: Variable del sistema
+- **WHEN** el archivo usa `{env:UNSLOTH_API_KEY}` y la variable está definida en el sistema
+- **THEN** GitCron la usa y la pantalla dice «del sistema», sin el valor
+
+#### Scenario: Variable guardada en GitCron
+- **WHEN** la variable no está en el sistema y la persona la guardó desde GitCron
+- **THEN** GitCron la usa, el archivo sigue diciendo `{env:UNSLOTH_API_KEY}` y la pantalla dice «guardada en GitCron»
+
+#### Scenario: Variable faltante
+- **WHEN** una referencia no se puede resolver
+- **THEN** el proveedor figura no disponible con el nombre de la variable que falta, y nada se manda con un valor vacío
+
+#### Scenario: URL por variable
+- **WHEN** la URL base de un proveedor es `{env:UNSLOTH_BASE_URL}`
+- **THEN** GitCron usa la dirección que la variable tenga en ese momento y la muestra resuelta
+
+### Requirement: Importar desde la configuración de OpenCode
+GitCron SHALL ofrecer copiar a `gitcron.json` bloques `provider`, `agent` y `mcp` de
+`~/.config/opencode/opencode.json`, con una vista previa de qué entra y qué cambia. Las referencias
+`{env:…}` y `{file:…}` SHALL copiarse como referencias. SHALL NOT modificar `opencode.json`.
+
+#### Scenario: Importación de proveedores con variables
+- **WHEN** se importan `unslothpc` y `unslothpclocal`, cuyas claves y cabeceras son `{env:…}`
+- **THEN** `gitcron.json` recibe los dos bloques con las mismas referencias, y la pantalla dice qué variables están definidas y cuáles faltan
 
 #### Scenario: Reimportar
-- **WHEN** se importa de nuevo un proveedor que ya existe en GitCron
-- **THEN** se muestra qué campos cambian y se actualiza sólo con confirmación
+- **WHEN** se importa un proveedor que ya existe en `gitcron.json`
+- **THEN** se muestran los campos que cambian y se escribe sólo con confirmación
 
-### Requirement: Los secretos de un proveedor se guardan cifrados y no llegan a la interfaz
-Las claves y cabeceras secretas de un proveedor SHALL guardarse cifradas con el almacenamiento seguro del
-sistema operativo y SHALL usarse sólo en el proceso principal al armar la petición. La interfaz SHALL
-poder saber si un secreto existe y reemplazarlo o borrarlo, y SHALL NOT poder leer su valor.
+#### Scenario: Archivo de OpenCode ausente o ilegible
+- **WHEN** `opencode.json` no existe o no se puede interpretar
+- **THEN** se dice cuál de los dos casos es, sin afirmar que no hay proveedores
 
-#### Scenario: Consulta desde la interfaz
-- **WHEN** la pantalla de ajustes muestra un proveedor con secretos guardados
-- **THEN** indica qué secretos existen, con opciones para reemplazar y borrar cada uno, sin su valor
+### Requirement: Un catálogo con dos familias de proveedores
+La pantalla SHALL presentar los proveedores de dos familias: *suscripción por CLI* (Claude Code, Codex y
+Antigravity, con la cuenta con la que la persona inició sesión en cada CLI) y *API o servidor propio* (los
+del bloque `provider`: OpenRouter, LM Studio, Unsloth y cualquier compatible con OpenAI). Cada proveedor
+SHALL declarar si está disponible y, si no, el motivo medido. Un CLI no instalado o sin sesión SHALL
+figurar con ese motivo, no omitirse. Los CLI de suscripción SHALL poder elegirse en `model` y en
+`agent.<uso>.model` con un identificador de proveedor reservado por CLI.
 
-#### Scenario: Almacenamiento seguro no disponible
-- **WHEN** el sistema operativo no ofrece cifrado
-- **THEN** no se guarda el secreto en claro y se informa el motivo
+#### Scenario: Máquina con suscripciones y servidores propios
+- **WHEN** están instalados Claude Code, Codex y Antigravity, y el archivo declara LM Studio y Unsloth
+- **THEN** la pantalla los lista a todos, agrupados por familia, cada uno con su disponibilidad
 
-### Requirement: Cada proveedor lista sus modelos y admite alta manual
-El catálogo SHALL obtener los modelos de cada proveedor de su fuente en el momento: la lista del servidor
-para los compatibles con OpenAI, la del CLI cuando la expone y la del servicio para OpenRouter. Cuando la
-fuente no responde o no lista, SHALL permitir escribir el identificador del modelo a mano. El criterio de
-inclusión de modelos de texto que ya rige para la redacción (sólo tipo `llm` cuando el servidor informa
-el tipo) SHALL aplicarse igual en el catálogo común.
+#### Scenario: CLI instalado sin sesión
+- **WHEN** un CLI está instalado pero su cuenta no tiene sesión iniciada
+- **THEN** figura no disponible con el motivo y la orden para iniciar sesión
+
+### Requirement: Cada proveedor lista sus modelos
+GitCron SHALL mostrar los modelos declarados en el archivo y, cuando el proveedor responde, los que
+reporta en el momento (`GET /models` para compatibles con OpenAI, la lista del CLI cuando la expone). Un
+modelo reportado que no está en el archivo SHALL poder agregarse al archivo con un toque. El criterio de
+inclusión de modelos de texto vigente para la redacción (sólo tipo `llm` cuando el servidor informa el
+tipo) SHALL aplicarse igual.
 
 #### Scenario: Servidor que responde
-- **WHEN** se abre la lista de modelos de un servidor compatible con OpenAI que responde
-- **THEN** se muestran los modelos que devolvió en ese momento
+- **WHEN** un servidor compatible con OpenAI responde con modelos que el archivo no declara
+- **THEN** se muestran como disponibles sin declarar, con la opción de agregarlos al archivo
 
 #### Scenario: Servidor apagado
 - **WHEN** el servidor no responde
-- **THEN** se informa que no respondió, se muestran los modelos declarados al importar como no confirmados y se permite escribir uno a mano
+- **THEN** se informa que no respondió y los modelos del archivo se muestran como no confirmados
 
-### Requirement: Una elección por omisión con excepciones visibles por uso
-GitCron SHALL guardar una elección por omisión de proveedor y modelo, y SHALL permitir una excepción por
-uso: redacción de commit, Cartografía, análisis de versión de OpenSpec, Temporal Agent y agente de SDD.
-Cada uso SHALL poder preferir un modelo rápido o uno de razonamiento. El proveedor y el modelo efectivos
-de un uso SHALL verse en la pantalla donde ese uso ocurre; una excepción SHALL NOT quedar visible sólo en
-ajustes.
+### Requirement: Una elección general con excepciones visibles por uso
+`model` SHALL ser la elección general y `small_model` la rápida. Cada uso de GitCron —redacción de commit,
+Cartografía, análisis de versión de OpenSpec, Temporal Agent y agente de SDD— SHALL tener su entrada en
+`agent` con nombre fijo y documentado; si declara `model`, `variant`, `temperature` u `options`, eso es
+una excepción para ese uso. El modelo, el proveedor y el origen de la elección (general, rápida o
+excepción, y de qué archivo) SHALL verse en la pantalla donde ocurre el uso.
 
-#### Scenario: Elección sin excepciones
-- **WHEN** hay una elección por omisión y ningún uso tiene excepción
-- **THEN** todos los usos usan ese proveedor y ese modelo, y cada pantalla lo nombra
+#### Scenario: Sin excepciones
+- **WHEN** ningún uso declara modelo propio
+- **THEN** todos usan `model`, salvo los que el archivo marca como rápidos, que usan `small_model`, y cada pantalla lo nombra
 
 #### Scenario: Excepción en un uso
-- **WHEN** Temporal Agent tiene una excepción que elige un modelo de suscripción por CLI
-- **THEN** Temporal Agent usa ese modelo, su pantalla lo nombra como excepción, y los demás usos siguen con la elección por omisión
+- **WHEN** la entrada de Temporal Agent en `agent` declara un modelo de suscripción por CLI
+- **THEN** Temporal Agent usa ese modelo, su pantalla lo nombra como excepción, y los demás usos siguen con la elección general
 
-### Requirement: El destino del contexto se declara y no hay caída silenciosa a un servicio externo
-Antes de mandar contenido del repositorio a un modelo, la pantalla SHALL declarar adónde va: esta
-máquina, un servidor propio en otra máquina o un servicio externo. Si el proveedor elegido no responde,
-GitCron SHALL informarlo y SHALL NOT pasar a otro proveedor sin una acción humana. La única alternancia
-automática permitida es entre direcciones declaradas del mismo proveedor.
+### Requirement: El destino del contexto se declara y no hay caída silenciosa a otro proveedor
+Antes de mandar contenido del repositorio a un modelo, la pantalla SHALL declarar adónde va: esta máquina,
+un servidor propio en otra máquina o un servicio externo. Si el proveedor elegido no responde, GitCron
+SHALL informarlo y SHALL NOT pasar a otro proveedor sin una acción humana. Cuando otro proveedor declara
+los mismos modelos (por ejemplo el mismo servidor por la red de la casa y por un túnel), GitCron SHALL
+ofrecer usarlo en ese momento, con un toque.
+
+#### Scenario: En casa con el túnel elegido
+- **WHEN** el uso tiene elegido `unslothpc` (túnel) y no responde, y `unslothpclocal` declara los mismos modelos y sí responde
+- **THEN** se informa que el túnel no respondió y se ofrece usar el local, sin cambiar solo
 
 #### Scenario: Servidor propio apagado con un servicio externo configurado
-- **WHEN** el proveedor elegido es un servidor propio que no responde y OpenRouter también está configurado
-- **THEN** se informa que el servidor no respondió y no se manda nada a OpenRouter
-
-#### Scenario: Destino externo
-- **WHEN** el uso tiene elegido un proveedor externo
-- **THEN** la pantalla lo nombra como servicio externo antes de mandar el contenido
-
-### Requirement: Un mismo proveedor puede tener una dirección local y una remota
-Un proveedor SHALL poder declarar una dirección local y una remota del mismo servidor (por ejemplo la red de
-la casa y un túnel). Al usarlo, GitCron SHALL probar primero la local con un límite de tiempo corto y, si no
-responde, la remota, y SHALL decir cuál usó. Dos proveedores importados que difieren sólo en la URL SHALL
-poder unirse en uno con dos direcciones, con confirmación.
-
-#### Scenario: En la PC de la casa
-- **WHEN** la dirección local responde
-- **THEN** se usa la local y la pantalla dice «local»
-
-#### Scenario: Fuera de casa
-- **WHEN** la dirección local no responde dentro del límite y la remota sí
-- **THEN** se usa la remota y la pantalla dice «remoto»
+- **WHEN** el proveedor elegido no responde y OpenRouter también está configurado
+- **THEN** se informa que no respondió y no se manda nada a OpenRouter
 
 ### Requirement: El lanzador de SDD manda el modelo elegido
 Al lanzar un agente desde SDD, GitCron SHALL pasarle el modelo efectivo del uso «agente de SDD». Los
-proveedores de API o servidor propio SHALL lanzarse como agente a través de OpenCode, con ese proveedor y
-ese modelo. La confirmación de lanzamiento SHALL nombrar el motor y el modelo.
+proveedores del bloque `provider` SHALL lanzarse como agente a través de OpenCode, entregándole esa misma
+definición de proveedor sin escribirla en la configuración de OpenCode. La confirmación de lanzamiento
+SHALL nombrar el motor y el modelo.
 
 #### Scenario: Agente de suscripción con modelo elegido
 - **WHEN** se lanza Codex con un modelo elegido
@@ -127,17 +185,26 @@ ese modelo. La confirmación de lanzamiento SHALL nombrar el motor y el modelo.
 
 #### Scenario: Agente sobre un servidor propio
 - **WHEN** el uso «agente de SDD» tiene elegido un modelo de Unsloth
-- **THEN** la sesión se lanza con OpenCode usando ese proveedor y ese modelo
+- **THEN** la sesión se lanza con OpenCode usando ese proveedor y ese modelo, y `opencode.json` no cambia
 
 #### Scenario: OpenCode ausente
 - **WHEN** el modelo elegido es de un servidor propio y OpenCode no está instalado
-- **THEN** el lanzador informa que hace falta OpenCode para usarlo como agente, sin lanzar otro motor en su lugar
+- **THEN** el lanzador informa que hace falta OpenCode para usarlo como agente, sin lanzar otro motor
 
 ### Requirement: Los controles de carga aparecen sólo donde el proveedor los tiene
-Cargar, expulsar, elegir contexto y tiempo de vida de un modelo SHALL ofrecerse sólo para proveedores que
-declaran esa capacidad. Con un proveedor que no la tiene, esos controles SHALL NOT mostrarse
-deshabilitados como si faltara algo.
+Cargar, expulsar y elegir contexto y tiempo de vida de un modelo SHALL ofrecerse sólo para proveedores que
+exponen esa capacidad. Con un proveedor que no la tiene, esos controles SHALL NOT mostrarse deshabilitados
+como si faltara algo.
 
 #### Scenario: Proveedor sin carga explícita
 - **WHEN** el modelo elegido es de OpenRouter o de un CLI de suscripción
 - **THEN** el panel no muestra los controles de carga y expulsión
+
+### Requirement: Los servidores MCP se conservan y se muestran
+El bloque `mcp` de `gitcron.json` SHALL leerse con el formato de OpenCode, mostrarse en la pantalla de
+ajustes con su tipo y si está habilitado, y conservarse intacto en toda escritura. Mientras ningún uso de
+GitCron consuma MCP, la pantalla SHALL decirlo en vez de sugerir que están en uso.
+
+#### Scenario: MCP declarados
+- **WHEN** el archivo declara servidores MCP locales y remotos
+- **THEN** la pantalla los lista con tipo y estado y aclara que GitCron todavía no los usa

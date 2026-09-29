@@ -12,113 +12,137 @@ Estado medido el 2026-09-29 (motivación en proposal.md):
 | Temporal Agent | OpenRouter o API de Anthropic | `electron/ai/providers/*`, `components/TemporalAgentSettings.tsx` |
 | Agente de SDD | Claude, Codex, OpenCode sin modelo; agy no lanzable | `PipelineRuntimeLauncher.tsx`, `runtime-session-hub.ts` |
 
-Piezas que ya existen y se reutilizan: `text-client.ts` (URL base + clave opcional + cabeceras sobre la API
-de OpenAI; `createUnslothConfig` sin llamadores), `key-store.ts` (safeStorage, un secreto por proveedor de
-una lista cerrada, con nombre opcional; el preload descarta el nombre), `requestedModel` en el hub y en los
-adaptadores de Claude, Codex y OpenCode, `AiModelControls` (carga, contexto, TTL de LM Studio).
+Piezas que se reutilizan: `text-client.ts` (URL base + clave opcional + cabeceras sobre la API de OpenAI),
+`key-store.ts` (safeStorage), `requestedModel` en el hub y en los adaptadores de Claude, Codex y OpenCode,
+`AiModelControls` (carga, contexto, TTL de LM Studio), `jsonc-parser` 3.3.1 (dependencia directa).
 
-`~/.config/opencode/opencode.json` de Ale declara `lmstudio` (`localhost:1234`), `unslothpc` (túnel
-`https://llm.aledesign.dev/v1`, clave y cabeceras `CF-Access-Client-Id`/`Secret`) y `unslothpclocal`
-(`http://192.168.1.7:8888/v1`, mismos secretos y mismos siete modelos). OpenCode 1.18.33 responde ACP
-protocolo 1. `agy` 1.2.13 tiene `-p`, `stream-json`, `--model`, `--mode accept-edits|plan` y `agy models`.
+`~/.config/opencode/opencode.json` de Ale: `lmstudio` (`localhost:1234`), `unslothpc` (túnel
+`https://llm.aledesign.dev/v1`) y `unslothpclocal` (`http://192.168.1.7:8888/v1`), los dos Unsloth con
+`apiKey` y cabeceras `CF-Access-Client-Id`/`Secret` como `{env:…}` y los mismos siete modelos, uno con
+`options.reasoning_effort: "High"`; `agent.tanda` con modelo de `unslothpc`; seis servidores `mcp` locales y
+remotos.
+
+Esquema de OpenCode (`https://opencode.ai/config.json`, bajado el 2026-09-29): nivel superior con
+`additionalProperties: false`; `provider.<id>` = `api, name, env, id, npm, whitelist, blacklist, options,
+models`; `provider.options` = `apiKey, baseURL, timeout, headerTimeout, chunkTimeout…` y abierto; modelo =
+`id, name, family, reasoning, temperature, tool_call, cost, limit{context,input,output}, modalities,
+options, headers, variants…`; `agent.<nombre>` = `model, variant, temperature, top_p, prompt, tools,
+disable, description, mode, options, steps, permission…`; `allowComments: true`.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Un único punto en main que responde «¿qué proveedor, modelo y dirección usa este uso?», consumido por
-  los cinco usos.
+- Un único punto en main que responde «¿qué proveedor, modelo, parámetros y destino usa este uso?»,
+  alimentado por `gitcron.json`.
 - Día uno sin sorpresas: al instalar la versión, cada uso sigue con lo que tenía hasta que la persona
-  cambie algo.
+  cambie algo, y eso queda escrito en el archivo.
 
 **Non-Goals:**
-- Conversación, memoria o recuperación de fuentes: son de `retomar-trabajo-con-asistencia-contextual`, que
-  consume este catálogo.
-- Editar `opencode.json` o la configuración de los CLI.
-- Gestionar cuentas de suscripción (iniciar sesión, cuotas): se informa el estado y la orden, no se opera.
-- Proveedores con protocolo propio nuevos más allá de la API de Anthropic que ya existe.
+- Conversación, memoria o recuperación de fuentes: son de `retomar-trabajo-con-asistencia-contextual`.
+- Usar los servidores MCP desde GitCron: sólo se conservan y se muestran.
+- Modificar `opencode.json` o la configuración de los CLI; gestionar cuentas de suscripción.
+- Definir claves propias de GitCron en el archivo.
 
 ## Decisions
 
-### D1. El catálogo vive en main y se persiste en dos partes
-Datos no secretos (proveedores, direcciones, modelos declarados, elección por omisión, excepciones por
-uso) en un JSON de `userData`; secretos en `key-store`. El renderer recibe el catálogo sin secretos y sólo
-puede pedir «existe / reemplazar / borrar». *Alternativa descartada:* guardar todo en el store de
-preferencias del renderer; los secretos no pueden pasar por ahí.
+### D1. Formato: el de OpenCode, sin extensiones
+`gitcron.json` valida contra el esquema de OpenCode. Todo lo de GitCron entra en campos existentes:
+`agent.<uso>` para cada uso, con nombres fijos (`gitcron-commit`, `gitcron-cartography`,
+`gitcron-openspec-analysis`, `gitcron-temporal`, `gitcron-sdd`) y `description` que explica qué uso es. El
+prefijo evita chocar con agentes de OpenCode si alguien copia el bloque entero. *Alternativas
+descartadas:* un formato propio (se rompe con cualquier otra herramienta, que es lo que Ale no quiere);
+LiteLLM `config.yaml` o Continue `config.yaml` (Ale no los usa, y ninguno cubre `mcp` y agentes a la vez);
+una clave `gitcron` en el nivel superior (el esquema la rechaza).
 
-### D2. Secretos con nombre por proveedor del catálogo
-`key-store` suma un espacio `catalog:<providerId>` con nombres de secreto (`apiKey`, y una entrada por
-cabecera secreta), validando `providerId` con el mismo criterio que los nombres de secreto. Los espacios
-actuales (`openrouter`, `claude`, `unsloth`…) siguen leyéndose para migrar. El preload pasa el nombre del
-secreto que hoy descarta. *Alternativa descartada:* ampliar la lista cerrada con cada proveedor importado;
-los ids los elige la persona.
+### D2. Ubicación y mezcla
+Global en `~/.config/gitcron/gitcron.json` (en Windows, `%USERPROFILE%\.config\gitcron\`, igual que
+OpenCode); de repositorio en `<raíz>/gitcron.json`. Mezcla profunda por clave con prioridad del
+repositorio, como OpenCode. La pantalla dice de qué archivo sale cada valor y escribe en el global salvo
+que la persona elija el del repositorio.
 
-### D3. Tres tipos de proveedor, una sola interfaz de uso
-- `openai-compatible`: una o dos direcciones, cabeceras, clave opcional, lista por `GET /models`. Capacidad
-  `load` sólo si el servidor expone la API nativa de LM Studio (se detecta, no se supone por el nombre).
-  OpenRouter es un preset de este tipo.
-- `anthropic-api`: la excepción que ya existe en `providers/claude.ts`.
-- `cli`: Claude, Codex, Antigravity. Para texto se corre el CLI en modo no interactivo en un directorio
-  temporal vacío, sin herramientas de escritura (Claude sin herramientas, Codex `--sandbox read-only`,
-  agy `--mode plan`), con el prompt por stdin y salida JSON. Para agente, el runtime del hub.
-Cada uso llama a `resolveModelFor(use)` y recibe `{provider, model, address, destination}`; `destination`
-es `this-machine | own-server | external-service` y la pantalla lo muestra. Las suscripciones por CLI
-cuentan como `external-service`: el contenido sale de la máquina.
+### D3. Lectura y escritura
+Lectura con `jsonc-parser` (comentarios y comas finales). Observación con `fs.watch` sobre la carpeta y
+relectura con un pequeño retardo; si la relectura falla, se conserva la última configuración válida y se
+muestra el error con línea. Escritura con `jsonc-parser.modify` + `applyEdits` sobre el texto: sólo cambia
+el valor tocado, y los comentarios, el orden y los campos desconocidos quedan. Escritura atómica (archivo
+temporal + renombrar); si el archivo cambió en disco desde la última lectura, se relee antes de editar.
 
-### D4. Sin caída a otro proveedor; sí entre direcciones del mismo
-Si el proveedor no responde, el uso falla con el motivo. La única alternancia automática es local → remota
-del mismo proveedor: sondeo `GET /models` a la local con tope de 1,5 s; el resultado se recuerda un minuto
-y se invalida ante un fallo. *Alternativa descartada:* cadena Unsloth → LM Studio → OpenRouter (la de la
-nota del 2026-09-14): manda contenido a un destino que la persona no eligió.
+### D4. Parámetros abiertos
+Petición = parámetros conocidos (`temperature`, `limit.output` como `max_tokens`) + `provider.options`
+fuera de las claves de conexión + `model.options` + la variante elegida, en ese orden de precedencia, y el
+`agent.<uso>` encima. Lo desconocido se pasa tal cual en el cuerpo de la petición. Validación contra una
+copia del esquema empaquetada: un campo desconocido es advertencia, nunca error ni borrado. La copia se
+actualiza con cada versión de GitCron; no se baja en tiempo de ejecución.
 
-### D5. Importación: vista previa, unión sugerida, sin tocar el archivo
-Se lee `provider.*`: `options.baseURL`, `options.apiKey`, `options.headers`, `models`. Una cabecera cuyo
-nombre contiene `secret`, `key`, `token`, `authorization` o `client-id` se trata como secreto. Dos
-proveedores con la misma lista de modelos y los mismos secretos que difieren sólo en la URL se proponen
-como uno con dos direcciones; local es la de `localhost`, `127.0.0.1` o una IP privada. El id del
-proveedor en OpenCode se conserva: sirve para D7.
+### D5. Secretos
+Sustitución de `{env:NOMBRE}` y `{file:ruta}` en cualquier valor de texto, con la sintaxis de OpenCode.
+`{env:}` se resuelve con `process.env` y, si falta, con las variables guardadas en `key-store` bajo un
+espacio `env:<NOMBRE>` (cifradas; la interfaz sólo puede ver si existen, reemplazarlas y borrarlas). Las
+claves ya guardadas de OpenRouter y Anthropic se exponen como `OPENROUTER_API_KEY` y `ANTHROPIC_API_KEY`
+guardadas, y el archivo inicial las referencia así. *Alternativa descartada:* un `{secret:…}` propio;
+rompería la compatibilidad del archivo.
 
-### D6. Migración sin cambio de comportamiento
-En el primer arranque: proveedor LM Studio en `localhost:1234`; OpenRouter y Anthropic con sus claves
-existentes si las hay; la elección por omisión es LM Studio con el modelo recordado de la redacción
-(`lib/ai-model-memory`), y Temporal Agent y Cartografía quedan con una excepción que reproduce su
-elección actual. Así nada cambia hasta que la persona toca algo, y lo que antes estaba escondido queda a
-la vista como excepción.
+### D6. Tipos de proveedor y resolución por uso
+- Bloque `provider` con `npm` `@ai-sdk/openai-compatible` u OpenRouter: `text-client` con la URL, cabeceras
+  y clave resueltas; lista por `GET /models`. Capacidad de carga sólo si el servidor expone la API nativa
+  de LM Studio (se detecta, no se supone por el nombre).
+- `@ai-sdk/anthropic`: la excepción que ya existe en `providers/claude.ts`.
+- CLI de suscripción: identificadores reservados `claude-code`, `codex` y `antigravity` como proveedor en
+  `model` (`codex/gpt-5.5`, por ejemplo); no se declaran en `provider`. Para texto se corre el CLI en modo no
+  interactivo en un directorio temporal vacío, sin herramientas de escritura, prompt por stdin y salida
+  JSON (forma exacta según tarea 1.3). Para agente, el runtime del hub.
+`resolveModelFor(uso)` devuelve `{provider, model, params, destination, source}`; `destination` es
+`this-machine | own-server | external-service` por la dirección resuelta (localhost; IP privada; resto), y
+las suscripciones cuentan como `external-service`.
 
-### D7. Agente sobre un servidor propio: OpenCode con el proveedor que ya conoce
-Un proveedor importado desde `opencode.json` ya existe para OpenCode con el mismo id; el lanzador le pide
-`<providerId>/<modelo>`. Un proveedor dado de alta a mano en GitCron no existe para OpenCode: en esta
-entrega figura como «no disponible como agente» con ese motivo. Cómo se elige el modelo de una sesión ACP
-se mide antes de implementar (tarea 1.2); si ACP no lo permite, se pasa por la opción de modelo del
-proceso `opencode acp`, sin escribir configuración en disco.
+### D7. Sin caída a otro proveedor
+Si el proveedor no responde, el uso falla con el motivo. Si otro proveedor declara el mismo conjunto de ids
+de modelo, la pantalla ofrece usarlo ahora (una vez) o hacerlo la elección del uso (escribe el archivo).
+*Alternativas descartadas:* cadena automática Unsloth → LM Studio → OpenRouter (manda contenido a un
+destino no elegido); un campo de «dirección alternativa» dentro del proveedor (no existe en el formato).
 
-### D8. Antigravity: adaptador estructurado nuevo, con fixture real antes que código
+### D8. Agente sobre un servidor propio: OpenCode lee la misma definición
+Como `gitcron.json` tiene el formato de OpenCode, el proceso `opencode acp` recibe la configuración de GitCron
+por la vía que OpenCode ofrezca para una configuración adicional (variable de entorno con ruta o contenido;
+se mide en la tarea 1.2), y las variables guardadas en GitCron se pasan en el entorno de ese proceso. El
+modelo de la sesión se elige como `<providerId>/<modelo>`. No se escribe nada en la configuración de
+OpenCode.
+
+### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
 accept-edits`, con reanudación por `--conversation`. El formato de eventos se fija con una captura real
-saneada (tarea 1.1), no por analogía con Claude. Sin `--dangerously-skip-permissions`: si un comando
-necesita aprobación en modo no interactivo, el adaptador lo reporta como motivo de detención (spec).
+saneada (tarea 1.1). Sin `--dangerously-skip-permissions`: si un comando necesita aprobación en modo no
+interactivo, el adaptador lo reporta como motivo de detención.
 
-### D9. Dónde se ve la elección
-Una sección de ajustes «Motores y modelos» (catálogo, importación, elección por omisión, excepciones). En
-cada uso, una línea con motor, modelo y destino, con un acceso para cambiar la excepción de ese uso.
-`AiModelControls` se monta sólo si el proveedor tiene capacidad `load`.
+### D10. Migración sin cambio de comportamiento
+Primer arranque sin `gitcron.json`: se crea con `$schema`, `provider.lmstudio` (`localhost:1234`),
+`provider.openrouter` con `{env:OPENROUTER_API_KEY}` si hay clave guardada, `model` = el modelo recordado
+de la redacción, y entradas `agent.gitcron-temporal` y `agent.gitcron-cartography` con su elección actual.
+Nada cambia hasta que la persona toca algo, y lo que estaba escondido en ajustes queda escrito. Si el
+archivo ya existe, no se toca.
+
+### D11. Dónde se ve
+Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
+(declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
+«Mostrar en la carpeta». En cada uso, una línea con motor, modelo, destino y origen, con acceso a su
+excepción. `AiModelControls` sólo con capacidad de carga.
 
 ## Risks / Trade-offs
 
-- [El stream de `agy` cambia entre versiones] → versión instalada reportada; eventos desconocidos se
-  ignoran y se cuentan; la conformance común corre sobre la captura.
-- [Un CLI de suscripción no expone lista de modelos] → alta manual y el modelo por omisión del CLI
-  nombrado como tal.
-- [Sondeo local lento en redes con pérdida] → tope corto y recuerdo por un minuto; la pantalla dice cuál
-  dirección usó.
-- [Texto por CLI tarda más que una API] → el uso lo declara con su tiempo transcurrido, como ya hace la
-  redacción local.
-- [Importar secretos de un archivo en claro] → GitCron no borra ni modifica el archivo; la pantalla sugiere
-  quitar las claves de `opencode.json` si la persona ya no lo usa, sin hacerlo.
+- [OpenCode cambia su esquema] → la copia empaquetada se actualiza con cada versión; mientras tanto lo
+  nuevo es advertencia, no error, y se pasa tal cual.
+- [Dos procesos editan el archivo a la vez] → relectura antes de cada edición y escritura atómica; si el
+  archivo cambió entre medio, se reaplica la edición puntual sobre el texto nuevo.
+- [Variables del sistema que cambian sin reiniciar GitCron] → Windows no las propaga a procesos ya
+  abiertos; la pantalla dice «del sistema al abrir GitCron» y ofrece guardarla en GitCron.
+- [El stream de `agy` cambia entre versiones] → versión reportada; eventos desconocidos se cuentan y se
+  ignoran; la conformance común corre sobre la captura.
+- [Un CLI no expone lista de modelos] → se escribe el id a mano en el archivo o en la pantalla.
 
 ## Migration Plan
 
-D6 en el primer arranque de la versión, idempotente. Volver atrás: la versión anterior ignora el JSON del
-catálogo y el espacio `catalog:*` del baúl; sus claves originales no se borran durante la migración.
+D10 en el primer arranque de la versión, sólo si el archivo no existe. Volver atrás: la versión anterior
+ignora `gitcron.json` y el espacio `env:*` del baúl; las claves originales no se borran.
 
 ## Open Questions
 
