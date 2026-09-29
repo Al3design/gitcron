@@ -55,7 +55,7 @@ import { usePipelineStore } from '@/lib/pipeline-store';
 import { AiElapsed } from './AiElapsed';
 import { appendDraftChunks, clearDraftLog, finishDraftLog, startDraftLog } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
-import { MIN_CONTEXT_LENGTH, filterDraftableModels, type LocalModel } from '@/types/commit-message-ai';
+import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiResolvedModel, type LocalModel } from '@/types/commit-message-ai';
 import { useRememberedAiModel, useRememberedAiSettings, rememberAiSettings, rememberAiModel as rememberAiModelGlobally, getRememberedAiModel, formatAiDeviceLabel } from '@/lib/ai-model-memory';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
@@ -1026,7 +1026,7 @@ export function OpenSpecDashboard({
   // El idioma sale del mismo store que el traductor, para que las frases de la
   // espera cambien junto con el resto del panel.
   const uiLanguage = useGitStore((state) => state.language);
-  const [aiModels, setAiModels] = useState<LocalModel[]>([]);
+  const [aiModels, setAiModels] = useState<LocalModel[]>([]), [resolvedCommitModel, setResolvedCommitModel] = useState<CommitAiResolvedModel | null>(null);
   const aiModel = useRememberedAiModel(repoPath);
   /**
    * En qué está la IA: quieta, cargando un modelo, o redactando.
@@ -1283,6 +1283,16 @@ export function OpenSpecDashboard({
   useEffect(() => {
     if (!prepareOpen || !repoPath) return;
     let alive = true;
+    window.api?.commitAi?.resolvedModel?.().then((res) => {
+      if (!alive) return;
+      if (res?.success && res.data) {
+        setResolvedCommitModel(res.data);
+      } else {
+        setResolvedCommitModel(null);
+      }
+    }).catch(() => {
+      if (alive) setResolvedCommitModel(null);
+    });
     window.api?.commitAi?.catalog().then((result) => {
       if (!alive) return;
       // Los de embeddings no redactan nada; se filtran acá y no en el proveedor,
@@ -1540,8 +1550,17 @@ export function OpenSpecDashboard({
     };
   }, []);
 
+  const getDestinationLabel = (
+    dest: 'this-machine' | 'own-server' | 'external-service',
+  ): string => {
+    if (dest === 'this-machine') return t('pipeline.openspec.prepare.aiDestThisMachine');
+    if (dest === 'own-server') return t('pipeline.openspec.prepare.aiDestOwnServer');
+    return t('pipeline.openspec.prepare.aiDestExternal');
+  };
+
   const draftWithAi = async () => {
-    if (aiBusy || !repoPath || !aiModel || chosen.length === 0) return;
+    const effectiveModel = resolvedCommitModel?.modelId || aiModel;
+    if (aiBusy || !repoPath || !effectiveModel || chosen.length === 0) return;
     const originRepoPath = repoPath;
     setAiBusy(true);
     setAiNotice(null);
@@ -1558,7 +1577,7 @@ export function OpenSpecDashboard({
         paths: chosen,
         changeId: soleChangeId(chosen, branchAttribution),
         intent: selectedChange?.intent ?? null,
-        model: aiModel,
+        model: effectiveModel,
         draftId,
       });
       // Cancelar mientras estaba en vuelo: lo que llegue después ya no se aplica.
@@ -2529,39 +2548,82 @@ export function OpenSpecDashboard({
                       cuáles iban juntos. Ale lo pidió señalando el sector
                       entero. El fondo distingue el sector de un vistazo, que es
                       lo que una línea no hace. */}
-                  <AiModelControls
-                    repoPath={repoPath}
-                    models={aiModels}
-                    deviceNames={aiDeviceNames}
-                    onModelsChange={setAiModels}
-                    busy={aiBusy}
-                    phase={aiPhase}
-                    startedAt={aiStartedAt}
-                    opKind={aiOpKind}
-                    notice={!rightOpen ? aiNotice : null}
-                    onNoticeChange={setAiNotice}
-                    onLoad={confirmAiLoad}
-                    onUnload={unloadAiModel}
-                    actions={
-                      <>
-                        {!aiNeedsLoad && (
-                          <button
-                            type="button"
-                            className={styles.secondaryAction}
-                            disabled={aiBusy || chosen.length === 0 || !aiModel}
-                            onClick={draftWithAi}
-                          >
-                            {aiPhase === 'drafting' ? t('pipeline.openspec.prepare.aiBusy') : t('pipeline.openspec.prepare.aiDraft')}
-                          </button>
-                        )}
+                  {resolvedCommitModel ? (
+                    <section className={styles.aiPanel}>
+                      <div className={styles.aiRow}>
+                        <p className={styles.aiResolvedLine}>
+                          {resolvedCommitModel.kind === 'cli'
+                            ? t('pipeline.openspec.prepare.aiResolvedLineCli', {
+                                model: resolvedCommitModel.modelId,
+                                provider: resolvedCommitModel.providerName,
+                                destination: getDestinationLabel(resolvedCommitModel.destination),
+                                file: resolvedCommitModel.sourceFile,
+                              })
+                            : t('pipeline.openspec.prepare.aiResolvedLine', {
+                                model: resolvedCommitModel.modelId,
+                                provider: resolvedCommitModel.providerName,
+                                destination: getDestinationLabel(resolvedCommitModel.destination),
+                                file: resolvedCommitModel.sourceFile,
+                              })}
+                        </p>
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          disabled={aiBusy || chosen.length === 0}
+                          onClick={draftWithAi}
+                        >
+                          {aiPhase === 'drafting'
+                            ? t('pipeline.openspec.prepare.aiBusy')
+                            : t('pipeline.openspec.prepare.aiDraft')}
+                        </button>
                         {aiBusy && (
                           <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
                             {t('pipeline.openspec.prepare.aiCancel')}
                           </button>
                         )}
-                      </>
-                    }
-                  />
+                      </div>
+                      {!rightOpen && aiNotice && (
+                        <p className={styles.aiNotice} role="status">
+                          {aiNotice}
+                        </p>
+                      )}
+                      {aiBusy && <AiElapsed phase={aiPhase} startedAt={aiStartedAt} kind={aiOpKind} />}
+                    </section>
+                  ) : (
+                    <AiModelControls
+                      repoPath={repoPath}
+                      models={aiModels}
+                      deviceNames={aiDeviceNames}
+                      onModelsChange={setAiModels}
+                      busy={aiBusy}
+                      phase={aiPhase}
+                      startedAt={aiStartedAt}
+                      opKind={aiOpKind}
+                      notice={!rightOpen ? aiNotice : null}
+                      onNoticeChange={setAiNotice}
+                      onLoad={confirmAiLoad}
+                      onUnload={unloadAiModel}
+                      actions={
+                        <>
+                          {!aiNeedsLoad && (
+                            <button
+                              type="button"
+                              className={styles.secondaryAction}
+                              disabled={aiBusy || chosen.length === 0 || !aiModel}
+                              onClick={draftWithAi}
+                            >
+                              {aiPhase === 'drafting' ? t('pipeline.openspec.prepare.aiBusy') : t('pipeline.openspec.prepare.aiDraft')}
+                            </button>
+                          )}
+                          {aiBusy && (
+                            <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
+                              {t('pipeline.openspec.prepare.aiCancel')}
+                            </button>
+                          )}
+                        </>
+                      }
+                    />
+                  )}
                   {/* Cada grupo declara de dónde viene lo que contiene. Ninguno
                       entra preseleccionado: sin un cambio de referencia,
                       privilegiar uno produciría un commit distinto según dónde

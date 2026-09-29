@@ -53,6 +53,7 @@ export interface TextGenerateOptions {
   maxTokens?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  options?: Record<string, unknown>;
 }
 
 /** Opciones para una generación de texto con streaming SSE. */
@@ -139,6 +140,7 @@ export async function completeText(
         ],
         temperature: opts.temperature ?? 0.4,
         max_tokens: opts.maxTokens ?? 1024,
+        ...(opts.options ?? {}),
       }),
       signal,
     });
@@ -202,6 +204,7 @@ export async function streamText(
         ],
         temperature: opts.temperature ?? 0.2,
         max_tokens: opts.maxTokens ?? 2048,
+        ...(opts.options ?? {}),
         stream: true,
         stream_options: { include_usage: true },
       }),

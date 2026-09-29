@@ -190,3 +190,15 @@ export interface DraftChunkEvent {
   draftId: string | null;
   chunks: DraftChunk[];
 }
+
+/**
+ * Modelo resuelto según la configuración de gitcron.json para redacción de commits.
+ * Sin secretos (D6, D13).
+ */
+export interface CommitAiResolvedModel {
+  providerName: string;
+  modelId: string;
+  kind: 'openai-compatible' | 'cli';
+  destination: 'this-machine' | 'own-server' | 'external-service';
+  sourceFile: string;
+}

@@ -251,6 +251,7 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('commit-ai:chunk', handler);
       return () => ipcRenderer.removeListener('commit-ai:chunk', handler);
     },
+    resolvedModel: () => ipcRenderer.invoke('commit-ai:resolved-model'),
   },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),

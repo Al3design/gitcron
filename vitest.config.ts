@@ -17,7 +17,7 @@ export default defineConfig({
       'lib/__tests__/**/*.test.ts',
       'hooks/__tests__/**/*.test.ts',
       'electron/__tests__/**/*.test.ts',
-      'electron/ai/__tests__/**/*.test.ts',
+      'electron/ai/**/__tests__/**/*.test.ts',
       'electron/ai/carto/__tests__/**/*.test.ts',
       'electron/db/__tests__/**/*.test.ts',
       // F04 introduce lógica de UI testeable sin DOM (resolución de estado del

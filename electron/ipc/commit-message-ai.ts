@@ -12,8 +12,11 @@
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
 import { simpleGit } from 'simple-git';
-import type { CommitDraftResult, LoadOutcome, LocalModel } from '../../types/commit-message-ai';
+import type { CommitAiResolvedModel, CommitDraftResult, LoadOutcome, LocalModel } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
+import { draftCommitWithCodex, type SpawnFunction } from '../ai/commit-message/codex-cli';
+import { resolveUse } from '../ai/config/gitcron-config';
+import { streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
   resolveDeviceNames,
@@ -23,6 +26,7 @@ import {
 import {
   DEFAULT_LOCAL_BASE_URL,
   draftCommitSubject,
+  parseDraftResponse,
   fetchModelCatalog,
   hasEnoughContext,
   isKnownModel,
@@ -63,6 +67,16 @@ const inFlightLoad = new Set<string>();
 
 /** Para poder abortar una carga, que antes era literalmente incancelable. */
 const loadControllers = new Map<string, AbortController>();
+
+let configPathOverride: string | null = null;
+export function setCommitAiConfigPathForTesting(p: string | null): void {
+  configPathOverride = p;
+}
+
+let codexSpawnOverride: SpawnFunction | null = null;
+export function setCodexSpawnForTesting(fn: SpawnFunction | null): void {
+  codexSpawnOverride = fn;
+}
 import {
   buildUserPrompt,
   DEFAULT_MAX_TOKENS,
@@ -78,6 +92,14 @@ type Result<T> = { success: boolean; data?: T; error?: string };
 
 const ok = <T>(data: T): Result<T> => ({ success: true, data });
 const fail = <T>(error: unknown): Result<T> => ({ success: false, error: errMsg(error) });
+
+function toUnavailable(error: unknown): CommitDraftResult {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof Error && error.name === 'AbortError') {
+    return { status: 'unavailable', detail: 'La redacción tardó demasiado y se canceló.' };
+  }
+  return { status: 'unavailable', detail: message };
+}
 
 /**
  * Las tareas que pasaron a hechas en esta tanda.
@@ -284,12 +306,123 @@ export function registerCommitMessageAiHandlers(): void {
     return ok({ cancelled: had });
   });
 
+  ipcMain.handle('commit-ai:resolved-model', async (): Promise<Result<CommitAiResolvedModel | null>> => {
+    try {
+      const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
+      if (!resolved) return ok(null);
+      return ok({
+        providerName: resolved.providerName,
+        modelId: resolved.modelId,
+        kind: resolved.kind,
+        destination: resolved.destination,
+        sourceFile: resolved.sourceFile,
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
   ipcMain.handle('commit-ai:draft', async (_e, args: DraftArgs): Promise<Result<CommitDraftResult>> => {
     try {
       const { repoPath, paths, changeId, intent, model, baseUrl, maxTokens, draftId } = args ?? ({} as DraftArgs);
       if (!repoPath || !Array.isArray(paths) || paths.length === 0) {
         return fail(new Error('No hay archivos elegidos para describir.'));
       }
+
+      const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
+      if (resolved) {
+        if (!resolved.available) {
+          return ok({
+            status: 'unavailable',
+            detail: resolved.unavailableReason ?? 'Proveedor no disponible.',
+          });
+        }
+
+        const effectiveModel = resolved.modelId;
+
+        // Contra `HEAD` y no contra el índice: en el panel lo elegido todavía no
+        // está preparado, y un diff vacío haría que el modelo describa la nada.
+        const { stat, diff, tasksDiff } = await withRepoLock(repoPath, async () => {
+          const git = simpleGit(repoPath, { timeout: { block: 20_000 } });
+          const tasksPaths = paths.filter((path) => path.endsWith('tasks.md'));
+          return {
+            stat: await git.raw(['diff', '--stat', 'HEAD', '--', ...paths]),
+            diff: await git.raw(['diff', 'HEAD', '--', ...paths]),
+            tasksDiff: tasksPaths.length > 0
+              ? await git.raw(['diff', 'HEAD', '--', ...tasksPaths])
+              : '',
+          };
+        });
+
+        const budget = inputBudgetChars(resolved.contextLength ?? MIN_CONTEXT_LENGTH);
+        const user = buildUserPrompt({
+          changeId: changeId ?? null,
+          intent: intent ?? null,
+          tickedTasks: tickedTasksFromDiff(tasksDiff),
+          stat,
+          diff: truncateDiff(diff, budget),
+        });
+
+        inFlightDraft?.abort();
+        const controller = new AbortController();
+        inFlightDraft = controller;
+
+        const pump = createChunkPump((chunks) => {
+          if (_e.sender.isDestroyed()) return;
+          _e.sender.send('commit-ai:chunk', { draftId: draftId ?? null, chunks });
+        });
+
+        let result: CommitDraftResult;
+        try {
+          if (resolved.kind === 'cli') {
+            if (resolved.providerId === 'codex') {
+              const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
+              result = await draftCommitWithCodex({
+                model: effectiveModel,
+                prompt: fullPrompt,
+                signal: controller.signal,
+                onChunk: (chunks) => pump.push(chunks),
+                spawnFn: codexSpawnOverride ?? undefined,
+              });
+            } else {
+              result = {
+                status: 'unavailable',
+                detail: 'todavía no conectado',
+              };
+            }
+          } else {
+            // openai-compatible
+            const textConfig: TextClientConfig = {
+              baseUrl: resolved.baseURL ?? DEFAULT_LOCAL_BASE_URL,
+              apiKey: resolved.apiKey,
+              headers: resolved.headers,
+              providerLabel: resolved.providerName,
+            };
+            const genResult = await streamText(textConfig, {
+              model: effectiveModel,
+              system: SYSTEM_PROMPT,
+              user,
+              temperature: resolved.temperature,
+              maxTokens: resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS),
+              options: resolved.options,
+              signal: controller.signal,
+              onChunk: (chunks) => pump.push(chunks),
+            });
+            result = parseDraftResponse(genResult.rawPayload, effectiveModel);
+          }
+        } catch (error) {
+          result = toUnavailable(error);
+        } finally {
+          pump.flush();
+        }
+        if (inFlightDraft === controller) inFlightDraft = null;
+
+        if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
+          return ok({ status: 'malformed', subject: result.subject, model: effectiveModel });
+        }
+        return ok(result);
+      }
+
       const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
 
       const catalog = await fetchModelCatalog(endpoint);
