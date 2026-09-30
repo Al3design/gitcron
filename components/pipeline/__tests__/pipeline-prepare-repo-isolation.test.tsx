@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore, type RepoState } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -165,6 +166,7 @@ beforeEach(() => {
   deviceNames.mockReset().mockResolvedValue({ success: true, data: {} });
   stageFilesMock.mockReset().mockResolvedValue(true);
 
+  usePipelineStore.getState().reset();
   useGitStore.setState({
     openRepos: [makeRepo('C:/repoA', 'archivoA.ts'), makeRepo('C:/repoB', 'archivoB.ts')],
     activeRepoIdx: 0,
@@ -183,6 +185,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   useGitStore.setState({ openRepos: [], activeRepoIdx: -1, repoPath: null, commitMessage: '', modifiedFiles: [] });
   if (ORIGINAL_API === undefined) delete (window as { api?: unknown }).api;
   else Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });
@@ -307,5 +310,52 @@ describe('Auditoría 4.2: Aislamiento entre dos repositorios en la preparación 
       expect(boton.querySelector('[class*="spin"]')).toBeNull();
       expect(boton.getAttribute('aria-disabled')).toBe('true');
     });
+  });
+
+  it('5. Montaje en <StrictMode>: pedir una redacción, desmontar el panel sin cambiar de repositorio, volver a montar: la redacción sigue (no se llamó a commitAi.cancel), se ve en curso con «Cancelar», y al resolver el mensaje llega al repositorio de origen', async () => {
+    let resolveDraft!: (value: unknown) => void;
+    draft.mockImplementation(() => new Promise((resolve) => {
+      resolveDraft = resolve;
+    }));
+
+    const { unmount } = renderDashboard('C:/repoA', true);
+    fireEvent.click(screen.getByRole('button', { name: /openspec\.prepare\.open/ }));
+    elegirTodo();
+    await elegirModelo();
+    fireEvent.click(botonRedactar());
+
+    expect(draft).toHaveBeenCalledTimes(1);
+    expect(draft).toHaveBeenCalledWith(expect.objectContaining({ repoPath: 'C:/repoA' }));
+
+    // Desmontar el panel sin cambiar de repositorio
+    unmount();
+
+    // No se cancela la redacción
+    expect(cancel).not.toHaveBeenCalled();
+
+    // Volver a montar el panel en el mismo repositorio
+    renderDashboard('C:/repoA', true);
+
+    // La preparación sigue abierta y la redacción en curso con «Cancelar»
+    const cancelButton = screen.getByRole('button', { name: /prepare\.aiCancel/ });
+    expect(cancelButton).toBeDefined();
+
+    // Resuelve la redacción
+    resolveDraft({
+      success: true,
+      data: {
+        status: 'drafted',
+        model: 'google/gemma-4-12b',
+        subject: 'feat(repoA): redacción que sobrevivió al desmontaje',
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(useGitStore.getState().openRepos[0].commitMessage).toBe('feat(repoA): redacción que sobrevivió al desmontaje');
+    });
+
+    const state = useGitStore.getState();
+    expect(state.commitMessage).toBe('feat(repoA): redacción que sobrevivió al desmontaje');
+    expect(cancel).not.toHaveBeenCalled();
   });
 });

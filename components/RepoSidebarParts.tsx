@@ -37,6 +37,7 @@ export function SidebarSection({
   children,
   count,
   extra,
+  actions,
   icon,
   isOpen: controlledIsOpen,
   onToggle: controlledOnToggle,
@@ -45,6 +46,7 @@ export function SidebarSection({
   children: ReactNode;
   count?: number;
   extra?: ReactNode;
+  actions?: ReactNode;
   icon?: ReactNode;
   isOpen?: boolean;
   onToggle?: () => void;
@@ -76,6 +78,11 @@ export function SidebarSection({
         {count !== undefined && <span className="bg-border-subtle text-[length:var(--font-size-2xs)] px-2 py-0.5 rounded-full font-mono shrink-0">{count}</span>}
         {extra}
       </div>
+      {actions && (
+        <div data-testid="sidebar-section-actions" className="flex items-center justify-end gap-2 px-3 pb-1 pt-0.5">
+          {actions}
+        </div>
+      )}
       {isOpen && <div className="space-y-0.5">{children}</div>}
     </div>
   );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepoDetailsPanel } from '../RepoDetailsPanel';
 import { useGitStore, type GitFile } from '@/lib/git-store';
@@ -258,5 +258,29 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     expect(textarea).toBeDefined();
     fireEvent.change(textarea, { target: { value: 'nueva nota' } });
     expect(useGitStore.getState().commitMessage).toBe('nueva nota');
+  });
+
+  it('4. En Graph y en SDD: el título «Cambios sin preparar» está presente y los cuatro controles están en el renglón de acciones por rol y nombre', () => {
+    const callbacks = createDefaultCallbacks();
+
+    // 1. En vista Graph
+    const { unmount: unmountGraph } = renderPanelWithStrictMode('Graph', callbacks);
+    expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
+    const actionsRowGraph = screen.getByTestId('sidebar-section-actions');
+    expect(within(actionsRowGraph).getByRole('button', { name: 'Stash' })).toBeDefined();
+    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeDefined();
+    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.discardAllTooltip' })).toBeDefined();
+    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.stageAllBtn' })).toBeDefined();
+    unmountGraph();
+
+    // 2. En vista SDD (Pipeline)
+    const { unmount: unmountPipeline } = renderPanelWithStrictMode('Pipeline', callbacks);
+    expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
+    const actionsRowPipeline = screen.getByTestId('sidebar-section-actions');
+    expect(within(actionsRowPipeline).getByRole('button', { name: 'Stash' })).toBeDefined();
+    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeDefined();
+    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.discardAllTooltip' })).toBeDefined();
+    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.stageAllBtn' })).toBeDefined();
+    unmountPipeline();
   });
 });

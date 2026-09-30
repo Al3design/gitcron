@@ -249,7 +249,8 @@ export function OpenSpecInspector({
   return (
     <aside className={`${styles.activityRail} ${styles.openspecScope}`} aria-label={t('pipeline.openspec.activity.title')}>
       <div className={styles.railSections}>
-        <SidebarSection
+        <div className={styles.sddSections}>
+          <SidebarSection
           title={t('pipeline.openspec.activity.title')}
           count={activityGroups.length}
           icon={<Activity size={13} aria-hidden="true" />}
@@ -377,6 +378,7 @@ export function OpenSpecInspector({
             </button>
           </div>
         </SidebarSection>
+        </div>
         {children}
       </div>
 

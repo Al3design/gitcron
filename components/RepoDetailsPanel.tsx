@@ -251,7 +251,7 @@ export function RepoDetailsPanel({
         title={t('staging.unstagedTitle')}
         count={unstaged.length}
         icon={<FileDiff size={13} aria-hidden="true" />}
-        extra={
+        actions={
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -279,6 +279,7 @@ export function RepoDetailsPanel({
                 onClick={onRequestResetAll}
                 className="p-1 text-text-secondary hover:text-error hover:bg-error/10 rounded transition-colors"
                 title={t('staging.discardAllTooltip')}
+                aria-label={t('staging.discardAllTooltip')}
               >
                 <Trash2 size={12} />
               </button>

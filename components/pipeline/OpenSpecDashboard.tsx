@@ -247,6 +247,8 @@ function formatSessionOption(session: RuntimeProjection): string {
  * volvería a emitir la marca de una corrida que puede seguir en vuelo.
  */
 let draftRunCounter = 0;
+let activeDraftAbortController: AbortController | null = null;
+let activeChunkUnsubscribe: (() => void) | null = null;
 
 export function OpenSpecDashboard({
   snapshot,
@@ -1038,22 +1040,29 @@ export function OpenSpecDashboard({
    * una barra durante la carga y un contador durante la redacción, que son cosas
    * distintas y se ven en momentos distintos.
    */
-  const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'drafting'>('idle');
-  /** Cuándo arrancó lo que está corriendo, para contar los segundos. */
-  const [aiStartedAt, setAiStartedAt] = useState<number | null>(null);
-  /**
-   * Cuál de las dos operaciones corre dentro de la fase «loading».
-   *
-   * Cargar y expulsar comparten fase porque ocupan al servidor igual y bloquean
-   * los mismos controles, pero no dicen lo mismo: expulsar mostraba «Cargando el
-   * modelo…», lo contrario de lo que pasaba. Ale lo vio expulsando.
-   */
-  const [aiOpKind, setAiOpKind] = useState<'load' | 'eject'>('load');
+  const storeAiPhase = usePipelineStore((state) => state.aiPhase);
+  const storeAiStartedAt = usePipelineStore((state) => state.aiStartedAt);
+  const storeAiDraftRepoPath = usePipelineStore((state) => state.aiDraftRepoPath);
+  const storeAiOpKind = usePipelineStore((state) => state.aiOpKind);
+  const setAiDraftState = usePipelineStore((state) => state.setAiDraftState);
+  const resetAiDraft = usePipelineStore((state) => state.resetAiDraft);
+
+  const isCurrentRepoDraft = storeAiDraftRepoPath === repoPath;
+  const aiPhase = isCurrentRepoDraft ? storeAiPhase : 'idle';
+  const aiStartedAt = isCurrentRepoDraft ? storeAiStartedAt : null;
+  const aiOpKind = isCurrentRepoDraft ? storeAiOpKind : 'load';
   /** Ocupada en cualquiera de las dos: es lo que deshabilita los controles. */
   const aiBusy = aiPhase !== 'idle';
   const setAiBusy = (busy: boolean) => {
-    setAiPhase(busy ? 'drafting' : 'idle');
-    setAiStartedAt(busy ? Date.now() : null);
+    if (busy) {
+      setAiDraftState({
+        aiPhase: 'drafting',
+        aiStartedAt: Date.now(),
+        aiDraftRepoPath: repoPath,
+      });
+    } else {
+      resetAiDraft();
+    }
   };
   const aiNotice = usePipelineStore((state) => state.aiNotice);
   const setAiNotice = usePipelineStore((state) => state.setAiNotice);
@@ -1089,7 +1098,6 @@ export function OpenSpecDashboard({
   const aiSettings = useRememberedAiSettings(repoPath);
   const aiContext = aiSettings.contextLength;
   const aiTtlMinutes = aiSettings.ttlMinutes;
-  const aiAbort = useRef<AbortController | null>(null);
 
   const [engineSnapshot, setEngineSnapshot] = useState<OpenSpecEngineStatus | null>(null);
   const [latestRegistryCheck, setLatestRegistryCheck] = useState<OpenSpecRegistryCheck | null>(null);
@@ -1377,18 +1385,34 @@ export function OpenSpecDashboard({
    * hay nadie que pueda pedir una redacción.
    */
   useEffect(() => {
-    if (!prepareOpen) return;
-    return window.api?.commitAi?.onChunk?.((event) => appendDraftChunks(event));
-  }, [prepareOpen]);
+    if (!prepareOpen && aiPhase !== 'drafting') return;
+    if (activeChunkUnsubscribe) {
+      activeChunkUnsubscribe();
+      activeChunkUnsubscribe = null;
+    }
+    const unsub = window.api?.commitAi?.onChunk?.((event) => appendDraftChunks(event));
+    return () => {
+      if (usePipelineStore.getState().aiPhase === 'drafting') {
+        activeChunkUnsubscribe = unsub ?? null;
+      } else {
+        unsub?.();
+      }
+    };
+  }, [prepareOpen, aiPhase]);
 
   /**
-   * Al desmontar el componente, la preparación no queda abierta en el store.
+   * Al desmontar el componente, la preparación se cierra en el store sólo si
+   * se cambió de repositorio. Cambiar de vista en el mismo repositorio no la
+   * cierra.
    */
   useEffect(() => {
     return () => {
-      setPrepareOpen(false);
+      const activeRepo = useGitStore.getState().repoPath;
+      if (activeRepo !== repoPath) {
+        setPrepareOpen(false);
+      }
     };
-  }, [setPrepareOpen]);
+  }, [repoPath, setPrepareOpen]);
 
   /**
    * El modelo elegido, para saber si hace falta cargarlo antes de redactar.
@@ -1441,9 +1465,12 @@ export function OpenSpecDashboard({
     if (aiContext < MIN_CONTEXT_LENGTH || aiTtlMinutes < 1) return;
     // Fase «cargando», no «redactando»: es lo que hace que las frases de espera
     // no arranquen acá, y lo que permite mostrar una barra en su lugar.
-    setAiOpKind('load');
-    setAiPhase('loading');
-    setAiStartedAt(Date.now());
+    setAiDraftState({
+      aiOpKind: 'load',
+      aiPhase: 'loading',
+      aiStartedAt: Date.now(),
+      aiDraftRepoPath: repoPath,
+    });
     setAiNotice(null);
     try {
       const result = await window.api?.commitAi?.load(aiModel, undefined, aiContext, aiTtlMinutes * 60);
@@ -1497,9 +1524,12 @@ export function OpenSpecDashboard({
    */
   const unloadAiModel = async () => {
     if (aiBusy || !aiModel) return;
-    setAiOpKind('eject');
-    setAiPhase('loading');
-    setAiStartedAt(Date.now());
+    setAiDraftState({
+      aiOpKind: 'eject',
+      aiPhase: 'loading',
+      aiStartedAt: Date.now(),
+      aiDraftRepoPath: repoPath,
+    });
     setAiNotice(null);
     try {
       // Primero se mira si TODAVÍA está cargado, y recién después se expulsa.
@@ -1538,18 +1568,19 @@ export function OpenSpecDashboard({
       )));
       setAiNotice(t('pipeline.openspec.prepare.aiEjectedOk', { model: aiModel }));
     } finally {
-      setAiPhase('idle');
-      setAiStartedAt(null);
+      setAiBusy(false);
     }
   };
 
   const abortInFlightAiDraft = () => {
-    if (!aiAbort.current) return;
-    aiAbort.current.abort();
-    aiAbort.current = null;
+    if (activeDraftAbortController) {
+      activeDraftAbortController.abort();
+      activeDraftAbortController = null;
+    }
     // El rail deja de decir «en vivo». Lo pensado hasta acá se queda: se canceló
     // la redacción, no lo que se había visto.
     finishDraftLog();
+    usePipelineStore.getState().resetAiDraft();
     // Corta la petición del otro lado, no sólo descarta la respuesta: antes el
     // modelo seguía trabajando después de apretar «Cancelar».
     void window.api?.commitAi?.cancel();
@@ -1565,7 +1596,10 @@ export function OpenSpecDashboard({
    * Cambiar de repositorio desmonta este panel (el workspace lleva `key` por
    * repo). Sin cortar acá, una redacción en vuelo terminaba escribiendo su
    * asunto en el campo de commit del repositorio al que se cambió, y el modelo
-   * seguía trabajando: medido en la auditoría 4.2 del 2026-09-29.
+   * seguía trabajando: medido en la auditoría 4.2 del 2026-09-29. Se corta sólo
+   * si cambió el repositorio activo: pasar a Graph y volver, en el mismo
+   * repositorio, también desmonta el panel y cortaba la redacción (visto por Ale
+   * el 2026-09-30).
    */
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -1575,9 +1609,12 @@ export function OpenSpecDashboard({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      abortInFlightAiDraft();
+      const activeRepo = useGitStore.getState().repoPath;
+      if (activeRepo !== repoPath) {
+        abortInFlightAiDraft();
+      }
     };
-  }, []);
+  }, [repoPath]);
 
   const getDestinationLabel = (
     dest: 'this-machine' | 'own-server' | 'external-service',
@@ -1595,14 +1632,19 @@ export function OpenSpecDashboard({
     const effectiveModel = resolvedModelData?.modelId || aiModel;
     if (aiBusy || !repoPath || !effectiveModel || chosen.length === 0 || isResolvedError) return;
     const originRepoPath = repoPath;
-    setAiBusy(true);
+    const draftId = String(++draftRunCounter);
+    setAiDraftState({
+      aiPhase: 'drafting',
+      aiStartedAt: Date.now(),
+      aiDraftId: draftId,
+      aiDraftRepoPath: originRepoPath,
+    });
     setAiNotice(null);
     const controller = new AbortController();
-    aiAbort.current = controller;
+    activeDraftAbortController = controller;
     // La marca se declara ANTES de pedir: los pedazos empiezan a llegar mientras
     // el `await` sigue esperando, y sin la marca puesta de antemano no habría con
     // qué distinguirlos de los de una corrida anterior que se canceló.
-    const draftId = String(++draftRunCounter);
     startDraftLog(draftId);
     try {
       const result = await window.api?.commitAi?.draft({
@@ -1613,64 +1655,64 @@ export function OpenSpecDashboard({
         model: effectiveModel,
         draftId,
       });
-      // Cancelar mientras estaba en vuelo: lo que llegue después ya no se aplica.
-      if (controller.signal.aborted || !isMountedRef.current) return;
+      // Cancelar mientras estaba en vuelo: si fue abortado, lo que llegue se descarta.
+      if (controller.signal.aborted) return;
       const draft = result?.data;
       if (!result?.success || !draft) {
+        const detail = result?.error ?? '—';
         if (isMountedRef.current) {
-          setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
+          setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail }));
+        } else {
+          usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail }));
         }
         return;
       }
       if (draft.status === 'drafted') {
-        // Montado implica que el repositorio activo sigue siendo el de origen.
-        setCommitMessage(draft.subject);
-        // Se nombra el modelo: quien confirma tiene que poder ver que esto lo
-        // escribió un modelo y no la aplicación.
         if (isMountedRef.current) {
+          setCommitMessage(draft.subject);
           setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
+        } else {
+          const gitStore = useGitStore.getState();
+          const originRepo = gitStore.openRepos.find((repo) => repo.path === originRepoPath);
+          if (originRepo) {
+            gitStore.updateRepoByPath(originRepoPath, {
+              commitMessage: draft.subject,
+            });
+          }
+          usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
         }
         return;
       }
-      if (!isMountedRef.current) return;
       if (draft.status === 'no-answer') {
-        // «No contestó» y no «contestó vacío»: con el razonamiento comiéndose el
-        // presupuesto, decir que devolvió un mensaje vacío haría pensar que la
-        // función está rota cuando lo que falta es techo de tokens.
-        setAiNotice(draft.reason === 'budget'
+        const msg = draft.reason === 'budget'
           ? t('pipeline.openspec.prepare.aiNoAnswerBudget', { model: draft.model })
-          : t('pipeline.openspec.prepare.aiNoAnswer', { model: draft.model }));
+          : t('pipeline.openspec.prepare.aiNoAnswer', { model: draft.model });
+        if (isMountedRef.current) setAiNotice(msg);
+        else usePipelineStore.getState().setAiNotice(msg);
         return;
       }
       if (draft.status === 'malformed') {
-        // Contestó, pero sin la forma pedida. No se impone en el campo —eso
-        // obligaría a corregirlo a mano— y se muestra igual: puede ser una buena
-        // descripción a la que sólo le falta el prefijo, y tirarla diciendo que
-        // no contestó sería mentir sobre lo que pasó.
-        setAiNotice(t('pipeline.openspec.prepare.aiMalformed', {
+        const msg = t('pipeline.openspec.prepare.aiMalformed', {
           model: draft.model,
           subject: draft.subject,
-        }));
+        });
+        if (isMountedRef.current) setAiNotice(msg);
+        else usePipelineStore.getState().setAiNotice(msg);
         return;
       }
-      // El aviso del centro dice qué hacer, no el volcado del servidor: acá
-      // llegaba el JSON crudo de LM Studio, que es exacto y no le sirve a nadie
-      // para decidir. El motivo técnico completo queda en el rail, que es donde
-      // se lo va a buscar. Si el error no se reconoce, se muestra tal cual:
-      // inventar un consejo sería peor.
       const consejo = adviceKeyForStreamError(draft.detail);
-      setAiNotice(consejo ? t(`pipeline.openspec.prepare.${consejo}`) : draft.detail);
+      const msg = consejo ? t(`pipeline.openspec.prepare.${consejo}`) : draft.detail;
+      if (isMountedRef.current) setAiNotice(msg);
+      else usePipelineStore.getState().setAiNotice(msg);
     } finally {
-      if (aiAbort.current === controller) aiAbort.current = null;
-      if (!controller.signal.aborted && isMountedRef.current) setAiBusy(false);
-      // Se terminó, con cuadro de cierre o sin él: un servidor que corta a mitad
-      // dejaría el rail diciendo «en vivo» para siempre. Lo que se pensó queda a
-      // la vista —recién se limpia cuando empieza otra redacción o se cierra el
-      // panel—, porque el momento de leerlo es justo después de que termina.
+      if (activeDraftAbortController === controller) activeDraftAbortController = null;
+      resetAiDraft();
       finishDraftLog();
       window.api?.commitAi?.lastRequest?.().then((res) => {
-        if (isMountedRef.current && res?.success && res.data) {
-          setLastAiRequest(res.data);
+        if (res?.success && res.data) {
+          if (isMountedRef.current) {
+            setLastAiRequest(res.data);
+          }
         }
       }).catch(() => undefined);
     }
@@ -1691,9 +1733,10 @@ export function OpenSpecDashboard({
       if (isMountedRef.current) {
         if (!commitMessage.trim()) setCommitMessage(suggestCommitMessage(chosen, branchAttribution));
       } else {
-        const originRepo = useGitStore.getState().openRepos.find((repo) => repo.path === originRepoPath);
+        const gitStore = useGitStore.getState();
+        const originRepo = gitStore.openRepos.find((repo) => repo.path === originRepoPath);
         if (originRepo && !originRepo.commitMessage.trim()) {
-          useGitStore.getState().updateRepoByPath(originRepoPath, {
+          gitStore.updateRepoByPath(originRepoPath, {
             commitMessage: suggestCommitMessage(chosen, branchAttribution),
           });
         }

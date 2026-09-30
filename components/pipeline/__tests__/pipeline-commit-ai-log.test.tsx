@@ -123,6 +123,7 @@ async function pedirRedaccion(): Promise<string> {
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 beforeEach(() => {
+  usePipelineStore.getState().reset();
   clearDraftLog();
   emitir = null;
   catalog.mockReset().mockResolvedValue({
@@ -155,6 +156,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   clearDraftLog();
   Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });
 });

@@ -12,14 +12,18 @@ import type { PipelineSnapshot } from '../pipeline-view-state';
 import { OPENSPEC_CYCLE_TARGET_VERSION } from '@/lib/openspec-version';
 import { _resetDefaultEngineStatusReader } from '@/lib/engine-status-reader';
 
-vi.mock('@/lib/git-store', () => ({
-  useGitStore: (selector: any) =>
-    selector({
-      modifiedFiles: [],
-      currentBranch: 'main',
-      stageFiles: vi.fn(),
-    }),
-}));
+vi.mock('@/lib/git-store', () => {
+  const state = {
+    modifiedFiles: [],
+    currentBranch: 'main',
+    stageFiles: vi.fn(),
+    repoPath: null,
+    openRepos: [],
+  };
+  return {
+    useGitStore: Object.assign((selector: any) => selector(state), { getState: () => state }),
+  };
+});
 
 vi.mock('@/hooks/use-git-actions', () => ({
   useGitActions: () => ({
