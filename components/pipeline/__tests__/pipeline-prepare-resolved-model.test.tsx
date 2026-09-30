@@ -232,4 +232,138 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     expect(resolvedLine).toBeDefined();
     expect(screen.queryByRole('combobox')).toBeNull();
   });
+
+  it('con archivo roto se ve el error y no el selector de LM Studio', async () => {
+    const catalogMock = vi.fn().mockResolvedValue({ success: true, data: [] });
+    const resolvedModelMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        status: 'error',
+        error: '~/.config/gitcron/gitcron.json: Error de sintaxis en la línea 3: ValueExpected',
+      },
+    });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        commitAi: {
+          catalog: catalogMock,
+          resolvedModel: resolvedModelMock,
+          deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }),
+          draft: vi.fn(),
+          load: vi.fn(),
+          unload: vi.fn(),
+          cancel: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <StrictMode>
+        <OpenSpecDashboard
+          snapshot={snapshot()}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={false}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          projection={null as RuntimeProjection | null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />
+      </StrictMode>,
+    );
+
+    const openButton = screen.getByRole('button', { name: /preparar/i });
+    fireEvent.click(openButton);
+
+    const errorText = await screen.findByText(/Error de sintaxis en la línea 3/i);
+    expect(errorText).toBeDefined();
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+
+    const draftButton = screen.getByRole('button', { name: /redactar con ia/i });
+    expect((draftButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('con modelo resuelto y redacción en curso aparece «Cancelar» y llama a commitAi.cancel', async () => {
+    const cancelMock = vi.fn().mockResolvedValue({ success: true, data: { cancelled: true } });
+    let draftResolve: (val: any) => void = () => undefined;
+    const draftMock = vi.fn().mockImplementation(() => new Promise((resolve) => {
+      draftResolve = resolve;
+    }));
+
+    const resolvedModelMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        providerName: 'Codex',
+        modelId: 'gpt-5.6-luna',
+        kind: 'cli',
+        destination: 'external-service',
+        sourceFile: '~/.config/gitcron/gitcron.json',
+      },
+    });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        commitAi: {
+          catalog: vi.fn().mockResolvedValue({ success: true, data: [] }),
+          resolvedModel: resolvedModelMock,
+          deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }),
+          draft: draftMock,
+          load: vi.fn(),
+          unload: vi.fn(),
+          cancel: cancelMock,
+        },
+      },
+    });
+
+    render(
+      <StrictMode>
+        <OpenSpecDashboard
+          snapshot={snapshot()}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={false}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          projection={null as RuntimeProjection | null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />
+      </StrictMode>,
+    );
+
+    const openButton = screen.getByRole('button', { name: /preparar/i });
+    fireEvent.click(openButton);
+
+    await screen.findByText(/Redacta con gpt-5\.6-luna/i);
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]);
+
+    const draftButton = screen.getByRole('button', { name: /redactar con ia/i });
+    fireEvent.click(draftButton);
+
+    const cancelButton = await screen.findByRole('button', { name: /cancelar/i });
+    expect(cancelButton).toBeDefined();
+
+    fireEvent.click(cancelButton);
+    expect(cancelMock).toHaveBeenCalled();
+
+    draftResolve?.({ success: true, data: { status: 'drafted', subject: 'feat: x', model: 'gpt-5.6-luna' } });
+  });
 });

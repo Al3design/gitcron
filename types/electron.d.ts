@@ -8,7 +8,7 @@ import type {
 } from './temporal-agent';
 import type { PredictionHistoryEntry } from '../electron/db/types';
 import type { PipelineState, RuntimeDiscoveryEntry, RuntimeProjection } from './pipeline';
-import type { CommitAiResolvedModel, CommitDraftResult, DraftChunkEvent, LoadOutcome, LocalModel } from './commit-message-ai';
+import type { CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunkEvent, LoadOutcome, LocalModel } from './commit-message-ai';
 import type { ApplyHunkOptions, FileDiff } from '../lib/hunk-patch';
 import type {
   CartoGraphStatus,
@@ -420,8 +420,8 @@ interface ElectronAPI {
      * en silencio, que es como funcionaba antes.
      */
     onChunk(cb: (event: DraftChunkEvent) => void): () => void;
-    /** Modelo resuelto según la configuración de gitcron.json, o null si no aplica. */
-    resolvedModel(): Promise<GitResult<CommitAiResolvedModel | null>>;
+    /** Modelo resuelto según la configuración de gitcron.json, error si está roto, o null si no aplica. */
+    resolvedModel(): Promise<GitResult<CommitAiResolvedResult>>;
   };
   /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve

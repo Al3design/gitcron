@@ -726,6 +726,13 @@
   font-size: var(--font-size-xs);
   font-family: var(--font-mono), ui-monospace, monospace;
 }
+.aiResolvedError {
+  margin: 0;
+  flex: 1 1 auto;
+  color: var(--color-error);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
 /* El contador vive dentro de la fila de la IA, en el hueco que dejan los dos
    números. Antes estaba en una línea propia arriba: aparecía de golpe al
    apretar el botón y empujaba el panel entero hacia abajo, justo en el momento

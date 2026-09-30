@@ -196,9 +196,32 @@ export interface DraftChunkEvent {
  * Sin secretos (D6, D13).
  */
 export interface CommitAiResolvedModel {
+  status?: 'resolved';
   providerName: string;
   modelId: string;
   kind: 'openai-compatible' | 'cli';
   destination: 'this-machine' | 'own-server' | 'external-service';
   sourceFile: string;
+  available?: boolean;
+  unavailableReason?: string;
 }
+
+/**
+ * Error al resolver el modelo de gitcron.json (archivo roto, sintaxis, etc.).
+ */
+export interface CommitAiResolvedError {
+  status?: 'error';
+  error: string;
+  sourceFile?: string;
+}
+
+/**
+ * Los tres casos de resolución según gitcron.json:
+ * - Sin configurar: `null` (archivo ausente o sin agent['gitcron-commit'].model).
+ * - Resuelto: CommitAiResolvedModel.
+ * - Error: CommitAiResolvedError (archivo roto, error de sintaxis, etc.).
+ */
+export type CommitAiResolvedResult =
+  | CommitAiResolvedModel
+  | CommitAiResolvedError
+  | null;

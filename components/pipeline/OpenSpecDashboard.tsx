@@ -55,7 +55,7 @@ import { usePipelineStore } from '@/lib/pipeline-store';
 import { AiElapsed } from './AiElapsed';
 import { appendDraftChunks, clearDraftLog, finishDraftLog, startDraftLog } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
-import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiResolvedModel, type LocalModel } from '@/types/commit-message-ai';
+import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiResolvedError, type CommitAiResolvedModel, type CommitAiResolvedResult, type LocalModel } from '@/types/commit-message-ai';
 import { useRememberedAiModel, useRememberedAiSettings, rememberAiSettings, rememberAiModel as rememberAiModelGlobally, getRememberedAiModel, formatAiDeviceLabel } from '@/lib/ai-model-memory';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
@@ -1026,7 +1026,8 @@ export function OpenSpecDashboard({
   // El idioma sale del mismo store que el traductor, para que las frases de la
   // espera cambien junto con el resto del panel.
   const uiLanguage = useGitStore((state) => state.language);
-  const [aiModels, setAiModels] = useState<LocalModel[]>([]), [resolvedCommitModel, setResolvedCommitModel] = useState<CommitAiResolvedModel | null>(null);
+  const [aiModels, setAiModels] = useState<LocalModel[]>([]);
+  const [resolvedCommitModel, setResolvedCommitModel] = useState<CommitAiResolvedResult | null>(null);
   const aiModel = useRememberedAiModel(repoPath);
   /**
    * En qué está la IA: quieta, cargando un modelo, o redactando.
@@ -1040,7 +1041,6 @@ export function OpenSpecDashboard({
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'drafting'>('idle');
   /** Cuándo arrancó lo que está corriendo, para contar los segundos. */
   const [aiStartedAt, setAiStartedAt] = useState<number | null>(null);
-  /** Ocupada en cualquiera de las dos: es lo que deshabilita los controles. */
   /**
    * Cuál de las dos operaciones corre dentro de la fase «loading».
    *
@@ -1049,6 +1049,7 @@ export function OpenSpecDashboard({
    * modelo…», lo contrario de lo que pasaba. Ale lo vio expulsando.
    */
   const [aiOpKind, setAiOpKind] = useState<'load' | 'eject'>('load');
+  /** Ocupada en cualquiera de las dos: es lo que deshabilita los controles. */
   const aiBusy = aiPhase !== 'idle';
   const setAiBusy = (busy: boolean) => {
     setAiPhase(busy ? 'drafting' : 'idle');
@@ -1285,13 +1286,32 @@ export function OpenSpecDashboard({
     let alive = true;
     window.api?.commitAi?.resolvedModel?.().then((res) => {
       if (!alive) return;
-      if (res?.success && res.data) {
-        setResolvedCommitModel(res.data);
-      } else {
-        setResolvedCommitModel(null);
+      if (!res?.success) {
+        setResolvedCommitModel({
+          status: 'error',
+          error: res?.error ?? '',
+        });
+        return;
       }
-    }).catch(() => {
-      if (alive) setResolvedCommitModel(null);
+      if (res.data === null) {
+        setResolvedCommitModel(null);
+        return;
+      }
+      if (res.data === undefined) {
+        setResolvedCommitModel({
+          status: 'error',
+          error: res?.error ?? '',
+        });
+        return;
+      }
+      setResolvedCommitModel(res.data);
+    }).catch((err) => {
+      if (alive) {
+        setResolvedCommitModel({
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     });
     window.api?.commitAi?.catalog().then((result) => {
       if (!alive) return;
@@ -1559,8 +1579,12 @@ export function OpenSpecDashboard({
   };
 
   const draftWithAi = async () => {
-    const effectiveModel = resolvedCommitModel?.modelId || aiModel;
-    if (aiBusy || !repoPath || !effectiveModel || chosen.length === 0) return;
+    const isResolvedError = Boolean(resolvedCommitModel && 'error' in resolvedCommitModel);
+    const resolvedModelData = resolvedCommitModel && !('error' in resolvedCommitModel)
+      ? resolvedCommitModel
+      : null;
+    const effectiveModel = resolvedModelData?.modelId || aiModel;
+    if (aiBusy || !repoPath || !effectiveModel || chosen.length === 0 || isResolvedError) return;
     const originRepoPath = repoPath;
     setAiBusy(true);
     setAiNotice(null);
@@ -2548,7 +2572,28 @@ export function OpenSpecDashboard({
                       cuáles iban juntos. Ale lo pidió señalando el sector
                       entero. El fondo distingue el sector de un vistazo, que es
                       lo que una línea no hace. */}
-                  {resolvedCommitModel ? (
+                  {resolvedCommitModel && 'error' in resolvedCommitModel ? (
+                    <section className={styles.aiPanel}>
+                      <div className={styles.aiRow}>
+                        <p className={styles.aiResolvedError} role="alert">
+                          {resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError')}
+                        </p>
+                        <button
+                          type="button"
+                          className={styles.secondaryAction}
+                          disabled={true}
+                          title={resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError')}
+                        >
+                          {t('pipeline.openspec.prepare.aiDraft')}
+                        </button>
+                      </div>
+                      {!rightOpen && aiNotice && (
+                        <p className={styles.aiNotice} role="status">
+                          {aiNotice}
+                        </p>
+                      )}
+                    </section>
+                  ) : resolvedCommitModel ? (
                     <section className={styles.aiPanel}>
                       <div className={styles.aiRow}>
                         <p className={styles.aiResolvedLine}>

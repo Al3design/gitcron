@@ -87,11 +87,13 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     const resolvedRes = await resolvedHandler({});
     expect(resolvedRes.success).toBe(true);
     expect(resolvedRes.data).toEqual({
+      status: 'resolved',
       providerName: 'Unsloth CASA',
       modelId: 'unsloth/Qwen3.8-27B-GGUF',
       kind: 'openai-compatible',
       destination: 'external-service',
       sourceFile: configPath,
+      available: true,
     });
     // Garantiza que no expone secretos
     expect(resolvedRes.data).not.toHaveProperty('apiKey');
@@ -109,6 +111,8 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
             options: {
               baseURL: 'http://192.168.1.7:8888/v1',
               apiKey: 'unsloth-secret-token',
+              enterpriseUrl: 'https://enterprise.internal',
+              setCacheKey: true,
               headers: {
                 'CF-Access-Client-Id': 'cf-client-id-xyz',
                 'CF-Access-Client-Secret': 'cf-client-secret-abc',
@@ -117,7 +121,6 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
             models: {
               'unsloth/Qwen3.8-27B-GGUF': {
                 limit: { context: 65536, output: 8192 },
-                options: { reasoning_effort: 'high' },
               },
             },
           },
@@ -126,6 +129,10 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
           'gitcron-commit': {
             model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
             temperature: 0.2,
+            options: {
+              model: 'hijacked-model-name',
+              reasoning_effort: 'high',
+            },
           },
         },
       }),
@@ -192,7 +199,11 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     expect(body.reasoning_effort).toBe('high');
     // stream explícito
     expect(body.stream).toBe(true);
+    // options.model no pisa el modelo esencial
     expect(body.model).toBe('unsloth/Qwen3.8-27B-GGUF');
+    // enterpriseUrl y setCacheKey no viajan en el cuerpo
+    expect(body).not.toHaveProperty('enterpriseUrl');
+    expect(body).not.toHaveProperty('setCacheKey');
     expect(body.temperature).toBe(0.2);
   });
 
@@ -382,7 +393,35 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
 
     const res = await draftPromise;
     expect(res.data?.status).toBe('unavailable');
-    expect(res.data?.detail).toMatch(/canceló/i);
+    expect(res.data?.detail).toMatch(/cancelada/i);
+    expect(res.data?.detail).not.toMatch(/tardó demasiado/i);
+  });
+
+  it('codex CLI: tiempo agotado da aviso de tiempo', async () => {
+    const mockSpawn = vi.fn((_cmd: string, _args: string[], _opts: any) => {
+      const emitter = new EventEmitter() as any;
+      emitter.stdout = new PassThrough();
+      emitter.stderr = new PassThrough();
+      emitter.stdin = new PassThrough();
+      emitter.killed = false;
+      emitter.kill = vi.fn(() => {
+        emitter.killed = true;
+      });
+      return emitter;
+    });
+
+    const { draftCommitWithCodex } = await import('../ai/commit-message/codex-cli');
+    const result = await draftCommitWithCodex({
+      model: 'gpt-5.6-luna',
+      prompt: 'test prompt',
+      timeoutMs: 40,
+      spawnFn: mockSpawn as any,
+    });
+
+    expect(result.status).toBe('unavailable');
+    if (result.status === 'unavailable') {
+      expect(result.detail).toMatch(/tardó demasiado.*canceló/i);
+    }
   });
 
   it('codex CLI: error 400 de Codex -> unavailable con el motivo', async () => {

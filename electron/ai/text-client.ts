@@ -115,6 +115,30 @@ export function buildHeaders(config: TextClientConfig): Record<string, string> {
   return headers;
 }
 
+function buildRequestBody(
+  opts: TextGenerateOptions,
+  defaults: { temperature: number; maxTokens: number },
+  extra?: { stream?: boolean; stream_options?: Record<string, unknown> },
+): Record<string, unknown> {
+  const safeOptions = { ...(opts.options ?? {}) };
+  delete safeOptions.model;
+  delete safeOptions.messages;
+  delete safeOptions.stream;
+  delete safeOptions.stream_options;
+
+  return {
+    temperature: opts.temperature ?? defaults.temperature,
+    max_tokens: opts.maxTokens ?? defaults.maxTokens,
+    ...safeOptions,
+    model: opts.model,
+    messages: [
+      { role: 'system', content: opts.system },
+      { role: 'user', content: opts.user },
+    ],
+    ...(extra ?? {}),
+  };
+}
+
 /**
  * Genera texto en una sola respuesta (modo síncrono / no streaming).
  */
@@ -132,16 +156,9 @@ export async function completeText(
     res = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [
-          { role: 'system', content: opts.system },
-          { role: 'user', content: opts.user },
-        ],
-        temperature: opts.temperature ?? 0.4,
-        max_tokens: opts.maxTokens ?? 1024,
-        ...(opts.options ?? {}),
-      }),
+      body: JSON.stringify(
+        buildRequestBody(opts, { temperature: 0.4, maxTokens: 1024 }),
+      ),
       signal,
     });
   } catch (err) {
@@ -196,18 +213,13 @@ export async function streamText(
     res = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
-      body: JSON.stringify({
-        model: opts.model,
-        messages: [
-          { role: 'system', content: opts.system },
-          { role: 'user', content: opts.user },
-        ],
-        temperature: opts.temperature ?? 0.2,
-        max_tokens: opts.maxTokens ?? 2048,
-        ...(opts.options ?? {}),
-        stream: true,
-        stream_options: { include_usage: true },
-      }),
+      body: JSON.stringify(
+        buildRequestBody(
+          opts,
+          { temperature: 0.2, maxTokens: 2048 },
+          { stream: true, stream_options: { include_usage: true } },
+        ),
+      ),
       signal,
     });
   } catch (err) {

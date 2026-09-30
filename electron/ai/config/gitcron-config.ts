@@ -7,6 +7,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import schema from './opencode-config.schema.json';
+
+export const SCHEMA_PROVIDER_OPTION_KEYS: readonly string[] = Object.keys(
+  (schema as any)?.$defs?.ProviderConfig?.properties?.options?.properties ?? {},
+);
 
 export type ProviderDestination = 'this-machine' | 'own-server' | 'external-service';
 export type ProviderKind = 'openai-compatible' | 'cli';
@@ -49,10 +54,6 @@ export interface GitCronAgentConfig {
   model?: string;
   temperature?: number;
   options?: Record<string, unknown>;
-  maxTokens?: number;
-  limit?: {
-    output?: number;
-  };
   [key: string]: unknown;
 }
 
@@ -106,7 +107,7 @@ export function readGitCronConfig(customPath?: string): GitCronConfig | null {
     const first = errors[0];
     const line = rawText.slice(0, first.offset).split(/\r?\n/).length;
     const msg = printParseErrorCode(first.error);
-    throw new Error(`Error de sintaxis en la línea ${line}: ${msg}`);
+    throw new Error(`${filePath}: Error de sintaxis en la línea ${line}: ${msg}`);
   }
 
   return parsed as GitCronConfig;
@@ -253,7 +254,16 @@ export function resolveUse(
   const modelRef = agentConfig.model.trim();
   const slashIdx = modelRef.indexOf('/');
   if (slashIdx === -1) {
-    return null;
+    return {
+      providerId: '',
+      providerName: 'Desconocido',
+      modelId: modelRef,
+      kind: 'openai-compatible',
+      destination: 'external-service',
+      sourceFile: filePath,
+      available: false,
+      unavailableReason: 'falta el proveedor: se escribe <proveedor>/<modelo>',
+    };
   }
 
   const providerId = modelRef.slice(0, slashIdx);
@@ -270,7 +280,7 @@ export function resolveUse(
       destination: 'external-service',
       sourceFile: filePath,
       temperature: agentConfig.temperature,
-      maxTokens: agentConfig.limit?.output ?? agentConfig.maxTokens,
+      maxTokens: undefined,
       options: agentConfig.options ?? {},
       available: isCodex,
       unavailableReason: isCodex ? undefined : 'todavía no conectado',
@@ -305,17 +315,30 @@ export function resolveUse(
   const apiKey = substitutedOptions?.apiKey;
   const headers = substitutedOptions?.headers as Record<string, string> | undefined;
 
+  if (!baseURL) {
+    return {
+      providerId,
+      providerName,
+      modelId,
+      kind: 'openai-compatible',
+      destination: 'external-service',
+      sourceFile: filePath,
+      available: false,
+      unavailableReason: `el proveedor ${providerId} no declara options.baseURL`,
+    };
+  }
+
   const destination = determineDestination(baseURL, 'openai-compatible');
 
   const modelConfig = rawProvider.models?.[modelId];
 
-  // Precedencia: agent encima de model
+  // Precedencia: agent encima de model. max_tokens sale de limit.output del modelo.
   const temperature = agentConfig.temperature !== undefined ? agentConfig.temperature : modelConfig?.temperature;
-  const maxTokens = agentConfig.limit?.output ?? agentConfig.maxTokens ?? modelConfig?.limit?.output;
+  const maxTokens = modelConfig?.limit?.output;
   const contextLength = modelConfig?.limit?.context;
 
-  // options: provider.options (fuera de claves de conexión) + model.options + agent.options
-  const connectionKeys = new Set(['baseURL', 'apiKey', 'headers', 'timeout', 'npm']);
+  // options: provider.options (excluyendo claves del esquema y headers) + model.options + agent.options
+  const connectionKeys = new Set([...SCHEMA_PROVIDER_OPTION_KEYS, 'headers']);
   const providerExtraOptions: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(substitutedOptions ?? {})) {
     if (!connectionKeys.has(k)) {

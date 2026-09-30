@@ -257,4 +257,87 @@ describe('gitcron-config', () => {
     expect(determineDestination('https://openrouter.ai/api/v1')).toBe('external-service');
     expect(determineDestination(undefined, 'cli')).toBe('external-service');
   });
+
+  it('modelo sin barra devuelve no disponible con motivo de falta el proveedor', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-test-'));
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    const content = JSON.stringify({
+      agent: {
+        'gitcron-commit': {
+          model: 'gpt-4o',
+        },
+      },
+    });
+    fs.writeFileSync(configPath, content, 'utf8');
+
+    try {
+      const resolved = resolveUse('gitcron-commit', configPath);
+      expect(resolved).not.toBeNull();
+      expect(resolved?.available).toBe(false);
+      expect(resolved?.unavailableReason).toBe('falta el proveedor: se escribe <proveedor>/<modelo>');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('proveedor sin baseURL devuelve no disponible con motivo', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-test-'));
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    const content = JSON.stringify({
+      provider: {
+        srv: {
+          options: {},
+          models: {
+            m1: {},
+          },
+        },
+      },
+      agent: {
+        'gitcron-commit': {
+          model: 'srv/m1',
+        },
+      },
+    });
+    fs.writeFileSync(configPath, content, 'utf8');
+
+    try {
+      const resolved = resolveUse('gitcron-commit', configPath);
+      expect(resolved).not.toBeNull();
+      expect(resolved?.available).toBe(false);
+      expect(resolved?.unavailableReason).toBe('el proveedor srv no declara options.baseURL');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('agent con claves fuera del esquema no afectan max_tokens', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-test-'));
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    const content = JSON.stringify({
+      provider: {
+        srv: {
+          options: { baseURL: 'http://localhost:1234/v1' },
+          models: {
+            m1: { limit: { output: 2048 } },
+          },
+        },
+      },
+      agent: {
+        'gitcron-commit': {
+          model: 'srv/m1',
+          maxTokens: 9999,
+          limit: { output: 9999 },
+        },
+      },
+    });
+    fs.writeFileSync(configPath, content, 'utf8');
+
+    try {
+      const resolved = resolveUse('gitcron-commit', configPath);
+      expect(resolved).not.toBeNull();
+      expect(resolved?.maxTokens).toBe(2048);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

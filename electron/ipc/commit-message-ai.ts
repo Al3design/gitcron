@@ -12,10 +12,10 @@
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
 import { simpleGit } from 'simple-git';
-import type { CommitAiResolvedModel, CommitDraftResult, LoadOutcome, LocalModel } from '../../types/commit-message-ai';
+import type { CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunk, LoadOutcome, LocalModel } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
 import { draftCommitWithCodex, type SpawnFunction } from '../ai/commit-message/codex-cli';
-import { resolveUse } from '../ai/config/gitcron-config';
+import { getDefaultConfigPath, resolveUse } from '../ai/config/gitcron-config';
 import { streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
@@ -96,7 +96,7 @@ const fail = <T>(error: unknown): Result<T> => ({ success: false, error: errMsg(
 function toUnavailable(error: unknown): CommitDraftResult {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof Error && error.name === 'AbortError') {
-    return { status: 'unavailable', detail: 'La redacción tardó demasiado y se canceló.' };
+    return { status: 'unavailable', detail: 'Redacción cancelada.' };
   }
   return { status: 'unavailable', detail: message };
 }
@@ -306,21 +306,96 @@ export function registerCommitMessageAiHandlers(): void {
     return ok({ cancelled: had });
   });
 
-  ipcMain.handle('commit-ai:resolved-model', async (): Promise<Result<CommitAiResolvedModel | null>> => {
+  ipcMain.handle('commit-ai:resolved-model', async (): Promise<Result<CommitAiResolvedResult>> => {
+    const configPath = configPathOverride ?? getDefaultConfigPath();
     try {
-      const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
+      const resolved = resolveUse('gitcron-commit', configPath);
       if (!resolved) return ok(null);
+      if (!resolved.available) {
+        return ok({
+          status: 'error',
+          error: resolved.unavailableReason ?? 'Proveedor no disponible.',
+          sourceFile: resolved.sourceFile,
+        });
+      }
       return ok({
+        status: 'resolved',
         providerName: resolved.providerName,
         modelId: resolved.modelId,
         kind: resolved.kind,
         destination: resolved.destination,
         sourceFile: resolved.sourceFile,
+        available: true,
       });
     } catch (error) {
-      return fail(error);
+      const msg = error instanceof Error ? error.message : String(error);
+      return ok({
+        status: 'error',
+        error: msg,
+        sourceFile: configPath,
+      });
     }
   });
+
+  async function collectDraftPrompt(
+    repoPath: string,
+    paths: string[],
+    changeId: string | null,
+    intent: string | null,
+    contextLength: number,
+  ): Promise<string> {
+    const { stat, diff, tasksDiff } = await withRepoLock(repoPath, async () => {
+      const git = simpleGit(repoPath, { timeout: { block: 20_000 } });
+      const tasksPaths = paths.filter((path) => path.endsWith('tasks.md'));
+      return {
+        stat: await git.raw(['diff', '--stat', 'HEAD', '--', ...paths]),
+        diff: await git.raw(['diff', 'HEAD', '--', ...paths]),
+        tasksDiff: tasksPaths.length > 0
+          ? await git.raw(['diff', 'HEAD', '--', ...tasksPaths])
+          : '',
+      };
+    });
+
+    const budget = inputBudgetChars(contextLength);
+    return buildUserPrompt({
+      changeId,
+      intent,
+      tickedTasks: tickedTasksFromDiff(tasksDiff),
+      stat,
+      diff: truncateDiff(diff, budget),
+    });
+  }
+
+  async function runDraftWithPump(
+    sender: Electron.WebContents,
+    draftId: string | null,
+    effectiveModel: string,
+    runner: (signal: AbortSignal, pump: { push: (chunks: DraftChunk[]) => void }) => Promise<CommitDraftResult>,
+  ): Promise<Result<CommitDraftResult>> {
+    inFlightDraft?.abort();
+    const controller = new AbortController();
+    inFlightDraft = controller;
+
+    const pump = createChunkPump((chunks) => {
+      if (sender.isDestroyed()) return;
+      sender.send('commit-ai:chunk', { draftId, chunks });
+    });
+
+    let result: CommitDraftResult;
+    try {
+      result = await runner(controller.signal, pump);
+    } catch (error) {
+      result = toUnavailable(error);
+    } finally {
+      pump.flush();
+      if (inFlightDraft === controller) inFlightDraft = null;
+    }
+
+    if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
+      return ok({ status: 'malformed', subject: result.subject, model: effectiveModel });
+    }
+    return ok(result);
+  }
 
   ipcMain.handle('commit-ai:draft', async (_e, args: DraftArgs): Promise<Result<CommitDraftResult>> => {
     try {
@@ -339,99 +414,67 @@ export function registerCommitMessageAiHandlers(): void {
         }
 
         const effectiveModel = resolved.modelId;
+        const user = await collectDraftPrompt(
+          repoPath,
+          paths,
+          changeId ?? null,
+          intent ?? null,
+          resolved.contextLength ?? MIN_CONTEXT_LENGTH,
+        );
 
-        // Contra `HEAD` y no contra el índice: en el panel lo elegido todavía no
-        // está preparado, y un diff vacío haría que el modelo describa la nada.
-        const { stat, diff, tasksDiff } = await withRepoLock(repoPath, async () => {
-          const git = simpleGit(repoPath, { timeout: { block: 20_000 } });
-          const tasksPaths = paths.filter((path) => path.endsWith('tasks.md'));
-          return {
-            stat: await git.raw(['diff', '--stat', 'HEAD', '--', ...paths]),
-            diff: await git.raw(['diff', 'HEAD', '--', ...paths]),
-            tasksDiff: tasksPaths.length > 0
-              ? await git.raw(['diff', 'HEAD', '--', ...tasksPaths])
-              : '',
-          };
-        });
-
-        const budget = inputBudgetChars(resolved.contextLength ?? MIN_CONTEXT_LENGTH);
-        const user = buildUserPrompt({
-          changeId: changeId ?? null,
-          intent: intent ?? null,
-          tickedTasks: tickedTasksFromDiff(tasksDiff),
-          stat,
-          diff: truncateDiff(diff, budget),
-        });
-
-        inFlightDraft?.abort();
-        const controller = new AbortController();
-        inFlightDraft = controller;
-
-        const pump = createChunkPump((chunks) => {
-          if (_e.sender.isDestroyed()) return;
-          _e.sender.send('commit-ai:chunk', { draftId: draftId ?? null, chunks });
-        });
-
-        let result: CommitDraftResult;
-        try {
+        return await runDraftWithPump(_e.sender, draftId ?? null, effectiveModel, async (signal, pump) => {
           if (resolved.kind === 'cli') {
             if (resolved.providerId === 'codex') {
               const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
-              result = await draftCommitWithCodex({
+              return await draftCommitWithCodex({
                 model: effectiveModel,
                 prompt: fullPrompt,
-                signal: controller.signal,
+                signal,
                 onChunk: (chunks) => pump.push(chunks),
                 spawnFn: codexSpawnOverride ?? undefined,
               });
-            } else {
-              result = {
-                status: 'unavailable',
-                detail: 'todavía no conectado',
-              };
             }
-          } else {
-            // openai-compatible
-            const textConfig: TextClientConfig = {
-              baseUrl: resolved.baseURL ?? DEFAULT_LOCAL_BASE_URL,
-              apiKey: resolved.apiKey,
-              headers: resolved.headers,
-              providerLabel: resolved.providerName,
+            return {
+              status: 'unavailable',
+              detail: 'todavía no conectado',
             };
-            const genResult = await streamText(textConfig, {
-              model: effectiveModel,
-              system: SYSTEM_PROMPT,
-              user,
-              temperature: resolved.temperature,
-              maxTokens: resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS),
-              options: resolved.options,
-              signal: controller.signal,
-              onChunk: (chunks) => pump.push(chunks),
-            });
-            result = parseDraftResponse(genResult.rawPayload, effectiveModel);
           }
-        } catch (error) {
-          result = toUnavailable(error);
-        } finally {
-          pump.flush();
-        }
-        if (inFlightDraft === controller) inFlightDraft = null;
 
-        if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
-          return ok({ status: 'malformed', subject: result.subject, model: effectiveModel });
-        }
-        return ok(result);
+          // openai-compatible: sin caída a DEFAULT_LOCAL_BASE_URL (D7)
+          if (!resolved.baseURL) {
+            return {
+              status: 'unavailable',
+              detail: `el proveedor ${resolved.providerId} no declara options.baseURL`,
+            };
+          }
+
+          const textConfig: TextClientConfig = {
+            baseUrl: resolved.baseURL,
+            apiKey: resolved.apiKey,
+            headers: resolved.headers,
+            providerLabel: resolved.providerName,
+          };
+          const genResult = await streamText(textConfig, {
+            model: effectiveModel,
+            system: SYSTEM_PROMPT,
+            user,
+            temperature: resolved.temperature,
+            maxTokens: resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS),
+            options: resolved.options,
+            signal,
+            onChunk: (chunks) => pump.push(chunks),
+          });
+          return parseDraftResponse(genResult.rawPayload, effectiveModel);
+        });
       }
 
+      // Camino nativo LM Studio
       const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
 
       const catalog = await fetchModelCatalog(endpoint);
       const chosen = catalog.find((entry) => entry.id === model);
       if (!chosen) return fail(new Error('Ese modelo no está en el catálogo del servidor.'));
       if (!hasEnoughContext(chosen)) {
-        // Se dice antes de intentar, no después de esperar un minuto: el
-        // contexto se fija al cargar el modelo, así que la salida es cargarlo
-        // de nuevo, no reintentar.
         return ok({
           status: 'unavailable',
           detail: `«${model}» no está cargado con al menos ${MIN_CONTEXT_LENGTH} de contexto. `
@@ -439,75 +482,25 @@ export function registerCommitMessageAiHandlers(): void {
         });
       }
 
-      // Contra `HEAD` y no contra el índice: en el panel lo elegido todavía no
-      // está preparado, y un diff vacío haría que el modelo describa la nada.
-      const { stat, diff, tasksDiff } = await withRepoLock(repoPath, async () => {
-        const git = simpleGit(repoPath, { timeout: { block: 20_000 } });
-        const tasksPaths = paths.filter((path) => path.endsWith('tasks.md'));
-        return {
-          stat: await git.raw(['diff', '--stat', 'HEAD', '--', ...paths]),
-          diff: await git.raw(['diff', 'HEAD', '--', ...paths]),
-          tasksDiff: tasksPaths.length > 0
-            ? await git.raw(['diff', 'HEAD', '--', ...tasksPaths])
-            : '',
-        };
-      });
+      const user = await collectDraftPrompt(
+        repoPath,
+        paths,
+        changeId ?? null,
+        intent ?? null,
+        chosen.loadedContextLength ?? MIN_CONTEXT_LENGTH,
+      );
 
-      const budget = inputBudgetChars(chosen.loadedContextLength ?? MIN_CONTEXT_LENGTH);
-      const user = buildUserPrompt({
-        changeId: changeId ?? null,
-        intent: intent ?? null,
-        tickedTasks: tickedTasksFromDiff(tasksDiff),
-        stat,
-        diff: truncateDiff(diff, budget),
-      });
-
-      // Una sola redacción a la vez: si quedaba otra en vuelo se corta, en vez
-      // de dejar dos ocupando el modelo.
-      inFlightDraft?.abort();
-      const controller = new AbortController();
-      inFlightDraft = controller;
-
-      // Lo que el modelo va produciendo, cruzado con ventana de agrupado.
-      //
-      // Medido: 45 cuadros por segundo. Uno por mensaje serían 45 mensajes de
-      // IPC y 45 re-renderizados por segundo, que es el error que ya trabó la
-      // máquina. Con la ventana quedan ~8, con el mismo texto adentro.
-      //
-      // `isDestroyed()` en cada envío: la redacción sobrevive a que se cierre la
-      // ventana —el `await` sigue— y mandarle a un `WebContents` muerto tira.
-      const pump = createChunkPump((chunks) => {
-        if (_e.sender.isDestroyed()) return;
-        _e.sender.send('commit-ai:chunk', { draftId: draftId ?? null, chunks });
-      });
-
-      let result: CommitDraftResult;
-      try {
-        result = await draftCommitSubject({
+      return await runDraftWithPump(_e.sender, draftId ?? null, model, async (signal, pump) => {
+        return await draftCommitSubject({
           baseUrl: endpoint,
           model,
           system: SYSTEM_PROMPT,
           user,
           maxTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
-          signal: controller.signal,
+          signal,
           onChunk: (chunks) => pump.push(chunks),
         });
-      } finally {
-        // Lo último de la ventana no se pierde: el cierre —con su motivo y su
-        // conteo de tokens— casi siempre cae dentro de una ventana que todavía
-        // no venció, y es justo el dato que explica una espera larga.
-        pump.flush();
-      }
-      if (inFlightDraft === controller) inFlightDraft = null;
-
-      // Un asunto que no respeta la forma convencional no se impone en el campo,
-      // pero **sí se dice qué contestó**: rotularlo «no contestó» era mentir
-      // sobre lo que pasó, y borraba una descripción posiblemente buena a la que
-      // sólo le faltaba el prefijo. Quien mira decide si la usa.
-      if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
-        return ok({ status: 'malformed', subject: result.subject, model });
-      }
-      return ok(result);
+      });
     } catch (error) {
       return fail(error);
     }

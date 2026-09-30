@@ -94,7 +94,7 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
         killProcess();
         finish({
           status: 'unavailable',
-          detail: 'La redacción tardó demasiado y se canceló.',
+          detail: 'Redacción cancelada.',
         });
       };
 
