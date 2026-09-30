@@ -266,6 +266,25 @@ y un CLI (Codex): `gitcron.json` mínimo, redacción de commit con cada uno, ped
 cancelar, cambiar de vista y volver con la elección conservada. Si la unificación falla en una de las dos
 familias, se ve ahí y no después de construir importación, MCP y ajustes. Las tareas quedan ordenadas así.
 
+### D16. Una redacción por repositorio, en fila, que sobrevive a vistas y solapas (pedido de Ale, 2026-09-30)
+Idea final de Ale: una IA que acompaña en todas las pantallas y sabe en qué repositorio está, sin perder el hilo
+al moverse entre solapas; eso lo construye `retomar-trabajo-con-asistencia-contextual`. Esta pieza es la primera
+y debe quedar compatible con ese cambio:
+- **Estado por repositorio** en el renderer: un mapa `repoPath → { fase, inicio, draftId, estado en fila }` y un
+  registro de pensamiento por `draftId` (hoy `lib/commit-draft-log.ts` guarda uno solo). Nada de un «draft»
+  global.
+- **Fila en el proceso principal:** `commit-ai:draft` deja de cortar la redacción anterior
+  (`inFlightDraft?.abort()`); encola por orden de llegada, corre una por vez y avisa al renderer cuándo una pasa de
+  «en fila» a «en curso». `commit-ai:cancel` recibe el `draftId` y corta sólo esa (en curso o en fila); sin
+  `draftId` mantiene el comportamiento actual para los llamadores existentes.
+- **Resultado por origen:** siempre por `updateRepoByPath(origen)`; si el repositorio de origen se cerró, no se
+  escribe en ningún lado.
+- **Sin corte al desmontar:** el panel deja de cortar al desmontarse, también al cambiar de repositorio; la
+  protección de la tanda 08 (no cruzar mensajes) la da el punto anterior.
+- **Aviso:** por la superficie de notificaciones de la aplicación (`setSuccess`/toasts existentes), nombrando el
+  repositorio, sólo cuando termina con el repositorio fuera de la vista.
+- **Límite declarado:** la carga y expulsión de modelos de LM Studio siguen siendo una a la vez; no entran en la fila.
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /

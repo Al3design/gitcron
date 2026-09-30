@@ -28,3 +28,38 @@ elegir otro servidor desde la pantalla.
 #### Scenario: Servidor en otra máquina
 - **WHEN** el servidor del proveedor elegido no está en la misma máquina que la aplicación
 - **THEN** se lo alcanza por la dirección declarada en el catálogo, sin depender de una ruta fija
+
+## ADDED Requirements
+
+### Requirement: Una redacción en curso no se pierde al cambiar de vista o de repositorio
+Una redacción del mensaje de commit pedida en un repositorio SHALL seguir en curso aunque la persona pase a
+otra vista o a la solapa de otro repositorio, y su resultado SHALL escribirse en el campo de commit del
+repositorio donde se pidió, nunca en el que está abierto. Cada repositorio SHALL conservar su propia
+redacción: al volver a su solapa se ve en curso (tiempo transcurrido, lo que va pensando, «Cancelar») o su
+resultado. Cuando termina una redacción de un repositorio que no está a la vista, la aplicación SHALL avisarlo
+por su superficie de notificaciones, nombrando el repositorio. Si se pide una redacción mientras otra está en
+curso, la nueva SHALL esperar en fila y decirlo («esperando a que termine la de <repositorio>»), sin cortar la
+anterior; cancelar una redacción SHALL cortar sólo esa.
+
+El fundamento es de Ale (2026-09-30): el hilo de lo que piensa la IA no tiene que perderse por moverse entre
+solapas. El corte al cambiar de repositorio existía sólo porque el mensaje caía en el repositorio equivocado;
+escribir por el repositorio de origen resuelve eso sin cortar. La fila evita que dos redacciones compitan por
+el mismo servidor, que en el caso de Unsloth atiende un pedido por vez. Es la primera pieza de una IA que
+acompaña en todas las pantallas sabiendo en qué repositorio está, que generaliza
+`retomar-trabajo-con-asistencia-contextual`.
+
+#### Scenario: Cambio de solapa durante una redacción
+- **WHEN** se pide una redacción en odontoPro y la persona pasa a la solapa de gitCronos
+- **THEN** la redacción sigue, el mensaje llega al campo de commit de odontoPro, y al volver a odontoPro se ve el resultado y lo que pensó
+
+#### Scenario: Aviso al terminar fuera de la vista
+- **WHEN** termina una redacción de un repositorio que no está a la vista
+- **THEN** aparece un aviso de la aplicación que nombra ese repositorio
+
+#### Scenario: Dos redacciones seguidas
+- **WHEN** hay una redacción en curso en odontoPro y se pide otra en gitCronos
+- **THEN** la de gitCronos espera en fila y lo dice; la de odontoPro no se corta
+
+#### Scenario: Cancelar una sola
+- **WHEN** hay una redacción en curso y otra en fila, y se cancela la que está en fila
+- **THEN** sólo esa se cancela y la que está en curso sigue

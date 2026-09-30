@@ -18,6 +18,7 @@ Rutina de trabajo: [config.yaml](../../config.yaml). Secuencia del producto: [EX
 | 1.4 | orquestador | Copia del esquema de OpenCode y `gitcron.json` de ejemplo |
 | 2.1–2.2 | local | Módulo mínimo de configuración en `electron/ai/`; `electron/ipc/commit-message-ai.ts`; `electron/ai/text-client.ts`; cliente de texto por CLI |
 | 2.3 | orquestador | Recorrido real con Unsloth local y Codex, y reporte |
+| 2.4 | local | `electron/ipc/commit-message-ai.ts` (fila y cancelación por draftId); `lib/commit-draft-log.ts` y `lib/pipeline-store.ts` (estado por repositorio); `components/pipeline/OpenSpecDashboard.tsx`; avisos existentes |
 | 3.1–3.5 | local | Módulo nuevo de configuración en `electron/ai/` y sus tests; `electron/ai/key-store.ts`; `electron/ipc/ai.ts`; `electron/preload.ts`; `types/electron.d.ts` |
 | 3.6, 3.6b | local | Importador en el módulo de configuración y su test con fixture saneado |
 | 3.7 | local | Módulo de configuración; `lib/ai-model-memory.ts` y ajustes actuales como fuente |
