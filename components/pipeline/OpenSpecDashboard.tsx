@@ -55,7 +55,7 @@ import { usePipelineStore } from '@/lib/pipeline-store';
 import { AiElapsed } from './AiElapsed';
 import { appendDraftChunks, clearDraftLog, finishDraftLog, startDraftLog } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
-import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiResolvedError, type CommitAiResolvedModel, type CommitAiResolvedResult, type LocalModel } from '@/types/commit-message-ai';
+import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiLastRequest, type CommitAiResolvedError, type CommitAiResolvedModel, type CommitAiResolvedResult, type LocalModel } from '@/types/commit-message-ai';
 import { useRememberedAiModel, useRememberedAiSettings, rememberAiSettings, rememberAiModel as rememberAiModelGlobally, getRememberedAiModel, formatAiDeviceLabel } from '@/lib/ai-model-memory';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
@@ -1268,6 +1268,9 @@ export function OpenSpecDashboard({
     ));
   };
 
+  const [lastAiRequest, setLastAiRequest] = useState<CommitAiLastRequest | null>(null);
+  const [showSentDetails, setShowSentDetails] = useState<boolean>(false);
+
   /**
    * Deja el commit listo: archivos preparados y mensaje sugerido escrito.
    *
@@ -1313,6 +1316,11 @@ export function OpenSpecDashboard({
         });
       }
     });
+    window.api?.commitAi?.lastRequest?.().then((res) => {
+      if (alive && res?.success && res.data) {
+        setLastAiRequest(res.data);
+      }
+    }).catch(() => undefined);
     window.api?.commitAi?.catalog().then((result) => {
       if (!alive) return;
       // Los de embeddings no redactan nada; se filtran acá y no en el proveedor,
@@ -1473,6 +1481,7 @@ export function OpenSpecDashboard({
   const closePrepare = () => {
     if (aiBusy) cancelAiDraft();
     setAiNotice(null);
+    setShowSentDetails(false);
     // Acá sí se borra lo que pensó: el rail se va con el panel, y dejarlo
     // guardado haría que la próxima vez que se abra aparezca el razonamiento de
     // un commit que ya se preparó.
@@ -1659,6 +1668,11 @@ export function OpenSpecDashboard({
       // la vista —recién se limpia cuando empieza otra redacción o se cierra el
       // panel—, porque el momento de leerlo es justo después de que termina.
       finishDraftLog();
+      window.api?.commitAi?.lastRequest?.().then((res) => {
+        if (isMountedRef.current && res?.success && res.data) {
+          setLastAiRequest(res.data);
+        }
+      }).catch(() => undefined);
     }
   };
 
@@ -2633,6 +2647,69 @@ export function OpenSpecDashboard({
                         </p>
                       )}
                       {aiBusy && <AiElapsed phase={aiPhase} startedAt={aiStartedAt} kind={aiOpKind} />}
+                      {lastAiRequest && (
+                        <div className={styles.aiSentSection}>
+                          <button
+                            type="button"
+                            className={styles.aiSentToggle}
+                            onClick={() => setShowSentDetails((prev) => !prev)}
+                            aria-expanded={showSentDetails}
+                          >
+                            {showSentDetails
+                              ? t('pipeline.openspec.prepare.aiHideSent')
+                              : t('pipeline.openspec.prepare.aiShowSent')}
+                          </button>
+                          {showSentDetails && (
+                            <div className={styles.aiSentDetails} data-testid="ai-sent-details">
+                              <dl className={styles.aiSentList}>
+                                <dt>{t('pipeline.openspec.prepare.aiSentEndpoint')}</dt>
+                                <dd>{lastAiRequest.endpoint}</dd>
+                                <dt>{t('pipeline.openspec.prepare.aiSentModel')}</dt>
+                                <dd>
+                                  {String(lastAiRequest.model.value)}
+                                  <span className={styles.aiSentProvenance}> ({lastAiRequest.model.provenance})</span>
+                                </dd>
+                                <dt>{t('pipeline.openspec.prepare.aiSentParams')}</dt>
+                                <dd>
+                                  {Object.keys(lastAiRequest.parameters).length > 0 ? (
+                                    <ul className={styles.aiSentParamList}>
+                                      {Object.entries(lastAiRequest.parameters).map(([key, item]) => (
+                                        <li key={key}>
+                                          <code>{key}</code>: <span>{typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value)}</span>
+                                          <span className={styles.aiSentProvenance}> ({item.provenance})</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
+                                  )}
+                                </dd>
+                                <dt>{t('pipeline.openspec.prepare.aiSentHeaders')}</dt>
+                                <dd>
+                                  {lastAiRequest.headers.length > 0 ? (
+                                    <ul className={styles.aiSentHeaderList}>
+                                      {lastAiRequest.headers.map((h) => (
+                                        <li key={h.name}>
+                                          <code>{h.name}</code>
+                                          <span className={styles.aiSentProvenance}> ({h.provenance})</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
+                                  )}
+                                </dd>
+                                {lastAiRequest.auth && (
+                                  <>
+                                    <dt>{t('pipeline.openspec.prepare.aiSentAuth')}</dt>
+                                    <dd>{lastAiRequest.auth}</dd>
+                                  </>
+                                )}
+                              </dl>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </section>
                   ) : (
                     <AiModelControls

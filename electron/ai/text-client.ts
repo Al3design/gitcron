@@ -140,6 +140,18 @@ function buildRequestBody(
 }
 
 /**
+ * El cuerpo exacto que `streamText` manda. Exportado para que quien muestre
+ * «lo enviado» use el mismo armado y no una copia de sus valores por omisión.
+ */
+export function buildStreamRequestBody(opts: TextGenerateOptions): Record<string, unknown> {
+  return buildRequestBody(
+    opts,
+    { temperature: 0.2, maxTokens: 2048 },
+    { stream: true, stream_options: { include_usage: true } },
+  );
+}
+
+/**
  * Genera texto en una sola respuesta (modo síncrono / no streaming).
  */
 export async function completeText(
@@ -213,13 +225,7 @@ export async function streamText(
     res = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
-      body: JSON.stringify(
-        buildRequestBody(
-          opts,
-          { temperature: 0.2, maxTokens: 2048 },
-          { stream: true, stream_options: { include_usage: true } },
-        ),
-      ),
+      body: JSON.stringify(buildStreamRequestBody(opts)),
       signal,
     });
   } catch (err) {

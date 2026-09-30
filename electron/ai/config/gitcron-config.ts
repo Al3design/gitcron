@@ -66,6 +66,17 @@ export interface GitCronConfig {
   [key: string]: unknown;
 }
 
+export interface ResolvedProvenance {
+  sourceFile: string;
+  model: string;
+  baseURL?: string;
+  temperature?: string;
+  max_tokens?: string;
+  options: Record<string, string>;
+  headers: Record<string, string>;
+  auth?: string;
+}
+
 export interface ResolvedUse {
   providerId: string;
   providerName: string;
@@ -82,6 +93,7 @@ export interface ResolvedUse {
   contextLength?: number;
   available: boolean;
   unavailableReason?: string;
+  provenance: ResolvedProvenance;
 }
 
 export function getDefaultConfigPath(): string {
@@ -263,6 +275,12 @@ export function resolveUse(
       sourceFile: filePath,
       available: false,
       unavailableReason: 'falta el proveedor: se escribe <proveedor>/<modelo>',
+      provenance: {
+        sourceFile: filePath,
+        model: `agent.${use}.model`,
+        options: {},
+        headers: {},
+      },
     };
   }
 
@@ -272,6 +290,10 @@ export function resolveUse(
   // CLI reservados
   if (RESERVED_CLI_IDS.includes(providerId as ReservedCliId)) {
     const isCodex = providerId === 'codex';
+    const cliOptionsProvenance: Record<string, string> = {};
+    for (const k of Object.keys(agentConfig.options ?? {})) {
+      cliOptionsProvenance[k] = `agent.${use}.options.${k}`;
+    }
     return {
       providerId,
       providerName: cliDisplayName(providerId),
@@ -284,6 +306,13 @@ export function resolveUse(
       options: agentConfig.options ?? {},
       available: isCodex,
       unavailableReason: isCodex ? undefined : 'todavía no conectado',
+      provenance: {
+        sourceFile: filePath,
+        model: `agent.${use}.model`,
+        temperature: agentConfig.temperature !== undefined ? `agent.${use}.temperature` : undefined,
+        options: cliOptionsProvenance,
+        headers: {},
+      },
     };
   }
 
@@ -299,6 +328,12 @@ export function resolveUse(
       sourceFile: filePath,
       available: false,
       unavailableReason: `Proveedor «${providerId}» no declarado en provider`,
+      provenance: {
+        sourceFile: filePath,
+        model: `agent.${use}.model`,
+        options: {},
+        headers: {},
+      },
     };
   }
 
@@ -315,26 +350,48 @@ export function resolveUse(
   const apiKey = substitutedOptions?.apiKey;
   const headers = substitutedOptions?.headers as Record<string, string> | undefined;
 
-  if (!baseURL) {
-    return {
-      providerId,
-      providerName,
-      modelId,
-      kind: 'openai-compatible',
-      destination: 'external-service',
-      sourceFile: filePath,
-      available: false,
-      unavailableReason: `el proveedor ${providerId} no declara options.baseURL`,
-    };
+  let baseURLProvenance: string | undefined;
+  if (typeof rawOptions.baseURL === 'string') {
+    const baseEnvMatch = rawOptions.baseURL.match(/\{env:([A-Za-z0-9_]+)\}/);
+    if (baseEnvMatch) {
+      baseURLProvenance = `provider.${providerId}.options.baseURL (variable ${baseEnvMatch[1]})`;
+    } else {
+      baseURLProvenance = `provider.${providerId}.options.baseURL`;
+    }
   }
 
-  const destination = determineDestination(baseURL, 'openai-compatible');
+  let authProvenance: string | undefined;
+  if (typeof rawOptions.apiKey === 'string') {
+    const apiEnvMatch = rawOptions.apiKey.match(/\{env:([A-Za-z0-9_]+)\}/);
+    if (apiEnvMatch) {
+      authProvenance = `Bearer, de la variable ${apiEnvMatch[1]}`;
+    } else if (rawOptions.apiKey.trim().length > 0) {
+      authProvenance = 'Bearer, valor escrito en el archivo';
+    }
+  }
 
   const modelConfig = rawProvider.models?.[modelId];
 
-  // Precedencia: agent encima de model. max_tokens sale de limit.output del modelo.
-  const temperature = agentConfig.temperature !== undefined ? agentConfig.temperature : modelConfig?.temperature;
-  const maxTokens = modelConfig?.limit?.output;
+  // Precedencia: agent encima de model. max_tokens sale de limit.output del modelo o 3000 por omisión.
+  let temperature: number | undefined;
+  let temperatureProvenance: string | undefined;
+  if (agentConfig.temperature !== undefined) {
+    temperature = agentConfig.temperature;
+    temperatureProvenance = `agent.${use}.temperature`;
+  } else if (modelConfig?.temperature !== undefined) {
+    temperature = modelConfig.temperature;
+    temperatureProvenance = `provider.${providerId}.models.${modelId}.temperature`;
+  }
+
+  let maxTokens: number;
+  let maxTokensProvenance: string;
+  if (modelConfig?.limit?.output !== undefined) {
+    maxTokens = modelConfig.limit.output;
+    maxTokensProvenance = `provider.${providerId}.models.${modelId}.limit.output`;
+  } else {
+    maxTokens = 3000;
+    maxTokensProvenance = 'valor por omisión de GitCron (3000)';
+  }
   const contextLength = modelConfig?.limit?.context;
 
   // options: provider.options (excluyendo claves del esquema y headers) + model.options + agent.options
@@ -352,6 +409,44 @@ export function resolveUse(
     ...(agentConfig.options ?? {}),
   };
 
+  const optionsProvenance: Record<string, string> = {};
+  for (const k of Object.keys(providerExtraOptions)) {
+    optionsProvenance[k] = `provider.${providerId}.options.${k}`;
+  }
+  for (const k of Object.keys(modelConfig?.options ?? {})) {
+    optionsProvenance[k] = `provider.${providerId}.models.${modelId}.options.${k}`;
+  }
+  for (const k of Object.keys(agentConfig.options ?? {})) {
+    optionsProvenance[k] = `agent.${use}.options.${k}`;
+  }
+
+  const headersProvenance: Record<string, string> = {};
+  for (const h of Object.keys(rawOptions.headers ?? {})) {
+    headersProvenance[h] = `provider.${providerId}.options.headers.${h}`;
+  }
+
+  if (!baseURL) {
+    return {
+      providerId,
+      providerName,
+      modelId,
+      kind: 'openai-compatible',
+      destination: 'external-service',
+      sourceFile: filePath,
+      available: false,
+      unavailableReason: `el proveedor ${providerId} no declara options.baseURL`,
+      provenance: {
+        sourceFile: filePath,
+        model: `agent.${use}.model`,
+        options: optionsProvenance,
+        headers: headersProvenance,
+        auth: authProvenance,
+      },
+    };
+  }
+
+  const destination = determineDestination(baseURL, 'openai-compatible');
+
   return {
     providerId,
     providerName,
@@ -368,5 +463,15 @@ export function resolveUse(
     contextLength,
     available,
     unavailableReason,
+    provenance: {
+      sourceFile: filePath,
+      model: `agent.${use}.model`,
+      baseURL: baseURLProvenance,
+      temperature: temperatureProvenance,
+      max_tokens: maxTokensProvenance,
+      options: optionsProvenance,
+      headers: headersProvenance,
+      auth: authProvenance,
+    },
   };
 }

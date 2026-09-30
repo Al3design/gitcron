@@ -12,11 +12,21 @@
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
 import { simpleGit } from 'simple-git';
-import type { CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunk, LoadOutcome, LocalModel } from '../../types/commit-message-ai';
+import type {
+  CommitAiLastRequest,
+  CommitAiResolvedModel,
+  CommitAiResolvedResult,
+  CommitDraftResult,
+  DraftChunk,
+  HeaderProvenance,
+  LoadOutcome,
+  LocalModel,
+  ParameterProvenance,
+} from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
 import { draftCommitWithCodex, type SpawnFunction } from '../ai/commit-message/codex-cli';
 import { getDefaultConfigPath, resolveUse } from '../ai/config/gitcron-config';
-import { streamText, type TextClientConfig } from '../ai/text-client';
+import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
   resolveDeviceNames,
@@ -76,6 +86,57 @@ export function setCommitAiConfigPathForTesting(p: string | null): void {
 let codexSpawnOverride: SpawnFunction | null = null;
 export function setCodexSpawnForTesting(fn: SpawnFunction | null): void {
   codexSpawnOverride = fn;
+}
+
+/**
+ * Parámetros estándar de la API de Chat Completions de OpenAI.
+ * Si el servidor responde 4xx, cualquier parámetro fuera de esta lista se reporta con su procedencia.
+ */
+export const OPENAI_STANDARD_PARAMS: readonly string[] = [
+  'model',
+  'messages',
+  'temperature',
+  'top_p',
+  'max_tokens',
+  'max_completion_tokens',
+  'stream',
+  'stream_options',
+  'stop',
+  'n',
+  'presence_penalty',
+  'frequency_penalty',
+  'logit_bias',
+  'logprobs',
+  'top_logprobs',
+  'user',
+  'seed',
+  'response_format',
+  'tools',
+  'tool_choice',
+  'parallel_tool_calls',
+  'reasoning_effort',
+  'service_tier',
+  'metadata',
+  'store',
+  'modalities',
+  'prediction',
+  'audio',
+  'web_search_options',
+  'verbosity',
+] as const;
+
+/**
+ * Último pedido efectivo del uso gitcron-commit guardado en memoria (D14).
+ * Nunca persiste en disco; nunca contiene secretos, prompt ni diff.
+ */
+let lastCommitAiRequest: CommitAiLastRequest | null = null;
+
+export function getLastCommitAiRequestForTesting(): CommitAiLastRequest | null {
+  return lastCommitAiRequest;
+}
+
+export function resetLastCommitAiRequestForTesting(): void {
+  lastCommitAiRequest = null;
 }
 import {
   buildUserPrompt,
@@ -337,6 +398,10 @@ export function registerCommitMessageAiHandlers(): void {
     }
   });
 
+  ipcMain.handle('commit-ai:last-request', async (): Promise<Result<CommitAiLastRequest | null>> => {
+    return ok(lastCommitAiRequest);
+  });
+
   async function collectDraftPrompt(
     repoPath: string,
     paths: string[],
@@ -425,6 +490,33 @@ export function registerCommitMessageAiHandlers(): void {
         return await runDraftWithPump(_e.sender, draftId ?? null, effectiveModel, async (signal, pump) => {
           if (resolved.kind === 'cli') {
             if (resolved.providerId === 'codex') {
+              const codexCommand = `codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -m ${effectiveModel} -`;
+              const codexParams: Record<string, ParameterProvenance> = {};
+              if (resolved.temperature !== undefined) {
+                codexParams.temperature = {
+                  value: resolved.temperature,
+                  provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
+                };
+              }
+              for (const [k, v] of Object.entries(resolved.options ?? {})) {
+                codexParams[k] = {
+                  value: v,
+                  provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
+                };
+              }
+
+              lastCommitAiRequest = {
+                kind: 'cli',
+                endpoint: codexCommand,
+                model: {
+                  value: effectiveModel,
+                  provenance: resolved.provenance.model,
+                },
+                parameters: codexParams,
+                headers: [],
+                timestamp: Date.now(),
+              };
+
               const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
               return await draftCommitWithCodex({
                 model: effectiveModel,
@@ -448,23 +540,88 @@ export function registerCommitMessageAiHandlers(): void {
             };
           }
 
+          const chatEndpoint = buildChatCompletionsEndpoint(resolved.baseURL);
+          const effectiveMaxTokens = resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS);
+
+          const streamOpts = {
+            model: effectiveModel,
+            system: SYSTEM_PROMPT,
+            user,
+            temperature: resolved.temperature,
+            maxTokens: effectiveMaxTokens,
+            options: resolved.options,
+            signal,
+            onChunk: (chunks: DraftChunk[]) => pump.push(chunks),
+          };
+
+          // Lo que se muestra sale del mismo cuerpo que viaja: si los valores por
+          // omisión o el filtrado de `options` cambian en text-client, la vista no
+          // puede quedar diciendo otra cosa (D14).
+          const sentBody = buildStreamRequestBody(streamOpts);
+          const provenanceOf = (key: string): string => {
+            if (key in (resolved.options ?? {})) return resolved.provenance.options[key] ?? `options.${key}`;
+            if (key === 'temperature') return resolved.provenance.temperature ?? 'valor por omisión de GitCron';
+            if (key === 'max_tokens') return resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`;
+            return 'parámetro de GitCron';
+          };
+          const openAiParams: Record<string, ParameterProvenance> = {};
+          for (const [key, value] of Object.entries(sentBody)) {
+            if (key === 'model' || key === 'messages') continue;
+            openAiParams[key] = { value, provenance: provenanceOf(key) };
+          }
+
+          const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
+            name,
+            provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
+          }));
+
+          lastCommitAiRequest = {
+            kind: 'openai-compatible',
+            endpoint: chatEndpoint,
+            model: {
+              value: effectiveModel,
+              provenance: resolved.provenance.model,
+            },
+            parameters: openAiParams,
+            headers: headerList,
+            auth: resolved.provenance.auth,
+            timestamp: Date.now(),
+          };
+
           const textConfig: TextClientConfig = {
             baseUrl: resolved.baseURL,
             apiKey: resolved.apiKey,
             headers: resolved.headers,
             providerLabel: resolved.providerName,
           };
-          const genResult = await streamText(textConfig, {
-            model: effectiveModel,
-            system: SYSTEM_PROMPT,
-            user,
-            temperature: resolved.temperature,
-            maxTokens: resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS),
-            options: resolved.options,
-            signal,
-            onChunk: (chunks) => pump.push(chunks),
-          });
-          return parseDraftResponse(genResult.rawPayload, effectiveModel);
+
+          try {
+            const genResult = await streamText(textConfig, streamOpts);
+            return parseDraftResponse(genResult.rawPayload, effectiveModel);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            const is4xx = /respondi[oó]\s+4\d\d/i.test(msg) || ((error as any)?.status >= 400 && (error as any)?.status < 500);
+            if (is4xx) {
+              const standardSet = new Set(OPENAI_STANDARD_PARAMS);
+              const nonStandard: Array<{ key: string; provenance: string }> = [];
+              for (const [key] of Object.entries(resolved.options ?? {})) {
+                if (!standardSet.has(key)) {
+                  const prov = resolved.provenance.options[key] ?? `options.${key}`;
+                  nonStandard.push({ key, provenance: prov });
+                }
+              }
+              if (nonStandard.length > 0) {
+                const nonStandardDesc = nonStandard
+                  .map(({ key, provenance }) => `${key} (de ${provenance})`)
+                  .join(', ');
+                return {
+                  status: 'unavailable',
+                  detail: `${msg} Parámetros enviados fuera del estándar de OpenAI: ${nonStandardDesc}.`,
+                };
+              }
+            }
+            return toUnavailable(error);
+          }
         });
       }
 

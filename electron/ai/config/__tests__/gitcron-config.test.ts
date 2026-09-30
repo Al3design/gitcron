@@ -340,4 +340,123 @@ describe('gitcron-config', () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it('devuelve procedencia en agente > modelo, {env:} en baseURL y apiKey, y max_tokens por omisión', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-test-'));
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    const content = JSON.stringify({
+      provider: {
+        unslothpc: {
+          name: 'Unsloth PC',
+          options: {
+            baseURL: '{env:UNSLOTH_BASE_URL}',
+            apiKey: '{env:UNSLOTH_API_KEY}',
+            headers: {
+              'CF-Access-Client-Id': '{env:CF_ID}',
+            },
+            extra_provider_param: 'from-provider',
+          },
+          models: {
+            'qwen/27b': {
+              temperature: 0.7,
+              options: {
+                reasoning_effort: 'low',
+                model_param: 'from-model',
+              },
+              // sin limit.output -> debe ser 3000 por omisión
+            },
+          },
+        },
+      },
+      agent: {
+        'gitcron-commit': {
+          model: 'unslothpc/qwen/27b',
+          temperature: 0.2, // gana sobre 0.7
+          options: {
+            reasoning_effort: 'high', // gana sobre 'low'
+          },
+        },
+      },
+    });
+    fs.writeFileSync(configPath, content, 'utf8');
+
+    try {
+      const resolved = resolveUse('gitcron-commit', configPath, {
+        UNSLOTH_BASE_URL: 'http://192.168.1.5:8888/v1',
+        UNSLOTH_API_KEY: 'secret-key-123',
+        CF_ID: 'cf-id-456',
+      } as any);
+
+      expect(resolved).not.toBeNull();
+      expect(resolved?.provenance).toBeDefined();
+
+      // sourceFile y model
+      expect(resolved?.provenance.sourceFile).toBe(configPath);
+      expect(resolved?.provenance.model).toBe('agent.gitcron-commit.model');
+
+      // baseURL con variable X
+      expect(resolved?.provenance.baseURL).toBe('provider.unslothpc.options.baseURL (variable UNSLOTH_BASE_URL)');
+
+      // apiKey con variable X
+      expect(resolved?.provenance.auth).toBe('Bearer, de la variable UNSLOTH_API_KEY');
+
+      // Precedencia agente > modelo en temperature
+      expect(resolved?.temperature).toBe(0.2);
+      expect(resolved?.provenance.temperature).toBe('agent.gitcron-commit.temperature');
+
+      // max_tokens por omisión (3000)
+      expect(resolved?.maxTokens).toBe(3000);
+      expect(resolved?.provenance.max_tokens).toBe('valor por omisión de GitCron (3000)');
+
+      // Precedencia agente > modelo > proveedor en options
+      expect(resolved?.provenance.options['reasoning_effort']).toBe('agent.gitcron-commit.options.reasoning_effort');
+      expect(resolved?.provenance.options['model_param']).toBe('provider.unslothpc.models.qwen/27b.options.model_param');
+      expect(resolved?.provenance.options['extra_provider_param']).toBe('provider.unslothpc.options.extra_provider_param');
+
+      // Headers por bloque
+      expect(resolved?.provenance.headers['CF-Access-Client-Id']).toBe('provider.unslothpc.options.headers.CF-Access-Client-Id');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('devuelve procedencia con clave escrita literal y max_tokens del modelo', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-test-'));
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    const content = JSON.stringify({
+      provider: {
+        srv: {
+          options: {
+            baseURL: 'http://localhost:1234/v1',
+            apiKey: 'literal-token-written-in-file',
+          },
+          models: {
+            'model-custom': {
+              temperature: 0.5,
+              limit: { output: 4096 },
+            },
+          },
+        },
+      },
+      agent: {
+        'gitcron-commit': {
+          model: 'srv/model-custom',
+        },
+      },
+    });
+    fs.writeFileSync(configPath, content, 'utf8');
+
+    try {
+      const resolved = resolveUse('gitcron-commit', configPath);
+      expect(resolved).not.toBeNull();
+      expect(resolved?.provenance.baseURL).toBe('provider.srv.options.baseURL');
+      expect(resolved?.provenance.auth).toBe('Bearer, valor escrito en el archivo');
+      expect(resolved?.temperature).toBe(0.5);
+      expect(resolved?.provenance.temperature).toBe('provider.srv.models.model-custom.temperature');
+      expect(resolved?.maxTokens).toBe(4096);
+      expect(resolved?.provenance.max_tokens).toBe('provider.srv.models.model-custom.limit.output');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

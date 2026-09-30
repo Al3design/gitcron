@@ -225,3 +225,36 @@ export type CommitAiResolvedResult =
   | CommitAiResolvedModel
   | CommitAiResolvedError
   | null;
+
+/**
+ * Procedencia de un parámetro del pedido efectivo (D14).
+ */
+export interface ParameterProvenance {
+  value: unknown;
+  provenance: string;
+}
+
+/**
+ * Nombre y procedencia de una cabecera enviada al proveedor (sin el valor).
+ */
+export interface HeaderProvenance {
+  name: string;
+  provenance: string;
+}
+
+/**
+ * Último pedido efectivo del uso gitcron-commit guardado en memoria (D14).
+ * Nunca contiene claves, valores de cabeceras secretas, ni el prompt o el diff.
+ */
+export interface CommitAiLastRequest {
+  kind: 'openai-compatible' | 'cli';
+  endpoint: string;
+  model: {
+    value: string;
+    provenance: string;
+  };
+  parameters: Record<string, ParameterProvenance>;
+  headers: HeaderProvenance[];
+  auth?: string;
+  timestamp: number;
+}

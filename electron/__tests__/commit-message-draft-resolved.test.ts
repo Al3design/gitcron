@@ -512,4 +512,235 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     expect(res.data?.status).toBe('unavailable');
     expect(res.data?.detail).toBe('todavía no conectado');
   });
+
+  it('commit-ai:last-request devuelve el pedido con procedencias y sin secretos, cabeceras secretas ni diff', async () => {
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        provider: {
+          unslothpc: {
+            name: 'Unsloth PC',
+            options: {
+              baseURL: 'http://192.168.1.10:8888/v1',
+              apiKey: 'super-secret-api-key-999',
+              headers: {
+                'CF-Access-Client-Id': 'cf-client-public-id',
+                'CF-Access-Client-Secret': 'cf-secret-token-xyz',
+              },
+            },
+            models: {
+              'unsloth/Qwen3.8-27B-GGUF': {
+                limit: { context: 32768, output: 4096 },
+                options: { top_k: 40 },
+              },
+            },
+          },
+        },
+        agent: {
+          'gitcron-commit': {
+            model: 'unslothpc/unsloth/Qwen3.8-27B-GGUF',
+            temperature: 0.3,
+            options: {
+              reasoning_effort: 'medium',
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+    setCommitAiConfigPathForTesting(configPath);
+
+    const mockFetch = vi.fn(async () => {
+      const sseBody = [
+        'data: {"choices":[{"delta":{"content":"feat: asunto redactado con éxito"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ].join('');
+      return new Response(sseBody, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const draftHandler = handlers.get('commit-ai:draft')!;
+    const lastRequestHandler = handlers.get('commit-ai:last-request')!;
+    const mockSender = { isDestroyed: () => false, send: vi.fn() };
+
+    // Ejecutar redacción
+    const draftRes = await draftHandler(
+      { sender: mockSender },
+      {
+        repoPath: tmpDir,
+        paths: ['src/file.ts'],
+        changeId: 'modelos-en-casa',
+        intent: 'probar último pedido',
+        model: 'ignored',
+      },
+    );
+    expect(draftRes.success).toBe(true);
+
+    // Consultar el último pedido
+    const lastRes = await lastRequestHandler({});
+    expect(lastRes.success).toBe(true);
+    expect(lastRes.data).toBeDefined();
+
+    const req = lastRes.data;
+    expect(req.kind).toBe('openai-compatible');
+    expect(req.endpoint).toBe('http://192.168.1.10:8888/v1/chat/completions');
+    expect(req.model).toEqual({
+      value: 'unsloth/Qwen3.8-27B-GGUF',
+      provenance: 'agent.gitcron-commit.model',
+    });
+
+    // Parámetros y sus procedencias
+    expect(req.parameters.temperature).toEqual({
+      value: 0.3,
+      provenance: 'agent.gitcron-commit.temperature',
+    });
+    expect(req.parameters.max_tokens).toEqual({
+      value: 4096,
+      provenance: 'provider.unslothpc.models.unsloth/Qwen3.8-27B-GGUF.limit.output',
+    });
+    expect(req.parameters.top_k).toEqual({
+      value: 40,
+      provenance: 'provider.unslothpc.models.unsloth/Qwen3.8-27B-GGUF.options.top_k',
+    });
+    expect(req.parameters.reasoning_effort).toEqual({
+      value: 'medium',
+      provenance: 'agent.gitcron-commit.options.reasoning_effort',
+    });
+
+    // Cabeceras: sólo nombre y procedencia
+    expect(req.headers).toEqual(
+      expect.arrayContaining([
+        {
+          name: 'CF-Access-Client-Id',
+          provenance: 'provider.unslothpc.options.headers.CF-Access-Client-Id',
+        },
+        {
+          name: 'CF-Access-Client-Secret',
+          provenance: 'provider.unslothpc.options.headers.CF-Access-Client-Secret',
+        },
+      ]),
+    );
+
+    // Autenticación sin valor
+    expect(req.auth).toBe('Bearer, valor escrito en el archivo');
+
+    // Comprobación de seguridad: buscar en el JSON serializado
+    const serialized = JSON.stringify(req);
+    expect(serialized).not.toContain('super-secret-api-key-999');
+    expect(serialized).not.toContain('cf-secret-token-xyz');
+    expect(serialized).not.toContain('hello world'); // contenido del diff
+    expect(serialized).not.toContain('console.log');
+  });
+
+  it('lo enviado coincide con el cuerpo que viajó, aunque options traiga model o stream y falte temperature', async () => {
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        provider: {
+          unslothpc: {
+            options: { baseURL: 'http://192.168.1.10:8888/v1' },
+            models: { 'unsloth/Qwen3.8-27B-GGUF': { options: { model: 'otro-modelo', stream: false, top_k: 40 } } },
+          },
+        },
+        agent: { 'gitcron-commit': { model: 'unslothpc/unsloth/Qwen3.8-27B-GGUF' } },
+      }),
+      'utf8',
+    );
+    setCommitAiConfigPathForTesting(configPath);
+
+    const mockFetch = vi.fn(async () => new Response(
+      'data: {"choices":[{"delta":{"content":"feat: asunto"}}]}\n\ndata: [DONE]\n\n',
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    ));
+    vi.stubGlobal('fetch', mockFetch);
+
+    await handlers.get('commit-ai:draft')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { repoPath: tmpDir, paths: ['src/file.ts'], changeId: null, intent: null, model: 'ignored' },
+    );
+    const req = (await handlers.get('commit-ai:last-request')!({})).data;
+
+    const sent = JSON.parse((mockFetch.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    const { model: sentModel, messages: _messages, ...sentParams } = sent;
+    expect(sentModel).toBe('unsloth/Qwen3.8-27B-GGUF');
+    expect(req.model.value).toBe(sentModel);
+    const shownValues = Object.fromEntries(
+      Object.entries(req.parameters as Record<string, { value: unknown }>).map(([k, v]) => [k, v.value]),
+    );
+    expect(shownValues).toEqual(sentParams);
+    expect(req.parameters.model).toBeUndefined();
+    expect(req.parameters.stream.value).toBe(true);
+    expect(req.parameters.temperature.provenance).toBe('valor por omisión de GitCron');
+  });
+
+  it('error 400 simulado con options.foo en el cuerpo nombra foo y su procedencia, e hizo un solo pedido', async () => {
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        provider: {
+          unslothsrv: {
+            name: 'Unsloth SRV',
+            options: {
+              baseURL: 'http://127.0.0.1:11434/v1',
+            },
+            models: {
+              'llama-3': {
+                options: {
+                  foo: 'bar-value',
+                },
+              },
+            },
+          },
+        },
+        agent: {
+          'gitcron-commit': {
+            model: 'unslothsrv/llama-3',
+          },
+        },
+      }),
+      'utf8',
+    );
+    setCommitAiConfigPathForTesting(configPath);
+
+    let fetchCallCount = 0;
+    const mockFetch = vi.fn(async () => {
+      fetchCallCount++;
+      return new Response(JSON.stringify({ error: { message: 'unknown parameter: foo' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const draftHandler = handlers.get('commit-ai:draft')!;
+    const mockSender = { isDestroyed: () => false, send: vi.fn() };
+
+    const result = await draftHandler(
+      { sender: mockSender },
+      {
+        repoPath: tmpDir,
+        paths: ['src/file.ts'],
+        changeId: 'modelos-en-casa',
+        intent: 'probar 400',
+        model: 'ignored',
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data?.status).toBe('unavailable');
+
+    // Mensaje nombra 'foo' y su procedencia
+    const detail = result.data?.detail ?? '';
+    expect(detail).toContain('400');
+    expect(detail).toContain('Parámetros enviados fuera del estándar de OpenAI: foo (de provider.unslothsrv.models.llama-3.options.foo)');
+
+    // Se hizo exactamente un solo pedido (no reintenta quitándolos)
+    expect(fetchCallCount).toBe(1);
+  });
 });

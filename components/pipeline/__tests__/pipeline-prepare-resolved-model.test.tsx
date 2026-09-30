@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React, { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeProjection } from '@/types/pipeline';
@@ -365,5 +365,132 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     expect(cancelMock).toHaveBeenCalled();
 
     draftResolve?.({ success: true, data: { status: 'drafted', subject: 'feat: x', model: 'gpt-5.6-luna' } });
+  });
+
+  it('«Ver lo enviado» despliega y pliega en <StrictMode>; ningún secreto en el DOM', async () => {
+    const sampleLastRequest = {
+      kind: 'openai-compatible' as const,
+      endpoint: 'http://192.168.1.7:8888/v1/chat/completions',
+      model: {
+        value: 'unsloth/Qwen3.8-27B-GGUF',
+        provenance: 'agent.gitcron-commit.model',
+      },
+      parameters: {
+        temperature: { value: 0.2, provenance: 'agent.gitcron-commit.temperature' },
+        max_tokens: { value: 8192, provenance: 'provider.unslothpclocal.models.unsloth/Qwen3.8-27B-GGUF.limit.output' },
+        reasoning_effort: { value: 'high', provenance: 'agent.gitcron-commit.options.reasoning_effort' },
+      },
+      headers: [
+        { name: 'CF-Access-Client-Id', provenance: 'provider.unslothpclocal.options.headers.CF-Access-Client-Id' },
+        { name: 'CF-Access-Client-Secret', provenance: 'provider.unslothpclocal.options.headers.CF-Access-Client-Secret' },
+      ],
+      auth: 'Bearer, de la variable UNSLOTH_API_KEY',
+      timestamp: 1727680000000,
+    };
+
+    const lastRequestMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: sampleLastRequest,
+    });
+
+    const draftMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        status: 'drafted',
+        subject: 'feat(core): commit redactado con éxito',
+        model: 'unsloth/Qwen3.8-27B-GGUF',
+      },
+    });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        commitAi: {
+          catalog: vi.fn().mockResolvedValue({ success: true, data: [] }),
+          resolvedModel: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              providerName: 'Unsloth CASA Local',
+              modelId: 'unsloth/Qwen3.8-27B-GGUF',
+              kind: 'openai-compatible',
+              destination: 'own-server',
+              sourceFile: '~/.config/gitcron/gitcron.json',
+            },
+          }),
+          deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }),
+          draft: draftMock,
+          load: vi.fn(),
+          unload: vi.fn(),
+          cancel: vi.fn(),
+          lastRequest: lastRequestMock,
+        },
+      },
+    });
+
+    render(
+      <StrictMode>
+        <OpenSpecDashboard
+          snapshot={snapshot()}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={false}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          projection={null as RuntimeProjection | null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />
+      </StrictMode>,
+    );
+
+    // Abrir panel
+    const openButton = screen.getByRole('button', { name: /preparar/i });
+    fireEvent.click(openButton);
+
+    await screen.findByText(/Redacta con unsloth\/Qwen3\.8-27B-GGUF/i);
+
+    // Elegir archivo
+    const checkboxes = screen.getAllByRole('checkbox');
+    fireEvent.click(checkboxes[0]);
+
+    // Redactar
+    const draftButton = screen.getByRole('button', { name: /redactar con ia/i });
+    fireEvent.click(draftButton);
+
+    // Esperar a que se complete y aparezca el botón «Ver lo enviado»
+    const toggleButton = await screen.findByRole('button', { name: /ver lo enviado/i });
+    expect(toggleButton).toBeDefined();
+
+    // Antes de hacer clic, el detalle está plegado
+    expect(screen.queryByTestId('ai-sent-details')).toBeNull();
+
+    // Desplegar «Ver lo enviado»
+    fireEvent.click(toggleButton);
+
+    const details = await screen.findByTestId('ai-sent-details');
+    expect(details).toBeDefined();
+    expect(toggleButton.textContent).toMatch(/ocultar lo enviado/i);
+
+    // Verifica que se muestra la dirección, modelo, parámetros con procedencia y cabeceras por nombre
+    const detailsScope = within(details);
+    expect(detailsScope.getByText(/http:\/\/192\.168\.1\.7:8888\/v1\/chat\/completions/)).toBeDefined();
+    expect(detailsScope.getByText(/agent\.gitcron-commit\.model/)).toBeDefined();
+    expect(detailsScope.getAllByText(/CF-Access-Client-Secret/).length).toBeGreaterThanOrEqual(1);
+    expect(detailsScope.getByText(/Bearer, de la variable UNSLOTH_API_KEY/)).toBeDefined();
+
+    // Seguridad: ningún valor secreto en el DOM (claves de API o tokens literales)
+    expect(document.body.innerHTML).not.toContain('unsloth-secret-token');
+    expect(document.body.innerHTML).not.toContain('cf-client-secret-abc');
+
+    // Volver a plegar
+    fireEvent.click(toggleButton);
+    expect(screen.queryByTestId('ai-sent-details')).toBeNull();
+    expect(toggleButton.textContent).toMatch(/ver lo enviado/i);
   });
 });
