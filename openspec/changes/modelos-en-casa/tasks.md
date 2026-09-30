@@ -11,7 +11,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 2. Primer recorrido completo, angosto (D15)
 
-- [ ] 2.1 **IA local:** `gitcron.json` mínimo (sólo `provider` y `agent.gitcron-commit`, lectura con `jsonc-parser` y `{env:}` del sistema) y la redacción de commit usándolo con un servidor compatible con OpenAI (Unsloth por la red de la casa) y con un CLI de suscripción (Codex, según 1.3). **Comprobación:** Pruebas con servidor simulado y con proceso simulado; la redacción deja de usar la dirección fija de LM Studio.
+- [x] 2.1 **IA local:** `gitcron.json` mínimo (sólo `provider` y `agent.gitcron-commit`, lectura con `jsonc-parser` y `{env:}` del sistema) y la redacción de commit usándolo con un servidor compatible con OpenAI (Unsloth por la red de la casa) y con un CLI de suscripción (Codex, según 1.3). **Comprobación:** Pruebas con servidor simulado y con proceso simulado; la redacción deja de usar la dirección fija de LM Studio.
 - [ ] 2.2 **IA local:** Pedido efectivo con procedencia (D14) para la redacción: dirección, modelo y parámetros con el archivo y bloque de origen, sin secretos; error que nombra los parámetros fuera del estándar y su procedencia, sin reintento que los quite. **Comprobación:** Pruebas del detalle mostrado y del error; ningún secreto en el DOM.
 - [ ] 2.3 **Orquestador/auditor:** Recorrido en la máquina de Ale con las dos familias: elegir el modelo, redactar, ver el pedido efectivo, cancelar a mitad, cambiar de vista y volver con la elección conservada, y comprobar lo que recibió el servidor. **Comprobación:** `pnpm verificar --change modelos-en-casa` en verde y revisión en pantalla de Ale; si una familia no encaja en la forma común, se corrige el diseño antes del grupo 3.
 
