@@ -169,6 +169,14 @@ Por eso:
 - **Formato:** el esquema publicado (`https://opencode.ai/config.json`) sigue siendo el de la v1, igual a
   la copia empaquetada (mismo sha256); no hay esquema v2 publicado (`/v2/config.json` da 404). La v2 lee el
   formato v1 y lo normaliza; D1 se mantiene.
+- **Credenciales guardadas de OpenCode:** una clave en su almacén (`opencode auth`,
+  `~/.local/share/opencode/auth.json`) le gana al `apiKey` del `opencode.json`, aunque éste diga
+  `{env:…}`. Medido el 2026-09-30 en la notebook de Ale: `unslothpc` tenía guardada una clave vieja,
+  distinta de `UNSLOTH_API_KEY`, y Unsloth respondía 401 «Invalid or expired API key» mientras curl con la
+  variable daba 200; `unslothpclocal`, sin clave guardada, andaba. `opencode auth list` muestra el nombre
+  visible («Unsloth CASA»), no el id. Por eso GitCron, al ofrecer un proveedor como agente o al copiar su
+  bloque, SHALL avisar si el almacén de OpenCode tiene una clave para ese id y si difiere de la que resuelve
+  la configuración (comparando sin mostrar valores), y ofrecer la orden `opencode auth logout <id>`.
 - **Permisos:** `--auto` aprueba lo que no esté negado explícitamente; se usa con la confirmación del
   lanzador, igual que `acceptEdits`/`workspace-write` en Claude y Codex.
 
