@@ -67,6 +67,8 @@ declara no lanzable porque en 1.1.x no tenía salida estructurada. OpenCode 1.18
 ### Modified Capabilities
 - `pipeline-runtime-adapters`: Antigravity deja de ser el ejemplo de runtime sin stream estructurado; con
   `stream-json` se consume como stream estructurado y se lanza como los demás.
+- `pipeline-connection-security`: ACP deja de ser preferido cuando no deja elegir el modelo; OpenCode 2 se
+  lanza por `opencode run --format json` porque su ACP no ofrece los proveedores propios.
 - `pipeline-guided-workflow`: el selector de modelo del panel elige de la configuración común y no de un
   servidor fijo; estado de carga, contexto y dispositivo se declaran cuando el proveedor los informa.
 

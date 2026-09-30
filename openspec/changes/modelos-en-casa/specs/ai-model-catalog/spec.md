@@ -213,19 +213,30 @@ ofrecer usarlo en ese momento, con un toque.
 - **THEN** se informa que no respondió y no se manda nada a OpenRouter
 
 ### Requirement: El lanzador de SDD manda el modelo elegido
-Al lanzar un agente desde SDD, GitCron SHALL pasarle el modelo efectivo del uso «agente de SDD». Los
-proveedores del bloque `provider` SHALL lanzarse como agente a través de OpenCode, entregándole esa misma
-definición de proveedor sin escribirla en la configuración de OpenCode. La confirmación de lanzamiento
-SHALL nombrar el modelo, su proveedor y quién ejecuta las herramientas (el propio CLI de suscripción, u
-OpenCode cuando el modelo es de un servidor).
+Al lanzar un agente desde SDD, GitCron SHALL pasarle el modelo efectivo del uso «agente de SDD». Un modelo
+de servidor SHALL lanzarse como agente a través de OpenCode, y sólo si OpenCode lo conoce (lo lista su
+propia configuración). Si el proveedor está en `gitcron.json` pero no en la configuración de OpenCode,
+GitCron SHALL ofrecer copiar ese bloque a `~/.config/opencode/opencode.json` con vista previa y
+confirmación, escribiendo sólo ese bloque y conservando el resto del archivo; SHALL NOT escribirlo sin
+confirmación ni lanzar otro modelo en su lugar. La confirmación de lanzamiento SHALL nombrar el modelo, su
+proveedor, la variante (nivel de razonamiento) si la hay, y quién ejecuta las herramientas (el propio CLI
+de suscripción, u OpenCode cuando el modelo es de un servidor).
+
+Medido el 2026-09-29 con OpenCode 2.0.20: la v2 no suma configuración externa (ni `OPENCODE_CONFIG`,
+`OPENCODE_CONFIG_CONTENT`, `OPENCODE_CONFIG_DIR` ni `XDG_CONFIG_HOME`); sólo lee la configuración global
+y el `opencode.json` de la carpeta y sus superiores.
 
 #### Scenario: Agente de suscripción con modelo elegido
 - **WHEN** se lanza Codex con un modelo elegido
 - **THEN** la sesión arranca con ese modelo y la confirmación lo nombra
 
-#### Scenario: Agente sobre un servidor propio
-- **WHEN** el uso «agente de SDD» tiene elegido un modelo de Unsloth
-- **THEN** la sesión se lanza con OpenCode usando ese proveedor y ese modelo, y `opencode.json` no cambia
+#### Scenario: Agente sobre un servidor propio que OpenCode conoce
+- **WHEN** el uso «agente de SDD» tiene elegido `unslothpclocal/unsloth/Qwen3.8-27B-GGUF#high` y OpenCode lista ese modelo
+- **THEN** la sesión se lanza con OpenCode usando ese modelo y esa variante, y `opencode.json` no cambia
+
+#### Scenario: Proveedor que OpenCode no conoce
+- **WHEN** el modelo elegido es de un proveedor declarado sólo en `gitcron.json`
+- **THEN** el lanzador ofrece copiar el bloque a la configuración de OpenCode con vista previa, y sin confirmación no lanza nada
 
 #### Scenario: OpenCode ausente
 - **WHEN** el modelo elegido es de un servidor propio y OpenCode no está instalado
