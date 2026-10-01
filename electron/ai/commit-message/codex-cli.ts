@@ -33,6 +33,49 @@ export type ResolveExecutableFunction = (
  */
 const SAFE_MODEL_ID = /^[A-Za-z0-9._:/-]+$/;
 
+/**
+ * Los argumentos de la redacción. Exportados para que «Ver lo enviado» muestre
+ * los mismos que corren y no una copia que se desactualice.
+ *
+ * `--ignore-user-config` y `--ignore-rules`: sin ellos Codex carga el
+ * `config.toml` de la persona —sus conectores MCP, que fallan sin sesión y
+ * ensucian la salida— y sus skills. Medido el 2026-10-01 con «Respondé sólo
+ * con: feat: prueba»: 20 847 tokens de entrada y un aviso de skills recortadas;
+ * con los dos, 12 556 y sin avisos. La sesión de la cuenta sigue andando
+ * (vive en `CODEX_HOME`, no en el archivo). Apagar además las funciones de
+ * fábrica (`--disable plugins`, `apps`…) ahorra 1 300 más y pierde la caché.
+ */
+export function buildCodexDraftArgs(model: string): string[] {
+  return [
+    'exec',
+    '--json',
+    '--sandbox',
+    'read-only',
+    '--skip-git-repo-check',
+    '--ephemeral',
+    '--ignore-user-config',
+    '--ignore-rules',
+    '-m',
+    model,
+    '-',
+  ];
+}
+
+/**
+ * Codex manda el motivo de un fallo de la API como JSON dentro del texto
+ * (`{"type":"error","status":400,"error":{"message":"…"}}`). Se saca el mensaje
+ * legible; si no tiene esa forma, va tal cual.
+ */
+function readableCodexError(message: string): string {
+  try {
+    const inner = JSON.parse(message);
+    if (typeof inner?.error?.message === 'string') return inner.error.message;
+  } catch {
+    // No era JSON: el texto ya es legible.
+  }
+  return message;
+}
+
 export interface CodexDraftOptions {
   model: string;
   prompt: string;
@@ -67,17 +110,7 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gitcron-codex-'));
   try {
-    const args = [
-      'exec',
-      '--json',
-      '--sandbox',
-      'read-only',
-      '--skip-git-repo-check',
-      '--ephemeral',
-      '-m',
-      model,
-      '-',
-    ];
+    const args = buildCodexDraftArgs(model);
 
     return await new Promise<CommitDraftResult>((resolve) => {
       let child: ChildProcessWithoutNullStreams;
@@ -145,8 +178,45 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
       }
       signal?.addEventListener('abort', onAbort, { once: true });
 
+      let lastAgentMessage: string | null = null;
+      let errorMessage: string | null = null;
+      const warnings: string[] = [];
+
+      // Qué es cada evento, medido con Codex 0.144.4 el 2026-10-01:
+      // - `item.completed` con `item.type: "error"` es un AVISO, no un fallo: la
+      //   respuesta llega igual en el ítem siguiente. Tratarlo como fallo tiraba
+      //   la respuesta buena y mostraba el aviso de skills recortadas (lo vio Ale
+      //   en su primera redacción con Codex).
+      // - El fallo de verdad viene arriba de todo (`type: "error"`) y en
+      //   `turn.failed`, con salida 1.
+      const handleLine = (line: string) => {
+        if (line.trim().length === 0) return;
+        let parsed: any;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          return; // Línea no JSON
+        }
+        if (parsed.type === 'error' && typeof parsed.message === 'string') {
+          errorMessage = readableCodexError(parsed.message);
+        } else if (parsed.type === 'turn.failed') {
+          errorMessage ??= readableCodexError(parsed.error?.message ?? line);
+        } else if (parsed.type === 'item.completed' && typeof parsed.item?.text === 'string') {
+          if (parsed.item.type === 'agent_message') {
+            lastAgentMessage = parsed.item.text;
+          } else if (parsed.item.type === 'reasoning') {
+            onChunk?.([{ kind: 'reasoning', text: parsed.item.text }]);
+          }
+        } else if (parsed.type === 'item.completed' && parsed.item?.type === 'error') {
+          if (typeof parsed.item.message === 'string') warnings.push(parsed.item.message);
+        }
+      };
+
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf8');
+        const lines = stdout.split(/\r?\n/);
+        stdout = lines.pop() ?? '';
+        lines.forEach(handleLine);
       });
 
       child.stderr.on('data', (chunk: Buffer) => {
@@ -162,46 +232,20 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
 
       child.on('close', (code: number | null) => {
         if (settled) return;
-
-        const lines = stdout.split(/\r?\n/).filter((l) => l.trim().length > 0);
-        let lastAgentMessage: string | null = null;
-        let errorMessage: string | null = null;
-
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.type === 'error') {
-              errorMessage = parsed.message || line;
-            } else if (parsed.item?.type === 'error') {
-              errorMessage = parsed.item.message || line;
-            } else if (
-              parsed.type === 'item.completed' &&
-              parsed.item?.type === 'agent_message' &&
-              typeof parsed.item.text === 'string'
-            ) {
-              lastAgentMessage = parsed.item.text;
-            }
-          } catch {
-            // Línea no JSON
-          }
-        }
+        handleLine(stdout);
 
         if (errorMessage) {
           finish({ status: 'unavailable', detail: errorMessage });
           return;
         }
 
-        if (code !== 0 && !lastAgentMessage) {
-          const detail = stderr.trim() || `Codex finalizó con código ${code}`;
-          finish({ status: 'unavailable', detail });
-          return;
-        }
-
+        // Sin respuesta, los avisos son la mejor pista de qué pasó; con
+        // respuesta, no hacen falta.
         if (!lastAgentMessage) {
-          finish({
-            status: 'unavailable',
-            detail: stderr.trim() || 'Codex no devolvió ningún mensaje.',
-          });
+          const detail =
+            [...warnings, stderr.trim()].filter(Boolean).join('\n') ||
+            (code !== 0 ? `Codex finalizó con código ${code}` : 'Codex no devolvió ningún mensaje.');
+          finish({ status: 'unavailable', detail });
           return;
         }
 

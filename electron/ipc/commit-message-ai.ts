@@ -25,7 +25,7 @@ import type {
   ParameterProvenance,
 } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
-import { draftCommitWithCodex, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
+import { buildCodexDraftArgs, draftCommitWithCodex, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
 import { getDefaultConfigPath, resolveUse } from '../ai/config/gitcron-config';
 import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
@@ -626,7 +626,7 @@ export function registerCommitMessageAiHandlers(): void {
               return await runDraftWithPump(_e.sender, effectiveDraftId, effectiveModel, signal, async (sig, pump) => {
                 if (resolved.kind === 'cli') {
                   if (resolved.providerId === 'codex') {
-                    const codexCommand = `codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -m ${effectiveModel} -`;
+                    const codexCommand = ['codex', ...buildCodexDraftArgs(effectiveModel)].join(' ');
                     const codexParams: Record<string, ParameterProvenance> = {};
                     if (resolved.temperature !== undefined) {
                       codexParams.temperature = {

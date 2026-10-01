@@ -174,7 +174,7 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
       )}
 
       {/* El cuerpo, sólo si hubo una redacción: con un aviso suelto no hay ni
-          pensamiento ni respuesta que mostrar, y «Todavía no llegó nada» sobre
+          pensamiento ni respuesta que mostrar, y «Terminó sin mandar nada» sobre
           un modelo recién expulsado sería falso. */}
       {log.draftId === null ? null : nothingYet ? (
         /* Mientras no llegó nada, la frase que rota ocupa el lugar donde después
@@ -186,7 +186,9 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
            pasando. */
         log.streaming
           ? <DraftingThought active language={uiLanguage} />
-          : <p className={styles.railEmpty}>{t('pipeline.openspec.prepare.aiLogWaiting')}</p>
+          /* Ya terminó: decía «Todavía no llegó nada… tarda en arrancar» y Ale lo
+             vio junto a «terminó» con Codex. Si no llegó nada, ya no va a llegar. */
+          : <p className={styles.railEmpty}>{t('pipeline.openspec.prepare.aiLogNothing')}</p>
       ) : (
         <>
           {/* Se declara que está recortado. Un texto cortado en silencio hace

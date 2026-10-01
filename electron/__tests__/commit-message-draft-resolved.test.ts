@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import type { DraftChunk } from '../../types/commit-message-ai';
 
 const handlers = new Map<string, (_event: any, ...args: any[]) => Promise<any>>();
 
@@ -316,6 +317,8 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
       'read-only',
       '--skip-git-repo-check',
       '--ephemeral',
+      '--ignore-user-config',
+      '--ignore-rules',
       '-m',
       'gpt-5.6-luna',
       '-',
@@ -427,6 +430,90 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     if (result.status === 'unavailable') {
       expect(result.detail).toMatch(/tardó demasiado.*canceló/i);
     }
+  });
+
+  // Salidas reales de Codex 0.144.4, medidas el 2026-10-01.
+  function spawnEmitting(lines: unknown[], exitCode: number) {
+    return vi.fn((_cmd: string, _args: string[], _opts: any) => {
+      const emitter = new EventEmitter() as any;
+      emitter.stdout = new PassThrough();
+      emitter.stderr = new PassThrough();
+      emitter.stdin = new PassThrough();
+      emitter.killed = false;
+      emitter.kill = vi.fn();
+      process.nextTick(() => {
+        // Todo en un solo pedazo y el último renglón sin salto: así llega a veces.
+        emitter.stdout.write(lines.map((l) => JSON.stringify(l)).join('\n'));
+        emitter.stdout.end();
+        emitter.stderr.end();
+        emitter.stdout.on('end', () => emitter.emit('close', exitCode));
+        emitter.stdout.resume();
+      });
+      return emitter;
+    });
+  }
+
+  it('codex CLI: un aviso (ítem «error») no tira la respuesta que llega después', async () => {
+    const { draftCommitWithCodex } = await import('../ai/commit-message/codex-cli');
+    const chunks: DraftChunk[] = [];
+    const result = await draftCommitWithCodex({
+      model: 'gpt-5.6-luna',
+      prompt: 'test prompt',
+      onChunk: (c) => chunks.push(...c),
+      spawnFn: spawnEmitting(
+        [
+          { type: 'thread.started', thread_id: 't' },
+          { type: 'turn.started' },
+          {
+            type: 'item.completed',
+            item: { id: 'item_0', type: 'error', message: 'Skill descriptions were shortened to fit the 2% skills context budget.' },
+          },
+          { type: 'item.completed', item: { id: 'item_1', type: 'reasoning', text: 'Mirando el diff' } },
+          { type: 'item.completed', item: { id: 'item_2', type: 'agent_message', text: 'feat: prueba' } },
+          { type: 'turn.completed', usage: { input_tokens: 20847, output_tokens: 7 } },
+        ],
+        0,
+      ) as any,
+      resolveExecutable: async () => ({ file: 'codex', viaShell: false }),
+    });
+
+    expect(result).toEqual({ status: 'drafted', subject: 'feat: prueba', model: 'gpt-5.6-luna' });
+    expect(chunks).toEqual([
+      { kind: 'reasoning', text: 'Mirando el diff' },
+      { kind: 'content', text: 'feat: prueba' },
+    ]);
+  });
+
+  it('codex CLI: el fallo de la API se muestra legible, no como JSON', async () => {
+    const apiError = JSON.stringify({
+      type: 'error',
+      status: 400,
+      error: {
+        type: 'invalid_request_error',
+        message: "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.",
+      },
+    });
+    const { draftCommitWithCodex } = await import('../ai/commit-message/codex-cli');
+    const result = await draftCommitWithCodex({
+      model: 'gpt-6.1-sol',
+      prompt: 'test prompt',
+      spawnFn: spawnEmitting(
+        [
+          { type: 'thread.started', thread_id: 't' },
+          { type: 'item.completed', item: { id: 'item_0', type: 'error', message: 'Model metadata for `gpt-6.1-sol` not found.' } },
+          { type: 'turn.started' },
+          { type: 'error', message: apiError },
+          { type: 'turn.failed', error: { message: apiError } },
+        ],
+        1,
+      ) as any,
+      resolveExecutable: async () => ({ file: 'codex', viaShell: false }),
+    });
+
+    expect(result).toEqual({
+      status: 'unavailable',
+      detail: "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.",
+    });
   });
 
   it('codex CLI: error 400 de Codex -> unavailable con el motivo', async () => {
