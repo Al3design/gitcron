@@ -303,6 +303,32 @@ nivel por omisión marcado; un nivel que el modelo no admite no se ofrece. La el
 `#nivel` cuando la herramienta usa variantes). La lista de modelos de Codex se toma del catálogo vivo, no de la
 caché, por los modelos que la cuenta ya no admite.
 
+### D18. Cuánto tardó y cuántos tokens gastó (pedido de Ale, 2026-10-01)
+Al terminar una redacción el panel dice cuánto tardó y cuántos tokens se fueron, con cualquier motor.
+- **El tiempo lo mide el proceso principal**, desde que el pedido empieza a correr hasta que termina: el que
+  esperó en fila (D16) no suma la espera. Viaja en `commit-ai:draft-state` (`startedAt`, `finishedAt`), no se
+  calcula en el renderer, que puede no haber estado mirando.
+- **Los tokens salen de lo que informa cada motor**, sin estimar: el estándar de OpenAI con
+  `stream_options.include_usage` (`prompt_tokens`, `prompt_tokens_details.cached_tokens`, `completion_tokens`,
+  `completion_tokens_details.reasoning_tokens`); Codex en `turn.completed.usage` (`input_tokens`,
+  `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`; medido el 2026-10-01: 20 847 / 8 960 / 7 / 0).
+  Lo que el motor no informa no se muestra, y si no informa nada se dice «sin conteo de tokens». Hasta ahora el
+  panel sólo mostraba la línea si venían los tokens de pensar, así que un servidor que informaba entrada y
+  salida pero no pensamiento no mostraba nada.
+
+### D19. Historial de usos de IA por repositorio (pedido de Ale, 2026-10-01; diseño a cerrar en 4.6)
+Ale quiere que quede guardado qué escribió la IA, quién, cuándo, cuánto tardó y cuánto gastó. Va pensado para
+todos los usos de IA y no sólo la redacción, en línea con una IA en todas las pantallas que guarda estado por
+repositorio. Propuesta a confirmar al empezar 4.6:
+- Un registro por uso: uso (`gitcron-commit`, …), repositorio y rama, inicio y fin, motor, modelo y
+  procedencia (D14, sin secretos), tokens (D18), resultado (texto propuesto, o el fallo o la cancelación) y
+  destino (si terminó en un commit, cuál; si se descartó).
+- Guardado fuera del repositorio, en la carpeta de datos de GitCron, separado por repositorio, para no ensuciar
+  el árbol de trabajo ni mezclarse con lo que se versiona.
+- Pendiente de decidir con Ale: si se guarda también lo enviado (el diff puede ser grande y tener datos
+  sensibles), cuánto tiempo se conserva, y dónde se mira (un panel por repositorio, o junto a cada commit en
+  Graph).
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
