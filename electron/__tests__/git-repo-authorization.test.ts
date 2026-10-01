@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { removeTempDir } from '@/test-utils/temp-dir';
 import { simpleGit } from 'simple-git';
 import { authorizedRepoStore } from '../ipc/authorized-repos';
@@ -23,6 +23,14 @@ vi.mock('electron', () => ({
 describe('git-repo IPC — autorización de repositorios (sonda vs apertura)', () => {
   let tempRoot: string;
   let handler: (channel: string) => IpcHandler;
+  let registerOpenSpecIpcHandlers: typeof import('../ipc/pipeline-openspec').registerOpenSpecIpcHandlers;
+
+  // Cargar el módulo de OpenSpec es preparación, no lo que se prueba, y cuesta ~0,9 s:
+  // dentro de la prueba de revocación se comía la mitad de su tope de 5 s, y bajo la
+  // suite completa la hacía fallar por tiempo (medido el 2026-10-01).
+  beforeAll(async () => {
+    ({ registerOpenSpecIpcHandlers } = await import('../ipc/pipeline-openspec'));
+  });
 
   const makeRepo = async (name: string): Promise<string> => {
     const repoDir = path.join(tempRoot, name);
@@ -102,7 +110,6 @@ describe('git-repo IPC — autorización de repositorios (sonda vs apertura)', (
 
     // Registrar los handlers de openspec con DI y validar ANTES de cerrar.
     const openspecHandlers = new Map<string, IpcHandler>();
-    const { registerOpenSpecIpcHandlers } = await import('../ipc/pipeline-openspec');
     registerOpenSpecIpcHandlers({
       ipcMain: { handle: (channel: string, listener: IpcHandler) => openspecHandlers.set(channel, listener) } as any,
       getUserDataDir: () => null,
@@ -117,6 +124,20 @@ describe('git-repo IPC — autorización de repositorios (sonda vs apertura)', (
         diagnostics: [],
       }),
       readGlobalConfig: async () => null,
+      // Lo que se prueba es la autorización de la ruta, que queda real. El resto del
+      // estado del motor —lista de herramientas por un proceso aparte, última versión en
+      // npm, `doctor`, `context`— no cambia el resultado y costaba
+      // 1,35 s de los 5 s de tope; reemplazado, 0,02 s (medido el 2026-10-01).
+      checkLatest: async () => ({ status: 'unavailable' }) as any,
+      readEngineToolReport: async () => ({
+        source: 'gitcron-fallback',
+        engineVersion: null,
+        fallbackReason: 'package-not-found',
+        tools: [],
+        profileSyncNeeded: [],
+      }) as any,
+      runDoctor: async () => ({ command: 'openspec doctor --json', ok: true, error: null, data: null }) as any,
+      runContext: async () => ({ command: 'openspec context --json', ok: true, error: null, data: null }) as any,
     });
     const statusHandler = openspecHandlers.get('pipeline:openspec:engine-status')!;
     const reopened = await openPath(null, repoDir) as { data?: { path?: string } };
