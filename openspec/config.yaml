@@ -64,6 +64,10 @@ operations:
         código, ejecutar pnpm verificar --change <id> completo; scripts/verificar.mjs es la
         fuente del orden de las verificaciones y de sus escalones. Una corrida con
         --tocados o --rapido no equivale al cierre completo.
+        Toda búsqueda con rg lleva la carpeta donde buscar (por ejemplo `rg -n "x" components
+        electron lib`, o `.`): sin carpeta, rg lee la entrada estándar y en una terminal no
+        interactiva queda esperando para siempre. Medido el 2026-10-01: con carpeta, 0,09 s; sin
+        carpeta, colgado hasta cancelarlo. Excluir node_modules no lo arregla.
         Registrar fallos o límites sin convertirlos en éxito ni corregir trabajo ajeno
         fuera del alcance. En tandas sólo documentales, validar los changes afectados
         en modo estricto y revisar el diff.
