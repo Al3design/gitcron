@@ -259,12 +259,15 @@ export function RepoDetailsPanel({
         count={unstaged.length}
         icon={<FileDiff size={13} aria-hidden="true" />}
         actions={
-          <div className="flex items-center gap-2">
+          // Todo el ancho y no pegada a la derecha: amontonados a un costado,
+          // «Limpiar...» parecía cortado (Ale lo marcó). Los botones con texto se
+          // reparten el renglón; la papelera queda de su tamaño.
+          <div className="flex flex-1 items-center gap-2">
             <button
               type="button"
               onClick={onOpenStashModal}
               disabled={isLoading}
-              className="text-[length:var(--font-size-xs)] font-bold text-git-mod hover:text-bg-base hover:bg-git-mod px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+              className="flex-1 text-center text-[length:var(--font-size-xs)] font-bold text-git-mod hover:text-bg-base hover:bg-git-mod px-2 py-0.5 rounded border border-git-mod/40 transition-colors disabled:opacity-50"
               title={t('commit.stashTooltip')}
             >
               Stash
@@ -274,7 +277,7 @@ export function RepoDetailsPanel({
                 type="button"
                 onClick={onRequestCleanUntracked}
                 disabled={isLoading}
-                className="text-[length:var(--font-size-xs)] text-warning hover:text-bg-base px-2 py-0.5 rounded border border-warning/40 hover:bg-warning transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 text-center text-[length:var(--font-size-xs)] text-warning hover:text-bg-base px-2 py-0.5 rounded border border-warning/40 hover:bg-warning transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title={t('staging.cleanUntrackedTooltip')}
               >
                 {t('staging.cleanUntrackedBtn')}
@@ -295,7 +298,7 @@ export function RepoDetailsPanel({
               <button
                 type="button"
                 onClick={stageAll}
-                className="text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
+                className="flex-1 text-center text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
               >
                 {t('staging.stageAllBtn')}
               </button>

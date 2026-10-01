@@ -83,7 +83,9 @@ export function SidebarSection({
           {actions}
         </div>
       )}
-      {isOpen && <div className="space-y-0.5">{children}</div>}
+      {/* `data-section-body`: el gancho para que un panel le dé margen al
+          contenido sin tocar el encabezado, que ya trae el suyo. */}
+      {isOpen && <div data-section-body="" className="space-y-0.5">{children}</div>}
     </div>
   );
 }

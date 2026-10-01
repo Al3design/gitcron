@@ -1225,11 +1225,17 @@
   scrollbar-width: thin;
 }
 
+/* Sin margen propio a los costados: lo tenía, y sumado al de cada encabezado
+   dejaba «Actividad», «Necesita atención» y «Herramientas» más adentro que
+   «Cambios sin preparar» y el resto (Ale lo marcó). Los encabezados traen su
+   margen; el contenido lleva el mismo, igual que en Graph. */
 .sddSections {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: 0 var(--space-4);
+}
+.sddSections [data-section-body] {
+  padding: 0 var(--sp-3);
 }
 
 .activityRail > h3 { margin: 0; color: var(--color-text-secondary); }
