@@ -329,6 +329,20 @@ repositorio. Propuesta a confirmar al empezar 4.6:
   sensibles), cuánto tiempo se conserva, y dónde se mira (un panel por repositorio, o junto a cada commit en
   Graph).
 
+### D20. La IA tiene su color (pedido de Ale, 2026-10-01)
+Todo lo que hace o escribió una IA se distingue de un vistazo, sin colores nuevos:
+- **Violeta = IA.** `--color-accent-purple` ya se usaba sólo para eso (revisión de propuestas de un agente,
+  marca «propuesto» en el diff). Se nombra como token de uso (`--color-ai`) apuntando a él.
+- **Degradé de la IA:** del violeta al `--color-primary`, para bordes y fondos suaves de los bloques de IA (con
+  `color-mix` a baja opacidad, como los degradés que ya tiene la app).
+- **Mientras piensa, el texto brilla:** las frases y el estado «en vivo» llevan un brillo que recorre las
+  letras de izquierda a derecha (texto recortado sobre un degradé que se desplaza), como los IDE de Codex,
+  Claude y OpenCode. Sólo CSS; con `prefers-reduced-motion` queda quieto en violeta; con `forced-colors` vuelve
+  al color del sistema (un texto transparente sobre fondo recortado desaparece en ese modo).
+- **La autoría pasa a violeta:** «Lo escribió <modelo>, no la aplicación» dice quién escribió, no pide atención.
+  El ámbar queda para lo que sí la pide.
+- Se aplica primero en la preparación del commit; 4.4 lo lleva a las demás pantallas de uso.
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
