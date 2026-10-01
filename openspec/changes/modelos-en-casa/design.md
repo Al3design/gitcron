@@ -285,6 +285,24 @@ y debe quedar compatible con ese cambio:
   repositorio, sólo cuando termina con el repositorio fuera de la vista.
 - **Límite declarado:** la carga y expulsión de modelos de LM Studio siguen siendo una a la vez; no entran en la fila.
 
+### D17. Modelos e intensidad de pensamiento: la lista la da cada herramienta (pedido de Ale, 2026-10-01)
+Ale quiere elegir entre los modelos que haya disponibles y la intensidad de pensamiento que ofrezca cada
+herramienta (bajo, medio, alto, ultra…), sin una lista fija en GitCron. Fuentes medidas el 2026-10-01:
+
+| Herramienta | Modelos | Intensidad | Cómo se pide |
+|---|---|---|---|
+| Codex 0.144.4 | `codex debug models` (sólo `visibility: "list"`; la caché puede tener modelos que la cuenta ya no admite: `gpt-6.1-sol` y `gpt-6-luna` responden 400 «not supported when using Codex with a ChatGPT account») | `supported_reasoning_levels` por modelo: `gpt-5.6-luna` low…max; `gpt-5.6-sol`/`terra` suman `ultra`; `gpt-5.5` hasta xhigh; y `default_reasoning_level` | `-c model_reasoning_effort=<nivel>` |
+| Antigravity 1.2.13 | `agy models` (id y nombre; algunos ya traen el nivel en el id: `gemini-3.8-flash-high`) | `--effort low\|medium\|high\|max` | `--effort` |
+| OpenCode 2.0.20 | `opencode models` | variantes del modelo | `-m proveedor/modelo#variante` |
+| Servidores con la API de OpenAI | `GET /models` y el archivo | `reasoning_effort` del estándar (minimal, low, medium, high) | cuerpo del pedido |
+| Claude Code 2.1.284 | por medir | por medir | por medir |
+
+GitCron muestra, para el modelo elegido, sólo los niveles que esa herramienta declara para ese modelo, con su
+nivel por omisión marcado; un nivel que el modelo no admite no se ofrece. La elección se guarda en
+`gitcron.json` con campos del formato: el nivel en `agent.<uso>.options.reasoning_effort` (o la variante
+`#nivel` cuando la herramienta usa variantes). La lista de modelos de Codex se toma del catálogo vivo, no de la
+caché, por los modelos que la cuenta ya no admite.
+
 ### D11. Dónde se ve
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
