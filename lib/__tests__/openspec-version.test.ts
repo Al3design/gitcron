@@ -39,7 +39,7 @@ describe('compareSemver', () => {
 
 describe('classifyOpenSpecVersion (rango ≥ 1.5.0)', () => {
   it('declara la versión objetivo del ciclo y el rango soportado del proyecto', () => {
-    expect(OPENSPEC_CYCLE_TARGET_VERSION).toBe('1.13.0');
+    expect(OPENSPEC_CYCLE_TARGET_VERSION).toBe('1.14.0');
     expect(SUPPORTED_OPENSPEC_VERSIONS).toEqual({ min: '1.5.0' });
   });
 
@@ -78,16 +78,17 @@ describe('classifyOpenSpecVersion (rango ≥ 1.5.0)', () => {
 
 describe('isInstalledBehindCycle', () => {
   it('detecta correctamente si la versión instalada está por debajo de la versión del ciclo declarada', () => {
-    // Caso borde: 1.5.0 contra ciclo 1.13.0 (ocho minors de distancia, dentro de rango soportado)
+    // Caso borde: 1.5.0 contra ciclo 1.14.0 (nueve minors de distancia, dentro de rango soportado)
     expect(isInstalledBehindCycle('1.5.0')).toBe(true);
     expect(isInstalledBehindCycle('1.11.0')).toBe(true);
     expect(isInstalledBehindCycle('1.12.0')).toBe(true);
     expect(isInstalledBehindCycle('1.12.9')).toBe(true);
-    // Caso igual a igual: 1.13.0 contra 1.13.0 no debe avisar nada
-    expect(isInstalledBehindCycle('1.13.0')).toBe(false);
-    // Casos posteriores no avisan en esta función
-    expect(isInstalledBehindCycle('1.13.1')).toBe(false);
+    expect(isInstalledBehindCycle('1.13.0')).toBe(true);
+    // Caso igual a igual: 1.14.0 contra 1.14.0 no debe avisar nada
     expect(isInstalledBehindCycle('1.14.0')).toBe(false);
+    // Casos posteriores no avisan en esta función
+    expect(isInstalledBehindCycle('1.14.1')).toBe(false);
+    expect(isInstalledBehindCycle('1.15.0')).toBe(false);
     expect(isInstalledBehindCycle(null)).toBe(false);
     expect(isInstalledBehindCycle(undefined)).toBe(false);
   });

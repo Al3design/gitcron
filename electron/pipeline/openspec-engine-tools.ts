@@ -268,9 +268,33 @@ export function validateEngineToolReport(
     if (tool.generatedBy !== null && typeof tool.generatedBy !== 'string') return null;
     if (tool.skillsDir !== undefined && typeof tool.skillsDir !== 'string') return null;
     if (tool.legacySkillsDirs !== undefined && !Array.isArray(tool.legacySkillsDirs)) return null;
+    if (tool.configuredVia !== undefined && typeof tool.configuredVia !== 'string') return null;
   }
 
   return obj as OpenSpecToolReport;
+}
+
+/**
+ * Si la herramienta `agents` figura configurada, cada herramienta presente (`available`)
+ * con `skillsDir === '.agents'` que no figura configurada pasa a `configured: true`,
+ * con `configuredVia: 'shared-folder'`, y toma `needsUpdate` y `generatedBy` de `agents` (Decisión 2).
+ */
+export function annotateSharedFolderTools(report: OpenSpecToolReport): OpenSpecToolReport {
+  const agentsTool = report.tools.find((t) => t.id === 'agents');
+  if (!agentsTool || !agentsTool.configured) {
+    return report;
+  }
+
+  for (const tool of report.tools) {
+    if (tool.id !== 'agents' && tool.available && !tool.configured && tool.skillsDir === '.agents') {
+      tool.configured = true;
+      tool.configuredVia = 'shared-folder';
+      tool.needsUpdate = agentsTool.needsUpdate;
+      tool.generatedBy = agentsTool.generatedBy;
+    }
+  }
+
+  return report;
 }
 
 export interface FallbackDeps {
@@ -410,6 +434,11 @@ export function buildFallbackToolReport(options: {
     if (hasCodexLegacy) {
       activeAgentsOwner = 'codex';
     } else if (hasAgentsSkills) {
+      // Sin marca, el dueño se deduce como lo hace el motor. Medido con OpenSpec 1.14.0 el
+      // 2026-10-01: con instrucciones que usan la sintaxis de Codex (`$openspec-`) el motor da
+      // configurada a `codex`; sin ella, a `agents`, haya o no una carpeta `.codex`. La tanda 01
+      // de actualizar-ciclo-openspec-1-14 había cambiado esto por «sin dueño si hay otra
+      // herramienta presente», y el respaldo pasaba a decir otra cosa que el motor.
       let inferred = 'agents';
       for (const skill of snapshot.skillNames) {
         const file = path.join(agentsSkillsDir, skill, 'SKILL.md');
@@ -561,13 +590,15 @@ export function buildFallbackToolReport(options: {
     };
   });
 
-  return {
+  const report: OpenSpecToolReport = {
     source: 'gitcron-fallback',
     engineVersion: engineVersion ?? null,
     fallbackReason: reason,
     tools,
     profileSyncNeeded: [],
   };
+
+  return annotateSharedFolderTools(report);
 }
 
 export interface ReadEngineToolReportOptions {
@@ -844,6 +875,7 @@ export async function readEngineToolReport(options: ReadEngineToolReportOptions)
     }
   }
 
-  reportCache.set(cacheKey, validated);
-  return validated;
+  const finalReport = annotateSharedFolderTools(validated);
+  reportCache.set(cacheKey, finalReport);
+  return finalReport;
 }

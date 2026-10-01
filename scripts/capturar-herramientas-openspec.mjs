@@ -125,6 +125,36 @@ function isValidOpenSpecPackage(dirPath) {
   }
 }
 
+/**
+ * Fusiona la versión de aparición (addedIn y opcionalmente addedInOrEarlier) en la lista de herramientas.
+ * Conserva addedIn / addedInOrEarlier de las herramientas que ya estaban en el JSON anterior,
+ * toma los valores iniciales de mediciones/herramientas-por-version.json si aplica,
+ * y marca las nuevas con la versión capturada.
+ */
+export function mergeToolVersionMetadata(tools, previousSnapshot, initialMeasurements, capturedVersion) {
+  const prevMap = new Map((previousSnapshot?.tools ?? []).map((t) => [t.id, t]));
+  const desdeMap = initialMeasurements?.desde ?? {};
+
+  return tools.map((tool) => {
+    const item = { ...tool };
+    const prev = prevMap.get(tool.id);
+    if (prev && prev.addedIn) {
+      item.addedIn = prev.addedIn;
+      if (prev.addedInOrEarlier) {
+        item.addedInOrEarlier = true;
+      }
+    } else if (desdeMap[tool.id]) {
+      item.addedIn = desdeMap[tool.id];
+      if (item.addedIn === '1.0.0') {
+        item.addedInOrEarlier = true;
+      }
+    } else {
+      item.addedIn = capturedVersion;
+    }
+    return item;
+  });
+}
+
 async function main() {
   const arg = process.argv[2];
   let packageDir = null;
@@ -199,35 +229,76 @@ async function main() {
     return item;
   });
 
+  const outputPath = path.resolve('electron', 'pipeline', 'openspec-tools-snapshot.json');
+  let previousSnapshot = null;
+  if (existsSync(outputPath)) {
+    try {
+      previousSnapshot = JSON.parse(readFileSync(outputPath, 'utf8'));
+    } catch {
+      // Ignorar error al leer snapshot anterior
+    }
+  }
+
+  const measurementsCandidatePaths = [
+    path.resolve('openspec', 'changes', 'actualizar-ciclo-openspec-1-14', 'mediciones', 'herramientas-por-version.json'),
+    path.resolve('mediciones', 'herramientas-por-version.json'),
+  ];
+  let initialMeasurements = null;
+  for (const mPath of measurementsCandidatePaths) {
+    if (existsSync(mPath)) {
+      try {
+        initialMeasurements = JSON.parse(readFileSync(mPath, 'utf8'));
+        break;
+      } catch {
+        // Ignorar
+      }
+    }
+  }
+
+  const enrichedTools = mergeToolVersionMetadata(tools, previousSnapshot, initialMeasurements, version);
+
   const snapshot = {
     version,
-    tools,
+    tools: enrichedTools,
     skillNames: OPENSPEC_SKILL_NAMES,
   };
 
-  const outputPath = path.resolve('electron', 'pipeline', 'openspec-tools-snapshot.json');
   writeFileSync(outputPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf8');
 
   console.log(`Copia propia guardada en: ${outputPath}`);
   console.log(`Versión: ${version}`);
-  console.log(`Herramientas capturadas: ${tools.length}`);
+  console.log(`Herramientas capturadas: ${enrichedTools.length}`);
   console.log(`Skills: ${OPENSPEC_SKILL_NAMES.length}`);
 
-  // Verificaciones automáticas del requerimiento 1.1
-  const codex = tools.find((t) => t.id === 'codex');
+  // Verificaciones automáticas del requerimiento 1.1 y 2.1
+  const codex = enrichedTools.find((t) => t.id === 'codex');
   if (!codex || codex.skillsDir !== '.agents' || !codex.legacySkillsDirs?.includes('.codex')) {
     console.error('Error de verificación: Codex debe tener skillsDir: .agents y legacySkillsDirs: [.codex]');
     process.exit(1);
   }
-  const github = tools.find((t) => t.id === 'github');
+  if (!codex.addedIn || !codex.addedInOrEarlier) {
+    console.error('Error de verificación: Codex debe tener addedIn y addedInOrEarlier: true');
+    process.exit(1);
+  }
+  const amp = enrichedTools.find((t) => t.id === 'amp');
+  if (!amp || amp.addedIn !== '1.14.0') {
+    console.error('Error de verificación: Amp debe existir y tener addedIn: "1.14.0"');
+    process.exit(1);
+  }
+  const bob = enrichedTools.find((t) => t.id === 'bob');
+  if (!bob || bob.label !== 'IBM Bob') {
+    console.error('Error de verificación: Bob debe llamarse "IBM Bob"');
+    process.exit(1);
+  }
+  const github = enrichedTools.find((t) => t.id === 'github');
   if (github) {
     console.error('Error de verificación: ninguna herramienta debe tener id "github"');
     process.exit(1);
   }
-  if (tools.length !== 40) {
-    console.warn(`Aviso: se esperaban 40 herramientas, se encontraron ${tools.length}`);
+  if (enrichedTools.length !== 50) {
+    console.warn(`Aviso: se esperaban 50 herramientas, se encontraron ${enrichedTools.length}`);
   }
-  console.log('Verificación 1.1 superada exitosamente.');
+  console.log('Verificación 2.1 superada exitosamente.');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve('scripts/capturar-herramientas-openspec.mjs')) {

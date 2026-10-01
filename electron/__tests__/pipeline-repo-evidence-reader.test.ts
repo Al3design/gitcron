@@ -196,11 +196,16 @@ describe('RepoEvidenceReader', () => {
       const snapshot = await readerFor(root);
       expect(snapshot.evidence.openSpecTools).toEqual(tooling.tools);
 
-      // Si se retira la marca .openspec-target, Codex pasa a configured: false
+      // Si se retira la marca .openspec-target, la carpeta compartida queda a nombre de
+      // `agents` y Codex, que la lee, figura configurada por ella. Antes de OpenSpec 1.14
+      // esta prueba esperaba Codex sin configurar; medido con 1.14.0 el 2026-10-01, sin
+      // marca y sin la sintaxis `$openspec-` el motor da configurada a `agents`
+      // (actualizar-ciclo-openspec-1-14, D2).
       await fs.unlink(path.join(agentsSkillsDir, '.openspec-target'));
       const toolingWithoutTarget = await readOpenSpecTooling(root);
-      const codexUnconfigured = toolingWithoutTarget.tools.find((t) => t.toolId === 'codex');
-      expect(codexUnconfigured?.configured).toBe(false);
+      const codexWithoutTarget = toolingWithoutTarget.tools.find((t) => t.toolId === 'codex');
+      expect(codexWithoutTarget?.configured).toBe(true);
+      expect(codexWithoutTarget?.configuredVia).toBe('shared-folder');
     });
   });
 

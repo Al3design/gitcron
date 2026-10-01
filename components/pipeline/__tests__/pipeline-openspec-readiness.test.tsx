@@ -44,6 +44,19 @@ describe('detalle de herramientas en el rail', () => {
     expect(screen.getByText('codex')).toBeTruthy();
   });
 
+  it('herramienta con configuredVia shared-folder muestra configuredViaSharedFolder y no pendingTool', () => {
+    render(
+      <OpenSpecToolList
+        present
+        tools={[{ toolId: 'codex', label: 'Codex', directory: '.agents', configured: true, configuredVia: 'shared-folder' }]}
+      />,
+    );
+
+    expect(screen.getByText('Codex')).toBeTruthy();
+    expect(screen.getByText(/readiness\.configuredViaSharedFolder/)).toBeTruthy();
+    expect(screen.queryByText(/engine\.pendingTool:/)).toBeNull();
+  });
+
   it('sin OpenSpec lo declara en vez de listar nada', () => {
     render(<OpenSpecToolList present={false} tools={[]} />);
     expect(screen.getByText(/readiness\.missingTitle/)).toBeTruthy();

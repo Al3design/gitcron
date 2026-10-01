@@ -69,10 +69,10 @@ describe('OpenSpec Groups 4 y 5 — Formulario transparente y declaración de ve
     const baseStatus: OpenSpecEngineStatus = {
       cli: {
         installed: true,
-        runtimeVersion: '1.13.0',
+        runtimeVersion: '1.14.0',
         provenance: 'global',
         versionClass: 'supported',
-        supportedRange: { min: '1.5.0', max: '1.13.0' },
+        supportedRange: { min: '1.5.0', max: '1.14.0' },
         displayPath: '/usr/local/bin/openspec',
         evidenceStatus: 'confirmed',
         diagnostics: [],
@@ -88,7 +88,7 @@ describe('OpenSpec Groups 4 y 5 — Formulario transparente y declaración de ve
 
     it('declara la versión objetivo del ciclo en la tarjeta del motor (5.1)', () => {
       render(<OpenSpecEngineCard status={baseStatus} />);
-      expect(screen.getByText('pipeline.openspec.engine.cycleVersion:{"version":"1.13.0"}')).toBeTruthy();
+      expect(screen.getByText('pipeline.openspec.engine.cycleVersion:{"version":"1.14.0"}')).toBeTruthy();
     });
 
     it('no avisa cuando la versión instalada es posterior a la del ciclo (decisión 2026-09-14)', () => {
@@ -96,7 +96,7 @@ describe('OpenSpec Groups 4 y 5 — Formulario transparente y declaración de ve
         ...baseStatus,
         cli: {
           ...baseStatus.cli,
-          runtimeVersion: '1.14.0',
+          runtimeVersion: '1.15.0',
         },
       };
 
@@ -117,7 +117,7 @@ describe('OpenSpec Groups 4 y 5 — Formulario transparente y declaración de ve
 
       render(<OpenSpecEngineCard status={behindStatus} />);
       expect(
-        screen.getByText('pipeline.openspec.engine.versionBehindCycle:{"installed":"1.5.0","cycle":"1.13.0"}'),
+        screen.getByText('pipeline.openspec.engine.versionBehindCycle:{"installed":"1.5.0","cycle":"1.14.0"}'),
       ).toBeTruthy();
     });
 

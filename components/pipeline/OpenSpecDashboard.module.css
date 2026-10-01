@@ -1826,6 +1826,43 @@ summary.centerBlock {
 .readinessList strong { color: var(--color-text-primary); font-weight: 650; overflow-wrap: anywhere; word-break: break-word; }
 .readinessList code { color: var(--color-text-secondary); font-size: var(--font-size-xs); overflow-wrap: anywhere; word-break: break-word; }
 .readinessList em { font-style: normal; overflow-wrap: anywhere; word-break: break-word; }
+
+.toolMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.toolDescription {
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+  font-size: var(--font-size-xs);
+}
+
+.toolVersionBadge {
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.readinessList .toolMeta {
+  grid-column: 2 / -1;
+  margin-top: var(--space-1);
+}
+
+.railChooseList .toolMeta {
+  grid-column: 2 / -1;
+  margin-top: var(--space-1);
+}
+
+.railChooseOption .toolMeta {
+  width: 100%;
+  margin-left: calc(1rem + var(--space-2));
+  margin-top: var(--space-1);
+}
 .pendingBlockContainer {
   display: flex;
   flex-direction: column;

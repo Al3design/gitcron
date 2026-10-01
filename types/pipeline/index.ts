@@ -185,6 +185,7 @@ export interface OpenSpecToolEvidence {
   label: string;
   directory: string;
   configured: boolean;
+  configuredVia?: 'shared-folder';
 }
 
 export interface OpenSpecSpecificationEvidence {
@@ -655,6 +656,7 @@ export interface OpenSpecToolReportItem {
   legacySkillsDirs?: string[];
   available: boolean;
   configured: boolean;
+  configuredVia?: 'shared-folder';
   needsUpdate: boolean;
   generatedBy: string | null;
 }

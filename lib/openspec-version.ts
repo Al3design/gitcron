@@ -14,7 +14,7 @@ export interface OpenSpecVersionRange {
 }
 
 /** Versión de OpenSpec contra la que está diseñado y escrito el ciclo SDD de GitCron. */
-export const OPENSPEC_CYCLE_TARGET_VERSION = '1.13.0';
+export const OPENSPEC_CYCLE_TARGET_VERSION = '1.14.0';
 
 /** Sólo mínimo. Por decisión de Alejandro del 2026-09-14 una versión más nueva no se marca: el aviso de actualización sale de comparar la instalada con la última de npm, no de un rango. */
 export const SUPPORTED_OPENSPEC_VERSIONS: Readonly<OpenSpecVersionRange> = {

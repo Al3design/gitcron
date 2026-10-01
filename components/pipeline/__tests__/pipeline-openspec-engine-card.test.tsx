@@ -25,17 +25,17 @@ describe('OpenSpecEngineCard (UI Audit Tests & Jerarquía)', () => {
     const dummyStatus: OpenSpecEngineStatus = {
       cli: {
         installed: true,
-        runtimeVersion: '1.13.0',
+        runtimeVersion: '1.14.0',
         provenance: 'global',
         displayPath: 'C:\\global\\openspec.cmd',
-        supportedRange: { min: '1.5.0', max: '1.13.0' },
+        supportedRange: { min: '1.5.0', max: '1.14.0' },
         versionClass: 'supported',
         evidenceStatus: 'confirmed',
         diagnostics: [],
       },
       latestAvailable: {
         status: 'online',
-        latestVersion: '1.13.0',
+        latestVersion: '1.14.0',
         checkedAt: 'now',
         fromCache: false,
         cacheAgeSeconds: 0,
@@ -45,7 +45,7 @@ describe('OpenSpecEngineCard (UI Audit Tests & Jerarquía)', () => {
       globalConfig: null,
       installedIntegration: {
         skills: [],
-        generatedBy: '1.13.0',
+        generatedBy: '1.14.0',
         markersFound: [],
         outputInventory: [],
         evidenceStatus: 'confirmed',
@@ -222,14 +222,14 @@ describe('OpenSpecEngineCard (UI Audit Tests & Jerarquía)', () => {
     expect(screen.getByText(/Versión 1.9.0 disponible en npm/i)).toBeDefined();
   });
 
-  it('con motor 1.13.0 alineado al ciclo y todo lo demás sano, la insignia general sigue diciendo «Listo»', () => {
-    const status113Healthy: OpenSpecEngineStatus = {
+  it('con motor 1.14.0 alineado al ciclo y todo lo demás sano, la insignia general sigue diciendo «Listo»', () => {
+    const status114Healthy: OpenSpecEngineStatus = {
       cli: {
         installed: true,
-        runtimeVersion: '1.13.0',
+        runtimeVersion: '1.14.0',
         provenance: 'global',
         displayPath: 'C:\\global\\openspec.cmd',
-        supportedRange: { min: '1.5.0', max: '1.13.0' },
+        supportedRange: { min: '1.5.0', max: '1.14.0' },
         versionClass: 'supported',
         evidenceStatus: 'confirmed',
         diagnostics: [],
@@ -238,7 +238,7 @@ describe('OpenSpecEngineCard (UI Audit Tests & Jerarquía)', () => {
       globalConfig: null,
       installedIntegration: {
         skills: [],
-        generatedBy: '1.13.0',
+        generatedBy: '1.14.0',
         markersFound: [],
         outputInventory: [],
         evidenceStatus: 'confirmed',
@@ -255,7 +255,7 @@ describe('OpenSpecEngineCard (UI Audit Tests & Jerarquía)', () => {
       freshnessState: 'cli-up-to-date',
     };
 
-    render(<OpenSpecEngineCard status={status113Healthy} compact={false} />);
+    render(<OpenSpecEngineCard status={status114Healthy} compact={false} />);
     expect(screen.getByText(/Listo/i)).toBeDefined();
     expect(screen.queryByText(/Requiere atención/i)).toBeNull();
     expect(screen.queryByText(/anterior al ciclo declarado/i)).toBeNull();

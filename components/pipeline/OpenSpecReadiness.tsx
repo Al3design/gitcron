@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import type { OpenSpecToolEvidence, OpenSpecToolReport } from '@/types/pipeline';
 import { useT } from '@/hooks/use-translation';
+import { useGitStore } from '@/lib/git-store';
+import type { Lang } from '@/lib/i18n';
+import { resolveToolDescription, resolveToolVersionText } from '@/lib/openspec-tools-catalog';
 import snapshot from '@/electron/pipeline/openspec-tools-snapshot.json';
 import styles from './OpenSpecDashboard.module.css';
 
@@ -57,6 +60,7 @@ export function OpenSpecToolList({
   uncommittedCount,
 }: OpenSpecToolListProps) {
   const t = useT();
+  const currentLang = (useGitStore((s) => s.language) || 'es') as Lang;
   const [chosenTools, setChosenTools] = useState<string[]>([]);
   const list = tools ?? [];
   const pending = list.filter((tool) => !tool.configured);
@@ -106,25 +110,33 @@ export function OpenSpecToolList({
         <fieldset className={styles.railChoose} disabled={busy}>
           <legend>{t('pipeline.openspec.engine.axis.tools')}</legend>
           <ul className={styles.railChooseList}>
-            {list.map((tool) => (
-              <li key={tool.toolId}>
-                <label className={styles.railChooseOption}>
-                  <input
-                    type="checkbox"
-                    checked={selectedInitTools.includes(tool.toolId)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedInitTools((prev) => [...prev, tool.toolId]);
-                      } else {
-                        setSelectedInitTools((prev) => prev.filter((id) => id !== tool.toolId));
-                      }
-                    }}
-                  />
-                  <strong>{tool.label}</strong>
-                  <code>{tool.directory}</code>
-                </label>
-              </li>
-            ))}
+            {list.map((tool) => {
+              const description = resolveToolDescription(tool.toolId, currentLang, t);
+              const versionText = resolveToolVersionText(tool.toolId, t);
+              return (
+                <li key={tool.toolId}>
+                  <label className={styles.railChooseOption}>
+                    <input
+                      type="checkbox"
+                      checked={selectedInitTools.includes(tool.toolId)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedInitTools((prev) => [...prev, tool.toolId]);
+                        } else {
+                          setSelectedInitTools((prev) => prev.filter((id) => id !== tool.toolId));
+                        }
+                      }}
+                    />
+                    <strong>{tool.label}</strong>
+                    <code>{tool.directory}</code>
+                    <div className={styles.toolMeta}>
+                      <span className={styles.toolDescription}>{description}</span>
+                      <span className={styles.toolVersionBadge}>{versionText}</span>
+                    </div>
+                  </label>
+                </li>
+              );
+            })}
           </ul>
         </fieldset>
       )}
@@ -133,6 +145,8 @@ export function OpenSpecToolList({
       {present && list.length > 0 && (
         <ul className={styles.readinessList}>
           {list.map((tool) => {
+            const description = resolveToolDescription(tool.toolId, currentLang, t);
+            const versionText = resolveToolVersionText(tool.toolId, t);
             return (
               <li key={tool.toolId} data-configured={tool.configured}>
                 {tool.configured ? (
@@ -144,9 +158,15 @@ export function OpenSpecToolList({
                 <code>{tool.directory}</code>
                 <em>
                   {tool.configured
-                    ? t('pipeline.openspec.readiness.configured')
+                    ? (tool.configuredVia === 'shared-folder'
+                        ? t('pipeline.openspec.readiness.configuredViaSharedFolder')
+                        : t('pipeline.openspec.readiness.configured'))
                     : t('pipeline.openspec.engine.pendingTool', { tool: tool.label })}
                 </em>
+                <div className={styles.toolMeta}>
+                  <span className={styles.toolDescription}>{description}</span>
+                  <span className={styles.toolVersionBadge}>{versionText}</span>
+                </div>
               </li>
             );
           })}
@@ -181,23 +201,31 @@ export function OpenSpecToolList({
           <legend>{t('pipeline.openspec.rail.chooseToolLabel')}</legend>
           <p>{t('pipeline.openspec.rail.chooseToolHelp')}</p>
           <ul className={styles.railChooseList}>
-            {selectableTools.map((tool) => (
-              <li key={tool.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={chosenTools.includes(tool.id)}
-                    onChange={() => setChosenTools((current) => (
-                      current.includes(tool.id)
-                        ? current.filter((id) => id !== tool.id)
-                        : [...current, tool.id]
-                    ))}
-                  />
-                  <strong>{tool.label}</strong>
-                  <code>{tool.skillsDir}</code>
-                </label>
-              </li>
-            ))}
+            {selectableTools.map((tool) => {
+              const description = resolveToolDescription(tool.id, currentLang, t);
+              const versionText = resolveToolVersionText(tool.id, t);
+              return (
+                <li key={tool.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={chosenTools.includes(tool.id)}
+                      onChange={() => setChosenTools((current) => (
+                        current.includes(tool.id)
+                          ? current.filter((id) => id !== tool.id)
+                          : [...current, tool.id]
+                      ))}
+                    />
+                    <strong>{tool.label}</strong>
+                    <code>{tool.skillsDir}</code>
+                    <div className={styles.toolMeta}>
+                      <span className={styles.toolDescription}>{description}</span>
+                      <span className={styles.toolVersionBadge}>{versionText}</span>
+                    </div>
+                  </label>
+                </li>
+              );
+            })}
           </ul>
           <button
             type="button"

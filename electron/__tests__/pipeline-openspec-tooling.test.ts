@@ -64,6 +64,6 @@ describe('herramientas con OpenSpec configurado', () => {
     const ids = OPENSPEC_TOOL_DIRECTORIES.map((tool) => tool.toolId);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).not.toContain('github');
-    expect(ids.length).toBe(40);
+    expect(ids.length).toBe(50);
   });
 });

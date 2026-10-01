@@ -100,10 +100,10 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
 
   const dummyCliHealthy: OpenSpecEngineStatus['cli'] = {
     installed: true,
-    runtimeVersion: '1.13.0',
+    runtimeVersion: '1.14.0',
     provenance: 'global',
     displayPath: 'C:\\global\\openspec.cmd',
-    supportedRange: { min: '1.5.0', max: '1.13.0' },
+    supportedRange: { min: '1.5.0', max: '1.14.0' },
     versionClass: 'supported',
     evidenceStatus: 'confirmed',
     diagnostics: [],
@@ -787,7 +787,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
       />,
     );
 
-    const chipClean = await screen.findByRole('status', { name: /OpenSpec v1\.13\.0/i });
+    const chipClean = await screen.findByRole('status', { name: /OpenSpec v1\.14\.0/i });
     expect(chipClean.className).not.toMatch(/text-warning/);
     unmount4();
 
@@ -1197,19 +1197,19 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     vi.unstubAllGlobals();
   });
 
-  it('motor 1.13.0 sano y latest 1.14.0: la píldora avisa con punto, texto en title y clase text-warning (6.7-B + decisión 2026-09-14)', async () => {
-    const status113Healthy: OpenSpecEngineStatus = {
+  it('motor 1.14.0 sano y latest 1.15.0: la píldora avisa con punto, texto en title y clase text-warning (6.7-B + decisión 2026-09-14)', async () => {
+    const status114Healthy: OpenSpecEngineStatus = {
       ...dummyStatusHealthy,
       cli: {
         ...dummyStatusHealthy.cli,
-        runtimeVersion: '1.13.0',
+        runtimeVersion: '1.14.0',
       },
     };
 
-    const getEngineStatusMock = vi.fn().mockResolvedValue(status113Healthy);
+    const getEngineStatusMock = vi.fn().mockResolvedValue(status114Healthy);
     const checkLatestVersionMock = vi.fn().mockResolvedValue({
       status: 'online',
-      latestVersion: '1.14.0',
+      latestVersion: '1.15.0',
       checkedAt: 'now',
       fromCache: false,
       cacheAgeSeconds: 0,
@@ -1245,12 +1245,12 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
       />,
     );
 
-    // La píldora se encuentra por título que contiene «v1.14.0 disponible en npm»
-    const pill = await screen.findByTitle(/v1\.14\.0 disponible en npm/i);
+    // La píldora se encuentra por título que contiene «v1.15.0 disponible en npm»
+    const pill = await screen.findByTitle(/v1\.15\.0 disponible en npm/i);
     expect(pill).toBeDefined();
 
     // Existe un elemento con aria-label igual a ese texto
-    const dot = screen.getByLabelText('v1.14.0 disponible en npm');
+    const dot = screen.getByLabelText('v1.15.0 disponible en npm');
     expect(dot).toBeDefined();
     expect(dot.getAttribute('data-upgrade')).toBe('available');
 
@@ -1260,19 +1260,19 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     vi.unstubAllGlobals();
   });
 
-  it('motor 1.13.0 y latest 1.12.0 (instalada más nueva que npm): el título NO contiene disponible en npm y no hay data-upgrade (Tarea 6.7-B)', async () => {
-    const status113: OpenSpecEngineStatus = {
+  it('motor 1.14.0 y latest 1.13.0 (instalada más nueva que npm): el título NO contiene disponible en npm y no hay data-upgrade (Tarea 6.7-B)', async () => {
+    const status114: OpenSpecEngineStatus = {
       ...dummyStatusHealthy,
       cli: {
         ...dummyStatusHealthy.cli,
-        runtimeVersion: '1.13.0',
+        runtimeVersion: '1.14.0',
       },
     };
 
-    const getEngineStatusMock = vi.fn().mockResolvedValue(status113);
+    const getEngineStatusMock = vi.fn().mockResolvedValue(status114);
     const checkLatestVersionMock = vi.fn().mockResolvedValue({
       status: 'online',
-      latestVersion: '1.12.0',
+      latestVersion: '1.13.0',
       checkedAt: 'now',
       fromCache: false,
       cacheAgeSeconds: 0,
@@ -1308,8 +1308,8 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
       />,
     );
 
-    // Esperar a que la píldora se monte con OpenSpec v1.13.0
-    const pill = await screen.findByTitle(/OpenSpec v1\.13\.0/i);
+    // Esperar a que la píldora se monte con OpenSpec v1.14.0
+    const pill = await screen.findByTitle(/OpenSpec v1\.14\.0/i);
     expect(pill).toBeDefined();
 
     // El título NO contiene «disponible en npm»
@@ -1353,7 +1353,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
       />,
     );
 
-    await screen.findByTitle(/OpenSpec v1\.13\.0/i);
+    await screen.findByTitle(/OpenSpec v1\.14\.0/i);
     expect(getEngineStatusMock).toHaveBeenCalledTimes(1);
     expect(getEngineStatusMock).toHaveBeenCalledWith('C:\\repo-notify');
 

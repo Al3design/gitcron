@@ -170,6 +170,7 @@ export async function readOpenSpecTooling(
       label: t.label,
       directory: t.skillsDir ?? `.${t.id}`,
       configured: t.configured,
+      configuredVia: t.configuredVia,
     }));
 
   return { present, tools };

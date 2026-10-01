@@ -107,6 +107,8 @@ export interface OpenSpecToolDef {
   legacySkillsDirs?: string[];
   detectionPaths?: string[];
   globalSkillsDir?: string;
+  addedIn?: string;
+  addedInOrEarlier?: boolean;
 }
 
 export const OPENSPEC_TOOL_DIRECTORIES: ReadonlyArray<OpenSpecToolDef> = snapshot.tools.map((tool) => {
@@ -132,6 +134,8 @@ export const OPENSPEC_TOOL_DIRECTORIES: ReadonlyArray<OpenSpecToolDef> = snapsho
     legacySkillsDirs: tool.legacySkillsDirs,
     detectionPaths: tool.detectionPaths,
     globalSkillsDir: tool.globalSkillsDir,
+    addedIn: (tool as { addedIn?: string }).addedIn,
+    addedInOrEarlier: (tool as { addedInOrEarlier?: boolean }).addedInOrEarlier,
   };
 });
 

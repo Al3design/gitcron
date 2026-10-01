@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import type {
   InstructionsOpenSpecResult,
   OpenSpecArtifactGraphResult,
@@ -15,7 +16,7 @@ import type {
   OpenSpecRunUpdateResult,
   OpenSpecValidationStatus,
 } from '../../types/pipeline';
-import { simpleGit } from 'simple-git';
+import { simpleGit, type SimpleGit } from 'simple-git';
 import { withRepoLock } from '../git/repo-queue';
 import {
   isValidOpenSpecChangeSlug as isValidChangeId,
@@ -289,6 +290,100 @@ export interface RunOpenSpecUpdateOptions {
 }
 
 /**
+ * Toma una foto de los archivos administrados por OpenSpec que difieren de HEAD
+ * (`git status --porcelain -z --untracked-files=all`), con el hash de su contenido (Decisión 3).
+ */
+export async function captureOpenSpecManagedFilesSnapshot(
+  repoPath: string,
+  gitInstance?: SimpleGit,
+): Promise<Map<string, string>> {
+  const git = gitInstance ?? simpleGit(repoPath);
+  const raw = await git.raw(['status', '--porcelain', '-z', '--untracked-files=all']);
+  const snapshot = new Map<string, string>();
+  if (!raw) return snapshot;
+
+  const parts = raw.split('\0');
+  for (let i = 0; i < parts.length; i++) {
+    const entry = parts[i];
+    if (!entry) continue;
+
+    const status = entry.slice(0, 2);
+    const filePath = entry.slice(3);
+
+    // En rename ('R') o copy ('C'), la siguiente entrada de \0 es la ruta origen
+    if (status.includes('R') || status.includes('C')) {
+      i++;
+    }
+
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (!isOpenSpecManagedPath(normalizedPath)) {
+      continue;
+    }
+
+    const fullPath = path.join(repoPath, filePath);
+    try {
+      const stat = await fs.stat(fullPath);
+      if (stat.isFile()) {
+        const content = await fs.readFile(fullPath);
+        const hash = crypto.createHash('sha256').update(content).digest('hex');
+        snapshot.set(normalizedPath, hash);
+      } else {
+        snapshot.set(normalizedPath, '__deleted__');
+      }
+    } catch {
+      snapshot.set(normalizedPath, '__deleted__');
+    }
+  }
+
+  return snapshot;
+}
+
+/**
+ * Compara dos fotos y devuelve las rutas de archivos que cambiaron por la actualización:
+ * nuevos después, presentes en las dos con otro hash, y presentes antes y no después (Decisión 3).
+ */
+export function diffOpenSpecSnapshots(
+  before: Map<string, string>,
+  after: Map<string, string>,
+): string[] {
+  const changed = new Set<string>();
+
+  for (const [filePath, hashAfter] of after) {
+    if (!before.has(filePath)) {
+      changed.add(filePath);
+    } else if (before.get(filePath) !== hashAfter) {
+      changed.add(filePath);
+    }
+  }
+
+  for (const [filePath] of before) {
+    if (!after.has(filePath)) {
+      changed.add(filePath);
+    }
+  }
+
+  return Array.from(changed).sort();
+}
+
+/**
+ * Función común para capturar la foto posterior y calcular los archivos actualizados
+ * comparándolos contra la foto previa, bajo el cerrojo del repositorio (Decisión 3).
+ */
+export async function computeUpdatedManagedFiles(
+  repoPath: string,
+  beforeSnapshot: Map<string, string>,
+): Promise<string[]> {
+  try {
+    const afterSnapshot = await withRepoLock(repoPath, () =>
+      captureOpenSpecManagedFilesSnapshot(repoPath),
+    );
+    return diffOpenSpecSnapshots(beforeSnapshot, afterSnapshot);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Ejecuta openspec update en el repositorio autorizado con variables de entorno controladas.
  */
 export async function runOpenSpecUpdate(
@@ -305,6 +400,11 @@ export async function runOpenSpecUpdate(
     };
   }
 
+  // Foto previa antes de correr openspec update bajo cerrojo (Decisión 3)
+  const beforeSnapshot = await withRepoLock(repoPath, () =>
+    captureOpenSpecManagedFilesSnapshot(repoPath),
+  ).catch(() => new Map<string, string>());
+
   const args = options?.force ? ['update', '--force'] : ['update'];
 
   try {
@@ -314,18 +414,7 @@ export async function runOpenSpecUpdate(
       maxBuffer: 4 * 1024 * 1024,
     });
 
-    let filesUpdated: string[] = [];
-    try {
-      await withRepoLock(repoPath, async () => {
-        const git = simpleGit(repoPath);
-        const status = await git.status();
-        filesUpdated = status.files
-          .map((f) => f.path)
-          .filter(isOpenSpecManagedPath);
-      });
-    } catch {
-      // ignore
-    }
+    const filesUpdated = await computeUpdatedManagedFiles(repoPath, beforeSnapshot);
 
     return {
       success: true,
@@ -339,18 +428,7 @@ export async function runOpenSpecUpdate(
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
       .find((part) => part.length > 0) ?? 'update-failed';
 
-    let filesUpdated: string[] = [];
-    try {
-      await withRepoLock(repoPath, async () => {
-        const git = simpleGit(repoPath);
-        const status = await git.status();
-        filesUpdated = status.files
-          .map((f) => f.path)
-          .filter(isOpenSpecManagedPath);
-      });
-    } catch {
-      // ignore
-    }
+    const filesUpdated = await computeUpdatedManagedFiles(repoPath, beforeSnapshot);
 
     const isIncomplete = filesUpdated.length > 0;
     return {

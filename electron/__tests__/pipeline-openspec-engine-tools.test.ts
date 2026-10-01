@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
+  annotateSharedFolderTools,
   buildFallbackToolReport,
   getCachedToolReport,
   invalidateEngineToolReportCache,
@@ -445,7 +446,7 @@ describe('openspec-engine-tools (Grupo 2)', () => {
       await fsp.mkdir(path.join(agentsSkillsDir, 'openspec-apply-change'), { recursive: true });
       await fsp.writeFile(
         path.join(agentsSkillsDir, 'openspec-apply-change', 'SKILL.md'),
-        '---\ngeneratedBy: "1.13.2"\n---\n',
+        '---\ngeneratedBy: "1.14.0"\n---\n',
       );
       await fsp.writeFile(path.join(agentsSkillsDir, '.openspec-target'), 'codex\n');
 
@@ -460,7 +461,7 @@ describe('openspec-engine-tools (Grupo 2)', () => {
       const report = buildFallbackToolReport({
         repoPath,
         reason: 'package-not-found',
-        engineVersion: '1.13.2',
+        engineVersion: '1.14.0',
       });
 
       expect(report.source).toBe('gitcron-fallback');
@@ -632,6 +633,122 @@ describe('openspec-engine-tools (Grupo 2)', () => {
       expect(report2.source).toBe('gitcron-fallback');
       expect(report2.fallbackReason).toBe('timeout');
       expect(spawnCount).toBe(2);
+    });
+  });
+
+  describe('3.1 Carpeta compartida anotada a su propio nombre (D2)', () => {
+    it('odontoPro con OpenSpec 1.14: agents configurada, codex y amp presentes -> salen configuradas por shared-folder', () => {
+      const mockRawEngineReport: OpenSpecToolReport = {
+        source: 'engine',
+        engineVersion: '1.14.0',
+        tools: [
+          { id: 'claude', label: 'Claude Code', available: true, configured: true, needsUpdate: false, generatedBy: '1.14.0' },
+          { id: 'agents', label: 'Carpeta compartida .agents', available: true, configured: true, needsUpdate: false, generatedBy: '1.14.0' },
+          { id: 'codex', label: 'Codex', skillsDir: '.agents', available: true, configured: false, needsUpdate: false, generatedBy: null },
+          { id: 'amp', label: 'Amp', skillsDir: '.agents', available: true, configured: false, needsUpdate: false, generatedBy: null },
+          { id: 'zed', label: 'Zed Agent', skillsDir: '.agents', available: false, configured: false, needsUpdate: false, generatedBy: null },
+        ],
+        profileSyncNeeded: [],
+      };
+
+      const report = annotateSharedFolderTools(mockRawEngineReport);
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.configured).toBe(true);
+      expect(codex?.configuredVia).toBe('shared-folder');
+      expect(codex?.generatedBy).toBe('1.14.0');
+      expect(codex?.needsUpdate).toBe(false);
+
+      const amp = report.tools.find((t) => t.id === 'amp');
+      expect(amp?.configured).toBe(true);
+      expect(amp?.configuredVia).toBe('shared-folder');
+
+      // Herramienta no presente (available: false) no pasa a configurada
+      const zed = report.tools.find((t) => t.id === 'zed');
+      expect(zed?.configured).toBe(false);
+      expect(zed?.configuredVia).toBeUndefined();
+    });
+
+    it('sin instrucciones en .agents/skills no cuenta como configurada en el respaldo', async () => {
+      const repoPath = path.join(tempDir, 'repo-empty-agents');
+      await fsp.mkdir(path.join(repoPath, '.agents', 'skills'), { recursive: true });
+      await fsp.writeFile(path.join(repoPath, '.agents', 'skills', '.openspec-target'), 'agents');
+      // No se crean carpetas de skills de OpenSpec
+
+      const report = buildFallbackToolReport({ repoPath });
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.configured).toBe(false);
+      expect(codex?.configuredVia).toBeUndefined();
+      const agents = report.tools.find((t) => t.id === 'agents');
+      expect(agents?.configured).toBe(false);
+    });
+
+    it('con la carpeta anotada a codex (.openspec-target = codex) rige lo anterior: codex configurada directa y otras no', async () => {
+      const repoPath = path.join(tempDir, 'repo-target-codex');
+      await fsp.mkdir(path.join(repoPath, '.agents', 'skills', 'openspec-propose'), { recursive: true });
+      await fsp.writeFile(path.join(repoPath, '.agents', 'skills', '.openspec-target'), 'codex');
+      // Marcador de presencia de amp
+      await fsp.mkdir(path.join(repoPath, '.amp'), { recursive: true });
+
+      const report = buildFallbackToolReport({ repoPath });
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.configured).toBe(true);
+      expect(codex?.configuredVia).toBeUndefined(); // directa, no por shared-folder
+
+      const amp = report.tools.find((t) => t.id === 'amp');
+      expect(amp?.available).toBe(true);
+      expect(amp?.configured).toBe(false);
+      expect(amp?.configuredVia).toBeUndefined();
+    });
+
+    it('el respaldo da el mismo resultado que el motor cuando .openspec-target = agents', async () => {
+      const repoPath = path.join(tempDir, 'repo-fallback-agents');
+      await fsp.mkdir(path.join(repoPath, '.agents', 'skills', 'openspec-propose'), { recursive: true });
+      await fsp.writeFile(path.join(repoPath, '.agents', 'skills', '.openspec-target'), 'agents');
+      // Presencia de codex y amp
+      await fsp.mkdir(path.join(repoPath, '.codex'), { recursive: true });
+      await fsp.mkdir(path.join(repoPath, '.amp'), { recursive: true });
+
+      const report = buildFallbackToolReport({ repoPath });
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.available).toBe(true);
+      expect(codex?.configured).toBe(true);
+      expect(codex?.configuredVia).toBe('shared-folder');
+
+      const amp = report.tools.find((t) => t.id === 'amp');
+      expect(amp?.available).toBe(true);
+      expect(amp?.configured).toBe(true);
+      expect(amp?.configuredVia).toBe('shared-folder');
+    });
+
+    // Sin marca, el respaldo deduce el dueño como el motor. Medido con OpenSpec 1.14.0 el
+    // 2026-10-01 sobre un repositorio con las instrucciones de odontoPro y sin .openspec-target:
+    // `getConfiguredTools` da ["agents"] con o sin carpeta .codex, y ["codex"] cuando las
+    // instrucciones usan la sintaxis `$openspec-` de Codex.
+    it('sin marca y sin sintaxis de Codex: dueño agents aunque exista .codex, y Codex por la carpeta compartida', async () => {
+      const repoPath = path.join(tempDir, 'repo-sin-marca-agents');
+      const skillDir = path.join(repoPath, '.agents', 'skills', 'openspec-propose');
+      await fsp.mkdir(skillDir, { recursive: true });
+      await fsp.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: openspec-propose\n---\nUsar con /opsx:propose\n');
+      await fsp.mkdir(path.join(repoPath, '.codex'), { recursive: true });
+
+      const report = buildFallbackToolReport({ repoPath });
+      expect(report.tools.find((t) => t.id === 'agents')?.configured).toBe(true);
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.available).toBe(true);
+      expect(codex?.configured).toBe(true);
+      expect(codex?.configuredVia).toBe('shared-folder');
+    });
+
+    it('sin marca y con sintaxis de Codex: dueño codex, configurada directa como dice el motor', async () => {
+      const repoPath = path.join(tempDir, 'repo-sin-marca-codex');
+      const skillDir = path.join(repoPath, '.agents', 'skills', 'openspec-propose');
+      await fsp.mkdir(skillDir, { recursive: true });
+      await fsp.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: openspec-propose\n---\nUsar con $openspec-propose\n');
+
+      const report = buildFallbackToolReport({ repoPath });
+      const codex = report.tools.find((t) => t.id === 'codex');
+      expect(codex?.configured).toBe(true);
+      expect(codex?.configuredVia).toBeUndefined();
     });
   });
 });

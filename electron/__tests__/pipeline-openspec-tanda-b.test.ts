@@ -62,7 +62,7 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     for (const sk of officialSkills) {
       const skDir = path.join(agentSkillsDir, sk);
       fs.mkdirSync(skDir, { recursive: true });
-      fs.writeFileSync(path.join(skDir, 'SKILL.md'), `---\ngeneratedBy: "1.13.2"\n---\nOdontoPau skill\n`);
+      fs.writeFileSync(path.join(skDir, 'SKILL.md'), `---\ngeneratedBy: "1.14.0"\n---\nOdontoPau skill\n`);
     }
 
     // .codex/config.toml
@@ -81,10 +81,10 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     const snapshot = await buildEngineStatusSnapshot(repoPath, {
       discoverCli: async () => ({
         installed: true,
-        runtimeVersion: '1.13.2',
+        runtimeVersion: '1.14.0',
         provenance: 'local',
         displayPath: 'node_modules\\.bin\\openspec.cmd',
-        supportedRange: { min: '1.5.0', max: '1.13.2' },
+        supportedRange: { min: '1.5.0', max: '1.14.0' },
         versionClass: 'supported',
         evidenceStatus: 'confirmed',
         diagnostics: [],
@@ -135,7 +135,7 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     for (const sk of officialSkills) {
       const skDir = path.join(agentSkillsDir, sk);
       fs.mkdirSync(skDir, { recursive: true });
-      fs.writeFileSync(path.join(skDir, 'SKILL.md'), `---\ngeneratedBy: "1.13.2"\n---\nGitCron skill\n`);
+      fs.writeFileSync(path.join(skDir, 'SKILL.md'), `---\ngeneratedBy: "1.14.0"\n---\nGitCron skill\n`);
     }
 
     // Herramientas configuradas de gitCronos
@@ -163,10 +163,10 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     const snapshot = await buildEngineStatusSnapshot(repoPath, {
       discoverCli: async () => ({
         installed: true,
-        runtimeVersion: '1.13.2',
+        runtimeVersion: '1.14.0',
         provenance: 'global',
         displayPath: 'C:\\global\\openspec.cmd',
-        supportedRange: { min: '1.5.0', max: '1.13.2' },
+        supportedRange: { min: '1.5.0', max: '1.14.0' },
         versionClass: 'supported',
         evidenceStatus: 'confirmed',
         diagnostics: [],
@@ -273,7 +273,7 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     const engineReport = await readEngineToolReport({
       repoPath: gitCronosRepo,
       executablePath: runtime.executablePath,
-      runtimeVersion: snapshot.cli.runtimeVersion ?? '1.13.2',
+      runtimeVersion: snapshot.cli.runtimeVersion ?? '1.14.0',
       nodeExecutable: process.execPath,
     });
 

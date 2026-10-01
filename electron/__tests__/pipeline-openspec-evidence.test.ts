@@ -479,7 +479,7 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
       for (const sk of officialSkills) {
         const wfDir = path.join(agentSkillsDir, sk);
         fs.mkdirSync(wfDir, { recursive: true });
-        fs.writeFileSync(path.join(wfDir, 'SKILL.md'), `---\ngeneratedBy: "1.13.2"\n---\nOfficial agent skill\n`);
+        fs.writeFileSync(path.join(wfDir, 'SKILL.md'), `---\ngeneratedBy: "1.14.0"\n---\nOfficial agent skill\n`);
       }
 
       // .codex/config.toml (sin skills en .codex)
@@ -498,10 +498,10 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
       const snapshot = await buildEngineStatusSnapshot(tempDir, {
         discoverCli: async () => ({
           installed: true,
-          runtimeVersion: '1.13.2',
+          runtimeVersion: '1.14.0',
           provenance: 'local',
           displayPath: 'node_modules\\.bin\\openspec.cmd',
-          supportedRange: { min: '1.5.0', max: '1.13.2' },
+          supportedRange: { min: '1.5.0', max: '1.14.0' },
           versionClass: 'supported',
           evidenceStatus: 'confirmed',
           diagnostics: [],
@@ -514,10 +514,10 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
         }),
         runDoctor: async () => ({ command: 'openspec doctor --json', ok: true, error: null, data: null }),
         runContext: async () => ({ command: 'openspec context --json', ok: true, error: null, data: null }),
-        // El informe de herramientas se fija a la copia 1.13.2: sin esto la prueba consultaba
+        // El informe de herramientas se fija a la copia 1.14.0: sin esto la prueba consultaba
         // el paquete de OpenSpec instalado en la máquina, y con 1.14.0 instalado (2026-10-01)
-        // marcaba Codex para actualizar aunque el motor simulado diga 1.13.2.
-        readEngineToolReport: async ({ repoPath }) => buildFallbackToolReport({ repoPath, engineVersion: '1.13.2' }),
+        // marcaba Codex para actualizar aunque el motor simulado diga 1.14.0.
+        readEngineToolReport: async ({ repoPath }) => buildFallbackToolReport({ repoPath, engineVersion: '1.14.0' }),
       });
 
       // Verificamos estado exacto medido de OdontoPau (sólo Codex configurada, decisión 3 y 4)
@@ -563,10 +563,10 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
       const snapshotWithoutMarker = await buildEngineStatusSnapshot(tempDir, {
         discoverCli: async () => ({
           installed: true,
-          runtimeVersion: '1.13.2',
+          runtimeVersion: '1.14.0',
           provenance: 'local',
           displayPath: 'node_modules\\.bin\\openspec.cmd',
-          supportedRange: { min: '1.5.0', max: '1.13.2' },
+          supportedRange: { min: '1.5.0', max: '1.14.0' },
           versionClass: 'supported',
           evidenceStatus: 'confirmed',
           diagnostics: [],
@@ -581,11 +581,12 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
         runContext: async () => ({ command: 'openspec context --json', ok: true, error: null, data: null }),
         // Informe medido con el paquete real de OpenSpec 1.13.2 sobre este mismo armado
         // (2026-10-01): sin la marca .openspec-target, Codex no figura disponible y la
-        // configurada es «agents». Antes la prueba consultaba el motor instalado en la
-        // máquina, y con 1.14.0 marcaba Codex como pendiente; qué hace GitCron con la
-        // 1.14 se revisa en el cambio del ciclo 1.14, no en esta prueba.
+        // configurada es «agents». Las versiones de la simulación siguen al ciclo (1.14.0)
+        // para que lo generado no se lea como desactualizado, pero la forma es la de 1.13.2:
+        // en 1.14.0 Codex sí figura disponible y la regla de la carpeta compartida la da
+        // configurada (pruebas «3.1 Carpeta compartida» de pipeline-openspec-engine-tools).
         readEngineToolReport: async ({ repoPath }) => {
-          const report = buildFallbackToolReport({ repoPath, engineVersion: '1.13.2' });
+          const report = buildFallbackToolReport({ repoPath, engineVersion: '1.14.0' });
           return {
             ...report,
             tools: report.tools.map((t) => {

@@ -1,10 +1,22 @@
 {
-  "version": "1.13.2",
+  "version": "1.14.0",
   "tools": [
     {
       "id": "amazon-q",
       "label": "Amazon Q Developer",
-      "skillsDir": ".amazonq"
+      "skillsDir": ".amazonq",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "amp",
+      "label": "Amp",
+      "skillsDir": ".agents",
+      "detectionPaths": [
+        ".amp",
+        ".agents/skills"
+      ],
+      "addedIn": "1.14.0"
     },
     {
       "id": "antigravity",
@@ -16,37 +28,54 @@
       "detectionPaths": [
         ".agent",
         ".agents/workflows"
-      ]
+      ],
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "atomcode",
+      "label": "AtomCode",
+      "skillsDir": ".atomcode",
+      "addedIn": "1.14.0"
     },
     {
       "id": "auggie",
       "label": "Auggie (Augment CLI)",
-      "skillsDir": ".augment"
+      "skillsDir": ".augment",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "bob",
-      "label": "Bob Shell",
-      "skillsDir": ".bob"
+      "label": "IBM Bob",
+      "skillsDir": ".bob",
+      "addedIn": "1.3.0"
     },
     {
       "id": "claude",
       "label": "Claude Code",
-      "skillsDir": ".claude"
+      "skillsDir": ".claude",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "cline",
       "label": "Cline",
-      "skillsDir": ".cline"
+      "skillsDir": ".cline",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "command-code",
       "label": "Command Code",
-      "skillsDir": ".commandcode"
+      "skillsDir": ".commandcode",
+      "addedIn": "1.9.0"
     },
     {
       "id": "codeartsagent",
       "label": "CodeArts",
-      "skillsDir": ".codeartsdoer"
+      "skillsDir": ".codeartsdoer",
+      "addedIn": "1.7.0"
     },
     {
       "id": "codex",
@@ -58,7 +87,15 @@
       "detectionPaths": [
         ".agents/skills",
         ".codex/skills"
-      ]
+      ],
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "dsh",
+      "label": "DeepSeek Harness",
+      "skillsDir": ".dsh",
+      "addedIn": "1.14.0"
     },
     {
       "id": "devin",
@@ -67,47 +104,75 @@
       "detectionPaths": [
         ".devin",
         ".windsurf"
-      ]
+      ],
+      "addedIn": "1.7.0"
     },
     {
       "id": "forgecode",
       "label": "ForgeCode",
-      "skillsDir": ".forge"
+      "skillsDir": ".forge",
+      "addedIn": "1.3.0"
     },
     {
       "id": "codebuddy",
       "label": "CodeBuddy Code (CLI)",
-      "skillsDir": ".codebuddy"
+      "skillsDir": ".codebuddy",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "codestudio",
+      "label": "Code Studio",
+      "skillsDir": ".codestudio",
+      "addedIn": "1.14.0"
     },
     {
       "id": "continue",
       "label": "Continue",
-      "skillsDir": ".continue"
+      "skillsDir": ".continue",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "costrict",
       "label": "CoStrict",
-      "skillsDir": ".cospec"
+      "skillsDir": ".cospec",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "crush",
       "label": "Crush",
-      "skillsDir": ".crush"
+      "skillsDir": ".crush",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "cursor",
       "label": "Cursor",
-      "skillsDir": ".cursor"
+      "skillsDir": ".cursor",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "easycode",
+      "label": "EasyCode",
+      "skillsDir": ".easycode",
+      "addedIn": "1.14.0"
     },
     {
       "id": "factory",
       "label": "Factory Droid",
-      "skillsDir": ".factory"
+      "skillsDir": ".factory",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "gemini",
       "label": "Gemini CLI",
-      "skillsDir": ".gemini"
+      "skillsDir": ".gemini",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "github-copilot",
@@ -121,7 +186,30 @@
         ".github/agents",
         ".github/skills",
         ".github/.mcp.json"
-      ]
+      ],
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
+    },
+    {
+      "id": "gigacode",
+      "label": "GigaCode",
+      "skillsDir": ".gigacode",
+      "addedIn": "1.14.0"
+    },
+    {
+      "id": "grok",
+      "label": "Grok Build",
+      "skillsDir": ".grok",
+      "addedIn": "1.14.0"
+    },
+    {
+      "id": "gsd",
+      "label": "GSD",
+      "skillsDir": ".agents",
+      "detectionPaths": [
+        ".gsd"
+      ],
+      "addedIn": "1.14.0"
     },
     {
       "id": "hermes",
@@ -131,22 +219,28 @@
         ".hermes",
         "HERMES.md",
         ".hermes.md"
-      ]
+      ],
+      "addedIn": "1.7.0"
     },
     {
       "id": "iflow",
       "label": "iFlow",
-      "skillsDir": ".iflow"
+      "skillsDir": ".iflow",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "junie",
       "label": "Junie",
-      "skillsDir": ".junie"
+      "skillsDir": ".junie",
+      "addedIn": "1.3.0"
     },
     {
       "id": "kilocode",
       "label": "Kilo Code",
-      "skillsDir": ".kilocode"
+      "skillsDir": ".kilocode",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "kimi",
@@ -155,57 +249,71 @@
       "detectionPaths": [
         ".kimi-code",
         ".kimi"
-      ]
+      ],
+      "addedIn": "1.4.0"
     },
     {
       "id": "kiro",
       "label": "Kiro",
-      "skillsDir": ".kiro"
+      "skillsDir": ".kiro",
+      "addedIn": "1.2.0"
     },
     {
       "id": "lingma",
       "label": "Lingma",
-      "skillsDir": ".lingma"
+      "skillsDir": ".lingma",
+      "addedIn": "1.3.0"
     },
     {
       "id": "minimax-code",
       "label": "MiniMax Code",
-      "globalSkillsDir": ".minimax"
+      "globalSkillsDir": ".minimax",
+      "addedIn": "1.8.0"
     },
     {
       "id": "vibe",
       "label": "Mistral Vibe",
-      "skillsDir": ".vibe"
+      "skillsDir": ".vibe",
+      "addedIn": "1.4.0"
     },
     {
       "id": "oh-my-pi",
       "label": "Oh My Pi",
-      "skillsDir": ".omp"
+      "skillsDir": ".omp",
+      "addedIn": "1.6.0"
     },
     {
       "id": "opencode",
       "label": "OpenCode",
-      "skillsDir": ".opencode"
+      "skillsDir": ".opencode",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "pi",
       "label": "Pi",
-      "skillsDir": ".pi"
+      "skillsDir": ".pi",
+      "addedIn": "1.2.0"
     },
     {
       "id": "codeassistant",
       "label": "SourceCraft Code Assistant",
-      "skillsDir": ".codeassistant"
+      "skillsDir": ".codeassistant",
+      "addedIn": "1.12.0"
     },
     {
       "id": "qoder",
       "label": "Qoder",
-      "skillsDir": ".qoder"
+      "skillsDir": ".qoder",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "qwen",
       "label": "Qwen Code",
-      "skillsDir": ".qwen"
+      "skillsDir": ".qwen",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "rovodev",
@@ -214,17 +322,37 @@
       "detectionPaths": [
         ".rovodev/skills",
         ".rovodev"
-      ]
+      ],
+      "addedIn": "1.8.0"
     },
     {
       "id": "roocode",
       "label": "Zoo Code",
-      "skillsDir": ".roo"
+      "skillsDir": ".roo",
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     },
     {
       "id": "trae",
       "label": "Trae",
-      "skillsDir": ".trae"
+      "skillsDir": ".trae",
+      "addedIn": "1.1.0"
+    },
+    {
+      "id": "veai",
+      "label": "Veai",
+      "skillsDir": ".veai",
+      "addedIn": "1.14.0"
+    },
+    {
+      "id": "warp",
+      "label": "Warp",
+      "skillsDir": ".warp",
+      "detectionPaths": [
+        ".warp",
+        "WARP.md"
+      ],
+      "addedIn": "1.14.0"
     },
     {
       "id": "zed",
@@ -233,12 +361,14 @@
       "detectionPaths": [
         ".zed",
         ".agents/skills"
-      ]
+      ],
+      "addedIn": "1.10.0"
     },
     {
       "id": "zcode",
       "label": "ZCode",
-      "skillsDir": ".zcode"
+      "skillsDir": ".zcode",
+      "addedIn": "1.7.0"
     },
     {
       "id": "agents",
@@ -246,7 +376,9 @@
       "skillsDir": ".agents",
       "detectionPaths": [
         ".agents/skills"
-      ]
+      ],
+      "addedIn": "1.0.0",
+      "addedInOrEarlier": true
     }
   ],
   "skillNames": [
