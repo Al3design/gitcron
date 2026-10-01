@@ -3,21 +3,36 @@
 // Pensado para que la IA ejecutora pegue sólo el resumen en su reporte y para que
 // la auditoría no repita la cadena a mano.
 //
-//   pnpm verificar                 build, test ×2, tsc, eslint (tocados), openspec validate,
-//                                  git diff --check, trampas
-//   pnpm verificar --rapido        sin build ni segunda pasada de test
-//   pnpm verificar --change <id>   change a validar (por omisión: el de la rama change/<id>)
+// Tres escalones, de menor a mayor (Ale, 2026-10-01: «si la herramienta va
+// creciendo, cada vez se hace eterno esto»). Lo lento queda para cuando importa:
+//
+//   pnpm verificar --tocados       mientras se trabaja y arreglos chicos de auditoría: sólo
+//                                  las pruebas que dependen de los archivos tocados
+//                                  (vitest related), tsc, eslint, openspec validate,
+//                                  diff --check, trampas. Crece con el cambio, no con la
+//                                  app: 17 s por un panel, 75 s si se tocan los textos
+//                                  (lib/i18n.ts lo importa casi todo).
+//   pnpm verificar --rapido        arreglos que tocan piezas centrales: toda la suite una
+//                                  vez, sin build.
+//   pnpm verificar                 cierre de tanda, su auditoría y antes de fusionar:
+//                                  build, test ×2 y todo lo demás.
+//
+//   --desde <ref>                  compara contra <ref> en vez de HEAD (p. ej. `--desde main`
+//                                  para todo el change, o `--desde HEAD~2` después de commitear)
+//   --change <id>                  change a validar (por omisión: el de la rama change/<id>)
 //
 // El orden no es arbitrario: `pnpm build` va antes que `pnpm test` porque una prueba
 // (font-size-as-color) lee de out/; y test corre dos veces porque los intermitentes
 // bajo carga sólo se ven repitiendo la suite entera.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-const rapido = args.includes('--rapido');
+const tocadosSolo = args.includes('--tocados');
+const rapido = args.includes('--rapido') || tocadosSolo;
 const changeArg = args.includes('--change') ? args[args.indexOf('--change') + 1] : null;
+const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
 
 const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g');
 
@@ -65,9 +80,9 @@ function git(argumentos) {
   return correr(`git ${argumentos}`).salida.trim();
 }
 
-/** Archivos tocados respecto de HEAD, más los nuevos sin seguimiento. */
+/** Archivos tocados respecto de la base (HEAD o --desde), más los nuevos sin seguimiento. */
 function archivosTocados() {
-  const modificados = git('diff --name-only HEAD').split(/\r?\n/);
+  const modificados = git(`diff --name-only ${base}`).split(/\r?\n/);
   const nuevos = git('ls-files --others --exclude-standard').split(/\r?\n/);
   return [...new Set([...modificados, ...nuevos])].filter((f) => f.trim() !== '');
 }
@@ -82,6 +97,7 @@ function changeDeLaRama() {
 /** Cifras útiles para el renglón, sin volcar la salida entera. */
 function extraerResumen(nombre, salida) {
   if (nombre.startsWith('test')) {
+    if (/No test files found/.test(salida)) return 'ninguna prueba depende de lo tocado';
     const archivos = salida.match(/Test Files\s+(\d+ passed \(\d+\))/);
     const pruebas = salida.match(/Tests\s+(\d+ passed \(\d+\))/);
     return [archivos?.[1] && `archivos ${archivos[1]}`, pruebas?.[1] && `pruebas ${pruebas[1]}`]
@@ -116,7 +132,7 @@ function trampas() {
   const tocados = archivosTocados();
 
   // Auditorías o notas ajenas en los artefactos del change.
-  const diffTasks = git('diff -U0 HEAD -- openspec/changes/*/tasks.md openspec/changes/*/task-log.md');
+  const diffTasks = git(`diff -U0 ${base} -- openspec/changes/*/tasks.md openspec/changes/*/task-log.md`);
   // El patrón medido: un ítem o título propio que arranca con «Auditoría de …»
   // imitando las del auditor. Las notas del auditor van dentro de una casilla y
   // no empiezan así.
@@ -129,7 +145,7 @@ function trampas() {
     (f) => /\.(ts|tsx|mjs)$/.test(f) && !/__tests__|\.test\.|fixtures|scripts\//.test(f),
   );
   for (const archivo of produccion) {
-    const diff = git(`diff -U0 HEAD -- "${archivo}"`);
+    const diff = git(`diff -U0 ${base} -- "${archivo}"`);
     const agregado = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++'));
     const texto = agregado.join('\n');
     if (/NODE_ENV|\.mock\b|vi\.fn|import\.meta\.vitest/.test(texto)) {
@@ -141,7 +157,7 @@ function trampas() {
     if (/eslint-disable/.test(texto)) avisos.push(`${archivo}: eslint-disable agregado`);
   }
   for (const archivo of tocados.filter((f) => f.endsWith('.css'))) {
-    const diff = git(`diff -U0 HEAD -- "${archivo}"`);
+    const diff = git(`diff -U0 ${base} -- "${archivo}"`);
     const agregado = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
     if (/!important/.test(agregado)) avisos.push(`${archivo}: !important agregado`);
     if (/max-width:\s*0\b/.test(agregado)) avisos.push(`${archivo}: max-width: 0 agregado`);
@@ -159,11 +175,11 @@ function trampas() {
 
   // Archivos reescritos enteros (más del 80 % de las líneas cambiadas): hay que
   // leerlos como nuevos.
-  const stat = git('diff --numstat HEAD');
+  const stat = git(`diff --numstat ${base}`);
   for (const linea of stat.split(/\r?\n/)) {
     const [agregadas, borradas, archivo] = linea.split('\t');
     if (!archivo || !/\.(ts|tsx)$/.test(archivo)) continue;
-    const contenido = correr(`git show HEAD:"${archivo}"`);
+    const contenido = correr(`git show ${base}:"${archivo}"`);
     const total = contenido.status === 0 ? contenido.salida.split(/\r?\n/).length : 0;
     if (total > 80 && Number(borradas) > total * 0.8) {
       avisos.push(`${archivo}: reescrito casi entero (${borradas} de ${total} líneas borradas)`);
@@ -181,11 +197,21 @@ function main() {
   const tocados = archivosTocados();
   const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f));
   const change = changeDeLaRama();
+  // Para `vitest related`: código y estilos que siguen existiendo (un archivo
+  // borrado no tiene pruebas que dependan de él).
+  const tocadosCodigo = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
 
   const chequeos = [
-    { nombre: 'build', comando: 'pnpm build', cuando: !rapido, motivoSalto: '--rapido' },
-    { nombre: 'test (1)', comando: 'pnpm test', cuando: true },
-    { nombre: 'test (2)', comando: 'pnpm test', cuando: !rapido, motivoSalto: '--rapido' },
+    { nombre: 'build', comando: 'pnpm build', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
+    tocadosSolo
+      ? {
+          nombre: 'test (tocados)',
+          comando: `pnpm exec vitest related --run ${tocadosCodigo.map((f) => `"${f}"`).join(' ')}`,
+          cuando: tocadosCodigo.length > 0,
+          motivoSalto: 'ningún archivo de código tocado',
+        }
+      : { nombre: 'test (1)', comando: 'pnpm test', cuando: true },
+    { nombre: 'test (2)', comando: 'pnpm test', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
     { nombre: 'tsc', comando: 'pnpm exec tsc --noEmit', cuando: true },
     {
       nombre: 'eslint',
@@ -245,7 +271,7 @@ function main() {
       ? `RESULTADO: OK (${total} s)${avisos.length ? ' — con avisos' : ''}`
       : `RESULTADO: FALLÓ ${fallidos.join(', ')} (${total} s) — detalle en tmp/verificacion.log`;
   console.warn(
-    ['', `VERIFICACIÓN  rama ${git('rev-parse --abbrev-ref HEAD')} · HEAD ${git('rev-parse --short HEAD')} · ${tocados.length} archivos tocados`, ...renglones, '', resultadoFinal].join('\n'),
+    ['', `VERIFICACIÓN  rama ${git('rev-parse --abbrev-ref HEAD')} · HEAD ${git('rev-parse --short HEAD')} · ${tocados.length} archivos tocados${base === 'HEAD' ? '' : ` desde ${base}`}${tocadosSolo ? ' · modo --tocados' : ''}`, ...renglones, '', resultadoFinal].join('\n'),
   );
   process.exitCode = fallidos.length === 0 ? 0 : 1;
 }
