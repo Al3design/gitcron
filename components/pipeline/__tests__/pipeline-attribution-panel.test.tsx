@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -81,6 +82,7 @@ function renderOn(currentBranch: string) {
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 beforeEach(() => {
+  usePipelineStore.getState().reset();
   useGitStore.setState({
     modifiedFiles: [{ path: 'components/algo.tsx', status: 'modified', staged: false }],
     commitMessage: '',
@@ -91,6 +93,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   useGitStore.setState({ modifiedFiles: [], commitMessage: '' });
   if (ORIGINAL_API === undefined) delete (window as { api?: unknown }).api;
   else Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });

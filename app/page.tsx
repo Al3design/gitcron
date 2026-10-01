@@ -12,6 +12,7 @@ import { useGitActions } from '@/hooks/use-git-actions';
 import { useRepoLoader, useRepoWatch } from '@/hooks/use-repo-loader';
 import { setRepoLoading } from '@/hooks/git-actions/repo-loading';
 import { useAutoFetch } from '@/hooks/use-auto-fetch';
+import { useCommitAiDraftStateSync } from '@/hooks/use-commit-ai-draft-state-sync';
 import { commitHasBranchRef, normalizeBranchName, type CommitSelectOptions } from '@/components/CommitGraph';
 import { RepoMainView } from '@/components/RepoMainView';
 import { RepoOverlayLayer, type DeleteBranchState } from '@/components/RepoOverlayLayer';
@@ -183,6 +184,7 @@ export default function GitCronPage() {
   const updateActiveRepo = useGitStore((s) => s.updateActiveRepo);
 
   const { runFetchCycle } = useAutoFetch();
+  useCommitAiDraftStateSync();
 
   const [activeView, setActiveView] = useState<'repository' | 'settings' | 'help' | 'profile'>('repository');
   const [selectedSettingsSection, setSelectedSettingsSection] = useState<string>('language');

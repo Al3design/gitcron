@@ -18,6 +18,7 @@ import type {
   CommitAiResolvedResult,
   CommitDraftResult,
   DraftChunk,
+  DraftStateEvent,
   HeaderProvenance,
   LoadOutcome,
   LocalModel,
@@ -56,14 +57,94 @@ import {
 const loadedByUs = new Map<string, string>();
 
 /**
- * La redacción en vuelo, para poder cortarla de verdad.
+ * Elemento en la fila de redacción de commits (tarea 2.4 / D16).
  *
- * El botón «Cancelar» de la primera versión sólo descartaba la respuesta: la
- * petición seguía corriendo del otro lado y el modelo seguía ocupado. Un control
- * que dice cancelar y no cancela es peor que no tenerlo, y Ale pidió
- * explícitamente poder frenar el proceso.
+ * Los pedidos corren de a uno por orden de llegada para no saturar los
+ * servidores locales (Unsloth o LM Studio procesan un pedido a la vez).
+ *
+ * Cada uno lleva su `AbortController` para poder cortarlo de verdad: el botón
+ * «Cancelar» de la primera versión sólo descartaba la respuesta, la petición
+ * seguía corriendo del otro lado y el modelo seguía ocupado. Un control que dice
+ * cancelar y no cancela es peor que no tenerlo, y Ale pidió explícitamente
+ * poder frenar el proceso.
  */
-let inFlightDraft: AbortController | null = null;
+interface QueuedDraftItem {
+  draftId: string;
+  repoPath: string;
+  sender: Electron.WebContents;
+  controller: AbortController;
+  run: (signal: AbortSignal) => Promise<Result<CommitDraftResult>>;
+  resolve: (res: Result<CommitDraftResult>) => void;
+  status: 'queued' | 'running' | 'completed' | 'cancelled';
+}
+
+let runningDraft: QueuedDraftItem | null = null;
+const draftQueue: QueuedDraftItem[] = [];
+let serverDraftCounter = 0;
+
+export function resetDraftQueueForTesting(): void {
+  if (runningDraft) {
+    runningDraft.controller.abort();
+    runningDraft = null;
+  }
+  for (const item of draftQueue) {
+    item.controller.abort();
+  }
+  draftQueue.length = 0;
+}
+
+function notifyDraftState(sender: Electron.WebContents, event: DraftStateEvent): void {
+  if (!sender.isDestroyed()) {
+    sender.send('commit-ai:draft-state', event);
+  }
+}
+
+async function startQueueItem(item: QueuedDraftItem): Promise<void> {
+  runningDraft = item;
+  item.status = 'running';
+  notifyDraftState(item.sender, {
+    draftId: item.draftId,
+    repoPath: item.repoPath,
+    status: 'running',
+  });
+
+  let result: Result<CommitDraftResult>;
+  try {
+    if (item.controller.signal.aborted) {
+      result = ok({ status: 'unavailable', detail: 'Redacción cancelada.' });
+    } else {
+      result = await item.run(item.controller.signal);
+    }
+  } catch (error) {
+    result = ok(toUnavailable(error));
+  }
+
+  const finalStatus = item.controller.signal.aborted ? 'cancelled' : 'completed';
+  item.status = finalStatus;
+  notifyDraftState(item.sender, {
+    draftId: item.draftId,
+    repoPath: item.repoPath,
+    status: finalStatus,
+  });
+
+  item.resolve(result);
+
+  runningDraft = null;
+  processDraftQueue();
+}
+
+function processDraftQueue(): void {
+  if (runningDraft) return;
+  while (draftQueue.length > 0) {
+    const next = draftQueue.shift()!;
+    if (next.controller.signal.aborted || next.status === 'cancelled') {
+      next.resolve(ok({ status: 'unavailable', detail: 'Redacción cancelada.' }));
+      continue;
+    }
+    startQueueItem(next).catch(() => undefined);
+    return;
+  }
+}
 
 /**
  * Cargas en curso, por servidor.
@@ -358,10 +439,55 @@ export function registerCommitMessageAiHandlers(): void {
    * qué saber en qué fase está. Antes sólo miraba la redacción, así que durante
    * los 11 segundos de una carga no cortaba nada mientras decía que sí.
    */
-  ipcMain.handle('commit-ai:cancel', (): Result<{ cancelled: boolean }> => {
-    const had = inFlightDraft !== null || loadControllers.size > 0;
-    inFlightDraft?.abort();
-    inFlightDraft = null;
+  ipcMain.handle('commit-ai:cancel', (_e, draftId?: string): Result<{ cancelled: boolean }> => {
+    if (draftId) {
+      if (runningDraft && runningDraft.draftId === draftId) {
+        runningDraft.status = 'cancelled';
+        runningDraft.controller.abort();
+        notifyDraftState(runningDraft.sender, {
+          draftId: runningDraft.draftId,
+          repoPath: runningDraft.repoPath,
+          status: 'cancelled',
+        });
+        return ok({ cancelled: true });
+      }
+      const queuedIdx = draftQueue.findIndex((item) => item.draftId === draftId);
+      if (queuedIdx !== -1) {
+        const [item] = draftQueue.splice(queuedIdx, 1);
+        item.status = 'cancelled';
+        item.controller.abort();
+        notifyDraftState(item.sender, {
+          draftId: item.draftId,
+          repoPath: item.repoPath,
+          status: 'cancelled',
+        });
+        item.resolve(ok({ status: 'unavailable', detail: 'Redacción cancelada.' }));
+        return ok({ cancelled: true });
+      }
+      return ok({ cancelled: false });
+    }
+
+    const had = runningDraft !== null || draftQueue.length > 0 || loadControllers.size > 0;
+    if (runningDraft) {
+      runningDraft.status = 'cancelled';
+      runningDraft.controller.abort();
+      notifyDraftState(runningDraft.sender, {
+        draftId: runningDraft.draftId,
+        repoPath: runningDraft.repoPath,
+        status: 'cancelled',
+      });
+    }
+    while (draftQueue.length > 0) {
+      const item = draftQueue.shift()!;
+      item.status = 'cancelled';
+      item.controller.abort();
+      notifyDraftState(item.sender, {
+        draftId: item.draftId,
+        repoPath: item.repoPath,
+        status: 'cancelled',
+      });
+      item.resolve(ok({ status: 'unavailable', detail: 'Redacción cancelada.' }));
+    }
     for (const controller of loadControllers.values()) controller.abort();
     loadControllers.clear();
     return ok({ cancelled: had });
@@ -435,12 +561,9 @@ export function registerCommitMessageAiHandlers(): void {
     sender: Electron.WebContents,
     draftId: string | null,
     effectiveModel: string,
+    signal: AbortSignal,
     runner: (signal: AbortSignal, pump: { push: (chunks: DraftChunk[]) => void }) => Promise<CommitDraftResult>,
   ): Promise<Result<CommitDraftResult>> {
-    inFlightDraft?.abort();
-    const controller = new AbortController();
-    inFlightDraft = controller;
-
     const pump = createChunkPump((chunks) => {
       if (sender.isDestroyed()) return;
       sender.send('commit-ai:chunk', { draftId, chunks });
@@ -448,12 +571,11 @@ export function registerCommitMessageAiHandlers(): void {
 
     let result: CommitDraftResult;
     try {
-      result = await runner(controller.signal, pump);
+      result = await runner(signal, pump);
     } catch (error) {
       result = toUnavailable(error);
     } finally {
       pump.flush();
-      if (inFlightDraft === controller) inFlightDraft = null;
     }
 
     if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
@@ -468,195 +590,221 @@ export function registerCommitMessageAiHandlers(): void {
       if (!repoPath || !Array.isArray(paths) || paths.length === 0) {
         return fail(new Error('No hay archivos elegidos para describir.'));
       }
+      const effectiveDraftId = draftId || String(++serverDraftCounter);
 
-      const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
-      if (resolved) {
-        if (!resolved.available) {
-          return ok({
-            status: 'unavailable',
-            detail: resolved.unavailableReason ?? 'Proveedor no disponible.',
-          });
-        }
-
-        const effectiveModel = resolved.modelId;
-        const user = await collectDraftPrompt(
+      return await new Promise<Result<CommitDraftResult>>((resolve) => {
+        const controller = new AbortController();
+        const queueItem: QueuedDraftItem = {
+          draftId: effectiveDraftId,
           repoPath,
-          paths,
-          changeId ?? null,
-          intent ?? null,
-          resolved.contextLength ?? MIN_CONTEXT_LENGTH,
-        );
-
-        return await runDraftWithPump(_e.sender, draftId ?? null, effectiveModel, async (signal, pump) => {
-          if (resolved.kind === 'cli') {
-            if (resolved.providerId === 'codex') {
-              const codexCommand = `codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -m ${effectiveModel} -`;
-              const codexParams: Record<string, ParameterProvenance> = {};
-              if (resolved.temperature !== undefined) {
-                codexParams.temperature = {
-                  value: resolved.temperature,
-                  provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
-                };
-              }
-              for (const [k, v] of Object.entries(resolved.options ?? {})) {
-                codexParams[k] = {
-                  value: v,
-                  provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
-                };
+          sender: _e.sender,
+          controller,
+          run: async (signal) => {
+            const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
+            if (resolved) {
+              if (!resolved.available) {
+                return ok({
+                  status: 'unavailable',
+                  detail: resolved.unavailableReason ?? 'Proveedor no disponible.',
+                });
               }
 
-              lastCommitAiRequest = {
-                kind: 'cli',
-                endpoint: codexCommand,
-                model: {
-                  value: effectiveModel,
-                  provenance: resolved.provenance.model,
-                },
-                parameters: codexParams,
-                headers: [],
-                timestamp: Date.now(),
-              };
+              const effectiveModel = resolved.modelId;
+              const user = await collectDraftPrompt(
+                repoPath,
+                paths,
+                changeId ?? null,
+                intent ?? null,
+                resolved.contextLength ?? MIN_CONTEXT_LENGTH,
+              );
 
-              const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
-              return await draftCommitWithCodex({
-                model: effectiveModel,
-                prompt: fullPrompt,
-                signal,
-                onChunk: (chunks) => pump.push(chunks),
-                spawnFn: codexSpawnOverride ?? undefined,
+              return await runDraftWithPump(_e.sender, effectiveDraftId, effectiveModel, signal, async (sig, pump) => {
+                if (resolved.kind === 'cli') {
+                  if (resolved.providerId === 'codex') {
+                    const codexCommand = `codex exec --json --sandbox read-only --skip-git-repo-check --ephemeral -m ${effectiveModel} -`;
+                    const codexParams: Record<string, ParameterProvenance> = {};
+                    if (resolved.temperature !== undefined) {
+                      codexParams.temperature = {
+                        value: resolved.temperature,
+                        provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
+                      };
+                    }
+                    for (const [k, v] of Object.entries(resolved.options ?? {})) {
+                      codexParams[k] = {
+                        value: v,
+                        provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
+                      };
+                    }
+
+                    lastCommitAiRequest = {
+                      kind: 'cli',
+                      endpoint: codexCommand,
+                      model: {
+                        value: effectiveModel,
+                        provenance: resolved.provenance.model,
+                      },
+                      parameters: codexParams,
+                      headers: [],
+                      timestamp: Date.now(),
+                    };
+
+                    const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
+                    return await draftCommitWithCodex({
+                      model: effectiveModel,
+                      prompt: fullPrompt,
+                      signal: sig,
+                      onChunk: (chunks) => pump.push(chunks),
+                      spawnFn: codexSpawnOverride ?? undefined,
+                    });
+                  }
+                  return {
+                    status: 'unavailable',
+                    detail: 'todavía no conectado',
+                  };
+                }
+
+                // openai-compatible: sin caída a DEFAULT_LOCAL_BASE_URL (D7)
+                if (!resolved.baseURL) {
+                  return {
+                    status: 'unavailable',
+                    detail: `el proveedor ${resolved.providerId} no declara options.baseURL`,
+                  };
+                }
+
+                const chatEndpoint = buildChatCompletionsEndpoint(resolved.baseURL);
+                const effectiveMaxTokens = resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS);
+
+                const streamOpts = {
+                  model: effectiveModel,
+                  system: SYSTEM_PROMPT,
+                  user,
+                  temperature: resolved.temperature,
+                  maxTokens: effectiveMaxTokens,
+                  options: resolved.options,
+                  signal: sig,
+                  onChunk: (chunks: DraftChunk[]) => pump.push(chunks),
+                };
+
+                // Lo que se muestra sale del mismo cuerpo que viaja: si los valores por
+                // omisión o el filtrado de `options` cambian en text-client, la vista no
+                // puede quedar diciendo otra cosa (D14).
+                const sentBody = buildStreamRequestBody(streamOpts);
+                const provenanceOf = (key: string): string => {
+                  if (key in (resolved.options ?? {})) return resolved.provenance.options[key] ?? `options.${key}`;
+                  if (key === 'temperature') return resolved.provenance.temperature ?? 'valor por omisión de GitCron';
+                  if (key === 'max_tokens') return resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`;
+                  return 'parámetro de GitCron';
+                };
+                const openAiParams: Record<string, ParameterProvenance> = {};
+                for (const [key, value] of Object.entries(sentBody)) {
+                  if (key === 'model' || key === 'messages') continue;
+                  openAiParams[key] = { value, provenance: provenanceOf(key) };
+                }
+
+                const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
+                  name,
+                  provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
+                }));
+
+                lastCommitAiRequest = {
+                  kind: 'openai-compatible',
+                  endpoint: chatEndpoint,
+                  model: {
+                    value: effectiveModel,
+                    provenance: resolved.provenance.model,
+                  },
+                  parameters: openAiParams,
+                  headers: headerList,
+                  auth: resolved.provenance.auth,
+                  timestamp: Date.now(),
+                };
+
+                const textConfig: TextClientConfig = {
+                  baseUrl: resolved.baseURL,
+                  apiKey: resolved.apiKey,
+                  headers: resolved.headers,
+                  providerLabel: resolved.providerName,
+                };
+
+                try {
+                  const genResult = await streamText(textConfig, streamOpts);
+                  return parseDraftResponse(genResult.rawPayload, effectiveModel);
+                } catch (error) {
+                  const msg = error instanceof Error ? error.message : String(error);
+                  const is4xx = /respondi[oó]\s+4\d\d/i.test(msg) || ((error as any)?.status >= 400 && (error as any)?.status < 500);
+                  if (is4xx) {
+                    const standardSet = new Set(OPENAI_STANDARD_PARAMS);
+                    const nonStandard: Array<{ key: string; provenance: string }> = [];
+                    for (const [key] of Object.entries(resolved.options ?? {})) {
+                      if (!standardSet.has(key)) {
+                        const prov = resolved.provenance.options[key] ?? `options.${key}`;
+                        nonStandard.push({ key, provenance: prov });
+                      }
+                    }
+                    if (nonStandard.length > 0) {
+                      const nonStandardDesc = nonStandard
+                        .map(({ key, provenance }) => `${key} (de ${provenance})`)
+                        .join(', ');
+                      return {
+                        status: 'unavailable',
+                        detail: `${msg} Parámetros enviados fuera del estándar de OpenAI: ${nonStandardDesc}.`,
+                      };
+                    }
+                  }
+                  return toUnavailable(error);
+                }
               });
             }
-            return {
-              status: 'unavailable',
-              detail: 'todavía no conectado',
-            };
-          }
 
-          // openai-compatible: sin caída a DEFAULT_LOCAL_BASE_URL (D7)
-          if (!resolved.baseURL) {
-            return {
-              status: 'unavailable',
-              detail: `el proveedor ${resolved.providerId} no declara options.baseURL`,
-            };
-          }
+            // Camino nativo LM Studio
+            const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
 
-          const chatEndpoint = buildChatCompletionsEndpoint(resolved.baseURL);
-          const effectiveMaxTokens = resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS);
-
-          const streamOpts = {
-            model: effectiveModel,
-            system: SYSTEM_PROMPT,
-            user,
-            temperature: resolved.temperature,
-            maxTokens: effectiveMaxTokens,
-            options: resolved.options,
-            signal,
-            onChunk: (chunks: DraftChunk[]) => pump.push(chunks),
-          };
-
-          // Lo que se muestra sale del mismo cuerpo que viaja: si los valores por
-          // omisión o el filtrado de `options` cambian en text-client, la vista no
-          // puede quedar diciendo otra cosa (D14).
-          const sentBody = buildStreamRequestBody(streamOpts);
-          const provenanceOf = (key: string): string => {
-            if (key in (resolved.options ?? {})) return resolved.provenance.options[key] ?? `options.${key}`;
-            if (key === 'temperature') return resolved.provenance.temperature ?? 'valor por omisión de GitCron';
-            if (key === 'max_tokens') return resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`;
-            return 'parámetro de GitCron';
-          };
-          const openAiParams: Record<string, ParameterProvenance> = {};
-          for (const [key, value] of Object.entries(sentBody)) {
-            if (key === 'model' || key === 'messages') continue;
-            openAiParams[key] = { value, provenance: provenanceOf(key) };
-          }
-
-          const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
-            name,
-            provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
-          }));
-
-          lastCommitAiRequest = {
-            kind: 'openai-compatible',
-            endpoint: chatEndpoint,
-            model: {
-              value: effectiveModel,
-              provenance: resolved.provenance.model,
-            },
-            parameters: openAiParams,
-            headers: headerList,
-            auth: resolved.provenance.auth,
-            timestamp: Date.now(),
-          };
-
-          const textConfig: TextClientConfig = {
-            baseUrl: resolved.baseURL,
-            apiKey: resolved.apiKey,
-            headers: resolved.headers,
-            providerLabel: resolved.providerName,
-          };
-
-          try {
-            const genResult = await streamText(textConfig, streamOpts);
-            return parseDraftResponse(genResult.rawPayload, effectiveModel);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            const is4xx = /respondi[oó]\s+4\d\d/i.test(msg) || ((error as any)?.status >= 400 && (error as any)?.status < 500);
-            if (is4xx) {
-              const standardSet = new Set(OPENAI_STANDARD_PARAMS);
-              const nonStandard: Array<{ key: string; provenance: string }> = [];
-              for (const [key] of Object.entries(resolved.options ?? {})) {
-                if (!standardSet.has(key)) {
-                  const prov = resolved.provenance.options[key] ?? `options.${key}`;
-                  nonStandard.push({ key, provenance: prov });
-                }
-              }
-              if (nonStandard.length > 0) {
-                const nonStandardDesc = nonStandard
-                  .map(({ key, provenance }) => `${key} (de ${provenance})`)
-                  .join(', ');
-                return {
-                  status: 'unavailable',
-                  detail: `${msg} Parámetros enviados fuera del estándar de OpenAI: ${nonStandardDesc}.`,
-                };
-              }
+            const catalog = await fetchModelCatalog(endpoint);
+            const chosen = catalog.find((entry) => entry.id === model);
+            if (!chosen) return fail(new Error('Ese modelo no está en el catálogo del servidor.'));
+            if (!hasEnoughContext(chosen)) {
+              return ok({
+                status: 'unavailable',
+                detail: `«${model}» no está cargado con al menos ${MIN_CONTEXT_LENGTH} de contexto. `
+                  + 'El contexto se define al cargar el modelo en LM Studio.',
+              });
             }
-            return toUnavailable(error);
-          }
-        });
-      }
 
-      // Camino nativo LM Studio
-      const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
+            const user = await collectDraftPrompt(
+              repoPath,
+              paths,
+              changeId ?? null,
+              intent ?? null,
+              chosen.loadedContextLength ?? MIN_CONTEXT_LENGTH,
+            );
 
-      const catalog = await fetchModelCatalog(endpoint);
-      const chosen = catalog.find((entry) => entry.id === model);
-      if (!chosen) return fail(new Error('Ese modelo no está en el catálogo del servidor.'));
-      if (!hasEnoughContext(chosen)) {
-        return ok({
-          status: 'unavailable',
-          detail: `«${model}» no está cargado con al menos ${MIN_CONTEXT_LENGTH} de contexto. `
-            + 'El contexto se define al cargar el modelo en LM Studio.',
-        });
-      }
+            return await runDraftWithPump(_e.sender, effectiveDraftId, model, signal, async (sig, pump) => {
+              return await draftCommitSubject({
+                baseUrl: endpoint,
+                model,
+                system: SYSTEM_PROMPT,
+                user,
+                maxTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+                signal: sig,
+                onChunk: (chunks) => pump.push(chunks),
+              });
+            });
+          },
+          resolve,
+          status: 'queued',
+        };
 
-      const user = await collectDraftPrompt(
-        repoPath,
-        paths,
-        changeId ?? null,
-        intent ?? null,
-        chosen.loadedContextLength ?? MIN_CONTEXT_LENGTH,
-      );
-
-      return await runDraftWithPump(_e.sender, draftId ?? null, model, async (signal, pump) => {
-        return await draftCommitSubject({
-          baseUrl: endpoint,
-          model,
-          system: SYSTEM_PROMPT,
-          user,
-          maxTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
-          signal,
-          onChunk: (chunks) => pump.push(chunks),
-        });
+        if (!runningDraft) {
+          startQueueItem(queueItem).catch(() => undefined);
+        } else {
+          draftQueue.push(queueItem);
+          notifyDraftState(queueItem.sender, {
+            draftId: queueItem.draftId,
+            repoPath: queueItem.repoPath,
+            status: 'queued',
+            activeRepoPath: runningDraft.repoPath,
+          });
+        }
       });
     } catch (error) {
       return fail(error);

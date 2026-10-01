@@ -191,6 +191,17 @@ export interface DraftChunkEvent {
   chunks: DraftChunk[];
 }
 
+export type DraftStatus = 'queued' | 'running' | 'completed' | 'cancelled';
+
+/** Lo que viaja en `commit-ai:draft-state`. */
+export interface DraftStateEvent {
+  draftId: string;
+  repoPath: string;
+  status: DraftStatus;
+  /** Si está en fila, qué repositorio está corriendo actualmente. */
+  activeRepoPath?: string | null;
+}
+
 /**
  * Modelo resuelto según la configuración de gitcron.json para redacción de commits.
  * Sin secretos (D6, D13).

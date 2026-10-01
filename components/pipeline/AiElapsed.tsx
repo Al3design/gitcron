@@ -41,10 +41,12 @@ export function AiElapsed({
    * pasando. Ale lo vio al expulsar.
    */
   kind = 'load',
+  queueRunningRepoName,
 }: {
-  phase: 'idle' | 'loading' | 'drafting';
+  phase: 'idle' | 'loading' | 'drafting' | 'queued';
   startedAt: number | null;
   kind?: 'load' | 'eject';
+  queueRunningRepoName?: string | null;
 }) {
   const t = useT();
   /**
@@ -59,7 +61,7 @@ export function AiElapsed({
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
-    if (phase === 'idle' || startedAt === null) return;
+    if (phase === 'idle' || phase === 'queued' || startedAt === null) return;
     // Se calcula contra la marca de arranque y no sumando uno por tick: un
     // intervalo que se atrasa —y con la máquina cargada se atrasa— iría quedando
     // corto, y el número dejaría de ser el tiempo real.
@@ -69,6 +71,16 @@ export function AiElapsed({
     );
     return () => window.clearInterval(timer);
   }, [phase, startedAt]);
+
+  if (phase === 'queued') {
+    return (
+      <div className={styles.aiElapsed}>
+        <em aria-live="off">
+          {t('pipeline.openspec.prepare.aiQueued', { repo: queueRunningRepoName ?? '—' })}
+        </em>
+      </div>
+    );
+  }
 
   if (phase === 'idle' || startedAt === null) return null;
 

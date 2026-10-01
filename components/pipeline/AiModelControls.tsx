@@ -12,6 +12,7 @@ import {
   rememberAiSettings,
   formatAiDeviceLabel,
 } from '@/lib/ai-model-memory';
+import { useGitStore } from '@/lib/git-store';
 import { AiElapsed } from './AiElapsed';
 import styles from './OpenSpecDashboard.module.css';
 
@@ -31,10 +32,11 @@ export interface AiModelControlsProps {
   onModelsChange?: (models: LocalModel[]) => void;
   actions?: React.ReactNode;
   busy?: boolean;
-  phase?: 'idle' | 'loading' | 'drafting';
+  phase?: 'idle' | 'loading' | 'drafting' | 'queued';
   startedAt?: number | null;
   opKind?: 'load' | 'draft' | 'eject';
   notice?: string | null;
+  queueRunningRepoPath?: string | null;
   onNoticeChange?: (notice: string | null) => void;
   onLoad?: () => Promise<void> | void;
   onUnload?: () => Promise<void> | void;
@@ -54,6 +56,7 @@ export function AiModelControls({
   startedAt: externalStartedAt,
   opKind: externalOpKind,
   notice: externalNotice,
+  queueRunningRepoPath,
   onNoticeChange,
   onLoad,
   onUnload,
@@ -68,7 +71,7 @@ export function AiModelControls({
   const [internalModels, setInternalModels] = useState<LocalModel[]>([]);
   const [internalDeviceNames, setInternalDeviceNames] = useState<Record<string, string>>({});
   const [internalBusy, setInternalBusy] = useState(false);
-  const [internalPhase, setInternalPhase] = useState<'idle' | 'loading' | 'drafting'>('idle');
+  const [internalPhase, setInternalPhase] = useState<'idle' | 'loading' | 'drafting' | 'queued'>('idle');
   const [internalStartedAt, setInternalStartedAt] = useState<number | null>(null);
   const [internalOpKind, setInternalOpKind] = useState<'load' | 'draft' | 'eject'>('load');
   const [internalNotice, setInternalNotice] = useState<string | null>(null);
@@ -323,6 +326,12 @@ export function AiModelControls({
             phase={phase}
             startedAt={startedAt}
             kind={opKind === 'eject' ? 'eject' : 'load'}
+            queueRunningRepoName={
+              queueRunningRepoPath
+                ? (useGitStore.getState().openRepos.find((r) => r.path === queueRunningRepoPath)?.name ??
+                   queueRunningRepoPath.split(/[\\/]/).filter(Boolean).pop() ?? queueRunningRepoPath)
+                : null
+            }
           />
         )}
       </div>

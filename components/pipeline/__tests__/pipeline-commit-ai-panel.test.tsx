@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -88,6 +89,7 @@ const botonRedactar = () => screen.getByRole('button', { name: /prepare\.aiDraft
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 beforeEach(() => {
+  usePipelineStore.getState().reset();
   setCommitMessage.mockClear();
   catalog.mockReset().mockResolvedValue({
     success: true,
@@ -113,6 +115,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   useGitStore.setState({ modifiedFiles: [], commitMessage: '' });
   if (ORIGINAL_API === undefined) delete (window as { api?: unknown }).api;
   else Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });

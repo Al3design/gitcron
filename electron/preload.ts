@@ -222,7 +222,7 @@ contextBridge.exposeInMainWorld('api', {
     catalog: (baseUrl?: string) => ipcRenderer.invoke('commit-ai:catalog', baseUrl),
     load: (model: string, baseUrl?: string, contextLength?: number, ttlSeconds?: number) =>
       ipcRenderer.invoke('commit-ai:load', model, baseUrl, contextLength, ttlSeconds),
-    cancel: () => ipcRenderer.invoke('commit-ai:cancel'),
+    cancel: (draftId?: string) => ipcRenderer.invoke('commit-ai:cancel', draftId),
     unload: (model: string, baseUrl?: string) => ipcRenderer.invoke('commit-ai:unload', model, baseUrl),
     deviceNames: () => ipcRenderer.invoke('commit-ai:device-names'),
     draft: (args: {
@@ -250,6 +250,14 @@ contextBridge.exposeInMainWorld('api', {
       const handler = (_e: unknown, payload: { draftId: string | null; chunks: unknown[] }) => cb(payload);
       ipcRenderer.on('commit-ai:chunk', handler);
       return () => ipcRenderer.removeListener('commit-ai:chunk', handler);
+    },
+    /**
+     * Cambios de estado de cada pedido de redacción (en fila, en curso, terminado, cancelado).
+     */
+    onDraftState: (cb: (event: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null }) => void) => {
+      const handler = (_e: unknown, payload: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null }) => cb(payload);
+      ipcRenderer.on('commit-ai:draft-state', handler);
+      return () => ipcRenderer.removeListener('commit-ai:draft-state', handler);
     },
     resolvedModel: () => ipcRenderer.invoke('commit-ai:resolved-model'),
     lastRequest: () => ipcRenderer.invoke('commit-ai:last-request'),

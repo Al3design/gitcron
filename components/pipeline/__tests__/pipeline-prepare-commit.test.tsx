@@ -3,6 +3,7 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeProjection } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -119,6 +120,7 @@ function openPrepareAndChooseAll() {
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 beforeEach(() => {
+  usePipelineStore.getState().reset();
   stageFiles.mockClear();
   setCommitMessage.mockClear();
   // Puebla el store como lo haría el watcher. `openspec/changes/demo-change/`
@@ -139,6 +141,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   useGitStore.setState({ modifiedFiles: [], commitMessage: '' });
   if (ORIGINAL_API === undefined) {
     delete (window as { api?: unknown }).api;

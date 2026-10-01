@@ -3,6 +3,7 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeProjection } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -111,6 +112,7 @@ function setModified(files: Array<{ path: string; staged: boolean }>) {
 }
 
 beforeEach(() => {
+  usePipelineStore.getState().reset();
   stageFiles.mockClear();
   setCommitMessage.mockClear();
   setModified([
@@ -123,6 +125,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  usePipelineStore.getState().reset();
   useGitStore.setState({ modifiedFiles: [], commitMessage: '' });
   if (ORIGINAL_API === undefined) delete (window as { api?: unknown }).api;
   else Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });

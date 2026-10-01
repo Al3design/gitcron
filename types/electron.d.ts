@@ -8,7 +8,7 @@ import type {
 } from './temporal-agent';
 import type { PredictionHistoryEntry } from '../electron/db/types';
 import type { PipelineState, RuntimeDiscoveryEntry, RuntimeProjection } from './pipeline';
-import type { CommitAiLastRequest, CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunkEvent, LoadOutcome, LocalModel } from './commit-message-ai';
+import type { CommitAiLastRequest, CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunkEvent, DraftStateEvent, LoadOutcome, LocalModel } from './commit-message-ai';
 import type { ApplyHunkOptions, FileDiff } from '../lib/hunk-patch';
 import type {
   CartoGraphStatus,
@@ -397,7 +397,7 @@ interface ElectronAPI {
     /** La acción con costo. Va siempre después de haberlo declarado. */
     load(model: string, baseUrl?: string, contextLength?: number, ttlSeconds?: number): Promise<GitResult<LoadOutcome>>;
     /** Corta la redacción en vuelo de verdad, no sólo descarta su respuesta. */
-    cancel(): Promise<GitResult<{ cancelled: boolean }>>;
+    cancel(draftId?: string): Promise<GitResult<{ cancelled: boolean }>>;
     /** Descarga el modelo a mano, sin esperar a que venza su TTL. */
     unload(model: string, baseUrl?: string): Promise<GitResult<{ unloaded: boolean }>>;
     /** Identificador de máquina → nombre legible. Resuelto una vez y guardado. */
@@ -420,6 +420,8 @@ interface ElectronAPI {
      * en silencio, que es como funcionaba antes.
      */
     onChunk(cb: (event: DraftChunkEvent) => void): () => void;
+    /** Avisos de estado de cada pedido de redacción (en fila, en curso, terminado, cancelado). */
+    onDraftState(cb: (event: DraftStateEvent) => void): () => void;
     /** Modelo resuelto según la configuración de gitcron.json, error si está roto, o null si no aplica. */
     resolvedModel(): Promise<GitResult<CommitAiResolvedResult>>;
     /** Último pedido efectivo enviado al proveedor (con procedencias y sin secretos), o null si no hubo. */

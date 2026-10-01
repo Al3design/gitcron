@@ -247,7 +247,7 @@ function formatSessionOption(session: RuntimeProjection): string {
  * volvería a emitir la marca de una corrida que puede seguir en vuelo.
  */
 let draftRunCounter = 0;
-let activeDraftAbortController: AbortController | null = null;
+const activeDraftControllers = new Map<string, AbortController>();
 let activeChunkUnsubscribe: (() => void) | null = null;
 
 export function OpenSpecDashboard({
@@ -362,7 +362,11 @@ export function OpenSpecDashboard({
    * La única fuente de verdad es el store de Zustand para mantener
    * sincronizados el cuerpo central y el panel derecho sin estados duplicados.
    */
-  const prepareOpen = usePipelineStore((state) => state.prepareOpen);
+  const prepareOpen = usePipelineStore((state) =>
+    (repoPath && state.prepareOpenByRepo[repoPath] !== undefined
+      ? state.prepareOpenByRepo[repoPath]
+      : state.prepareOpen),
+  );
   const setPrepareOpen = usePipelineStore((state) => state.setPrepareOpen);
   /**
    * Cambios desplegados en la pantalla de entrada, y si la lista de archivados
@@ -1040,18 +1044,19 @@ export function OpenSpecDashboard({
    * una barra durante la carga y un contador durante la redacción, que son cosas
    * distintas y se ven en momentos distintos.
    */
-  const storeAiPhase = usePipelineStore((state) => state.aiPhase);
-  const storeAiStartedAt = usePipelineStore((state) => state.aiStartedAt);
-  const storeAiDraftRepoPath = usePipelineStore((state) => state.aiDraftRepoPath);
-  const storeAiOpKind = usePipelineStore((state) => state.aiOpKind);
+  const fallbackAiNotice = usePipelineStore((state) => state.aiNotice);
+  const storeRepoAiDraft = usePipelineStore((state) => (repoPath ? state.repoAiDrafts[repoPath] : null));
+  const aiPhase = storeRepoAiDraft?.aiPhase ?? 'idle';
+  const aiStartedAt = storeRepoAiDraft?.aiStartedAt ?? null;
+  const aiOpKind = storeRepoAiDraft?.aiOpKind ?? 'load';
+  const aiDraftId = storeRepoAiDraft?.aiDraftId ?? null;
+  const queueRunningRepoPath = storeRepoAiDraft?.queueRunningRepoPath ?? null;
+  const aiNotice = storeRepoAiDraft?.aiNotice ?? fallbackAiNotice;
   const setAiDraftState = usePipelineStore((state) => state.setAiDraftState);
   const resetAiDraft = usePipelineStore((state) => state.resetAiDraft);
+  const setAiNotice = usePipelineStore((state) => state.setAiNotice);
 
-  const isCurrentRepoDraft = storeAiDraftRepoPath === repoPath;
-  const aiPhase = isCurrentRepoDraft ? storeAiPhase : 'idle';
-  const aiStartedAt = isCurrentRepoDraft ? storeAiStartedAt : null;
-  const aiOpKind = isCurrentRepoDraft ? storeAiOpKind : 'load';
-  /** Ocupada en cualquiera de las dos: es lo que deshabilita los controles. */
+  /** Ocupada en cualquiera de las fases activas: es lo que deshabilita los controles. */
   const aiBusy = aiPhase !== 'idle';
   const setAiBusy = (busy: boolean) => {
     if (busy) {
@@ -1059,13 +1064,11 @@ export function OpenSpecDashboard({
         aiPhase: 'drafting',
         aiStartedAt: Date.now(),
         aiDraftRepoPath: repoPath,
-      });
+      }, repoPath);
     } else {
-      resetAiDraft();
+      resetAiDraft(repoPath);
     }
   };
-  const aiNotice = usePipelineStore((state) => state.aiNotice);
-  const setAiNotice = usePipelineStore((state) => state.setAiNotice);
   /**
    * Contexto y minutos de inactividad, elegidos antes de cargar.
    *
@@ -1392,27 +1395,32 @@ export function OpenSpecDashboard({
     }
     const unsub = window.api?.commitAi?.onChunk?.((event) => appendDraftChunks(event));
     return () => {
-      if (usePipelineStore.getState().aiPhase === 'drafting') {
+      const anyDrafting = Object.values(usePipelineStore.getState().repoAiDrafts).some(
+        (draft) => draft.aiPhase === 'drafting',
+      ) || usePipelineStore.getState().aiPhase === 'drafting';
+      if (anyDrafting) {
         activeChunkUnsubscribe = unsub ?? null;
       } else {
         unsub?.();
+        activeChunkUnsubscribe = null;
       }
     };
   }, [prepareOpen, aiPhase]);
 
-  /**
-   * Al desmontar el componente, la preparación se cierra en el store sólo si
-   * se cambió de repositorio. Cambiar de vista en el mismo repositorio no la
-   * cierra.
+  /*
+   * Los cambios de estado de la fila de redacciones (en fila, en curso,
+   * terminada) los escucha `useCommitAiDraftStateSync`, en la raíz de la app:
+   * este panel se desmonta al pasar a Graph o a otra solapa y los perdía.
+   *
+   * Al desmontar ya no se corta la redacción ni se cierra la preparación, ni
+   * siquiera al cambiar de repositorio. El corte existía porque una redacción
+   * en vuelo terminaba escribiendo su asunto en el campo de commit del
+   * repositorio al que se cambió (auditoría 4.2 de cerrar-conexiones,
+   * 2026-09-29); ahora el resultado se escribe siempre en el repositorio de
+   * origen por ruta, y cada repositorio recuerda si su preparación estaba
+   * abierta (`prepareOpenByRepo`). Pedido de Ale del 2026-09-30: el hilo de lo
+   * que piensa la IA no se pierde al moverse entre solapas.
    */
-  useEffect(() => {
-    return () => {
-      const activeRepo = useGitStore.getState().repoPath;
-      if (activeRepo !== repoPath) {
-        setPrepareOpen(false);
-      }
-    };
-  }, [repoPath, setPrepareOpen]);
 
   /**
    * El modelo elegido, para saber si hace falta cargarlo antes de redactar.
@@ -1470,12 +1478,13 @@ export function OpenSpecDashboard({
       aiPhase: 'loading',
       aiStartedAt: Date.now(),
       aiDraftRepoPath: repoPath,
-    });
-    setAiNotice(null);
+      queueRunningRepoPath: null,
+    }, repoPath);
+    setAiNotice(null, repoPath);
     try {
       const result = await window.api?.commitAi?.load(aiModel, undefined, aiContext, aiTtlMinutes * 60);
       if (!result?.success) {
-        setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
+        setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }), repoPath);
         return;
       }
       // Relee el catálogo: el modelo que se acaba de cargar tiene ahora un
@@ -1493,7 +1502,7 @@ export function OpenSpecDashboard({
           model: aiModel,
           context: cargado.loadedContextLength ?? aiContext,
         })
-        : t('pipeline.openspec.prepare.aiLoadedUnconfirmed', { model: aiModel }));
+        : t('pipeline.openspec.prepare.aiLoadedUnconfirmed', { model: aiModel }), repoPath);
     } finally {
       setAiBusy(false);
     }
@@ -1507,13 +1516,14 @@ export function OpenSpecDashboard({
    */
   const closePrepare = () => {
     if (aiBusy) cancelAiDraft();
-    setAiNotice(null);
+    setAiNotice(null, repoPath);
     setShowSentDetails(false);
     // Acá sí se borra lo que pensó: el rail se va con el panel, y dejarlo
     // guardado haría que la próxima vez que se abra aparezca el razonamiento de
     // un commit que ya se preparó.
-    clearDraftLog();
-    setPrepareOpen(false);
+    if (aiDraftId) clearDraftLog(aiDraftId);
+    else clearDraftLog();
+    setPrepareOpen(false, repoPath);
   };
 
   /**
@@ -1529,8 +1539,9 @@ export function OpenSpecDashboard({
       aiPhase: 'loading',
       aiStartedAt: Date.now(),
       aiDraftRepoPath: repoPath,
-    });
-    setAiNotice(null);
+      queueRunningRepoPath: null,
+    }, repoPath);
+    setAiNotice(null, repoPath);
     try {
       // Primero se mira si TODAVÍA está cargado, y recién después se expulsa.
       //
@@ -1545,13 +1556,13 @@ export function OpenSpecDashboard({
       setAiModels(antes);
       const vigente = antes.find((model) => model.id === aiModel);
       if (!vigente?.loaded) {
-        setAiNotice(t('pipeline.openspec.prepare.aiAlreadyEjected', { model: aiModel }));
+        setAiNotice(t('pipeline.openspec.prepare.aiAlreadyEjected', { model: aiModel }), repoPath);
         return;
       }
 
       const result = await window.api?.commitAi?.unload(aiModel);
       if (!result?.success) {
-        setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
+        setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }), repoPath);
         return;
       }
       // El estado se actualiza en memoria y NO releyendo el catálogo.
@@ -1566,40 +1577,45 @@ export function OpenSpecDashboard({
           ? { ...model, loaded: false, loadedContextLength: null, loadedInstanceId: null }
           : model
       )));
-      setAiNotice(t('pipeline.openspec.prepare.aiEjectedOk', { model: aiModel }));
+      setAiNotice(t('pipeline.openspec.prepare.aiEjectedOk', { model: aiModel }), repoPath);
     } finally {
       setAiBusy(false);
     }
   };
 
-  const abortInFlightAiDraft = () => {
-    if (activeDraftAbortController) {
-      activeDraftAbortController.abort();
-      activeDraftAbortController = null;
+  const abortInFlightAiDraft = (targetDraftId?: string | null) => {
+    const draftToCancel = targetDraftId ?? aiDraftId;
+    if (draftToCancel && activeDraftControllers.has(draftToCancel)) {
+      activeDraftControllers.get(draftToCancel)!.abort();
+      activeDraftControllers.delete(draftToCancel);
+    } else if (!draftToCancel) {
+      for (const ctrl of activeDraftControllers.values()) {
+        ctrl.abort();
+      }
+      activeDraftControllers.clear();
     }
     // El rail deja de decir «en vivo». Lo pensado hasta acá se queda: se canceló
     // la redacción, no lo que se había visto.
-    finishDraftLog();
-    usePipelineStore.getState().resetAiDraft();
+    finishDraftLog(draftToCancel ?? undefined);
+    usePipelineStore.getState().resetAiDraft(repoPath);
     // Corta la petición del otro lado, no sólo descarta la respuesta: antes el
     // modelo seguía trabajando después de apretar «Cancelar».
-    void window.api?.commitAi?.cancel();
+    void window.api?.commitAi?.cancel(draftToCancel ?? undefined);
   };
 
   const cancelAiDraft = () => {
-    abortInFlightAiDraft();
+    abortInFlightAiDraft(aiDraftId);
     setAiBusy(false);
-    setAiNotice(null);
+    setAiNotice(null, repoPath);
   };
 
   /**
-   * Cambiar de repositorio desmonta este panel (el workspace lleva `key` por
-   * repo). Sin cortar acá, una redacción en vuelo terminaba escribiendo su
-   * asunto en el campo de commit del repositorio al que se cambió, y el modelo
-   * seguía trabajando: medido en la auditoría 4.2 del 2026-09-29. Se corta sólo
-   * si cambió el repositorio activo: pasar a Graph y volver, en el mismo
-   * repositorio, también desmonta el panel y cortaba la redacción (visto por Ale
-   * el 2026-09-30).
+   * Al desmontar el componente (por ejemplo al cambiar de repositorio), ya no
+   * se corta la redacción en vuelo ni se cierra la preparación: cada repositorio
+   * corre su propia redacción en cola en el proceso principal y la protección
+   * contra escribir en un repositorio ajeno la da que el resultado se escribe
+   * siempre con `updateRepoByPath(originRepoPath)`. Si el repositorio de origen
+   * se cerró, no se escribe (requisito D16 / tanda 05).
    */
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -1609,10 +1625,6 @@ export function OpenSpecDashboard({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      const activeRepo = useGitStore.getState().repoPath;
-      if (activeRepo !== repoPath) {
-        abortInFlightAiDraft();
-      }
     };
   }, [repoPath]);
 
@@ -1638,10 +1650,11 @@ export function OpenSpecDashboard({
       aiStartedAt: Date.now(),
       aiDraftId: draftId,
       aiDraftRepoPath: originRepoPath,
-    });
-    setAiNotice(null);
+      queueRunningRepoPath: null,
+    }, originRepoPath);
+    setAiNotice(null, originRepoPath);
     const controller = new AbortController();
-    activeDraftAbortController = controller;
+    activeDraftControllers.set(draftId, controller);
     // La marca se declara ANTES de pedir: los pedazos empiezan a llegar mientras
     // el `await` sigue esperando, y sin la marca puesta de antemano no habría con
     // qué distinguirlos de los de una corrida anterior que se canceló.
@@ -1660,35 +1673,33 @@ export function OpenSpecDashboard({
       const draft = result?.data;
       if (!result?.success || !draft) {
         const detail = result?.error ?? '—';
-        if (isMountedRef.current) {
-          setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail }));
-        } else {
-          usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail }));
-        }
+        usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail }), originRepoPath);
         return;
       }
       if (draft.status === 'drafted') {
-        if (isMountedRef.current) {
-          setCommitMessage(draft.subject);
-          setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
-        } else {
-          const gitStore = useGitStore.getState();
-          const originRepo = gitStore.openRepos.find((repo) => repo.path === originRepoPath);
-          if (originRepo) {
-            gitStore.updateRepoByPath(originRepoPath, {
-              commitMessage: draft.subject,
-            });
-          }
-          usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }));
+        const gitStore = useGitStore.getState();
+        const originRepo = gitStore.openRepos.find((repo) => repo.path === originRepoPath);
+        const originRepoName = originRepo?.name ?? originRepoPath.split(/[\\/]/).filter(Boolean).pop() ?? originRepoPath;
+
+        if (originRepo) {
+          gitStore.updateRepoByPath(originRepoPath, {
+            commitMessage: draft.subject,
+          });
         }
+        const isCurrentRepo = !gitStore.repoPath || gitStore.repoPath === originRepoPath;
+        if (isMountedRef.current && isCurrentRepo) {
+          setCommitMessage(draft.subject);
+        } else {
+          gitStore.setSuccess(t('pipeline.openspec.prepare.aiFinishedNotice', { repo: originRepoName }));
+        }
+        usePipelineStore.getState().setAiNotice(t('pipeline.openspec.prepare.aiWrote', { model: draft.model }), originRepoPath);
         return;
       }
       if (draft.status === 'no-answer') {
         const msg = draft.reason === 'budget'
           ? t('pipeline.openspec.prepare.aiNoAnswerBudget', { model: draft.model })
           : t('pipeline.openspec.prepare.aiNoAnswer', { model: draft.model });
-        if (isMountedRef.current) setAiNotice(msg);
-        else usePipelineStore.getState().setAiNotice(msg);
+        usePipelineStore.getState().setAiNotice(msg, originRepoPath);
         return;
       }
       if (draft.status === 'malformed') {
@@ -1696,21 +1707,20 @@ export function OpenSpecDashboard({
           model: draft.model,
           subject: draft.subject,
         });
-        if (isMountedRef.current) setAiNotice(msg);
-        else usePipelineStore.getState().setAiNotice(msg);
+        usePipelineStore.getState().setAiNotice(msg, originRepoPath);
         return;
       }
       const consejo = adviceKeyForStreamError(draft.detail);
       const msg = consejo ? t(`pipeline.openspec.prepare.${consejo}`) : draft.detail;
-      if (isMountedRef.current) setAiNotice(msg);
-      else usePipelineStore.getState().setAiNotice(msg);
+      usePipelineStore.getState().setAiNotice(msg, originRepoPath);
     } finally {
-      if (activeDraftAbortController === controller) activeDraftAbortController = null;
-      resetAiDraft();
-      finishDraftLog();
+      activeDraftControllers.delete(draftId);
+      resetAiDraft(originRepoPath);
+      finishDraftLog(draftId);
       window.api?.commitAi?.lastRequest?.().then((res) => {
         if (res?.success && res.data) {
-          if (isMountedRef.current) {
+          const currentRepo = useGitStore.getState().repoPath;
+          if (isMountedRef.current && (!currentRepo || currentRepo === originRepoPath)) {
             setLastAiRequest(res.data);
           }
         }
@@ -2363,7 +2373,7 @@ export function OpenSpecDashboard({
               title={t('pipeline.openspec.prepare.open')}
               onClick={() => {
                 const next = !prepareOpen;
-                setPrepareOpen(next);
+                setPrepareOpen(next, repoPath);
                 if (next && onEnsureRightOpen) {
                   onEnsureRightOpen();
                 }
@@ -2485,7 +2495,7 @@ export function OpenSpecDashboard({
                 onBack={() => setReviewOpen(false)}
                 onPrepareCommit={() => {
                   setReviewOpen(false);
-                  setPrepareOpen(true);
+                  setPrepareOpen(true, repoPath);
                 }}
                 onUpdateCompleted={() => {
                   onRefresh?.();
@@ -2674,7 +2684,7 @@ export function OpenSpecDashboard({
                           disabled={aiBusy || chosen.length === 0}
                           onClick={draftWithAi}
                         >
-                          {aiPhase === 'drafting'
+                          {aiPhase === 'drafting' || aiPhase === 'queued'
                             ? t('pipeline.openspec.prepare.aiBusy')
                             : t('pipeline.openspec.prepare.aiDraft')}
                         </button>
@@ -2689,7 +2699,19 @@ export function OpenSpecDashboard({
                           {aiNotice}
                         </p>
                       )}
-                      {aiBusy && <AiElapsed phase={aiPhase} startedAt={aiStartedAt} kind={aiOpKind} />}
+                      {aiBusy && (
+                        <AiElapsed
+                          phase={aiPhase}
+                          startedAt={aiStartedAt}
+                          kind={aiOpKind}
+                          queueRunningRepoName={
+                            queueRunningRepoPath
+                              ? (useGitStore.getState().openRepos.find((r) => r.path === queueRunningRepoPath)?.name ??
+                                 queueRunningRepoPath.split(/[\\/]/).filter(Boolean).pop() ?? queueRunningRepoPath)
+                              : null
+                          }
+                        />
+                      )}
                       {lastAiRequest && (
                         <div className={styles.aiSentSection}>
                           <button
@@ -2764,6 +2786,7 @@ export function OpenSpecDashboard({
                       phase={aiPhase}
                       startedAt={aiStartedAt}
                       opKind={aiOpKind}
+                      queueRunningRepoPath={queueRunningRepoPath}
                       notice={!rightOpen ? aiNotice : null}
                       onNoticeChange={setAiNotice}
                       onLoad={confirmAiLoad}
@@ -2777,7 +2800,9 @@ export function OpenSpecDashboard({
                               disabled={aiBusy || chosen.length === 0 || !aiModel}
                               onClick={draftWithAi}
                             >
-                              {aiPhase === 'drafting' ? t('pipeline.openspec.prepare.aiBusy') : t('pipeline.openspec.prepare.aiDraft')}
+                              {aiPhase === 'drafting' || aiPhase === 'queued'
+                                ? t('pipeline.openspec.prepare.aiBusy')
+                                : t('pipeline.openspec.prepare.aiDraft')}
                             </button>
                           )}
                           {aiBusy && (

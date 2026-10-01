@@ -4,6 +4,7 @@ import React, { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeProjection } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 
@@ -71,6 +72,7 @@ const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000 }, () => {
   beforeEach(() => {
+    usePipelineStore.getState().reset();
     stageFiles.mockClear();
     setCommitMessage.mockClear();
     useGitStore.setState({
@@ -86,6 +88,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
 
   afterEach(() => {
     cleanup();
+    usePipelineStore.getState().reset();
     useGitStore.setState({ modifiedFiles: [], commitMessage: '' });
     if (ORIGINAL_API === undefined) {
       delete (window as { api?: unknown }).api;

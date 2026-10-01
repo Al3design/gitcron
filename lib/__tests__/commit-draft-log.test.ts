@@ -132,6 +132,17 @@ describe('a qué redacción pertenece lo que llega', () => {
     expect(getDraftLogSnapshot().reasoning).toBe('');
     expect(getDraftLogSnapshot().streaming).toBe(true);
   });
+
+  it('conserva registros independientes por draftId', () => {
+    startDraftLog('repoA-1');
+    appendDraftChunks({ draftId: 'repoA-1', chunks: [razona('pensamiento A')] });
+
+    startDraftLog('repoB-1');
+    appendDraftChunks({ draftId: 'repoB-1', chunks: [razona('pensamiento B')] });
+
+    expect(getDraftLogSnapshot('repoA-1').reasoning).toBe('pensamiento A');
+    expect(getDraftLogSnapshot('repoB-1').reasoning).toBe('pensamiento B');
+  });
 });
 
 describe('avisar a quien mira', () => {

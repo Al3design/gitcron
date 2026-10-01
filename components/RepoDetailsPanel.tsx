@@ -79,7 +79,10 @@ export function RepoDetailsPanel({
 
   const reviewOpen = usePipelineStore((s) => s.reviewOpen);
   const toggleReviewOpen = usePipelineStore((s) => s.toggleReviewOpen);
-  const aiNotice = usePipelineStore((s) => s.aiNotice);
+  const fallbackAiNotice = usePipelineStore((s) => s.aiNotice);
+  const activeRepoDraft = usePipelineStore((s) => (repoPath ? s.repoAiDrafts[repoPath] : null));
+  const aiNotice = activeRepoDraft?.aiNotice ?? fallbackAiNotice;
+  const activeDraftId = activeRepoDraft?.aiDraftId ?? null;
   // La sesión activa la entrega el workspace Pipeline (mismo repo, keyeado por
   // él): el panel no arranca otra lectura ni conserva su propia.
   const projection = usePipelineStore((s) => s.projection);
@@ -88,7 +91,11 @@ export function RepoDetailsPanel({
     controlNotice: decisionNotice,
     sendingDecisions,
   } = usePipelineDecisionControl(repoPath, projection);
-  const draftLog = useSyncExternalStore(subscribeDraftLog, getDraftLogSnapshot, getDraftLogSnapshot);
+  const draftLog = useSyncExternalStore(
+    subscribeDraftLog,
+    () => getDraftLogSnapshot(activeDraftId),
+    () => getDraftLogSnapshot(activeDraftId),
+  );
   const hasDraftLog = draftLog.draftId !== null || Boolean(aiNotice);
 
   const sectionState = useSidebarSectionState(repoPath, DEFAULT_OPEN_RIGHT_PANEL);
@@ -369,7 +376,7 @@ export function RepoDetailsPanel({
           isOpen={sectionState.isOpen('details-draft-log')}
           onToggle={() => sectionState.toggle('details-draft-log')}
         >
-          <CommitDraftLog notice={aiNotice} />
+          <CommitDraftLog notice={aiNotice} draftId={activeDraftId} />
         </SidebarSection>
       )}
 

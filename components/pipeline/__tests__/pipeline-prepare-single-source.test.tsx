@@ -195,6 +195,8 @@ describe('OpenSpecDashboard / RepoDetailsPanel — Única fuente de verdad para 
     });
     usePipelineStore.setState({
       prepareOpen: false,
+      prepareOpenByRepo: {},
+      repoAiDrafts: {},
       reviewOpen: false,
       aiNotice: null,
       snapshot: makeSnapshot(),

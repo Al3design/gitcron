@@ -65,17 +65,12 @@ const EMPTY: DraftLog = {
   error: null,
 };
 
+const logsByDraftId = new Map<string, DraftLog>();
+let activeDraftId: string | null = null;
 let snapshot: DraftLog = EMPTY;
 const listeners = new Set<() => void>();
 
-/**
- * Reemplaza el snapshot y avisa.
- *
- * Siempre un objeto nuevo: `useSyncExternalStore` compara por identidad, y
- * mutar el que ya entregó dejaría la vista sin enterarse.
- */
-function commit(next: DraftLog): void {
-  snapshot = next;
+function notify(): void {
   for (const listener of listeners) listener();
 }
 
@@ -84,32 +79,60 @@ export function subscribeDraftLog(listener: () => void): () => void {
   return () => { listeners.delete(listener); };
 }
 
-/** La referencia se mantiene mientras nada cambie: es lo que pide React. */
-export function getDraftLogSnapshot(): DraftLog {
+/**
+ * Devuelve el log del draftId solicitado o del activo.
+ * La referencia se mantiene mientras nada cambie en ese log: es lo que pide React.
+ */
+export function getDraftLogSnapshot(draftId?: string | null): DraftLog {
+  if (draftId) {
+    return logsByDraftId.get(draftId) ?? EMPTY;
+  }
+  if (activeDraftId) {
+    return logsByDraftId.get(activeDraftId) ?? snapshot;
+  }
   return snapshot;
 }
 
-/**
- * Arranca una redacción. Limpia lo anterior y fija de cuál es lo que viene.
- *
- * Limpiar acá y no al terminar es deliberado: lo que pensó la última redacción
- * sigue a la vista hasta que empiece otra, y no se borra en el instante en que
- * termina, que es justo cuando se lo quiere leer.
- */
-export function startDraftLog(draftId: string): void {
-  commit({ ...EMPTY, draftId, streaming: true });
+/** Cambia cuál es la redacción activa a la vista. */
+export function setActiveDraftLog(draftId: string | null): void {
+  if (activeDraftId === draftId) return;
+  activeDraftId = draftId;
+  snapshot = draftId ? (logsByDraftId.get(draftId) ?? EMPTY) : EMPTY;
+  notify();
 }
 
 /**
- * Aplica lo que llegó.
+ * Arranca una redacción. Registra su log por draftId y la fija como activa.
  *
- * Lo de otra redacción se **descarta**: cancelar y volver a pedir dejaba en
- * vuelo el stream de la corrida muerta, y sin esta guardia su pensamiento se
- * mezclaba con el de la nueva en el mismo panel.
+ * Limpiar acá y no al terminar es deliberado: lo que pensó la última redacción
+ * sigue a la vista hasta que empiece otra en ese mismo repo, y no se borra en
+ * el instante en que termina, que es justo cuando se lo quiere leer.
+ */
+export function startDraftLog(draftId: string): void {
+  const newLog: DraftLog = { ...EMPTY, draftId, streaming: true };
+  logsByDraftId.set(draftId, newLog);
+  activeDraftId = draftId;
+  snapshot = newLog;
+  notify();
+}
+
+/**
+ * Aplica lo que llegó al registro correspondiente a su draftId.
+ *
+ * Si el draftId no está registrado en el mapa, se descarta (no despierta a
+ * nadie). Si pertenece a una redacción activa en otro repositorio, se acumula
+ * allí para cuando el usuario vuelva a esa solapa.
  */
 export function appendDraftChunks(event: DraftChunkEvent): void {
-  if (event.draftId === null || event.draftId !== snapshot.draftId) return;
-  commit(applyChunks(snapshot, event.chunks));
+  if (event.draftId === null) return;
+  const current = logsByDraftId.get(event.draftId);
+  if (!current) return;
+  const updated = applyChunks(current, event.chunks);
+  logsByDraftId.set(event.draftId, updated);
+  if (activeDraftId === event.draftId) {
+    snapshot = updated;
+  }
+  notify();
 }
 
 /**
@@ -150,13 +173,47 @@ export function applyChunks(log: DraftLog, chunks: readonly DraftChunk[]): Draft
  * llegue: un servidor que corta, una cancelación. Sin esto el panel quedaría
  * diciendo «pensando» para siempre.
  */
-export function finishDraftLog(): void {
-  if (!snapshot.streaming) return;
-  commit({ ...snapshot, streaming: false });
+export function finishDraftLog(draftId?: string): void {
+  if (draftId) {
+    const current = logsByDraftId.get(draftId);
+    if (!current || !current.streaming) return;
+    const updated = { ...current, streaming: false };
+    logsByDraftId.set(draftId, updated);
+    if (activeDraftId === draftId) snapshot = updated;
+    notify();
+    return;
+  }
+  if (activeDraftId) {
+    const current = logsByDraftId.get(activeDraftId);
+    if (current && current.streaming) {
+      const updated = { ...current, streaming: false };
+      logsByDraftId.set(activeDraftId, updated);
+      snapshot = updated;
+      notify();
+      return;
+    }
+  }
+  if (snapshot.streaming) {
+    snapshot = { ...snapshot, streaming: false };
+    notify();
+  }
 }
 
 /** Deja el log en blanco. Para cuando se cierra el panel. */
-export function clearDraftLog(): void {
-  if (snapshot === EMPTY) return;
-  commit(EMPTY);
+export function clearDraftLog(draftId?: string): void {
+  if (draftId) {
+    if (logsByDraftId.delete(draftId)) {
+      if (activeDraftId === draftId) {
+        activeDraftId = null;
+        snapshot = EMPTY;
+      }
+      notify();
+    }
+    return;
+  }
+  if (logsByDraftId.size === 0 && snapshot === EMPTY && activeDraftId === null) return;
+  logsByDraftId.clear();
+  activeDraftId = null;
+  snapshot = EMPTY;
+  notify();
 }

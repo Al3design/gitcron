@@ -34,14 +34,20 @@ export type CommitDraftLogProps = {
    * por acción, no ocho veces por segundo, así que no hay nada que aislar.
    */
   notice?: string | null;
+  /** Identificador de la corrida de redacción de este repositorio. */
+  draftId?: string | null;
 };
 
-export function CommitDraftLog({ notice }: CommitDraftLogProps) {
+export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
   const t = useT();
   // Con selector: sin él, cualquier `set()` del store re-renderiza esto, y este
   // componente se vuelve a dibujar ocho veces por segundo por su cuenta.
   const uiLanguage = useGitStore((state) => state.language);
-  const log = useSyncExternalStore(subscribeDraftLog, getDraftLogSnapshot, getDraftLogSnapshot);
+  const log = useSyncExternalStore(
+    subscribeDraftLog,
+    () => getDraftLogSnapshot(draftId),
+    () => getDraftLogSnapshot(draftId),
+  );
   const streamRef = useRef<HTMLPreElement | null>(null);
   const [copiedReasoning, setCopiedReasoning] = useState(false);
   const [copiedContent, setCopiedContent] = useState(false);
