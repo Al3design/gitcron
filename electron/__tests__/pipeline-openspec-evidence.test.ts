@@ -13,7 +13,7 @@ import {
 import { buildEngineStatusSnapshot } from '../ipc/pipeline-openspec';
 import { authorizedRepoStore } from '../ipc/authorized-repos';
 import { classifyOpenSpecProfile, deriveProfileWorkflowRows } from '../../lib/openspec-profile';
-import { invalidateEngineToolReportCache } from '../pipeline/openspec-engine-tools';
+import { buildFallbackToolReport, invalidateEngineToolReportCache } from '../pipeline/openspec-engine-tools';
 
 /**
  * Doble de disco anclado a rutas EXACTAS (invariante 19): `readdir` sólo
@@ -514,6 +514,10 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
         }),
         runDoctor: async () => ({ command: 'openspec doctor --json', ok: true, error: null, data: null }),
         runContext: async () => ({ command: 'openspec context --json', ok: true, error: null, data: null }),
+        // El informe de herramientas se fija a la copia 1.13.2: sin esto la prueba consultaba
+        // el paquete de OpenSpec instalado en la máquina, y con 1.14.0 instalado (2026-10-01)
+        // marcaba Codex para actualizar aunque el motor simulado diga 1.13.2.
+        readEngineToolReport: async ({ repoPath }) => buildFallbackToolReport({ repoPath, engineVersion: '1.13.2' }),
       });
 
       // Verificamos estado exacto medido de OdontoPau (sólo Codex configurada, decisión 3 y 4)
@@ -575,6 +579,22 @@ describe('inspectInstalledEvidence (Audit Points 5, 6, 7, 8 Tests)', () => {
         }),
         runDoctor: async () => ({ command: 'openspec doctor --json', ok: true, error: null, data: null }),
         runContext: async () => ({ command: 'openspec context --json', ok: true, error: null, data: null }),
+        // Informe medido con el paquete real de OpenSpec 1.13.2 sobre este mismo armado
+        // (2026-10-01): sin la marca .openspec-target, Codex no figura disponible y la
+        // configurada es «agents». Antes la prueba consultaba el motor instalado en la
+        // máquina, y con 1.14.0 marcaba Codex como pendiente; qué hace GitCron con la
+        // 1.14 se revisa en el cambio del ciclo 1.14, no en esta prueba.
+        readEngineToolReport: async ({ repoPath }) => {
+          const report = buildFallbackToolReport({ repoPath, engineVersion: '1.13.2' });
+          return {
+            ...report,
+            tools: report.tools.map((t) => {
+              if (t.id === 'codex') return { ...t, available: false, configured: false };
+              if (t.id === 'agents') return { ...t, available: true, configured: true };
+              return t;
+            }),
+          };
+        },
       });
 
       expect(snapshotWithoutMarker.installedIntegration?.configuredTools).toEqual(['agents']);

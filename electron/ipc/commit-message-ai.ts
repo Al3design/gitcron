@@ -25,7 +25,7 @@ import type {
   ParameterProvenance,
 } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
-import { draftCommitWithCodex, type SpawnFunction } from '../ai/commit-message/codex-cli';
+import { draftCommitWithCodex, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
 import { getDefaultConfigPath, resolveUse } from '../ai/config/gitcron-config';
 import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
@@ -167,6 +167,11 @@ export function setCommitAiConfigPathForTesting(p: string | null): void {
 let codexSpawnOverride: SpawnFunction | null = null;
 export function setCodexSpawnForTesting(fn: SpawnFunction | null): void {
   codexSpawnOverride = fn;
+}
+
+let codexResolveOverride: ResolveExecutableFunction | null = null;
+export function setCodexResolveForTesting(fn: ResolveExecutableFunction | null): void {
+  codexResolveOverride = fn;
 }
 
 /**
@@ -655,6 +660,7 @@ export function registerCommitMessageAiHandlers(): void {
                       signal: sig,
                       onChunk: (chunks) => pump.push(chunks),
                       spawnFn: codexSpawnOverride ?? undefined,
+                      resolveExecutable: codexResolveOverride ?? undefined,
                     });
                   }
                   return {

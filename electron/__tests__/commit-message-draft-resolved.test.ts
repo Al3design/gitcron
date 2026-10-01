@@ -36,6 +36,7 @@ import {
   registerCommitMessageAiHandlers,
   setCommitAiConfigPathForTesting,
   setCodexSpawnForTesting,
+  setCodexResolveForTesting,
 } from '../ipc/commit-message-ai';
 
 describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () => {
@@ -46,11 +47,14 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     handlers.clear();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-commit-test-'));
     registerCommitMessageAiHandlers();
+    // En Windows codex es un acceso .cmd que sólo arranca por el shell; la prueba fija la resolución.
+    setCodexResolveForTesting(async () => ({ file: 'C:/tools/codex.cmd', viaShell: true }));
   });
 
   afterEach(() => {
     setCommitAiConfigPathForTesting(null);
     setCodexSpawnForTesting(null);
+    setCodexResolveForTesting(null);
     fs.rmSync(tmpDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
@@ -303,7 +307,8 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     });
 
     // Argumentos exactos
-    expect(capturedCommand).toBe('codex');
+    expect(capturedCommand).toBe('C:/tools/codex.cmd');
+    expect(capturedOpts.shell).toBe(true);
     expect(capturedArgs).toEqual([
       'exec',
       '--json',
@@ -315,7 +320,6 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
       'gpt-5.6-luna',
       '-',
     ]);
-    expect(capturedOpts.shell).toBe(false);
 
     // Prompt pasado por stdin
     expect(capturedStdin).toContain('Tarea completada');
@@ -416,6 +420,7 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
       prompt: 'test prompt',
       timeoutMs: 40,
       spawnFn: mockSpawn as any,
+      resolveExecutable: async () => ({ file: 'codex', viaShell: false }),
     });
 
     expect(result.status).toBe('unavailable');
