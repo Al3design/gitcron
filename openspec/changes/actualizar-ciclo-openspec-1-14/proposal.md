@@ -15,7 +15,7 @@ OpenSpec 1.14.0 sobre odontoPro y el repositorio de GitCron.
   «Bob Shell» renombrado «IBM Bob».
 - Con 1.14, OpenSpec anota la carpeta compartida `.agents/skills` a nombre de la carpeta (`.openspec-target`
   dice `agents`) y no de una herramienta. Las herramientas que leen de esa carpeta (Codex, Amp, GSD,
-  Antigravity) se muestran configuradas «por la carpeta compartida .agents» en vez de pendientes.
+  Antigravity, Zed) se muestran configuradas «por la carpeta compartida .agents» en vez de pendientes.
 - El resumen de una actualización cuenta los archivos que la actualización cambió, uno por uno, comparando antes
   y después: hoy cuenta lo que Git agrupa (una carpeta nueva entera vale uno) y suma cambios que ya estaban
   antes de actualizar.

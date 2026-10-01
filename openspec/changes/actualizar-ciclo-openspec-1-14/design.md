@@ -13,7 +13,7 @@ Ver proposal.md (Why). Estado medido el 2026-10-01 con OpenSpec 1.14.0:
   propia (respaldo). Sondeado sobre odontoPro con 1.14.0: `getConfiguredTools` devuelve
   `["claude","cline","continue","opencode","agents"]`; `codex`, `amp`, `gsd` y `antigravity` salen
   `configured: false`; `getToolsNeedingProfileSync` devuelve `[]`. `.agents/skills/.openspec-target` dice
-  `agents`. En AI_TOOLS de 1.14, `codex`, `amp`, `gsd` y `antigravity` tienen `skillsDir: '.agents'`.
+  `agents`. En AI_TOOLS de 1.14, `codex`, `amp`, `gsd`, `antigravity` y `zed` tienen `skillsDir: '.agents'`.
 - `electron/pipeline/openspec-cli.ts` (`runOpenSpecUpdate`, dos ramas: éxito y error) cuenta los archivos
   actualizados con `git status` después del comando, filtrado por `isOpenSpecManagedPath`. Git agrupa una
   carpeta sin seguimiento en una entrada; en odontoPro: 14 entradas agrupadas contra 55 con `-uall`.

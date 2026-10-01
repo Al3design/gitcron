@@ -3,7 +3,7 @@
 ## 1. Mediciones
 
 - [x] 1.1 **Orquestador/auditor:** Medir en qué versión de OpenSpec aparece cada herramienta, leyendo AI_TOOLS de cada versión publicada de 1.0.0 a 1.14.0. **Comprobación:** `mediciones/herramientas-por-version.json` con las 50 herramientas de 1.14.0 y la fuente declarada.
-- [ ] 1.2 **Orquestador/auditor:** Investigar y escribir una descripción verificada de cada herramienta de la lista de 1.14.0, en es/en/zh, con la fuente consultada; las que no se puedan confirmar quedan sin descripción. **Comprobación:** `mediciones/descripciones.md` con una fila por id (descripción y fuente, o «sin confirmar») y ningún id fuera de la lista de 1.14.0.
+- [x] 1.2 **Orquestador/auditor:** Investigar y escribir una descripción verificada de cada herramienta de la lista de 1.14.0, en es/en/zh, con la fuente consultada; las que no se puedan confirmar quedan sin descripción. **Comprobación:** `mediciones/descripciones.md` con una fila por id (descripción y fuente, o «sin confirmar») y ningún id fuera de la lista de 1.14.0.
 
 ## 2. Ciclo 1.14 y lista propia
 
