@@ -14,7 +14,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { CommitDraftResult, DraftChunk } from '../../../types/commit-message-ai';
+import type { CommitDraftResult, DraftChunk, DraftUsage } from '../../../types/commit-message-ai';
 import {
   resolveRuntimeExecutable,
   type RuntimeExecutableResolution,
@@ -74,6 +74,18 @@ function readableCodexError(message: string): string {
     // No era JSON: el texto ya es legible.
   }
   return message;
+}
+
+function parseCodexUsage(rawUsage: any): DraftUsage | null {
+  if (!rawUsage || typeof rawUsage !== 'object') return null;
+  const intVal = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+  return {
+    promptTokens: intVal(rawUsage.input_tokens),
+    cachedPromptTokens: intVal(rawUsage.cached_input_tokens),
+    completionTokens: intVal(rawUsage.output_tokens),
+    reasoningTokens: intVal(rawUsage.reasoning_output_tokens),
+  };
 }
 
 export interface CodexDraftOptions {
@@ -181,6 +193,7 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
       let lastAgentMessage: string | null = null;
       let errorMessage: string | null = null;
       const warnings: string[] = [];
+      let turnUsage: DraftUsage | null = null;
 
       // Qué es cada evento, medido con Codex 0.144.4 el 2026-10-01:
       // - `item.completed` con `item.type: "error"` es un AVISO, no un fallo: la
@@ -209,6 +222,8 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
           }
         } else if (parsed.type === 'item.completed' && parsed.item?.type === 'error') {
           if (typeof parsed.item.message === 'string') warnings.push(parsed.item.message);
+        } else if (parsed.type === 'turn.completed') {
+          turnUsage = parseCodexUsage(parsed.usage);
         }
       };
 
@@ -249,7 +264,16 @@ export async function draftCommitWithCodex(options: CodexDraftOptions): Promise<
           return;
         }
 
+        // El contenido se emite aquí en el cierre, una vez confirmado que no
+        // hubo error. El cuadro de cierre `done` con el conteo de tokens de
+        // `turn.completed` DEBE emitirse después del contenido: si llegara
+        // antes, el panel (DraftLog) lo daría por terminado prematuramente
+        // (`streaming = false`) antes de mostrar la respuesta generada.
         onChunk?.([{ kind: 'content', text: lastAgentMessage }]);
+
+        if (turnUsage) {
+          onChunk?.([{ kind: 'done', finishReason: null, usage: turnUsage }]);
+        }
 
         const payload = {
           choices: [{ message: { content: lastAgentMessage } }],

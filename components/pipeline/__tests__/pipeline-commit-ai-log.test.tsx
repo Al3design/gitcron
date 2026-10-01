@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
-import { clearDraftLog } from '@/lib/commit-draft-log';
+import { clearDraftLog, setDraftLogTiming } from '@/lib/commit-draft-log';
 import type { DraftChunkEvent } from '@/types/commit-message-ai';
 import { OpenSpecDashboard } from '../OpenSpecDashboard';
 import { RepoDetailsPanel } from '@/components/RepoDetailsPanel';
@@ -221,17 +221,18 @@ describe('el rail durante la redacción', () => {
     await waitFor(() => expect(emitir).not.toBeNull());
 
     act(() => {
+      setDraftLogTiming(marca, { startedAt: 1000, finishedAt: 15000 });
       emitir?.({
         draftId: marca,
         chunks: [
           { kind: 'reasoning', text: 'pensé mucho' },
-          { kind: 'done', finishReason: 'stop', usage: { promptTokens: 4649, completionTokens: 311, reasoningTokens: 278 } },
+          { kind: 'done', finishReason: 'stop', usage: { promptTokens: 4649, cachedPromptTokens: null, completionTokens: 311, reasoningTokens: 278 } },
         ],
       });
     });
 
     // Sin este número, «tardó 98 segundos» no dice por qué.
-    expect(await screen.findByText(/aiLogTokens.*278/)).toBeTruthy();
+    expect(await screen.findByText(/278/)).toBeTruthy();
   });
 
   it('un fallo del servidor se muestra tal cual, y no como «no contestó»', async () => {

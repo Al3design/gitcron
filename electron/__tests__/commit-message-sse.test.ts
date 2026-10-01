@@ -66,13 +66,35 @@ describe('un cuadro suelto', () => {
     expect(parseChatChunk(cuadroCierre)).toEqual({ kind: 'done', finishReason: 'stop', usage: null });
   });
 
-  it('el cuadro de usage llega sin ninguna opción y no rompe', () => {
+  it('el cuadro de usage llega sin ninguna opción y no rompe (sin caché)', () => {
     // Viene con `choices: []`: mirar `choices[0]` a ciegas explotaría justo en el
     // cuadro que trae los números.
     expect(parseChatChunk(cuadroUsage)).toEqual({
       kind: 'done',
       finishReason: null,
-      usage: { promptTokens: 28, completionTokens: 311, reasoningTokens: 278 },
+      usage: { promptTokens: 28, cachedPromptTokens: null, completionTokens: 311, reasoningTokens: 278 },
+    });
+  });
+
+  it('el cuadro de usage lee prompt_tokens_details.cached_tokens si está presente', () => {
+    const cuadroUsageCached = {
+      choices: [],
+      usage: {
+        prompt_tokens: 20847,
+        prompt_tokens_details: { cached_tokens: 8960 },
+        completion_tokens: 7,
+        completion_tokens_details: { reasoning_tokens: 0 },
+      },
+    };
+    expect(parseChatChunk(cuadroUsageCached)).toEqual({
+      kind: 'done',
+      finishReason: null,
+      usage: {
+        promptTokens: 20847,
+        cachedPromptTokens: 8960,
+        completionTokens: 7,
+        reasoningTokens: 0,
+      },
     });
   });
 
@@ -139,7 +161,7 @@ describe('el agrupado', () => {
   it('el cierre nunca se funde con nada', () => {
     const juntados = mergeConsecutive([
       { kind: 'done', finishReason: 'stop', usage: null },
-      { kind: 'done', finishReason: null, usage: { promptTokens: 1, completionTokens: 2, reasoningTokens: 3 } },
+      { kind: 'done', finishReason: null, usage: { promptTokens: 1, cachedPromptTokens: null, completionTokens: 2, reasoningTokens: 3 } },
     ]);
     expect(juntados).toHaveLength(2);
   });

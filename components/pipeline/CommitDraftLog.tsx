@@ -16,13 +16,105 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, Check, ChevronDown, Copy } from 'lucide-react';
-import { getDraftLogSnapshot, subscribeDraftLog, REASONING_LIMIT } from '@/lib/commit-draft-log';
+import { getDraftLogSnapshot, subscribeDraftLog, REASONING_LIMIT, type DraftLog } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
 import { useGitStore } from '@/lib/git-store';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { DraftingThought } from './DraftingThought';
 import styles from './OpenSpecDashboard.module.css';
+
+/**
+ * Formato de duración de una redacción:
+ * - Menos de un minuto: «14 s»
+ * - Desde un minuto: «1 min 38 s»
+ */
+type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+// Las unidades pasan por i18n: en chino son 秒 y 分, no «s» y «min».
+function formatDraftDuration(startedAt: number, finishedAt: number, t: Translate): string {
+  const elapsedSeconds = Math.max(0, Math.round((finishedAt - startedAt) / 1000));
+  if (elapsedSeconds < 60) {
+    return t('pipeline.openspec.prepare.aiLogSeconds', { seconds: elapsedSeconds });
+  }
+  return t('pipeline.openspec.prepare.aiLogMinutesSeconds', {
+    minutes: Math.floor(elapsedSeconds / 60),
+    seconds: elapsedSeconds % 60,
+  });
+}
+
+/**
+ * Línea de tiempo y tokens:
+ * Aparece cuando la redacción terminó y dice, en este orden, sólo lo que se sepa:
+ * «Tardó 14 s» · «20.847 de entrada (8.960 en caché)» · «7 de salida, 0 en pensar».
+ * Si el motor no informó ningún token: «Tardó 14 s · sin conteo de tokens».
+ * Si tampoco hay tiempo (una redacción vieja, de antes de esta tanda), no se muestra nada.
+ */
+function formatDraftTimingAndTokens(log: DraftLog, t: Translate, language: string): string | null {
+  if (log.streaming || log.startedAt === null || log.finishedAt === null) {
+    return null;
+  }
+
+  const durationStr = formatDraftDuration(log.startedAt, log.finishedAt, t);
+  const timePart = t('pipeline.openspec.prepare.aiLogElapsed', { time: durationStr });
+
+  const numFmt = new Intl.NumberFormat(language);
+  const fmt = (n: number) => numFmt.format(n);
+
+  const usage = log.usage;
+  const hasAnyTokens =
+    usage !== null &&
+    (usage.promptTokens !== null ||
+      usage.completionTokens !== null ||
+      usage.reasoningTokens !== null ||
+      usage.cachedPromptTokens !== null);
+
+  if (!hasAnyTokens) {
+    return `${timePart} · ${t('pipeline.openspec.prepare.aiLogNoTokens')}`;
+  }
+
+  const parts = [timePart];
+
+  if (usage.promptTokens !== null) {
+    if (usage.cachedPromptTokens !== null) {
+      parts.push(
+        t('pipeline.openspec.prepare.aiLogTokensInputCached', {
+          input: fmt(usage.promptTokens),
+          cached: fmt(usage.cachedPromptTokens),
+        }),
+      );
+    } else {
+      parts.push(
+        t('pipeline.openspec.prepare.aiLogTokensInput', {
+          input: fmt(usage.promptTokens),
+        }),
+      );
+    }
+  }
+
+  if (usage.completionTokens !== null && usage.reasoningTokens !== null) {
+    parts.push(
+      t('pipeline.openspec.prepare.aiLogTokensOutputAndReasoning', {
+        output: fmt(usage.completionTokens),
+        reasoning: fmt(usage.reasoningTokens),
+      }),
+    );
+  } else if (usage.completionTokens !== null) {
+    parts.push(
+      t('pipeline.openspec.prepare.aiLogTokensOutput', {
+        output: fmt(usage.completionTokens),
+      }),
+    );
+  } else if (usage.reasoningTokens !== null) {
+    parts.push(
+      t('pipeline.openspec.prepare.aiLogTokensReasoning', {
+        reasoning: fmt(usage.reasoningTokens),
+      }),
+    );
+  }
+
+  return parts.join(' · ');
+}
 
 export type CommitDraftLogProps = {
   /**
@@ -118,6 +210,7 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
   if (log.draftId === null && !notice) return null;
 
   const nothingYet = log.reasoning.length === 0 && log.content.length === 0;
+  const timingAndTokens = formatDraftTimingAndTokens(log, t, uiLanguage);
 
   return (
     /* Sin título propio: la sección del panel derecho que lo contiene ya dice
@@ -260,16 +353,10 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
         </>
       )}
 
-      {/* El conteo de tokens es lo que explica una espera larga: cuánto se fue
-          en pensar. Sin él, «tardó 98 segundos» no dice por qué. */}
-      {log.usage?.reasoningTokens !== null && log.usage !== null && (
-        <p className={styles.draftLogNote}>
-          {t('pipeline.openspec.prepare.aiLogTokens', {
-            reasoning: log.usage.reasoningTokens ?? 0,
-            completion: log.usage.completionTokens ?? 0,
-          })}
-        </p>
-      )}
+      {/* El tiempo y el conteo de tokens explican la espera: cuánto tardó el
+          pedido y cuánto presupuesto se fue en entrada, salida y pensar.
+          Sin ellos, una espera larga no dice qué pasó. */}
+      {timingAndTokens && <p className={styles.draftLogNote}>{timingAndTokens}</p>}
     </section>
   );
 }

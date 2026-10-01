@@ -6,6 +6,8 @@ import {
   finishDraftLog,
   getDraftLogSnapshot,
   REASONING_LIMIT,
+  setActiveDraftLog,
+  setDraftLogTiming,
   startDraftLog,
   subscribeDraftLog,
   type DraftLog,
@@ -33,6 +35,8 @@ const vacio: DraftLog = {
   usage: null,
   streaming: true,
   error: null,
+  startedAt: null,
+  finishedAt: null,
 };
 
 beforeEach(() => { clearDraftLog(); });
@@ -50,7 +54,7 @@ describe('acumular lo que llega', () => {
     const log = applyChunks(vacio, [{
       kind: 'done',
       finishReason: 'stop',
-      usage: { promptTokens: 28, completionTokens: 311, reasoningTokens: 278 },
+      usage: { promptTokens: 28, cachedPromptTokens: null, completionTokens: 311, reasoningTokens: 278 },
     }]);
 
     expect(log.streaming).toBe(false);
@@ -65,7 +69,7 @@ describe('acumular lo que llega', () => {
     const conConteo = applyChunks(vacio, [{
       kind: 'done',
       finishReason: null,
-      usage: { promptTokens: 28, completionTokens: 311, reasoningTokens: 278 },
+      usage: { promptTokens: 28, cachedPromptTokens: null, completionTokens: 311, reasoningTokens: 278 },
     }]);
     const despues = applyChunks(conConteo, [{ kind: 'done', finishReason: 'stop', usage: null }]);
 
@@ -199,5 +203,38 @@ describe('terminar', () => {
     finishDraftLog();
 
     expect(escucha).not.toHaveBeenCalled();
+  });
+});
+
+describe('tiempos de ejecución (tarea 2.5 / D18)', () => {
+  it('fijar tiempos de A no cambia B; el snapshot del activo los muestra', () => {
+    startDraftLog('A');
+    startDraftLog('B');
+
+    // Inicialmente vacíos
+    expect(getDraftLogSnapshot('A').startedAt).toBeNull();
+    expect(getDraftLogSnapshot('A').finishedAt).toBeNull();
+    expect(getDraftLogSnapshot('B').startedAt).toBeNull();
+    expect(getDraftLogSnapshot('B').finishedAt).toBeNull();
+
+    // Fijamos tiempos sólo para A
+    setDraftLogTiming('A', { startedAt: 1000, finishedAt: 5000 });
+
+    // B no cambia
+    expect(getDraftLogSnapshot('B').startedAt).toBeNull();
+    expect(getDraftLogSnapshot('B').finishedAt).toBeNull();
+
+    // A sí cambió
+    expect(getDraftLogSnapshot('A').startedAt).toBe(1000);
+    expect(getDraftLogSnapshot('A').finishedAt).toBe(5000);
+
+    // Si el activo es B (el último iniciado), el snapshot activo no muestra los de A
+    expect(getDraftLogSnapshot().startedAt).toBeNull();
+    expect(getDraftLogSnapshot().finishedAt).toBeNull();
+
+    // Pasamos el activo a A y el snapshot del activo los muestra
+    setActiveDraftLog('A');
+    expect(getDraftLogSnapshot().startedAt).toBe(1000);
+    expect(getDraftLogSnapshot().finishedAt).toBe(5000);
   });
 });

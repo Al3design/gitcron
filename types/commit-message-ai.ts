@@ -174,6 +174,8 @@ export type DraftChunk =
 
 export interface DraftUsage {
   promptTokens: number | null;
+  /** Tokens de la entrada que el servidor encontró ya en su caché. */
+  cachedPromptTokens: number | null;
   completionTokens: number | null;
   /** Cuántos se fueron en pensar. Es el número que explica las esperas largas. */
   reasoningTokens: number | null;
@@ -200,6 +202,10 @@ export interface DraftStateEvent {
   status: DraftStatus;
   /** Si está en fila, qué repositorio está corriendo actualmente. */
   activeRepoPath?: string | null;
+  /** Momento en que la redacción empezó a correr (ms de época). */
+  startedAt?: number;
+  /** Momento en que la redacción terminó (ms de época). */
+  finishedAt?: number;
 }
 
 /**

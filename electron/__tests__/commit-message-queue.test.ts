@@ -99,6 +99,7 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       draftId: 'draft-1',
       repoPath: 'C:/repoA',
       status: 'running',
+      startedAt: expect.any(Number),
     });
 
     // Disparamos pedido 2 en repoB mientras el primero sigue en curso
@@ -112,7 +113,7 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       },
     );
 
-    // Verificamos que el segundo quedó en fila (queued) y nombra a repoA como el activo
+    // Verificamos que el segundo quedó en fila (queued) y nombra a repoA como el activo (sin tiempos)
     expect(sender.send).toHaveBeenCalledWith('commit-ai:draft-state', {
       draftId: 'draft-2',
       repoPath: 'C:/repoB',
@@ -138,6 +139,8 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       draftId: 'draft-1',
       repoPath: 'C:/repoA',
       status: 'completed',
+      startedAt: expect.any(Number),
+      finishedAt: expect.any(Number),
     });
 
     // Al terminar el primero, el segundo pasa a running
@@ -148,6 +151,7 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       draftId: 'draft-2',
       repoPath: 'C:/repoB',
       status: 'running',
+      startedAt: expect.any(Number),
     });
 
     // Resolvemos el segundo pedido
@@ -163,7 +167,36 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       draftId: 'draft-2',
       repoPath: 'C:/repoB',
       status: 'completed',
+      startedAt: expect.any(Number),
+      finishedAt: expect.any(Number),
     });
+
+    // Comprobaciones de tiempos medidos en el proceso principal:
+    // - startedAt <= finishedAt en ambos
+    // - el segundo, que esperó en fila, tiene startedAt posterior (o igual) al finishedAt del primero
+    // - el pedido mientras estuvo en fila no llevó tiempos
+    const stateCalls = sender.send.mock.calls
+      .filter((c: any[]) => c[0] === 'commit-ai:draft-state')
+      .map((c: any[]) => c[1]);
+
+    const d1Running = stateCalls.find((e: any) => e.draftId === 'draft-1' && e.status === 'running')!;
+    const d1Completed = stateCalls.find((e: any) => e.draftId === 'draft-1' && e.status === 'completed')!;
+    const d2Queued = stateCalls.find((e: any) => e.draftId === 'draft-2' && e.status === 'queued')!;
+    const d2Running = stateCalls.find((e: any) => e.draftId === 'draft-2' && e.status === 'running')!;
+    const d2Completed = stateCalls.find((e: any) => e.draftId === 'draft-2' && e.status === 'completed')!;
+
+    expect(d1Running.startedAt).toBeDefined();
+    expect(d1Completed.startedAt).toBe(d1Running.startedAt);
+    expect(d1Completed.startedAt).toBeLessThanOrEqual(d1Completed.finishedAt);
+
+    expect(d2Queued.startedAt).toBeUndefined();
+    expect(d2Queued.finishedAt).toBeUndefined();
+
+    expect(d2Running.startedAt).toBeDefined();
+    expect(d2Completed.startedAt).toBe(d2Running.startedAt);
+    expect(d2Completed.startedAt).toBeLessThanOrEqual(d2Completed.finishedAt);
+
+    expect(d2Running.startedAt).toBeGreaterThanOrEqual(d1Completed.finishedAt);
   });
 
   it('cancelar el pedido que está en fila no toca al que está corriendo', async () => {
@@ -218,6 +251,14 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
       repoPath: 'C:/repoB',
       status: 'cancelled',
     });
+
+    // Un pedido cancelado mientras estaba en fila no corrió: va sin tiempos
+    const d2Cancelled = sender.send.mock.calls
+      .filter((c: any[]) => c[0] === 'commit-ai:draft-state')
+      .map((c: any[]) => c[1])
+      .find((e: any) => e.draftId === 'draft-2' && e.status === 'cancelled')!;
+    expect(d2Cancelled.startedAt).toBeUndefined();
+    expect(d2Cancelled.finishedAt).toBeUndefined();
 
     // El pedido 1 sigue corriendo intacto
     expect(mockDraftCommitSubject).toHaveBeenCalledTimes(1);

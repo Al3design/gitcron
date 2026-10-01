@@ -52,6 +52,10 @@ export interface DraftLog {
    * parte de la respuesta.
    */
   error: string | null;
+  /** Momento en que la redacción empezó a correr (ms de época). */
+  startedAt: number | null;
+  /** Momento en que la redacción terminó (ms de época). */
+  finishedAt: number | null;
 }
 
 const EMPTY: DraftLog = {
@@ -63,6 +67,8 @@ const EMPTY: DraftLog = {
   usage: null,
   streaming: false,
   error: null,
+  startedAt: null,
+  finishedAt: null,
 };
 
 const logsByDraftId = new Map<string, DraftLog>();
@@ -109,10 +115,53 @@ export function setActiveDraftLog(draftId: string | null): void {
  * el instante en que termina, que es justo cuando se lo quiere leer.
  */
 export function startDraftLog(draftId: string): void {
-  const newLog: DraftLog = { ...EMPTY, draftId, streaming: true };
+  const existing = logsByDraftId.get(draftId);
+  const newLog: DraftLog = {
+    ...EMPTY,
+    draftId,
+    streaming: true,
+    startedAt: existing?.startedAt ?? null,
+    finishedAt: existing?.finishedAt ?? null,
+  };
   logsByDraftId.set(draftId, newLog);
   activeDraftId = draftId;
   snapshot = newLog;
+  notify();
+}
+
+/**
+ * Fija los tiempos de ejecución medidos en el proceso principal para una redacción.
+ *
+ * Los tiempos pertenecen exclusivamente al `draftId` indicado y no se cruzan
+ * con los de otras redacciones.
+ */
+export function setDraftLogTiming(
+  draftId: string,
+  timing: { startedAt?: number | null; finishedAt?: number | null },
+): void {
+  const current = logsByDraftId.get(draftId);
+  if (!current) {
+    const newLog: DraftLog = {
+      ...EMPTY,
+      draftId,
+      startedAt: timing.startedAt ?? null,
+      finishedAt: timing.finishedAt ?? null,
+    };
+    logsByDraftId.set(draftId, newLog);
+    if (activeDraftId === draftId) {
+      snapshot = newLog;
+      notify();
+    }
+    return;
+  }
+  const startedAt = timing.startedAt !== undefined ? timing.startedAt : current.startedAt;
+  const finishedAt = timing.finishedAt !== undefined ? timing.finishedAt : current.finishedAt;
+  if (startedAt === current.startedAt && finishedAt === current.finishedAt) return;
+  const updated: DraftLog = { ...current, startedAt, finishedAt };
+  logsByDraftId.set(draftId, updated);
+  if (activeDraftId === draftId) {
+    snapshot = updated;
+  }
   notify();
 }
 

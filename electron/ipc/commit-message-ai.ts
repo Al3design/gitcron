@@ -102,10 +102,12 @@ function notifyDraftState(sender: Electron.WebContents, event: DraftStateEvent):
 async function startQueueItem(item: QueuedDraftItem): Promise<void> {
   runningDraft = item;
   item.status = 'running';
+  const startedAt = Date.now();
   notifyDraftState(item.sender, {
     draftId: item.draftId,
     repoPath: item.repoPath,
     status: 'running',
+    startedAt,
   });
 
   let result: Result<CommitDraftResult>;
@@ -119,12 +121,15 @@ async function startQueueItem(item: QueuedDraftItem): Promise<void> {
     result = ok(toUnavailable(error));
   }
 
+  const finishedAt = Date.now();
   const finalStatus = item.controller.signal.aborted ? 'cancelled' : 'completed';
   item.status = finalStatus;
   notifyDraftState(item.sender, {
     draftId: item.draftId,
     repoPath: item.repoPath,
     status: finalStatus,
+    startedAt,
+    finishedAt,
   });
 
   item.resolve(result);

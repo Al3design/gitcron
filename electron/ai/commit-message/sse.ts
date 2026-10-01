@@ -40,7 +40,12 @@ function text(value: unknown): string {
 export function parseChatChunk(payload: unknown): DraftChunk | null {
   const frame = payload as {
     choices?: Array<{ delta?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }; finish_reason?: unknown }>;
-    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown; completion_tokens_details?: { reasoning_tokens?: unknown } };
+    usage?: {
+      prompt_tokens?: unknown;
+      prompt_tokens_details?: { cached_tokens?: unknown };
+      completion_tokens?: unknown;
+      completion_tokens_details?: { reasoning_tokens?: unknown };
+    };
     error?: { message?: unknown };
   };
 
@@ -58,6 +63,7 @@ export function parseChatChunk(payload: unknown): DraftChunk | null {
   const usage = frame?.usage
     ? {
       promptTokens: int(frame.usage.prompt_tokens),
+      cachedPromptTokens: int(frame.usage.prompt_tokens_details?.cached_tokens),
       completionTokens: int(frame.usage.completion_tokens),
       reasoningTokens: int(frame.usage.completion_tokens_details?.reasoning_tokens),
     }

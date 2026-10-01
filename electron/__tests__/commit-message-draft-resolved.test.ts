@@ -481,7 +481,96 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     expect(chunks).toEqual([
       { kind: 'reasoning', text: 'Mirando el diff' },
       { kind: 'content', text: 'feat: prueba' },
+      {
+        kind: 'done',
+        finishReason: null,
+        usage: {
+          promptTokens: 20847,
+          cachedPromptTokens: null,
+          completionTokens: 7,
+          reasoningTokens: null,
+        },
+      },
     ]);
+  });
+
+  it('codex CLI: con salida medida (2026-10-01), el done llega con los cuatro números y después del contenido', async () => {
+    const { draftCommitWithCodex } = await import('../ai/commit-message/codex-cli');
+    const chunks: DraftChunk[] = [];
+    const result = await draftCommitWithCodex({
+      model: 'gpt-5.6-luna',
+      prompt: 'test prompt',
+      onChunk: (c) => chunks.push(...c),
+      spawnFn: spawnEmitting(
+        [
+          { type: 'thread.started', thread_id: 't' },
+          { type: 'turn.started' },
+          { type: 'item.completed', item: { id: 'item_1', type: 'reasoning', text: 'Pensando...' } },
+          { type: 'item.completed', item: { id: 'item_2', type: 'agent_message', text: 'feat: commit listo' } },
+          // Salida real medida el 2026-10-01:
+          {
+            type: 'turn.completed',
+            usage: {
+              input_tokens: 20847,
+              cached_input_tokens: 8960,
+              output_tokens: 7,
+              reasoning_output_tokens: 0,
+            },
+          },
+        ],
+        0,
+      ) as any,
+      resolveExecutable: async () => ({ file: 'codex', viaShell: false }),
+    });
+
+    expect(result).toEqual({ status: 'drafted', subject: 'feat: commit listo', model: 'gpt-5.6-luna' });
+
+    // El done llega después del contenido con los cuatro números
+    expect(chunks).toEqual([
+      { kind: 'reasoning', text: 'Pensando...' },
+      { kind: 'content', text: 'feat: commit listo' },
+      {
+        kind: 'done',
+        finishReason: null,
+        usage: {
+          promptTokens: 20847,
+          cachedPromptTokens: 8960,
+          completionTokens: 7,
+          reasoningTokens: 0,
+        },
+      },
+    ]);
+
+    const contentIdx = chunks.findIndex((c) => c.kind === 'content');
+    const doneIdx = chunks.findIndex((c) => c.kind === 'done');
+    expect(contentIdx).toBeGreaterThanOrEqual(0);
+    expect(doneIdx).toBeGreaterThan(contentIdx);
+  });
+
+  it('codex CLI: sin turn.completed no hay done con conteo', async () => {
+    const { draftCommitWithCodex } = await import('../ai/commit-message/codex-cli');
+    const chunks: DraftChunk[] = [];
+    const result = await draftCommitWithCodex({
+      model: 'gpt-5.6-luna',
+      prompt: 'test prompt',
+      onChunk: (c) => chunks.push(...c),
+      spawnFn: spawnEmitting(
+        [
+          { type: 'thread.started', thread_id: 't' },
+          { type: 'turn.started' },
+          { type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: 'fix: sin conteo' } },
+          // Sin turn.completed
+        ],
+        0,
+      ) as any,
+      resolveExecutable: async () => ({ file: 'codex', viaShell: false }),
+    });
+
+    expect(result).toEqual({ status: 'drafted', subject: 'fix: sin conteo', model: 'gpt-5.6-luna' });
+    expect(chunks).toEqual([
+      { kind: 'content', text: 'fix: sin conteo' },
+    ]);
+    expect(chunks.some((c) => c.kind === 'done')).toBe(false);
   });
 
   it('codex CLI: el fallo de la API se muestra legible, no como JSON', async () => {

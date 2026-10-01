@@ -254,8 +254,8 @@ contextBridge.exposeInMainWorld('api', {
     /**
      * Cambios de estado de cada pedido de redacción (en fila, en curso, terminado, cancelado).
      */
-    onDraftState: (cb: (event: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null }) => void) => {
-      const handler = (_e: unknown, payload: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null }) => cb(payload);
+    onDraftState: (cb: (event: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null; startedAt?: number; finishedAt?: number }) => void) => {
+      const handler = (_e: unknown, payload: { draftId: string; repoPath: string; status: 'queued' | 'running' | 'completed' | 'cancelled'; activeRepoPath?: string | null; startedAt?: number; finishedAt?: number }) => cb(payload);
       ipcRenderer.on('commit-ai:draft-state', handler);
       return () => ipcRenderer.removeListener('commit-ai:draft-state', handler);
     },
