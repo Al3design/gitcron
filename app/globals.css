@@ -69,6 +69,7 @@
 
   /* Shared Auxiliary Accent */
   --color-accent-purple: light-dark(#5929a5, #b58bf8); /* Deep purple helper tag colors */
+  --color-ai: var(--color-accent-purple); /* violeta = IA (D20) */
 
   /* Shared Spacing Scale (Affects: padding, margin, gap across all views) */
   --space-0: 0;
@@ -786,6 +787,56 @@ body, .font-sans {
 }
 
 /* ─── Piezas compartidas ─── */
+/* El brillo que recorre las letras mientras la IA piensa (D20).
+   Va SIEMPRE en un <span> propio, sin clase de módulo, dentro del elemento que
+   lleva el estilo. Puesto sobre un elemento con su propio `color` o su propia
+   `animation`, uno de los dos pisa al otro según qué hoja cargue después: el
+   color tapaba el brillo de «en vivo», y el brillo apagaba el fundido de las
+   frases que rotan (auditoría de la tanda 08). */
+.ai-thinking-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-text-secondary),
+    var(--color-ai),
+    var(--color-primary),
+    var(--color-text-secondary)
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-thinking-shimmer 2s linear infinite;
+}
+
+@keyframes ai-thinking-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-thinking-text {
+    animation: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    background: none;
+    color: var(--color-ai);
+  }
+}
+
+@media (forced-colors: active) {
+  .ai-thinking-text {
+    animation: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+    background: none;
+    color: CanvasText;
+  }
+}
+
 .pipeline-icon {
   flex-shrink: 0;
 }

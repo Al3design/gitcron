@@ -376,4 +376,30 @@ describe('la espera', () => {
     await screen.findByText(/prepare\.aiNoAnswer/);
     expect(setCommitMessage).not.toHaveBeenCalled();
   });
+
+  it('el texto del botón lleva ai-thinking-text mientras redacta, y en reposo no (D20)', async () => {
+    let resolver: (value: unknown) => void = () => undefined;
+    draft.mockReturnValue(new Promise((resolve) => { resolver = resolve; }));
+
+    abrirPreparacion();
+    await elegirModelo();
+    elegirTodo();
+
+    const boton = botonRedactar();
+    expect(boton.classList.contains('ai-thinking-text')).toBe(false);
+    expect(boton.querySelector('.ai-thinking-text')).toBeNull();
+
+    fireEvent.click(boton);
+
+    // Mientras redacta, el texto lleva ai-thinking-text
+    const textoOcupado = await screen.findByText(/prepare\.aiBusy/);
+    expect(textoOcupado.classList.contains('ai-thinking-text')).toBe(true);
+    expect(boton.classList.contains('ai-thinking-text')).toBe(false);
+
+    // Al terminar, el botón y su texto ya no la llevan
+    resolver({ success: true, data: { status: 'no-answer', reason: 'empty', model: 'm' } });
+    await screen.findByRole('button', { name: /prepare\.aiDraft/ });
+    expect(botonRedactar().classList.contains('ai-thinking-text')).toBe(false);
+    expect(botonRedactar().querySelector('.ai-thinking-text')).toBeNull();
+  });
 });

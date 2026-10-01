@@ -987,21 +987,35 @@
    orden, y había que leerlos para saber cuáles iban juntos. El fondo los agrupa
    de un vistazo, que es lo que una línea no hace. Ale lo pidió señalando el
    sector entero.
-   Un punto más claro que el fondo base (--color-bg-overlay): se lee como algo que
-   está apoyado encima y no como un hueco, tanto en tema oscuro como en tema claro.
+   Borde con el violeta mezclado con --color-border-subtle y un fondo con un
+   degradé suave del violeta al primario sobre --color-bg-overlay (D20).
    .aiFacts adentro usa --color-bg-overlay como bloque embebido. */
 .aiPanel {
   margin: 0 0 var(--sp-5);
   padding: var(--sp-4) var(--sp-4) var(--sp-2);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
   border-radius: var(--radius-md);
-  background: var(--color-bg-overlay);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent)),
+    var(--color-bg-overlay);
 }
 /* El primer y el último bloque de adentro no repiten el aire del contenedor:
    con sus propios márgenes, el recuadro quedaba con el doble de aire arriba y
    abajo que a los costados. */
 .aiPanel > .aiRow { margin-block-start: 0; }
 .aiPanel > :last-child { margin-block-end: 0; }
+
+/* El botón «Redactar con IA» se distingue como acción de IA (borde y texto violeta, D20)
+   sin dejar de ser un secondaryAction: no cambia su tamaño ni su forma. */
+.aiDraftAction {
+  border-color: color-mix(in srgb, var(--color-ai) 60%, transparent);
+  color: var(--color-ai);
+}
+.aiDraftAction:hover:not(:disabled) {
+  border-color: var(--color-ai);
+  color: var(--color-ai);
+  background: color-mix(in srgb, var(--color-ai) 10%, transparent);
+}
 
 .aiFacts {
   margin: 0 0 var(--sp-4);
@@ -1261,13 +1275,14 @@
   gap: var(--sp-2);
   margin: 0 var(--sp-3) var(--sp-2);
   padding: var(--sp-3);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
   background: color-mix(in srgb, var(--color-bg-overlay) 46%, transparent);
 }
 /* El estado («en vivo», «terminó») en el encabezado de la sección, sin
-   cursiva: es una etiqueta, no énfasis. */
+   cursiva: es una etiqueta, no énfasis. Violeta (D20); «terminó» queda
+   quieto y «en vivo» lleva el brillo ai-thinking-text. */
 .draftLogStatus {
-  color: var(--color-primary);
+  color: var(--color-ai);
   font-style: normal;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1406,15 +1421,15 @@
    Se crea clase separada porque .draftLogNote se usa para avisos de texto truncado. */
 .draftLogTiming { margin: 0; color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent); font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace; }
 
-/* El aviso de la redacción, ya en el rail. Ámbar: que lo haya escrito un modelo
-   y no la aplicación es exactamente el tipo de cosa que pide atención antes de
-   confirmar, y ése es el punto de la rotulación de autoría. */
+/* El aviso de la redacción, ya en el rail. Violeta: dice quién escribió
+   (la autoría), no pide atención. El ámbar queda para lo que sí la pide,
+   como los fallos (D20). */
 .draftLogNotice {
   margin: 0;
   padding: var(--sp-2) var(--sp-3);
-  border-left: 2px solid var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 7%, transparent);
-  color: var(--color-warning);
+  border-left: 2px solid var(--color-ai);
+  background: color-mix(in srgb, var(--color-ai) 7%, transparent);
+  color: var(--color-ai);
   font-size: var(--font-size-xs); line-height: 1.55; font-family: var(--font-mono), ui-monospace, monospace;
   overflow-wrap: anywhere;
 }

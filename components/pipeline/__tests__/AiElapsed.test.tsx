@@ -46,4 +46,15 @@ describe('AiElapsed', () => {
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
     expect(container.textContent ?? '').toContain('aiElapsedDrafting');
   });
+
+  it('durante la redacción el contador lleva ai-thinking-text, y en carga no (D20)', () => {
+    const { container: draftingContainer } = render(<AiElapsed phase="drafting" startedAt={Date.now()} />);
+    // El brillo va en un span propio, sin otra clase: puesto sobre el <em>, que
+    // tiene su color, uno de los dos pisaba al otro.
+    const brillo = draftingContainer.querySelector('em > span.ai-thinking-text');
+    expect(brillo?.className).toBe('ai-thinking-text');
+
+    const { container: loadingContainer } = render(<AiElapsed phase="loading" startedAt={Date.now()} />);
+    expect(loadingContainer.querySelector('.ai-thinking-text')).toBeNull();
+  });
 });

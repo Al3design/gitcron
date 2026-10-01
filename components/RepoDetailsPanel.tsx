@@ -363,7 +363,7 @@ export function RepoDetailsPanel({
       {hasDraftLog && (
         <SidebarSection
           title={t('pipeline.openspec.prepare.aiLogTitle')}
-          icon={<Brain size={13} aria-hidden="true" />}
+          icon={<Brain size={13} aria-hidden="true" className="text-ai" />}
           extra={<CommitDraftLogStatus draftId={activeDraftId} />}
           isOpen={sectionState.isOpen('details-draft-log')}
           onToggle={() => sectionState.toggle('details-draft-log')}

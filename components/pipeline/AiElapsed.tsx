@@ -121,7 +121,9 @@ export function AiElapsed({
         </div>
       ) : (
         // En redacción no hay barra: el vivo llega al rail. Acá sólo el contador.
-        <em aria-live="off">{text}</em>
+        <em aria-live="off">
+          {phase === 'drafting' ? <span className="ai-thinking-text">{text}</span> : text}
+        </em>
       )}
     </div>
   );

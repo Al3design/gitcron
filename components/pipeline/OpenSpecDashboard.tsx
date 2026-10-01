@@ -2653,7 +2653,7 @@ export function OpenSpecDashboard({
                         </p>
                         <button
                           type="button"
-                          className={styles.secondaryAction}
+                          className={cn(styles.secondaryAction, styles.aiDraftAction)}
                           disabled={true}
                           title={resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError')}
                         >
@@ -2686,13 +2686,15 @@ export function OpenSpecDashboard({
                         </p>
                         <button
                           type="button"
-                          className={styles.secondaryAction}
+                          className={cn(styles.secondaryAction, styles.aiDraftAction)}
                           disabled={aiBusy || chosen.length === 0}
                           onClick={draftWithAi}
                         >
-                          {aiPhase === 'drafting' || aiPhase === 'queued'
-                            ? t('pipeline.openspec.prepare.aiBusy')
-                            : t('pipeline.openspec.prepare.aiDraft')}
+                          <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
+                            {aiPhase === 'drafting' || aiPhase === 'queued'
+                              ? t('pipeline.openspec.prepare.aiBusy')
+                              : t('pipeline.openspec.prepare.aiDraft')}
+                          </span>
                         </button>
                         {aiBusy && (
                           <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
@@ -2802,13 +2804,15 @@ export function OpenSpecDashboard({
                           {!aiNeedsLoad && (
                             <button
                               type="button"
-                              className={styles.secondaryAction}
+                              className={cn(styles.secondaryAction, styles.aiDraftAction)}
                               disabled={aiBusy || chosen.length === 0 || !aiModel}
                               onClick={draftWithAi}
                             >
-                              {aiPhase === 'drafting' || aiPhase === 'queued'
-                                ? t('pipeline.openspec.prepare.aiBusy')
-                                : t('pipeline.openspec.prepare.aiDraft')}
+                              <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
+                                {aiPhase === 'drafting' || aiPhase === 'queued'
+                                  ? t('pipeline.openspec.prepare.aiBusy')
+                                  : t('pipeline.openspec.prepare.aiDraft')}
+                              </span>
                             </button>
                           )}
                           {aiBusy && (

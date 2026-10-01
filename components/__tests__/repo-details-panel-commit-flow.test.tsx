@@ -297,8 +297,12 @@ describe('RepoDetailsPanel — Flujo de Commit Unificado y Cuatro Estados (Fase 
         onRequestCleanUntracked={vi.fn()}
       />
     );
-    expect(screen.getByLabelText('pipeline.openspec.prepare.aiLogTitle')).toBeDefined();
+    const aiSection = screen.getByLabelText('pipeline.openspec.prepare.aiLogTitle');
+    expect(aiSection).toBeDefined();
     expect(screen.getByText(/Analizando archivos preparados/)).toBeDefined();
+    const toggleButton = screen.getByRole('button', { name: /pipeline\.openspec\.prepare\.aiLogTitle/ });
+    const brainIcon = toggleButton.querySelector('svg');
+    expect(brainIcon?.classList.contains('text-ai')).toBe(true);
   });
 
   it('4. La rama destino se muestra en el flujo de commit en ambas vistas', () => {

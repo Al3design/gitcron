@@ -382,7 +382,7 @@ export function CommitDraftLogStatus({ draftId }: { draftId?: string | null }) {
   return (
     <em className={styles.draftLogStatus} aria-live="polite">
       {log.streaming
-        ? t('pipeline.openspec.prepare.aiLogThinking')
+        ? <span className="ai-thinking-text">{t('pipeline.openspec.prepare.aiLogThinking')}</span>
         : t('pipeline.openspec.prepare.aiLogDone')}
     </em>
   );

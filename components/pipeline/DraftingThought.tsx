@@ -27,7 +27,7 @@ export function DraftingThought({ active, language }: { active: boolean; languag
   if (!active || !thought) return null;
   return (
     <p className={styles.messageThought} aria-live="polite" key={thought}>
-      {thought}
+      <span className="ai-thinking-text">{thought}</span>
     </p>
   );
 }

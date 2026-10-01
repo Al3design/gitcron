@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CommitDraftLog } from '../CommitDraftLog';
+import { CommitDraftLog, CommitDraftLogStatus } from '../CommitDraftLog';
+import { DraftingThought } from '../DraftingThought';
 import { clearDraftLog, startDraftLog, appendDraftChunks, setDraftLogTiming, finishDraftLog } from '@/lib/commit-draft-log';
 import { translate } from '@/lib/i18n';
 import { useGitStore } from '@/lib/git-store';
@@ -324,5 +325,77 @@ describe('CommitDraftLog — tiempo y tokens (tarea 2.5 / D18)', () => {
     useGitStore.setState({ language: 'zh' });
     render(<CommitDraftLog draftId="draft-i18n" />);
     expect(screen.getByText('耗时 14 秒 · 20,847 个输入 token（8,960 缓存） · 7 输出，0 思考')).toBeTruthy();
+  });
+});
+
+describe('CommitDraftLog — la IA tiene su color y brillo al pensar (D20 / tanda 08)', () => {
+  beforeEach(() => {
+    clearDraftLog();
+    useGitStore.setState({ language: 'es' });
+  });
+
+  afterEach(() => {
+    cleanup();
+    clearDraftLog();
+  });
+
+  it('mientras redacta, la frase que rota y «en vivo» llevan ai-thinking-text', () => {
+    startDraftLog('draft-live');
+    appendDraftChunks({
+      draftId: 'draft-live',
+      chunks: [{ kind: 'reasoning', text: 'Analizando...' }],
+    });
+
+    // La frase que rota lleva ai-thinking-text
+    const { container: thoughtContainer } = render(<DraftingThought active language="es" />);
+    // En un span propio: sobre el <p>, el brillo apagaba el fundido entre frases.
+    const thoughtEl = thoughtContainer.querySelector('p > span.ai-thinking-text');
+    expect(thoughtEl?.className).toBe('ai-thinking-text');
+
+    // «en vivo» lleva ai-thinking-text
+    const { container: statusContainer } = render(<CommitDraftLogStatus draftId="draft-live" />);
+    // En un span propio: sobre el <em>, su color violeta tapaba el brillo.
+    const statusEm = statusContainer.querySelector('em');
+    expect(statusEm?.querySelector('span.ai-thinking-text')?.className).toBe('ai-thinking-text');
+    expect(statusEm?.textContent).toBe('en vivo');
+  });
+
+  it('al terminar, «terminó» no lleva ai-thinking-text, la respuesta no la lleva y el razonamiento nunca', () => {
+    startDraftLog('draft-done');
+    appendDraftChunks({
+      draftId: 'draft-done',
+      chunks: [
+        { kind: 'reasoning', text: 'Razonamiento largo que no debe brillar' },
+        { kind: 'content', text: 'feat(core): respuesta lista' },
+      ],
+    });
+    finishDraftLog('draft-done');
+
+    // «terminó» va en violeta quieto, sin brillo
+    const { container: statusContainer } = render(<CommitDraftLogStatus draftId="draft-done" />);
+    const statusEm = statusContainer.querySelector('em');
+    expect(statusEm?.querySelector('.ai-thinking-text')).toBeNull();
+    expect(statusEm?.textContent).toBe('terminó');
+
+    render(<CommitDraftLog draftId="draft-done" />);
+
+    // El razonamiento nunca lleva ai-thinking-text
+    const reasoningText = screen.getByText('Razonamiento largo que no debe brillar');
+    expect(reasoningText.classList.contains('ai-thinking-text')).toBe(false);
+
+    // La respuesta no lleva ai-thinking-text
+    const answerText = screen.getByText('feat(core): respuesta lista');
+    expect(answerText.classList.contains('ai-thinking-text')).toBe(false);
+  });
+
+  it('el aviso de autoría ya no usa la clase o el color de advertencia', () => {
+    render(
+      <CommitDraftLog notice="Lo escribió Gemma 4, no la aplicación. Revisalo antes de confirmar." />,
+    );
+    const notice = screen.getByText(/Lo escribió Gemma 4/);
+    expect(notice).toBeDefined();
+    // No usa clases ni nombres de advertencia
+    expect(notice.className).not.toMatch(/warning/i);
+    expect(notice.className).not.toMatch(/alert/i);
   });
 });
