@@ -23,4 +23,4 @@
 
 ## 6. Integración
 
-- [ ] 6.1 **Orquestador/auditor:** Recorrido en la máquina de Ale con OpenSpec 1.14.0: la franja dice «Ciclo SDD v1.14.0»; en odontoPro Codex figura configurada por la carpeta compartida y la integración al día; una actualización real muestra el número de archivos que coincide con `git status --untracked-files=all` de lo que cambió; la lista se lee con sus explicaciones. **Comprobación:** `pnpm verificar --change actualizar-ciclo-openspec-1-14` en verde y revisión en pantalla de Ale.
+- [x] 6.1 **Orquestador/auditor:** Recorrido en la máquina de Ale con OpenSpec 1.14.0: la franja dice «Ciclo SDD v1.14.0»; en odontoPro Codex figura configurada por la carpeta compartida y la integración al día; una actualización real muestra el número de archivos que coincide con `git status --untracked-files=all` de lo que cambió; la lista se lee con sus explicaciones. **Comprobación:** `pnpm verificar --change actualizar-ciclo-openspec-1-14` en verde y revisión en pantalla de Ale.
