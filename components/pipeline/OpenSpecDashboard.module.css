@@ -1245,29 +1245,26 @@
    razón: el bloque no tiene por qué reservar lugar para algo que puede no
    llegar nunca. El techo lo pone `.draftLogStream`, que es lo único que crece
    sin límite. */
+/* Con aire a los costados: el panel derecho perdió su relleno para que Graph y
+   SDD se vean iguales, y la caja quedaba pegada a los dos bordes. El margen es
+   el mismo de los encabezados de sección. */
 .draftLog {
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
   gap: var(--sp-2);
+  margin: 0 var(--sp-3) var(--sp-2);
   padding: var(--sp-3);
   border: 1px solid var(--color-border-subtle);
   background: color-mix(in srgb, var(--color-bg-overlay) 46%, transparent);
 }
-.draftLog > h4 {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-}
-/* El estado a la derecha del título, sin cursiva: es una etiqueta, no énfasis. */
-.draftLog > h4 > em {
-  margin-left: auto;
+/* El estado («en vivo», «terminó») en el encabezado de la sección, sin
+   cursiva: es una etiqueta, no énfasis. */
+.draftLogStatus {
   color: var(--color-primary);
   font-style: normal;
   font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
 }
 
 .draftLogReasoningBox {
@@ -1476,7 +1473,8 @@
 .attention :global(.pipeline-inbox__empty) { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 .attention :global(.pipeline-inbox__note) { font-size: var(--font-size-xs); }
 .attention :global(.pipeline-inbox__list) { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.railMeta { display: flex; justify-content: space-between; color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
+/* Con relleno a los costados por lo mismo que .draftLog: sin él quedaba pegado a los bordes. */
+.railMeta { display: flex; justify-content: space-between; padding: var(--sp-2) var(--sp-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 
 .completedSummary,
 .noActiveChange {

@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 import { formatDate, formatInitials } from '@/lib/display-format';
 import { SidebarSection, StagingFileRow } from '@/components/RepoSidebarParts';
 import { OpenSpecInspector } from '@/components/pipeline/OpenSpecInspector';
-import { CommitDraftLog } from '@/components/pipeline/CommitDraftLog';
+import { CommitDraftLog, CommitDraftLogStatus } from '@/components/pipeline/CommitDraftLog';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { DEFAULT_OPEN_RIGHT_PANEL, useSidebarSectionState } from '@/hooks/use-sidebar-section-state';
 import { getDraftLogSnapshot, subscribeDraftLog } from '@/lib/commit-draft-log';
@@ -373,6 +373,7 @@ export function RepoDetailsPanel({
         <SidebarSection
           title={t('pipeline.openspec.prepare.aiLogTitle')}
           icon={<Brain size={13} aria-hidden="true" />}
+          extra={<CommitDraftLogStatus draftId={activeDraftId} />}
           isOpen={sectionState.isOpen('details-draft-log')}
           onToggle={() => sectionState.toggle('details-draft-log')}
         >

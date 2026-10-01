@@ -15,7 +15,7 @@
 // 4.18). Suscribiéndose acá, lo único que se vuelve a dibujar es esto.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Brain, Check, ChevronDown, Copy } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Copy } from 'lucide-react';
 import { getDraftLogSnapshot, subscribeDraftLog, REASONING_LIMIT } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
 import { useGitStore } from '@/lib/git-store';
@@ -120,23 +120,10 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
   const nothingYet = log.reasoning.length === 0 && log.content.length === 0;
 
   return (
+    /* Sin título propio: la sección del panel derecho que lo contiene ya dice
+       «Lo que está pensando», y el estado («en vivo», «terminó») va en ese
+       encabezado (`CommitDraftLogStatus`). Ale vio el título dos veces seguidas. */
     <section className={`${styles.draftLog} ${styles.openspecScope}`} aria-label={t('pipeline.openspec.prepare.aiLogTitle')}>
-      <h4>
-        <Brain size={13} aria-hidden="true" />
-        {t('pipeline.openspec.prepare.aiLogTitle')}
-        {/* `aria-live` en la etiqueta de estado y no sobre el texto: leer en voz
-            alta cada pedazo del razonamiento sería inutilizable con lector de
-            pantalla. Lo que se anuncia es que empezó y que terminó. */}
-        {/* El estado sólo si hubo una redacción: con un aviso suelto —cargar o
-            expulsar el modelo— no hay nada que esté ni en vivo ni terminado. */}
-        {log.draftId !== null && (
-          <em aria-live="polite">
-            {log.streaming
-              ? t('pipeline.openspec.prepare.aiLogThinking')
-              : t('pipeline.openspec.prepare.aiLogDone')}
-          </em>
-        )}
-      </h4>
 
       {/* El aviso de la redacción: quién la escribió, o qué falló. Estaba en el
           centro diciendo lo mismo que este bloque, a dos columnas de distancia.
@@ -284,5 +271,32 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * «en vivo» o «terminó», para el encabezado de la sección que contiene el
+ * bloque. Estaba dentro del bloque, al lado de un segundo título igual al de la
+ * sección; en el encabezado se ve también con la sección cerrada.
+ */
+export function CommitDraftLogStatus({ draftId }: { draftId?: string | null }) {
+  const t = useT();
+  const log = useSyncExternalStore(
+    subscribeDraftLog,
+    () => getDraftLogSnapshot(draftId),
+    () => getDraftLogSnapshot(draftId),
+  );
+  // Sólo si hubo una redacción: con un aviso suelto —cargar o expulsar el
+  // modelo— no hay nada que esté ni en vivo ni terminado.
+  if (log.draftId === null) return null;
+  // `aria-live` en la etiqueta de estado y no sobre el texto: leer en voz alta
+  // cada pedazo del razonamiento sería inutilizable con lector de pantalla. Lo
+  // que se anuncia es que empezó y que terminó.
+  return (
+    <em className={styles.draftLogStatus} aria-live="polite">
+      {log.streaming
+        ? t('pipeline.openspec.prepare.aiLogThinking')
+        : t('pipeline.openspec.prepare.aiLogDone')}
+    </em>
   );
 }
