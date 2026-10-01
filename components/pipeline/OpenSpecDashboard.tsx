@@ -2607,10 +2607,16 @@ export function OpenSpecDashboard({
                       Preparar con el campo vacío sigue usando la sugerencia —eso
                       pasa en `prepareCommit`, no acá—, así que no se pierde la
                       comodidad de no tener que escribir nada. */}
+                  {/* Varias líneas y no `<input>`: la redacción trae asunto,
+                      renglón en blanco y cuerpo, y un campo de una línea borra
+                      los saltos al mostrarlos —se leía «…delegación
+                      localActualiza…»—; si se editaba ahí, el pegote quedaba en
+                      el mensaje. Ale lo vio con la primera redacción de Codex.
+                      Crece con el texto hasta un tope y después desplaza. */}
                   <label className={styles.messageField}>
                     <strong>{t('pipeline.openspec.prepare.message')}</strong>
-                    <input
-                      type="text"
+                    <textarea
+                      rows={1}
                       value={commitMessage}
                       disabled={prepareBusy || aiBusy}
                       placeholder={chosen.length > 0

@@ -646,10 +646,15 @@
   font-style: normal;
 }
 
-.messageField { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
-.messageField > strong { flex: 0 0 auto; color: var(--color-text-secondary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-.messageField input {
+.messageField { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
+.messageField > strong { flex: 0 0 auto; padding-top: var(--space-2); color: var(--color-text-secondary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
+.messageField textarea {
   min-width: 0;
+  /* Crece con el texto (asunto + cuerpo) hasta un tope; después desplaza. */
+  field-sizing: content;
+  max-height: 12lh;
+  resize: vertical;
+  line-height: 1.5;
   flex: 1 1 auto;
   padding: var(--space-2) var(--space-2);
   border: 1px solid var(--color-border-subtle);
@@ -658,16 +663,16 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
 }
-.messageField input::placeholder {
+.messageField textarea::placeholder {
   color: var(--color-text-secondary);
   opacity: 0.85;
 }
 /* El contorno no se apaga: antes iba `outline: none` con un cambio de borde de
    un píxel como único reemplazo, y encima sobre `:focus`, así que también se
    disparaba al hacer clic. */
-.messageField input:focus-visible { border-color: var(--color-primary); outline: var(--focus-ring); outline-offset: 1px; }
-.messageField input:focus:not(:focus-visible) { border-color: var(--color-primary); }
-.messageField input:disabled {
+.messageField textarea:focus-visible { border-color: var(--color-primary); outline: var(--focus-ring); outline-offset: 1px; }
+.messageField textarea:focus:not(:focus-visible) { border-color: var(--color-primary); }
+.messageField textarea:disabled {
   background: color-mix(in srgb, var(--color-bg-base) 70%, var(--color-border-subtle));
   color: var(--color-text-secondary);
   cursor: not-allowed;
