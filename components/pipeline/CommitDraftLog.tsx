@@ -356,7 +356,7 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
       {/* El tiempo y el conteo de tokens explican la espera: cuánto tardó el
           pedido y cuánto presupuesto se fue en entrada, salida y pensar.
           Sin ellos, una espera larga no dice qué pasó. */}
-      {timingAndTokens && <p className={styles.draftLogNote}>{timingAndTokens}</p>}
+      {timingAndTokens && <p className={styles.draftLogTiming}>{timingAndTokens}</p>}
     </section>
   );
 }

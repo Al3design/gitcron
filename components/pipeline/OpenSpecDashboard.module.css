@@ -1397,8 +1397,14 @@
 .draftLogAnswer > strong { color: var(--color-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 .draftLogAnswer > span { overflow-wrap: anywhere; color: var(--color-text-primary); white-space: pre-wrap; }
 
-/* Lo que se declara sobre el propio texto: que está recortado, y el conteo. */
+/* Lo que se declara sobre el propio texto: que está recortado. */
 .draftLogNote { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace; }
+
+/* La línea de tiempo y tokens: más apagada que el texto de la respuesta
+   usando la convención de gris secundario al 70 % (color-mix con transparent),
+   sin cambiar el tamaño para no perforar el piso de legibilidad font-size-xs (tanda 07).
+   Se crea clase separada porque .draftLogNote se usa para avisos de texto truncado. */
+.draftLogTiming { margin: 0; color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent); font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace; }
 
 /* El aviso de la redacción, ya en el rail. Ámbar: que lo haya escrito un modelo
    y no la aplicación es exactamente el tipo de cosa que pide atención antes de

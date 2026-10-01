@@ -6,6 +6,7 @@ import { RepoDetailsPanel } from '../RepoDetailsPanel';
 import { useGitStore, type GitFile } from '@/lib/git-store';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { clearDraftLog } from '@/lib/commit-draft-log';
+import { translate } from '@/lib/i18n';
 
 const commitChangesSpy = vi.fn().mockResolvedValue(true);
 const stageFileSpy = vi.fn().mockResolvedValue(true);
@@ -76,14 +77,12 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     vi.clearAllMocks();
     clearDraftLog();
     vi.stubGlobal('confirm', vi.fn(() => true));
-    vi.stubGlobal('window', {
-      api: {
-        gitShowFiles: vi.fn().mockResolvedValue({ success: true, data: [] }),
-        pipelineOpenSpec: {
-          getEngineStatus: vi.fn().mockResolvedValue(null),
-        },
+    (window as any).api = {
+      gitShowFiles: vi.fn().mockResolvedValue({ success: true, data: [] }),
+      pipelineOpenSpec: {
+        getEngineStatus: vi.fn().mockResolvedValue(null),
       },
-    });
+    };
 
     usePipelineStore.setState({
       prepareOpen: false,
@@ -121,7 +120,7 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
 
     // Controles por rol y nombre / texto
     const stageAllBtn = screen.getByRole('button', { name: 'staging.stageAllBtn' });
-    const cleanBtn = screen.getByRole('button', { name: 'staging.cleanUntrackedBtn' });
+    const moreActionsBtn = screen.getByRole('button', { name: 'staging.moreActions' });
     const unstageAllBtn = screen.getByRole('button', { name: 'staging.unstageAllBtn' });
     const commitBtn = screen.getByRole('button', { name: /staging\.commitWithCountBtn/ });
     const amendBtn = screen.getByRole('button', { name: 'staging.amendBtn' });
@@ -129,10 +128,9 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     const undoRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.undo' });
     const abortRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.abort' });
     const continueRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.continue' });
-    const stashBtn = screen.getByRole('button', { name: 'Stash' });
 
     expect(stageAllBtn).toBeDefined();
-    expect(cleanBtn).toBeDefined();
+    expect(moreActionsBtn).toBeDefined();
     expect(unstageAllBtn).toBeDefined();
     expect(commitBtn).toBeDefined();
     expect(amendBtn).toBeDefined();
@@ -140,12 +138,13 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     expect(undoRebaseBtn).toBeDefined();
     expect(abortRebaseBtn).toBeDefined();
     expect(continueRebaseBtn).toBeDefined();
-    expect(stashBtn).toBeDefined();
 
     // Invocaciones de callbacks y acciones Git
     fireEvent.click(stageAllBtn);
     expect(stageFilesSpy).toHaveBeenCalledWith(['README.md', 'scratch.txt'], true);
 
+    fireEvent.click(moreActionsBtn);
+    const cleanBtn = screen.getByRole('button', { name: 'staging.actionCleanUntracked' });
     fireEvent.click(cleanBtn);
     expect(callbacks.onRequestCleanUntracked).toHaveBeenCalledTimes(1);
 
@@ -170,8 +169,15 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     fireEvent.click(continueRebaseBtn);
     expect(continueRebaseSpy).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(moreActionsBtn);
+    const stashBtn = screen.getByRole('button', { name: 'staging.actionStash' });
     fireEvent.click(stashBtn);
     expect(callbacks.onOpenStashModal).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(moreActionsBtn);
+    const resetAllBtn = screen.getByRole('button', { name: 'staging.actionResetAll' });
+    fireEvent.click(resetAllBtn);
+    expect(callbacks.onRequestResetAll).toHaveBeenCalledTimes(1);
   });
 
   it('2. En vista Pipeline con prepareOpen = false: el bloque Git está presente SIEMPRE y con los mismos controles y callbacks', () => {
@@ -185,7 +191,7 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
 
     // Controles Git presentes en el inspector con preparación cerrada
     const stageAllBtn = screen.getByRole('button', { name: 'staging.stageAllBtn' });
-    const cleanBtn = screen.getByRole('button', { name: 'staging.cleanUntrackedBtn' });
+    const moreActionsBtn = screen.getByRole('button', { name: 'staging.moreActions' });
     const unstageAllBtn = screen.getByRole('button', { name: 'staging.unstageAllBtn' });
     const commitBtn = screen.getByRole('button', { name: /staging\.commitWithCountBtn/ });
     const amendBtn = screen.getByRole('button', { name: 'staging.amendBtn' });
@@ -193,10 +199,9 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     const undoRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.undo' });
     const abortRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.abort' });
     const continueRebaseBtn = screen.getByRole('button', { name: 'rebase.banner.btn.continue' });
-    const stashBtn = screen.getByRole('button', { name: 'Stash' });
 
     expect(stageAllBtn).toBeDefined();
-    expect(cleanBtn).toBeDefined();
+    expect(moreActionsBtn).toBeDefined();
     expect(unstageAllBtn).toBeDefined();
     expect(commitBtn).toBeDefined();
     expect(amendBtn).toBeDefined();
@@ -204,12 +209,13 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     expect(undoRebaseBtn).toBeDefined();
     expect(abortRebaseBtn).toBeDefined();
     expect(continueRebaseBtn).toBeDefined();
-    expect(stashBtn).toBeDefined();
 
     // Todos los callbacks se invocan idénticamente en Pipeline
     fireEvent.click(stageAllBtn);
     expect(stageFilesSpy).toHaveBeenCalledWith(['README.md', 'scratch.txt'], true);
 
+    fireEvent.click(moreActionsBtn);
+    const cleanBtn = screen.getByRole('button', { name: 'staging.actionCleanUntracked' });
     fireEvent.click(cleanBtn);
     expect(callbacks.onRequestCleanUntracked).toHaveBeenCalledTimes(1);
 
@@ -234,8 +240,15 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     fireEvent.click(continueRebaseBtn);
     expect(continueRebaseSpy).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(moreActionsBtn);
+    const stashBtn = screen.getByRole('button', { name: 'staging.actionStash' });
     fireEvent.click(stashBtn);
     expect(callbacks.onOpenStashModal).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(moreActionsBtn);
+    const resetAllBtn = screen.getByRole('button', { name: 'staging.actionResetAll' });
+    fireEvent.click(resetAllBtn);
+    expect(callbacks.onRequestResetAll).toHaveBeenCalledTimes(1);
   });
 
   it('3. En vista Pipeline con prepareOpen = true: mantiene los mismos controles y la caja de commit editable', () => {
@@ -244,7 +257,7 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     renderPanelWithStrictMode('Pipeline', callbacks);
 
     expect(screen.getByRole('button', { name: 'staging.stageAllBtn' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'staging.moreActions' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'staging.unstageAllBtn' })).toBeDefined();
     expect(screen.getByRole('button', { name: /staging\.commitWithCountBtn/ })).toBeDefined();
     expect(screen.getByRole('button', { name: 'staging.amendBtn' })).toBeDefined();
@@ -252,7 +265,6 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     expect(screen.getByRole('button', { name: 'rebase.banner.btn.undo' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'rebase.banner.btn.abort' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'rebase.banner.btn.continue' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Stash' })).toBeDefined();
 
     const textarea = screen.getByPlaceholderText('staging.commitMsgPlaceholder');
     expect(textarea).toBeDefined();
@@ -260,27 +272,86 @@ describe('RepoDetailsPanel — Operaciones Git unificadas entre Graph y SDD (Tan
     expect(useGitStore.getState().commitMessage).toBe('nueva nota');
   });
 
-  it('4. En Graph y en SDD: el título «Cambios sin preparar» está presente y los cuatro controles están en el renglón de acciones por rol y nombre', () => {
+  it('4. En Graph y en SDD: el título «Cambios sin preparar» está presente y los controles están en el renglón de acciones por rol y nombre', () => {
     const callbacks = createDefaultCallbacks();
 
     // 1. En vista Graph
     const { unmount: unmountGraph } = renderPanelWithStrictMode('Graph', callbacks);
     expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
     const actionsRowGraph = screen.getByTestId('sidebar-section-actions');
-    expect(within(actionsRowGraph).getByRole('button', { name: 'Stash' })).toBeDefined();
-    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeDefined();
-    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.discardAllTooltip' })).toBeDefined();
+    expect(within(actionsRowGraph).getByRole('button', { name: 'staging.moreActions' })).toBeDefined();
     expect(within(actionsRowGraph).getByRole('button', { name: 'staging.stageAllBtn' })).toBeDefined();
+    expect(within(actionsRowGraph).queryByRole('button', { name: 'Stash' })).toBeNull();
+    expect(within(actionsRowGraph).queryByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeNull();
+    expect(within(actionsRowGraph).queryByRole('button', { name: 'staging.discardAllTooltip' })).toBeNull();
     unmountGraph();
 
     // 2. En vista SDD (Pipeline)
     const { unmount: unmountPipeline } = renderPanelWithStrictMode('Pipeline', callbacks);
     expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
     const actionsRowPipeline = screen.getByTestId('sidebar-section-actions');
-    expect(within(actionsRowPipeline).getByRole('button', { name: 'Stash' })).toBeDefined();
-    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeDefined();
-    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.discardAllTooltip' })).toBeDefined();
+    expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.moreActions' })).toBeDefined();
     expect(within(actionsRowPipeline).getByRole('button', { name: 'staging.stageAllBtn' })).toBeDefined();
+    expect(within(actionsRowPipeline).queryByRole('button', { name: 'Stash' })).toBeNull();
+    expect(within(actionsRowPipeline).queryByRole('button', { name: 'staging.cleanUntrackedBtn' })).toBeNull();
+    expect(within(actionsRowPipeline).queryByRole('button', { name: 'staging.discardAllTooltip' })).toBeNull();
     unmountPipeline();
+  });
+
+  it('5. Menú «Más acciones»: items deshabilitados condicionalmente y cierre con Escape', async () => {
+    const callbacks = createDefaultCallbacks();
+
+    // Caso A: Con archivos modificados pero sin archivos sin seguimiento (untrackedCount = 0)
+    useGitStore.setState({
+      modifiedFiles: [
+        { path: 'src/main.ts', status: 'modified', staged: false, conflicted: false },
+      ],
+    });
+
+    const { unmount } = renderPanelWithStrictMode('Graph', callbacks);
+    const moreActionsBtn = screen.getByRole('button', { name: 'staging.moreActions' });
+    fireEvent.click(moreActionsBtn);
+
+    const cleanMenuItem = screen.getByRole('button', { name: 'staging.actionCleanUntracked' }) as HTMLButtonElement;
+    expect(cleanMenuItem.disabled).toBe(true);
+    const resetMenuItem = screen.getByRole('button', { name: 'staging.actionResetAll' }) as HTMLButtonElement;
+    expect(resetMenuItem.disabled).toBe(false);
+
+    // Escape cierra el menú
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('button', { name: 'staging.actionCleanUntracked' })).toBeNull();
+
+    unmount();
+
+    // Caso B: Sin cambios (modifiedFiles = [])
+    useGitStore.setState({ modifiedFiles: [] });
+    renderPanelWithStrictMode('Graph', callbacks);
+    const moreActionsBtnEmpty = screen.getByRole('button', { name: 'staging.moreActions' });
+    fireEvent.click(moreActionsBtnEmpty);
+
+    const resetMenuItemEmpty = screen.getByRole('button', { name: 'staging.actionResetAll' }) as HTMLButtonElement;
+    expect(resetMenuItemEmpty.disabled).toBe(true);
+    const cleanMenuItemEmpty = screen.getByRole('button', { name: 'staging.actionCleanUntracked' }) as HTMLButtonElement;
+    expect(cleanMenuItemEmpty.disabled).toBe(true);
+  });
+
+  it('6. Las claves nuevas de staging existen en los tres idiomas (ES, EN, ZH)', () => {
+    const languages = ['es', 'en', 'zh'] as const;
+    const keys = [
+      'staging.moreActions',
+      'staging.actionStash',
+      'staging.actionCleanUntracked',
+      'staging.actionResetAll',
+    ] as const;
+
+    for (const lang of languages) {
+      for (const key of keys) {
+        const translation = translate(key, lang);
+        expect(translation).toBeTruthy();
+        expect(translation).not.toBe(key);
+        expect(translation.trim().length).toBeGreaterThan(0);
+      }
+    }
   });
 });

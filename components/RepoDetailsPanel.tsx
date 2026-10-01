@@ -19,6 +19,7 @@ import {
   GitBranch,
   GitCommitHorizontal,
   Layers,
+  MoreHorizontal,
   PackageCheck,
   Play,
   RotateCcw,
@@ -32,6 +33,7 @@ import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { formatDate, formatInitials } from '@/lib/display-format';
 import { SidebarSection, StagingFileRow } from '@/components/RepoSidebarParts';
+import { UnstagedActionsMenu } from '@/components/ContextMenus';
 import { OpenSpecInspector } from '@/components/pipeline/OpenSpecInspector';
 import { CommitDraftLog, CommitDraftLogStatus } from '@/components/pipeline/CommitDraftLog';
 import { usePipelineStore } from '@/lib/pipeline-store';
@@ -103,6 +105,8 @@ export function RepoDetailsPanel({
   // Files changed in the selected commit (lazy-loaded per selection).
   const [commitFiles, setCommitFiles] = useState<GitFile[]>([]);
   const [commitFilesLoading, setCommitFilesLoading] = useState(false);
+  const [unstagedMenuOpen, setUnstagedMenuOpen] = useState(false);
+  const [unstagedMenuCoords, setUnstagedMenuCoords] = useState<{ x: number; y: number } | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -259,46 +263,30 @@ export function RepoDetailsPanel({
         count={unstaged.length}
         icon={<FileDiff size={13} aria-hidden="true" />}
         actions={
-          // Todo el ancho y no pegada a la derecha: amontonados a un costado,
-          // «Limpiar...» parecía cortado (Ale lo marcó). Los botones con texto se
-          // reparten el renglón; la papelera queda de su tamaño.
-          <div className="flex flex-1 items-center gap-2">
+          // Acciones al ancho de su contenido a la derecha: «Stage all» visible
+          // como acción principal y el resto en el menú «Más acciones» para evitar
+          // que botones individuales se estiren a todo el renglón o queden descolgados.
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onOpenStashModal}
               disabled={isLoading}
-              className="flex-1 text-center text-[length:var(--font-size-xs)] font-bold text-git-mod hover:text-bg-base hover:bg-git-mod px-2 py-0.5 rounded border border-git-mod/40 transition-colors disabled:opacity-50"
-              title={t('commit.stashTooltip')}
+              onClick={(event) => {
+                event.stopPropagation();
+                const rect = event.currentTarget.getBoundingClientRect();
+                setUnstagedMenuCoords({ x: rect.right, y: rect.bottom + 4 });
+                setUnstagedMenuOpen((prev) => !prev);
+              }}
+              className="p-1 text-text-secondary hover:text-text-primary rounded transition-colors disabled:opacity-50"
+              title={t('staging.moreActions')}
+              aria-label={t('staging.moreActions')}
             >
-              Stash
+              <MoreHorizontal size={14} />
             </button>
-            {untrackedCount > 0 && (
-              <button
-                type="button"
-                onClick={onRequestCleanUntracked}
-                disabled={isLoading}
-                className="flex-1 text-center text-[length:var(--font-size-xs)] text-warning hover:text-bg-base px-2 py-0.5 rounded border border-warning/40 hover:bg-warning transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title={t('staging.cleanUntrackedTooltip')}
-              >
-                {t('staging.cleanUntrackedBtn')}
-              </button>
-            )}
-            {modifiedFiles.length > 0 && (
-              <button
-                type="button"
-                onClick={onRequestResetAll}
-                className="p-1 text-text-secondary hover:text-error hover:bg-error/10 rounded transition-colors"
-                title={t('staging.discardAllTooltip')}
-                aria-label={t('staging.discardAllTooltip')}
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
             {unstaged.length > 0 && (
               <button
                 type="button"
                 onClick={stageAll}
-                className="flex-1 text-center text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
+                className="text-[length:var(--font-size-xs)] text-secondary hover:text-bg-base px-2 py-0.5 rounded border border-secondary/40 hover:bg-secondary transition-colors"
               >
                 {t('staging.stageAllBtn')}
               </button>
@@ -574,6 +562,20 @@ export function RepoDetailsPanel({
             {renderWorkingTreeBlock()}
           </div>
         </div>
+      )}
+
+      {unstagedMenuOpen && unstagedMenuCoords && (
+        <UnstagedActionsMenu
+          x={unstagedMenuCoords.x}
+          y={unstagedMenuCoords.y}
+          untrackedCount={untrackedCount}
+          hasModifiedFiles={modifiedFiles.length > 0}
+          isLoading={isLoading}
+          onOpenStashModal={onOpenStashModal}
+          onRequestCleanUntracked={onRequestCleanUntracked}
+          onRequestResetAll={onRequestResetAll}
+          onClose={() => setUnstagedMenuOpen(false)}
+        />
       )}
     </aside>
   );

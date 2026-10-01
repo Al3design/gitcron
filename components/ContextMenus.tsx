@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, Eraser, Pencil, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { GitFile } from '@/lib/git-store';
@@ -437,6 +437,88 @@ export function TaskContextMenu({
         danger
         icon={<Trash2 size={13} />}
         text={t('pipeline.openspec.task.delete')}
+      />
+    </motion.div>
+  );
+}
+
+export function UnstagedActionsMenu({
+  x,
+  y,
+  untrackedCount,
+  hasModifiedFiles,
+  isLoading,
+  onOpenStashModal,
+  onRequestCleanUntracked,
+  onRequestResetAll,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  untrackedCount: number;
+  hasModifiedFiles: boolean;
+  isLoading?: boolean;
+  onOpenStashModal: () => void;
+  onRequestCleanUntracked: () => void;
+  onRequestResetAll: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const { ref, coords, isMeasured } = useAdjustedPosition(x, y);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    const timer = setTimeout(() => {
+      window.addEventListener('click', handleClickOutside);
+      window.addEventListener('keydown', handleKeyDown);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose, ref]);
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isMeasured ? 1 : 0 }}
+      className="fixed glass-overlay rounded-lg py-1 z-[100] w-72 shadow-lg"
+      style={{
+        left: coords.left,
+        top: coords.top,
+        visibility: isMeasured ? 'visible' : 'hidden',
+      }}
+    >
+      <ContextMenuItem
+        onClick={() => { onClose(); onOpenStashModal(); }}
+        disabled={isLoading}
+        icon={<Archive size={13} />}
+        text={t('staging.actionStash')}
+      />
+      <ContextMenuItem
+        onClick={() => { onClose(); onRequestCleanUntracked(); }}
+        disabled={isLoading || untrackedCount === 0}
+        icon={<Eraser size={13} />}
+        text={t('staging.actionCleanUntracked')}
+      />
+      <div className="h-px bg-border-subtle/15 my-1" />
+      <ContextMenuItem
+        onClick={() => { onClose(); onRequestResetAll(); }}
+        disabled={isLoading || !hasModifiedFiles}
+        danger
+        icon={<Trash2 size={13} />}
+        text={t('staging.actionResetAll')}
       />
     </motion.div>
   );
