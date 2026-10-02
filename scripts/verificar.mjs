@@ -42,7 +42,7 @@ const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 
  * actualiza acá con causa. Medidos el 2026-09-21.
  */
 const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1112 }, // corrido de 1109 en modelos-en-casa 05: selectors de store por repositorio
+  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1113 }, // corrido de 1112 en modelos-en-casa 09: import de lib/gitcron-config-messages (antes de 1109 en 05: selectors por repositorio)
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 162 }, // corrido de 135 al agregar efecto de atención/foco en tanda 07
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 218 }, // corrido de 191 al agregar efecto de atención/foco en tanda 07
 ];

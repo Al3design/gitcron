@@ -21,6 +21,19 @@ import * as path from 'node:path';
 class AuthorizedRepoStore {
   /** Clave normalizada → ruta canónica autorizada. Presencia = autorizado. */
   private readonly authorized = new Map<string, string>();
+  /** Quienes necesitan enterarse de que se cerró la pestaña de un repositorio. */
+  private readonly deauthorizeListeners = new Set<(canonicalPath: string) => void>();
+
+  /**
+   * Avisa cuando se revoca un repositorio (se cerró su pestaña). Devuelve la baja.
+   * Existe para que lo que se abrió por ese repositorio —por ejemplo la
+   * observación de su `gitcron.json`— se cierre con él, sin que este registro
+   * tenga que conocer a cada interesado.
+   */
+  public onDeauthorize(listener: (canonicalPath: string) => void): () => void {
+    this.deauthorizeListeners.add(listener);
+    return () => this.deauthorizeListeners.delete(listener);
+  }
 
   /**
    * Normaliza una clave de ruta según la plataforma (case-insensitive en Windows).
@@ -65,12 +78,22 @@ class AuthorizedRepoStore {
    */
   public deauthorizeRepo(repoPath: string): void {
     if (typeof repoPath !== 'string' || !repoPath.trim()) return;
+    let key: string;
     try {
-      const realPath = fs.realpathSync(repoPath.trim());
-      this.authorized.delete(this.toKey(realPath));
+      key = this.toKey(fs.realpathSync(repoPath.trim()));
     } catch {
       // La carpeta pudo desaparecer: revocar por la clave derivada de la ruta recibida.
-      this.authorized.delete(this.toKey(path.normalize(repoPath.trim())));
+      key = this.toKey(path.normalize(repoPath.trim()));
+    }
+    const canonical = this.authorized.get(key);
+    this.authorized.delete(key);
+    if (canonical === undefined) return;
+    for (const listener of this.deauthorizeListeners) {
+      try {
+        listener(canonical);
+      } catch {
+        // Un interesado que falla no impide cerrar el repositorio.
+      }
     }
   }
 

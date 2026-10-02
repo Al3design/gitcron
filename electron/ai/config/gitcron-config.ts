@@ -1,7 +1,10 @@
 // electron/ai/config/gitcron-config.ts
 //
-// Lectura mínima de la configuración global de GitCron (~/.config/gitcron/gitcron.json).
-// Formato compatible con opencode.json (D1, D4, D5, D6).
+// Lectura de la configuración de GitCron: el gitcron.json global
+// (~/.config/gitcron/gitcron.json) y, si hay, el de la raíz del repositorio, mezclados
+// con prioridad del repositorio y el origen de cada valor (D2, D3). Formato compatible
+// con opencode.json (D1, D4, D5, D6). La escritura puntual está en
+// gitcron-config-writer.ts y la observación en gitcron-config-watcher.ts.
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -68,6 +71,17 @@ export interface GitCronConfig {
 
 export interface ResolvedProvenance {
   sourceFile: string;
+  /**
+   * `gitcron.json` del repositorio, cuando existe y aporta algo (D2). Con los dos
+   * archivos en juego, cada valor tiene que decir de cuál sale: la mezcla deja
+   * que el del repositorio pise sólo algunos.
+   */
+  repoFile?: string;
+  /**
+   * Las claves de procedencia (las mismas cadenas de este objeto: `model`,
+   * `options[k]`, `headers[h]`…) cuyo valor salió del archivo del repositorio.
+   */
+  fromRepo?: string[];
   model: string;
   baseURL?: string;
   temperature?: string;
@@ -100,29 +114,202 @@ export function getDefaultConfigPath(): string {
   return path.join(os.homedir(), '.config', 'gitcron', 'gitcron.json');
 }
 
-/**
- * Lee la configuración de gitcron.json soportando comentarios y comas finales.
- * Archivo ausente -> null.
- * Archivo roto -> Error con línea y motivo. Nunca se escribe el archivo.
- */
-export function readGitCronConfig(customPath?: string): GitCronConfig | null {
-  const filePath = customPath || getDefaultConfigPath();
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
+/** `gitcron.json` en la raíz de un repositorio (D2). */
+export function getRepoConfigPath(repoPath: string): string {
+  return path.join(repoPath, 'gitcron.json');
+}
 
-  const rawText = fs.readFileSync(filePath, 'utf8');
+/**
+ * Un archivo que no se pudo interpretar, con datos y no con texto.
+ *
+ * El texto lo arma la pantalla en el idioma de la persona: el que armaba este
+ * módulo («…: Error de sintaxis en la línea 27: CommaExpected») llegaba crudo,
+ * con el código interno de jsonc-parser. Ale lo vio el 2026-10-01.
+ */
+export interface GitCronConfigParseError {
+  file: string;
+  line: number;
+  column: number;
+  /** Código de jsonc-parser: `CommaExpected`, `ColonExpected`, `CloseBraceExpected`… */
+  code: string;
+}
+
+export interface GitCronConfigFileStatus {
+  path: string;
+  scope: 'global' | 'repo';
+  exists: boolean;
+  error?: GitCronConfigParseError;
+  /** El archivo está roto y se usa la última versión que se leyó bien en esta sesión. */
+  usingLastValid?: boolean;
+}
+
+export interface LoadedGitCronConfig {
+  /** La mezcla de los dos archivos; `null` si ninguno aporta nada. */
+  config: GitCronConfig | null;
+  files: GitCronConfigFileStatus[];
+  /**
+   * De qué archivo sale el valor en esa ruta. La ruta va por segmentos y no unida
+   * con puntos: los ids de modelo tienen puntos y barras (`unsloth/Qwen3.8-27B-GGUF`).
+   */
+  originOf(segments: readonly string[]): string | undefined;
+}
+
+/**
+ * Archivo roto sin una versión anterior que usar. Lleva el error con datos para
+ * que la pantalla lo explique; el mensaje es sólo para registros.
+ */
+export class GitCronConfigError extends Error {
+  constructor(public readonly parseError: GitCronConfigParseError) {
+    super(`${parseError.file}: línea ${parseError.line}, columna ${parseError.column}: ${parseError.code}`);
+    this.name = 'GitCronConfigError';
+  }
+}
+
+/**
+ * La última versión que se leyó bien de cada archivo en esta sesión. Con el
+ * archivo roto se sigue con ésta y se dice (requisito «El archivo y la pantalla
+ * dicen lo mismo»): un error al guardar a mano no tiene por qué cortar la
+ * redacción que andaba un segundo antes.
+ */
+const lastValidByFile = new Map<string, GitCronConfig>();
+
+/** Sólo para pruebas: olvidar las versiones válidas guardadas. */
+export function resetGitCronConfigCacheForTesting(): void {
+  lastValidByFile.clear();
+}
+
+type ParsedFile =
+  | { kind: 'absent' }
+  | { kind: 'ok'; config: GitCronConfig }
+  | { kind: 'error'; error: GitCronConfigParseError };
+
+/** Lee un archivo con comentarios y comas finales. Nunca lo escribe. */
+export function parseGitCronConfigFile(filePath: string): ParsedFile {
+  if (!fs.existsSync(filePath)) return { kind: 'absent' };
+  return parseGitCronConfigText(fs.readFileSync(filePath, 'utf8'), filePath);
+}
+
+/** Interpreta el texto de un gitcron.json (`filePath` sólo para el error). */
+export function parseGitCronConfigText(rawText: string, filePath: string): Exclude<ParsedFile, { kind: 'absent' }> {
   const errors: ParseError[] = [];
   const parsed = parse(rawText, errors, { allowTrailingComma: true });
-
   if (errors.length > 0) {
     const first = errors[0];
-    const line = rawText.slice(0, first.offset).split(/\r?\n/).length;
-    const msg = printParseErrorCode(first.error);
-    throw new Error(`${filePath}: Error de sintaxis en la línea ${line}: ${msg}`);
+    const before = rawText.slice(0, first.offset);
+    const lines = before.split(/\r?\n/);
+    return {
+      kind: 'error',
+      error: {
+        file: filePath,
+        line: lines.length,
+        column: lines[lines.length - 1].length + 1,
+        code: printParseErrorCode(first.error),
+      },
+    };
+  }
+  // Un archivo vacío o con un valor que no es objeto no aporta configuración.
+  const config = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? (parsed as GitCronConfig)
+    : {};
+  return { kind: 'ok', config };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+const segmentsKey = (segments: readonly string[]) => JSON.stringify(segments);
+
+/**
+ * Mezcla profunda por clave (D2): los objetos se mezclan y todo lo demás —listas
+ * incluidas— se reemplaza entero. Anota el archivo de cada ruta que escribe.
+ */
+function mergeWithOrigin(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+  file: string,
+  origins: Map<string, string>,
+  prefix: string[] = [],
+): void {
+  for (const [key, value] of Object.entries(source)) {
+    const segments = [...prefix, key];
+    if (isPlainObject(value) && isPlainObject(target[key])) {
+      mergeWithOrigin(target[key] as Record<string, unknown>, value, file, origins, segments);
+      continue;
+    }
+    target[key] = isPlainObject(value) ? structuredClone(value) : value;
+    markOrigin(value, file, origins, segments);
+  }
+}
+
+function markOrigin(value: unknown, file: string, origins: Map<string, string>, segments: string[]): void {
+  origins.set(segmentsKey(segments), file);
+  if (isPlainObject(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      markOrigin(child, file, origins, [...segments, key]);
+    }
+  }
+}
+
+/**
+ * Carga el `gitcron.json` global y, si se pasa el repositorio, el de su raíz, y
+ * los mezcla con prioridad del repositorio (D2). Un archivo roto usa su última
+ * versión válida de esta sesión si la hay; si no, no aporta nada y queda su
+ * error en `files`.
+ */
+export function loadGitCronConfig(options: { globalPath?: string; repoPath?: string | null } = {}): LoadedGitCronConfig {
+  const sources: Array<{ path: string; scope: 'global' | 'repo' }> = [
+    { path: options.globalPath || getDefaultConfigPath(), scope: 'global' },
+  ];
+  if (options.repoPath) sources.push({ path: getRepoConfigPath(options.repoPath), scope: 'repo' });
+
+  const merged: Record<string, unknown> = {};
+  const origins = new Map<string, string>();
+  const files: GitCronConfigFileStatus[] = [];
+  let contributed = false;
+
+  for (const source of sources) {
+    const parsed = parseGitCronConfigFile(source.path);
+    let config: GitCronConfig | undefined;
+    const status: GitCronConfigFileStatus = { path: source.path, scope: source.scope, exists: parsed.kind !== 'absent' };
+    if (parsed.kind === 'ok') {
+      config = parsed.config;
+      lastValidByFile.set(source.path, parsed.config);
+    } else if (parsed.kind === 'error') {
+      status.error = parsed.error;
+      config = lastValidByFile.get(source.path);
+      if (config) status.usingLastValid = true;
+    }
+    files.push(status);
+    if (config) {
+      mergeWithOrigin(merged, config, source.path, origins);
+      contributed = true;
+    }
   }
 
-  return parsed as GitCronConfig;
+  return {
+    config: contributed ? (merged as GitCronConfig) : null,
+    files,
+    originOf(segments) {
+      for (let i = segments.length; i > 0; i--) {
+        const file = origins.get(segmentsKey(segments.slice(0, i)));
+        if (file) return file;
+      }
+      return undefined;
+    },
+  };
+}
+
+/**
+ * Lee un solo archivo. Archivo ausente: `null`. Archivo roto: `GitCronConfigError`.
+ * Envoltura de `parseGitCronConfigFile` para quien necesita un archivo suelto; la
+ * resolución de usos pasa por `loadGitCronConfig`.
+ */
+export function readGitCronConfig(customPath?: string): GitCronConfig | null {
+  const parsed = parseGitCronConfigFile(customPath || getDefaultConfigPath());
+  if (parsed.kind === 'absent') return null;
+  if (parsed.kind === 'error') throw new GitCronConfigError(parsed.error);
+  return parsed.config;
 }
 
 /**
@@ -240,10 +427,14 @@ function cliDisplayName(cliId: string): string {
  */
 export function resolveUse(
   use: string = 'gitcron-commit',
-  customPathOrOptions?: string | { configPath?: string; env?: NodeJS.ProcessEnv },
+  customPathOrOptions?:
+    | string
+    | { configPath?: string; repoPath?: string | null; env?: NodeJS.ProcessEnv; loaded?: LoadedGitCronConfig },
   envArg?: NodeJS.ProcessEnv,
 ): ResolvedUse | null {
   let configPath: string | undefined;
+  let repoPath: string | null | undefined;
+  let preloaded: LoadedGitCronConfig | undefined;
   let env: NodeJS.ProcessEnv = process.env;
 
   if (typeof customPathOrOptions === 'string') {
@@ -251,17 +442,35 @@ export function resolveUse(
     if (envArg) env = envArg;
   } else if (customPathOrOptions && typeof customPathOrOptions === 'object') {
     configPath = customPathOrOptions.configPath;
+    repoPath = customPathOrOptions.repoPath;
+    preloaded = customPathOrOptions.loaded;
     if (customPathOrOptions.env) env = customPathOrOptions.env;
   }
 
-  const filePath = configPath || getDefaultConfigPath();
-  const config = readGitCronConfig(filePath);
+  const loaded = preloaded ?? loadGitCronConfig({ globalPath: configPath, repoPath });
+  // Un archivo roto sin versión anterior bloquea: seguir sólo con el otro sería
+  // redactar con una configuración que la persona no escribió así (D7).
+  const unreadable = loaded.files.find((f) => f.error && !f.usingLastValid);
+  if (unreadable?.error) throw new GitCronConfigError(unreadable.error);
+
+  const config = loaded.config;
   if (!config) return null;
 
   const agentConfig = config.agent?.[use];
   if (!agentConfig?.model || typeof agentConfig.model !== 'string') {
     return null;
   }
+
+  // De qué archivo sale cada valor (D2). `sourceFile` es el del modelo del uso.
+  const globalFile = loaded.files.find((f) => f.scope === 'global')?.path ?? (configPath || getDefaultConfigPath());
+  const filePath = loaded.originOf(['agent', use, 'model']) ?? globalFile;
+  const repoFile = loaded.files.find((f) => f.scope === 'repo')?.path;
+  const fromRepo: string[] = [];
+  const noteOrigin = (key: string, segments: string[]) => {
+    if (repoFile && loaded.originOf(segments) === repoFile) fromRepo.push(key);
+  };
+  const filesOf = () => (repoFile && fromRepo.length > 0 ? { repoFile, fromRepo: [...fromRepo] } : {});
+  noteOrigin('model', ['agent', use, 'model']);
 
   const modelRef = agentConfig.model.trim();
   const slashIdx = modelRef.indexOf('/');
@@ -280,6 +489,7 @@ export function resolveUse(
         model: `agent.${use}.model`,
         options: {},
         headers: {},
+        ...filesOf(),
       },
     };
   }
@@ -293,7 +503,9 @@ export function resolveUse(
     const cliOptionsProvenance: Record<string, string> = {};
     for (const k of Object.keys(agentConfig.options ?? {})) {
       cliOptionsProvenance[k] = `agent.${use}.options.${k}`;
+      noteOrigin(`options.${k}`, ['agent', use, 'options', k]);
     }
+    if (agentConfig.temperature !== undefined) noteOrigin('temperature', ['agent', use, 'temperature']);
     return {
       providerId,
       providerName: cliDisplayName(providerId),
@@ -312,6 +524,7 @@ export function resolveUse(
         temperature: agentConfig.temperature !== undefined ? `agent.${use}.temperature` : undefined,
         options: cliOptionsProvenance,
         headers: {},
+        ...filesOf(),
       },
     };
   }
@@ -333,6 +546,7 @@ export function resolveUse(
         model: `agent.${use}.model`,
         options: {},
         headers: {},
+        ...filesOf(),
       },
     };
   }
@@ -358,6 +572,7 @@ export function resolveUse(
     } else {
       baseURLProvenance = `provider.${providerId}.options.baseURL`;
     }
+    noteOrigin('baseURL', ['provider', providerId, 'options', 'baseURL']);
   }
 
   let authProvenance: string | undefined;
@@ -368,6 +583,7 @@ export function resolveUse(
     } else if (rawOptions.apiKey.trim().length > 0) {
       authProvenance = 'Bearer, valor escrito en el archivo';
     }
+    if (authProvenance) noteOrigin('auth', ['provider', providerId, 'options', 'apiKey']);
   }
 
   const modelConfig = rawProvider.models?.[modelId];
@@ -378,9 +594,11 @@ export function resolveUse(
   if (agentConfig.temperature !== undefined) {
     temperature = agentConfig.temperature;
     temperatureProvenance = `agent.${use}.temperature`;
+    noteOrigin('temperature', ['agent', use, 'temperature']);
   } else if (modelConfig?.temperature !== undefined) {
     temperature = modelConfig.temperature;
     temperatureProvenance = `provider.${providerId}.models.${modelId}.temperature`;
+    noteOrigin('temperature', ['provider', providerId, 'models', modelId, 'temperature']);
   }
 
   let maxTokens: number;
@@ -388,6 +606,7 @@ export function resolveUse(
   if (modelConfig?.limit?.output !== undefined) {
     maxTokens = modelConfig.limit.output;
     maxTokensProvenance = `provider.${providerId}.models.${modelId}.limit.output`;
+    noteOrigin('max_tokens', ['provider', providerId, 'models', modelId, 'limit', 'output']);
   } else {
     maxTokens = 3000;
     maxTokensProvenance = 'valor por omisión de GitCron (3000)';
@@ -409,20 +628,28 @@ export function resolveUse(
     ...(agentConfig.options ?? {}),
   };
 
+  // El último que escribe una clave es el que vale (agent encima de model encima
+  // de provider), así que su ruta es la que dice de qué archivo sale.
   const optionsProvenance: Record<string, string> = {};
+  const optionSegments: Record<string, string[]> = {};
   for (const k of Object.keys(providerExtraOptions)) {
     optionsProvenance[k] = `provider.${providerId}.options.${k}`;
+    optionSegments[k] = ['provider', providerId, 'options', k];
   }
   for (const k of Object.keys(modelConfig?.options ?? {})) {
     optionsProvenance[k] = `provider.${providerId}.models.${modelId}.options.${k}`;
+    optionSegments[k] = ['provider', providerId, 'models', modelId, 'options', k];
   }
   for (const k of Object.keys(agentConfig.options ?? {})) {
     optionsProvenance[k] = `agent.${use}.options.${k}`;
+    optionSegments[k] = ['agent', use, 'options', k];
   }
+  for (const [k, segments] of Object.entries(optionSegments)) noteOrigin(`options.${k}`, segments);
 
   const headersProvenance: Record<string, string> = {};
   for (const h of Object.keys(rawOptions.headers ?? {})) {
     headersProvenance[h] = `provider.${providerId}.options.headers.${h}`;
+    noteOrigin(`headers.${h}`, ['provider', providerId, 'options', 'headers', h]);
   }
 
   if (!baseURL) {
@@ -441,6 +668,7 @@ export function resolveUse(
         options: optionsProvenance,
         headers: headersProvenance,
         auth: authProvenance,
+        ...filesOf(),
       },
     };
   }
@@ -472,6 +700,7 @@ export function resolveUse(
       options: optionsProvenance,
       headers: headersProvenance,
       auth: authProvenance,
+      ...filesOf(),
     },
   };
 }

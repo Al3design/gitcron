@@ -98,6 +98,7 @@ import {
   isInstalledBehindCycle,
 } from '@/lib/openspec-version';
 import { readEngineStatus } from '@/lib/engine-status-reader';
+import { contributingConfigFiles, formatConfigParseError, lastValidNotices } from '@/lib/gitcron-config-messages';
 import styles from './OpenSpecDashboard.module.css';
 
 const INTEGRATION_STATE_KEY_MAP: Record<string, string> = {
@@ -1298,7 +1299,7 @@ export function OpenSpecDashboard({
   useEffect(() => {
     if (!prepareOpen || !repoPath) return;
     let alive = true;
-    window.api?.commitAi?.resolvedModel?.().then((res) => {
+    const loadResolvedModel = () => window.api?.commitAi?.resolvedModel?.(repoPath).then((res) => {
       if (!alive) return;
       if (!res?.success) {
         setResolvedCommitModel({
@@ -1326,6 +1327,15 @@ export function OpenSpecDashboard({
           error: err instanceof Error ? err.message : String(err),
         });
       }
+    });
+    loadResolvedModel();
+    // El gitcron.json se observa en el proceso principal (D3): guardarlo a mano
+    // vuelve a pedir la configuración sin reiniciar. La escucha vive acá porque
+    // sólo hace falta con la preparación abierta, y al reabrirla se pide igual.
+    const sameRepo = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
+    const stopConfigWatch = window.api?.commitAi?.onConfigChanged?.((event) => {
+      if (!alive) return;
+      if (event.repoPath === null || sameRepo(event.repoPath, repoPath)) loadResolvedModel();
     });
     window.api?.commitAi?.lastRequest?.().then((res) => {
       if (alive && res?.success && res.data) {
@@ -1371,7 +1381,10 @@ export function OpenSpecDashboard({
     // relea el catálogo —cargar o expulsar, que sí lo verifican—. Es preferible a
     // pagar un WebSocket por foco. Resolverlo bien pide un catálogo liviano, sin
     // el índice de dispositivos, y eso es trabajo aparte.
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      stopConfigWatch?.();
+    };
   }, [prepareOpen, repoPath]);
 
   /**
@@ -1635,6 +1648,23 @@ export function OpenSpecDashboard({
     if (dest === 'own-server') return t('pipeline.openspec.prepare.aiDestOwnServer');
     return t('pipeline.openspec.prepare.aiDestExternal');
   };
+
+  // Lo que la caja de la IA dice del gitcron.json (D2, D3).
+  // Un archivo roto se cuenta con archivo, línea y motivo traducido; antes llegaba
+  // el texto armado en el proceso principal, con el código interno («CommaExpected»).
+  const resolvedErrorText = resolvedCommitModel && 'error' in resolvedCommitModel
+    ? (resolvedCommitModel.parseError
+        ? formatConfigParseError(resolvedCommitModel.parseError, t)
+        : resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError'))
+    : '';
+  // «según …» nombra los archivos que aportan: el global y, si tiene, el del repositorio.
+  const resolvedFilesText = resolvedCommitModel && !('error' in resolvedCommitModel)
+    ? (contributingConfigFiles(resolvedCommitModel.configFiles).join(t('pipeline.openspec.prepare.aiFilesJoin'))
+        || resolvedCommitModel.sourceFile)
+    : '';
+  // En «Ver lo enviado», un valor que sale del archivo del repositorio lo dice.
+  const sentOrigin = (item: { provenance: string; file?: string }) =>
+    item.file ? `${item.provenance} · ${t('pipeline.openspec.prepare.aiSentFromRepo')}` : item.provenance;
 
   const draftWithAi = async () => {
     const isResolvedError = Boolean(resolvedCommitModel && 'error' in resolvedCommitModel);
@@ -2649,13 +2679,13 @@ export function OpenSpecDashboard({
                     <section className={styles.aiPanel}>
                       <div className={styles.aiRow}>
                         <p className={styles.aiResolvedError} role="alert">
-                          {resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError')}
+                          {resolvedErrorText}
                         </p>
                         <button
                           type="button"
                           className={cn(styles.secondaryAction, styles.aiDraftAction)}
                           disabled={true}
-                          title={resolvedCommitModel.error || t('pipeline.openspec.prepare.aiConfigReadError')}
+                          title={resolvedErrorText}
                         >
                           {t('pipeline.openspec.prepare.aiDraft')}
                         </button>
@@ -2675,13 +2705,13 @@ export function OpenSpecDashboard({
                                 model: resolvedCommitModel.modelId,
                                 provider: resolvedCommitModel.providerName,
                                 destination: getDestinationLabel(resolvedCommitModel.destination),
-                                file: resolvedCommitModel.sourceFile,
+                                file: resolvedFilesText,
                               })
                             : t('pipeline.openspec.prepare.aiResolvedLine', {
                                 model: resolvedCommitModel.modelId,
                                 provider: resolvedCommitModel.providerName,
                                 destination: getDestinationLabel(resolvedCommitModel.destination),
-                                file: resolvedCommitModel.sourceFile,
+                                file: resolvedFilesText,
                               })}
                         </p>
                         <button
@@ -2702,6 +2732,13 @@ export function OpenSpecDashboard({
                           </button>
                         )}
                       </div>
+                      {/* Un gitcron.json roto que no bloquea: se sigue con su última versión
+                          válida y se dice (requisito «El archivo y la pantalla dicen lo mismo»). */}
+                      {lastValidNotices(resolvedCommitModel.configFiles, t).map((text) => (
+                        <p key={text} className={styles.aiNotice} role="status">
+                          {text}
+                        </p>
+                      ))}
                       {!rightOpen && aiNotice && (
                         <p className={styles.aiNotice} role="status">
                           {aiNotice}
@@ -2740,7 +2777,7 @@ export function OpenSpecDashboard({
                                 <dt>{t('pipeline.openspec.prepare.aiSentModel')}</dt>
                                 <dd>
                                   {String(lastAiRequest.model.value)}
-                                  <span className={styles.aiSentProvenance}> ({lastAiRequest.model.provenance})</span>
+                                  <span className={styles.aiSentProvenance}> ({sentOrigin(lastAiRequest.model)})</span>
                                 </dd>
                                 <dt>{t('pipeline.openspec.prepare.aiSentParams')}</dt>
                                 <dd>
@@ -2749,7 +2786,7 @@ export function OpenSpecDashboard({
                                       {Object.entries(lastAiRequest.parameters).map(([key, item]) => (
                                         <li key={key}>
                                           <code>{key}</code>: <span>{typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value)}</span>
-                                          <span className={styles.aiSentProvenance}> ({item.provenance})</span>
+                                          <span className={styles.aiSentProvenance}> ({sentOrigin(item)})</span>
                                         </li>
                                       ))}
                                     </ul>
@@ -2764,7 +2801,7 @@ export function OpenSpecDashboard({
                                       {lastAiRequest.headers.map((h) => (
                                         <li key={h.name}>
                                           <code>{h.name}</code>
-                                          <span className={styles.aiSentProvenance}> ({h.provenance})</span>
+                                          <span className={styles.aiSentProvenance}> ({sentOrigin(h)})</span>
                                         </li>
                                       ))}
                                     </ul>

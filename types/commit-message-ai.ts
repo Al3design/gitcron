@@ -209,6 +209,27 @@ export interface DraftStateEvent {
 }
 
 /**
+ * Un archivo que no se pudo interpretar, con datos: la pantalla arma el texto en
+ * el idioma de la persona a partir de `code` (el código de jsonc-parser).
+ */
+export interface CommitAiConfigParseError {
+  file: string;
+  line: number;
+  column: number;
+  code: string;
+}
+
+/** Estado de cada `gitcron.json` que se leyó: el global y, si hay, el del repositorio (D2). */
+export interface CommitAiConfigFileStatus {
+  path: string;
+  scope: 'global' | 'repo';
+  exists: boolean;
+  error?: CommitAiConfigParseError;
+  /** Roto, y se sigue con la última versión que se leyó bien en esta sesión. */
+  usingLastValid?: boolean;
+}
+
+/**
  * Modelo resuelto según la configuración de gitcron.json para redacción de commits.
  * Sin secretos (D6, D13).
  */
@@ -219,8 +240,11 @@ export interface CommitAiResolvedModel {
   kind: 'openai-compatible' | 'cli';
   destination: 'this-machine' | 'own-server' | 'external-service';
   sourceFile: string;
+  /** El `gitcron.json` del repositorio, si aporta algún valor (D2). */
+  repoSourceFile?: string;
   available?: boolean;
   unavailableReason?: string;
+  configFiles?: CommitAiConfigFileStatus[];
 }
 
 /**
@@ -230,6 +254,9 @@ export interface CommitAiResolvedError {
   status?: 'error';
   error: string;
   sourceFile?: string;
+  /** Si el error es un archivo roto: dónde y por qué, para explicarlo traducido. */
+  parseError?: CommitAiConfigParseError;
+  configFiles?: CommitAiConfigFileStatus[];
 }
 
 /**
@@ -249,6 +276,8 @@ export type CommitAiResolvedResult =
 export interface ParameterProvenance {
   value: unknown;
   provenance: string;
+  /** El `gitcron.json` del repositorio, cuando el valor sale de ahí y no del global (D2). */
+  file?: string;
 }
 
 /**
@@ -257,6 +286,8 @@ export interface ParameterProvenance {
 export interface HeaderProvenance {
   name: string;
   provenance: string;
+  /** El `gitcron.json` del repositorio, cuando la cabecera sale de ahí (D2). */
+  file?: string;
 }
 
 /**
@@ -269,6 +300,8 @@ export interface CommitAiLastRequest {
   model: {
     value: string;
     provenance: string;
+    /** El `gitcron.json` del repositorio, cuando el modelo sale de ahí (D2). */
+    file?: string;
   };
   parameters: Record<string, ParameterProvenance>;
   headers: HeaderProvenance[];

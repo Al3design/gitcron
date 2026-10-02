@@ -35,6 +35,7 @@ vi.mock('../git/repo-queue', () => ({
 
 import {
   registerCommitMessageAiHandlers,
+  resetCommitAiConfigWatcherForTesting,
   setCommitAiConfigPathForTesting,
   setCodexSpawnForTesting,
   setCodexResolveForTesting,
@@ -54,6 +55,7 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
 
   afterEach(() => {
     setCommitAiConfigPathForTesting(null);
+    resetCommitAiConfigWatcherForTesting();
     setCodexSpawnForTesting(null);
     setCodexResolveForTesting(null);
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -65,7 +67,10 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
 
     // Sin archivo de configuración
     setCommitAiConfigPathForTesting(path.join(tmpDir, 'no-file.json'));
-    const noConfigRes = await resolvedHandler({});
+    // Una llamada real siempre trae quién pregunta: el canal lo usa para avisarle
+    // cuando el archivo cambia (D3).
+    const event = { sender: { isDestroyed: () => false, send: vi.fn() } };
+    const noConfigRes = await resolvedHandler(event);
     expect(noConfigRes).toEqual({ success: true, data: null });
 
     // Con archivo
@@ -89,7 +94,7 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     );
 
     setCommitAiConfigPathForTesting(configPath);
-    const resolvedRes = await resolvedHandler({});
+    const resolvedRes = await resolvedHandler(event);
     expect(resolvedRes.success).toBe(true);
     expect(resolvedRes.data).toEqual({
       status: 'resolved',
@@ -99,6 +104,7 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
       destination: 'external-service',
       sourceFile: configPath,
       available: true,
+      configFiles: [{ path: configPath, scope: 'global', exists: true }],
     });
     // Garantiza que no expone secretos
     expect(resolvedRes.data).not.toHaveProperty('apiKey');

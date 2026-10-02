@@ -423,7 +423,10 @@ interface ElectronAPI {
     /** Avisos de estado de cada pedido de redacción (en fila, en curso, terminado, cancelado). */
     onDraftState(cb: (event: DraftStateEvent) => void): () => void;
     /** Modelo resuelto según la configuración de gitcron.json, error si está roto, o null si no aplica. */
-    resolvedModel(): Promise<GitResult<CommitAiResolvedResult>>;
+    /** Con el repositorio, mezcla su gitcron.json sobre el global (D2). */
+    resolvedModel(repoPath?: string | null): Promise<GitResult<CommitAiResolvedResult>>;
+    /** Cambió un gitcron.json: el global (`repoPath: null`) o el de ese repositorio (D3). */
+    onConfigChanged?(cb: (event: { repoPath: string | null }) => void): () => void;
     /** Último pedido efectivo enviado al proveedor (con procedencias y sin secretos), o null si no hubo. */
     lastRequest(): Promise<GitResult<CommitAiLastRequest | null>>;
   };

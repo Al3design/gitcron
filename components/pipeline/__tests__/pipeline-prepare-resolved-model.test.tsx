@@ -242,7 +242,9 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
       success: true,
       data: {
         status: 'error',
-        error: '~/.config/gitcron/gitcron.json: Error de sintaxis en la línea 3: ValueExpected',
+        error: '~/.config/gitcron/gitcron.json: línea 27, columna 5: CommaExpected',
+        // El error viaja con datos y la pantalla arma el texto traducido (D3).
+        parseError: { file: '~/.config/gitcron/gitcron.json', line: 27, column: 5, code: 'CommaExpected' },
       },
     });
 
@@ -286,8 +288,10 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     const openButton = screen.getByRole('button', { name: /preparar/i });
     fireEvent.click(openButton);
 
-    const errorText = await screen.findByText(/Error de sintaxis en la línea 3/i);
+    // Antes se mostraba crudo («Error de sintaxis en la línea 27: CommaExpected»).
+    const errorText = await screen.findByText('Error en ~/.config/gitcron/gitcron.json, línea 27, columna 5: falta una coma.');
     expect(errorText).toBeDefined();
+    expect(screen.queryByText(/CommaExpected/)).toBeNull();
 
     expect(screen.queryByRole('combobox')).toBeNull();
 
@@ -381,7 +385,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
       parameters: {
         temperature: { value: 0.2, provenance: 'agent.gitcron-commit.temperature' },
         max_tokens: { value: 8192, provenance: 'provider.unslothpclocal.models.unsloth/Qwen3.8-27B-GGUF.limit.output' },
-        reasoning_effort: { value: 'high', provenance: 'agent.gitcron-commit.options.reasoning_effort' },
+        reasoning_effort: { value: 'high', provenance: 'agent.gitcron-commit.options.reasoning_effort', file: 'C:/repo/gitcron.json' },
       },
       headers: [
         { name: 'CF-Access-Client-Id', provenance: 'provider.unslothpclocal.options.headers.CF-Access-Client-Id' },
@@ -486,6 +490,9 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     expect(detailsScope.getByText(/agent\.gitcron-commit\.model/)).toBeDefined();
     expect(detailsScope.getAllByText(/CF-Access-Client-Secret/).length).toBeGreaterThanOrEqual(1);
     expect(detailsScope.getByText(/Bearer, de la variable UNSLOTH_API_KEY/)).toBeDefined();
+    // El valor que sale del gitcron.json del repositorio lo dice; el del global, no (D2).
+    expect(detailsScope.getByText(/agent\.gitcron-commit\.options\.reasoning_effort · gitcron\.json del repositorio/)).toBeDefined();
+    expect(detailsScope.queryByText(/agent\.gitcron-commit\.temperature · /)).toBeNull();
 
     // Seguridad: ningún valor secreto en el DOM (claves de API o tokens literales)
     expect(document.body.innerHTML).not.toContain('unsloth-secret-token');
@@ -495,5 +502,92 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     fireEvent.click(toggleButton);
     expect(screen.queryByTestId('ai-sent-details')).toBeNull();
     expect(toggleButton.textContent).toMatch(/ver lo enviado/i);
+  });
+  it('archivo roto con versión anterior: lo avisa sin bloquear, «según» nombra los dos archivos, y guardar a mano vuelve a pedir', async () => {
+    let onChanged: ((event: { repoPath: string | null }) => void) | null = null;
+    const resolvedModelMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        status: 'resolved',
+        providerName: 'Unsloth CASA',
+        modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        kind: 'openai-compatible',
+        destination: 'own-server',
+        sourceFile: '~/.config/gitcron/gitcron.json',
+        repoSourceFile: 'C:/repo/gitcron.json',
+        available: true,
+        configFiles: [
+          {
+            path: '~/.config/gitcron/gitcron.json',
+            scope: 'global',
+            exists: true,
+            usingLastValid: true,
+            error: { file: '~/.config/gitcron/gitcron.json', line: 27, column: 5, code: 'CommaExpected' },
+          },
+          { path: 'C:/repo/gitcron.json', scope: 'repo', exists: true },
+        ],
+      },
+    });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        commitAi: {
+          catalog: vi.fn().mockResolvedValue({ success: true, data: [] }),
+          resolvedModel: resolvedModelMock,
+          onConfigChanged: (cb: (event: { repoPath: string | null }) => void) => {
+            onChanged = cb;
+            return () => { onChanged = null; };
+          },
+          deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }),
+          draft: vi.fn(),
+          load: vi.fn(),
+          unload: vi.fn(),
+          cancel: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <StrictMode>
+        <OpenSpecDashboard
+          snapshot={snapshot()}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={false}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          projection={null as RuntimeProjection | null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />
+      </StrictMode>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /preparar/i }));
+
+    // Pide la configuración de SU repositorio.
+    await waitFor(() => expect(resolvedModelMock).toHaveBeenCalledWith('C:/repo'));
+    // «según» nombra los dos archivos que aportan.
+    await screen.findByText(/según ~\/\.config\/gitcron\/gitcron\.json y C:\/repo\/gitcron\.json/);
+    // El roto con versión anterior se avisa, traducido, y no bloquea.
+    expect(screen.getByText('~/.config/gitcron/gitcron.json tiene un error en la línea 27 (falta una coma). Se sigue usando la última versión válida.')).toBeDefined();
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    expect((screen.getByRole('button', { name: /redactar con ia/i }) as HTMLButtonElement).disabled).toBe(false);
+
+    // Guardar a mano: el aviso del proceso principal vuelve a pedir; el de otro repositorio, no.
+    const callsBefore = resolvedModelMock.mock.calls.length;
+    onChanged!({ repoPath: 'C:/otro' });
+    expect(resolvedModelMock.mock.calls.length).toBe(callsBefore);
+    onChanged!({ repoPath: 'c:\\repo' });
+    await waitFor(() => expect(resolvedModelMock.mock.calls.length).toBe(callsBefore + 1));
+    onChanged!({ repoPath: null });
+    await waitFor(() => expect(resolvedModelMock.mock.calls.length).toBe(callsBefore + 2));
   });
 });

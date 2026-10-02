@@ -259,7 +259,15 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('commit-ai:draft-state', handler);
       return () => ipcRenderer.removeListener('commit-ai:draft-state', handler);
     },
-    resolvedModel: () => ipcRenderer.invoke('commit-ai:resolved-model'),
+    resolvedModel: (repoPath?: string | null) => ipcRenderer.invoke('commit-ai:resolved-model', repoPath ?? null),
+    /**
+     * Cambió un gitcron.json: el global (`repoPath: null`) o el de ese repositorio (D3).
+     */
+    onConfigChanged: (cb: (event: { repoPath: string | null }) => void) => {
+      const handler = (_e: unknown, payload: { repoPath: string | null }) => cb(payload);
+      ipcRenderer.on('gitcron-config:changed', handler);
+      return () => ipcRenderer.removeListener('gitcron-config:changed', handler);
+    },
     lastRequest: () => ipcRenderer.invoke('commit-ai:last-request'),
   },
   cartoGraph: {

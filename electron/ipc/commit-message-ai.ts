@@ -9,10 +9,12 @@
 // Lo que viaja es el diff del repositorio, más sensible que el contexto que
 // manda Cartografía. Por eso el proveedor es local y el endpoint se declara.
 
+import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { app, ipcMain } from 'electron';
 import { simpleGit } from 'simple-git';
 import type {
+  CommitAiConfigFileStatus,
   CommitAiLastRequest,
   CommitAiResolvedModel,
   CommitAiResolvedResult,
@@ -26,7 +28,16 @@ import type {
 } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
 import { buildCodexDraftArgs, draftCommitWithCodex, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
-import { getDefaultConfigPath, resolveUse } from '../ai/config/gitcron-config';
+import {
+  getDefaultConfigPath,
+  GitCronConfigError,
+  loadGitCronConfig,
+  resolveUse,
+  type GitCronConfigFileStatus,
+  type ResolvedUse,
+} from '../ai/config/gitcron-config';
+import { authorizedRepoStore } from './authorized-repos';
+import { createGitCronConfigWatcher, type GitCronConfigWatcher } from '../ai/config/gitcron-config-watcher';
 import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
@@ -169,6 +180,70 @@ export function setCommitAiConfigPathForTesting(p: string | null): void {
   configPathOverride = p;
 }
 
+/**
+ * Observación de los `gitcron.json` (D3, tarea 3.4). Empieza cuando una pantalla
+ * pide la configuración y avisa a las pantallas que la pidieron: no se observa
+ * nada que nadie esté mirando.
+ */
+let configWatcher: GitCronConfigWatcher | null = null;
+let configWatcherGlobalPath: string | null = null;
+const configSubscribers = new Set<Electron.WebContents>();
+let stopDeauthorizeListener: (() => void) | null = null;
+
+function notifyConfigChanged(repoPath: string | null): void {
+  // Releer acá y no sólo cuando la pantalla vuelva a pedir: así la «última
+  // versión válida» es la última que se guardó bien, aunque nadie mirara.
+  try {
+    loadGitCronConfig({ globalPath: configWatcherGlobalPath ?? undefined, repoPath });
+  } catch {
+    // La relectura sólo actualiza la última versión válida; el error lo pide la pantalla.
+  }
+  for (const sender of configSubscribers) {
+    if (sender.isDestroyed()) {
+      configSubscribers.delete(sender);
+      continue;
+    }
+    sender.send('gitcron-config:changed', { repoPath });
+  }
+}
+
+function watchConfigFor(sender: Electron.WebContents, globalPath: string, repoPath: string | null): void {
+  configSubscribers.add(sender);
+  if (configWatcher && configWatcherGlobalPath !== globalPath) {
+    configWatcher.close();
+    configWatcher = null;
+  }
+  if (!configWatcher) {
+    configWatcherGlobalPath = globalPath;
+    configWatcher = createGitCronConfigWatcher({
+      globalPath,
+      onChange: notifyConfigChanged,
+      onError: (error) => console.warn('[gitcron-config] no se pudo observar:', errMsg(error)),
+    });
+  }
+  if (!stopDeauthorizeListener) {
+    // Cerrar la pestaña de un repositorio deja de observar su gitcron.json.
+    stopDeauthorizeListener = authorizedRepoStore.onDeauthorize((root) => configWatcher?.unwatchRepo(root));
+  }
+  configWatcher.watchGlobal();
+  if (repoPath) configWatcher.watchRepo(repoPath);
+}
+
+/** Sólo para pruebas: qué repositorios se observan. */
+export function getWatchedConfigReposForTesting(): string[] {
+  return configWatcher?.watchedRepos() ?? [];
+}
+
+/** Sólo para pruebas: cerrar la observación y olvidar a quién avisar. */
+export function resetCommitAiConfigWatcherForTesting(): void {
+  configWatcher?.close();
+  configWatcher = null;
+  configWatcherGlobalPath = null;
+  configSubscribers.clear();
+  stopDeauthorizeListener?.();
+  stopDeauthorizeListener = null;
+}
+
 let codexSpawnOverride: SpawnFunction | null = null;
 export function setCodexSpawnForTesting(fn: SpawnFunction | null): void {
   codexSpawnOverride = fn;
@@ -244,6 +319,37 @@ type Result<T> = { success: boolean; data?: T; error?: string };
 
 const ok = <T>(data: T): Result<T> => ({ success: true, data });
 const fail = <T>(error: unknown): Result<T> => ({ success: false, error: errMsg(error) });
+
+/**
+ * La raíz canónica de un repositorio abierto, o `null`. El `gitcron.json` del
+ * repositorio sólo se lee de una pestaña que la persona abrió: una ruta suelta
+ * del renderer no alcanza (misma regla que los canales de OpenSpec).
+ */
+function authorizedRepoRoot(candidate: unknown): string | null {
+  if (typeof candidate !== 'string' || !candidate.trim()) return null;
+  try {
+    const real = fs.realpathSync(candidate.trim());
+    return authorizedRepoStore.isAuthorized(real) ? real : null;
+  } catch {
+    return null;
+  }
+}
+
+function toFileStatus(file: GitCronConfigFileStatus): CommitAiConfigFileStatus {
+  return {
+    path: file.path,
+    scope: file.scope,
+    exists: file.exists,
+    ...(file.error ? { error: { ...file.error } } : {}),
+    ...(file.usingLastValid ? { usingLastValid: true } : {}),
+  };
+}
+
+/** El archivo del repositorio, si de ahí sale el valor con esa clave de procedencia (D2). */
+function repoFileFor(resolved: ResolvedUse, key: string): { file?: string } {
+  const { repoFile, fromRepo } = resolved.provenance;
+  return repoFile && fromRepo?.includes(key) ? { file: repoFile } : {};
+}
 
 function toUnavailable(error: unknown): CommitDraftResult {
   const message = error instanceof Error ? error.message : String(error);
@@ -503,16 +609,26 @@ export function registerCommitMessageAiHandlers(): void {
     return ok({ cancelled: had });
   });
 
-  ipcMain.handle('commit-ai:resolved-model', async (): Promise<Result<CommitAiResolvedResult>> => {
+  ipcMain.handle('commit-ai:resolved-model', async (_e, rawRepoPath?: unknown): Promise<Result<CommitAiResolvedResult>> => {
     const configPath = configPathOverride ?? getDefaultConfigPath();
+    // Sin repositorio, sólo el global (como antes). Con uno, tiene que ser una
+    // pestaña abierta: de otro modo no se lee su gitcron.json.
+    const repoPath = rawRepoPath === undefined || rawRepoPath === null ? null : authorizedRepoRoot(rawRepoPath);
+    if (rawRepoPath !== undefined && rawRepoPath !== null && !repoPath) {
+      return fail(new Error('IPC Security Error: Invalid or unauthorized repository path'));
+    }
+    watchConfigFor(_e.sender, configPath, repoPath);
+    const loaded = loadGitCronConfig({ globalPath: configPath, repoPath });
+    const configFiles = loaded.files.map(toFileStatus);
     try {
-      const resolved = resolveUse('gitcron-commit', configPath);
+      const resolved = resolveUse('gitcron-commit', { configPath, repoPath, loaded });
       if (!resolved) return ok(null);
       if (!resolved.available) {
         return ok({
           status: 'error',
           error: resolved.unavailableReason ?? 'Proveedor no disponible.',
           sourceFile: resolved.sourceFile,
+          configFiles,
         });
       }
       return ok({
@@ -522,14 +638,26 @@ export function registerCommitMessageAiHandlers(): void {
         kind: resolved.kind,
         destination: resolved.destination,
         sourceFile: resolved.sourceFile,
+        ...(resolved.provenance.repoFile ? { repoSourceFile: resolved.provenance.repoFile } : {}),
         available: true,
+        configFiles,
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      if (error instanceof GitCronConfigError) {
+        return ok({
+          status: 'error',
+          error: msg,
+          sourceFile: error.parseError.file,
+          parseError: { ...error.parseError },
+          configFiles,
+        });
+      }
       return ok({
         status: 'error',
         error: msg,
         sourceFile: configPath,
+        configFiles,
       });
     }
   });
@@ -610,7 +738,10 @@ export function registerCommitMessageAiHandlers(): void {
           sender: _e.sender,
           controller,
           run: async (signal) => {
-            const resolved = resolveUse('gitcron-commit', configPathOverride ?? undefined);
+            const resolved = resolveUse('gitcron-commit', {
+              configPath: configPathOverride ?? undefined,
+              repoPath: authorizedRepoRoot(repoPath),
+            });
             if (resolved) {
               if (!resolved.available) {
                 return ok({
@@ -637,12 +768,14 @@ export function registerCommitMessageAiHandlers(): void {
                       codexParams.temperature = {
                         value: resolved.temperature,
                         provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
+                        ...repoFileFor(resolved, 'temperature'),
                       };
                     }
                     for (const [k, v] of Object.entries(resolved.options ?? {})) {
                       codexParams[k] = {
                         value: v,
                         provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
+                        ...repoFileFor(resolved, `options.${k}`),
                       };
                     }
 
@@ -652,6 +785,7 @@ export function registerCommitMessageAiHandlers(): void {
                       model: {
                         value: effectiveModel,
                         provenance: resolved.provenance.model,
+                        ...repoFileFor(resolved, 'model'),
                       },
                       parameters: codexParams,
                       headers: [],
@@ -709,12 +843,14 @@ export function registerCommitMessageAiHandlers(): void {
                 const openAiParams: Record<string, ParameterProvenance> = {};
                 for (const [key, value] of Object.entries(sentBody)) {
                   if (key === 'model' || key === 'messages') continue;
-                  openAiParams[key] = { value, provenance: provenanceOf(key) };
+                  const originKey = key in (resolved.options ?? {}) ? `options.${key}` : key;
+                  openAiParams[key] = { value, provenance: provenanceOf(key), ...repoFileFor(resolved, originKey) };
                 }
 
                 const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
                   name,
                   provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
+                  ...repoFileFor(resolved, `headers.${name}`),
                 }));
 
                 lastCommitAiRequest = {
@@ -723,6 +859,7 @@ export function registerCommitMessageAiHandlers(): void {
                   model: {
                     value: effectiveModel,
                     provenance: resolved.provenance.model,
+                    ...repoFileFor(resolved, 'model'),
                   },
                   parameters: openAiParams,
                   headers: headerList,
