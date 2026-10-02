@@ -53,5 +53,8 @@ describe('mensajes del gitcron.json roto', () => {
       'y 2 advertencias más.',
     ]);
     expect(configWarningLines(undefined, tFor('es'))).toEqual([]);
+    expect(configWarningLines([{ kind: 'mcp-in-gitcron', segments: ['mcp'] }], tFor('es'))).toEqual([
+      '«mcp» en gitcron.json: GitCron no lo lee (es de OpenCode). Los servidores MCP van en mcp.json, donde se pueden importar.',
+    ]);
   });
 });

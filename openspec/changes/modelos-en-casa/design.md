@@ -215,6 +215,14 @@ de la redacción, y entradas `agent.gitcron-temporal` y `agent.gitcron-cartograp
 Nada cambia hasta que la persona toca algo, y lo que estaba escondido en ajustes queda escrito. Si el
 archivo ya existe, no se toca.
 
+*Medido al implementarlo (2026-10-01, tarea 3.7):* el modelo recordado de la redacción vive sólo en memoria
+mientras la app está abierta (`lib/ai-model-memory.ts`), así que no hay `model` que migrar y no se escribe
+`agent.gitcron-commit`: la redacción sigue por su camino de siempre hasta que la persona lo configure. El
+Agente Temporal guarda su proveedor en el almacenamiento cifrado (`ai.activeProvider`, OpenRouter si no hay)
+y su modelo **por repositorio**; el archivo recibe el proveedor con su modelo por omisión y el de cada
+repositorio queda donde está. Cartografía apagada se escribe con `disable: true` (campo del formato). Como
+esos usos leen `gitcron.json` recién con 4.3, la migración no cambia ningún comportamiento hoy.
+
 ### D11b. El estándar de OpenAI como piso, las extensiones como capas
 Pedido de Ale: que cumpla con el estándar de OpenAI. Se separan dos cosas que suelen confundirse:
 - **El protocolo** es el de la API de OpenAI (`/models`, `/chat/completions`, Bearer, SSE, nombres y

@@ -21,7 +21,12 @@ export type ConfigWarningKind =
    * `temperature` de un modelo con un número: en el formato es un sí/no («admite
    * temperatura»). GitCron lo sigue usando, pero OpenCode lo lee distinto.
    */
-  | 'model-temperature-number';
+  | 'model-temperature-number'
+  /**
+   * Un bloque `mcp` dentro de gitcron.json: lo lee sólo OpenCode. Los servidores MCP
+   * de GitCron van en mcp.json, con la notación `mcpServers` (D12).
+   */
+  | 'mcp-in-gitcron';
 
 export interface ConfigWarning {
   kind: ConfigWarningKind;
@@ -72,6 +77,7 @@ export function validateGitCronConfig(
   };
 
   checkKeys(config, TOP_KEYS, []);
+  if (config.mcp !== undefined) warn({ kind: 'mcp-in-gitcron', segments: ['mcp'] });
   checkType(config.model, 'string', ['model']);
   checkType(config.small_model, 'string', ['small_model']);
 

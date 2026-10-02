@@ -15,7 +15,8 @@ import * as path from 'node:path';
 import { applyEdits, modify, type FormattingOptions } from 'jsonc-parser';
 import { parseGitCronConfigText, type GitCronConfigParseError } from './gitcron-config';
 
-const NEW_FILE_TEXT = '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+/** Texto de un gitcron.json nuevo. Otro archivo (mcp.json) pasa el suyo. */
+export const NEW_GITCRON_FILE_TEXT = '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
 
 /** Lo que toca el disco, inyectable para poder simular otro proceso escribiendo a la vez. */
 export interface ConfigWriterFs {
@@ -44,7 +45,8 @@ export function detectFormatting(text: string): FormattingOptions {
 /**
  * Cambia el valor en `segments` (por segmentos: los ids de modelo llevan puntos y
  * barras). `value: undefined` quita la clave. Si el archivo no existe, lo crea con
- * `$schema`. Un archivo roto no se toca: se devuelve su error.
+ * `newFileText` (por omisión, un gitcron.json con `$schema`). Un archivo roto no se
+ * toca: se devuelve su error. Sirve igual para mcp.json (D12).
  *
  * Escritura atómica: temporal en la misma carpeta y renombrar encima. Justo antes
  * de renombrar se relee el archivo; si alguien lo cambió mientras tanto, la
@@ -55,15 +57,18 @@ export function updateGitCronConfigValue(options: {
   segments: readonly string[];
   value: unknown;
   fs?: ConfigWriterFs;
+  /** Contenido de partida si el archivo no existe (por omisión, un gitcron.json con `$schema`). */
+  newFileText?: string;
 }): ConfigWriteResult {
   const fs: ConfigWriterFs = options.fs ?? nodeFs;
   const { filePath, segments, value } = options;
+  const newFileText = options.newFileText ?? NEW_GITCRON_FILE_TEXT;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const exists = fs.existsSync(filePath);
     let base: string;
     try {
-      base = exists ? fs.readFileSync(filePath, 'utf8') : NEW_FILE_TEXT;
+      base = exists ? fs.readFileSync(filePath, 'utf8') : newFileText;
     } catch (error) {
       return { ok: false, reason: 'io', message: error instanceof Error ? error.message : String(error) };
     }

@@ -11,11 +11,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const CONFIG_FILE_NAME = 'gitcron.json';
-
 export interface GitCronConfigWatcherOptions {
-  /** Ruta del `gitcron.json` global. */
+  /** Ruta del archivo global (por omisión se observa ese mismo nombre en cada repositorio). */
   globalPath: string;
+  /** Nombre del archivo a observar (`gitcron.json`, o `mcp.json` en D12). Por omisión, el del global. */
+  fileName?: string;
+  /**
+   * Carpeta dentro del repositorio donde vive el archivo: `''` para la raíz
+   * (`gitcron.json`), `.gitcron` para `mcp.json` (D12).
+   */
+  repoSubdir?: string;
   /** Cambió el archivo de ese repositorio, o el global si es `null`. */
   onChange: (repoPath: string | null) => void;
   /**
@@ -42,6 +47,8 @@ const keyOf = (p: string) => (process.platform === 'win32' ? path.resolve(p).toL
 
 export function createGitCronConfigWatcher(options: GitCronConfigWatcherOptions): GitCronConfigWatcher {
   const debounceMs = options.debounceMs ?? 150;
+  const fileName = (options.fileName ?? path.basename(options.globalPath)).toLowerCase();
+  const repoDirOf = (repoPath: string) => (options.repoSubdir ? path.join(repoPath, options.repoSubdir) : repoPath);
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const repoWatchers = new Map<string, { repoPath: string; watcher: fs.FSWatcher }>();
   let globalWatcher: fs.FSWatcher | null = null;
@@ -59,9 +66,9 @@ export function createGitCronConfigWatcher(options: GitCronConfigWatcherOptions)
 
   const watchDir = (dir: string, key: string, repoPath: string | null): fs.FSWatcher | null => {
     try {
-      const watcher = fs.watch(dir, { persistent: false }, (_event, fileName) => {
+      const watcher = fs.watch(dir, { persistent: false }, (_event, changed) => {
         // Algunas plataformas no dan el nombre: entonces puede haber sido el archivo.
-        if (fileName && path.basename(String(fileName)).toLowerCase() !== CONFIG_FILE_NAME) return;
+        if (changed && path.basename(String(changed)).toLowerCase() !== fileName) return;
         schedule(key, repoPath);
       });
       watcher.on('error', (error) => {
@@ -89,7 +96,11 @@ export function createGitCronConfigWatcher(options: GitCronConfigWatcherOptions)
     watchRepo(repoPath) {
       const key = keyOf(repoPath);
       if (repoWatchers.has(key)) return;
-      const watcher = watchDir(repoPath, key, repoPath);
+      const dir = repoDirOf(repoPath);
+      // Una subcarpeta que todavía no existe (`.gitcron`) no se puede observar; se
+      // intenta de nuevo la próxima vez que alguien pida ese repositorio.
+      if (dir !== repoPath && !fs.existsSync(dir)) return;
+      const watcher = watchDir(dir, key, repoPath);
       if (watcher) repoWatchers.set(key, { repoPath, watcher });
     },
     unwatchRepo(repoPath) {

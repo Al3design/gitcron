@@ -9,7 +9,7 @@ import { pathToFileURL } from 'url';
 import { registerTemporalAgentHandlers } from './temporal-agent-ipc';
 import { bootstrapDatabase, getDatabase, temporalAgentDatabasePath } from './db/connection';
 import { sanitizeForLog } from './ipc/shared';
-import { registerStorageHandlers } from './ipc/storage';
+import { readEncryptedStorage, registerStorageHandlers } from './ipc/storage';
 import { registerAiHandlers } from './ipc/ai';
 import { registerGitHubHandlers } from './ipc/github';
 import { registerGitRepoHandlers } from './ipc/git-repo';
@@ -20,6 +20,10 @@ import { registerCartoHandlers } from './ipc/carto';
 import { registerCartoGraphHandlers } from './ipc/carto-graph';
 import { registerCartoAiHandlers } from './ipc/carto-ai';
 import { registerCommitMessageAiHandlers } from './ipc/commit-message-ai';
+import { migrateGitCronConfigIfMissing } from './ai/config/gitcron-config-migration';
+import { getDefaultConfigPath } from './ai/config/gitcron-config';
+import { hasKey } from './ai/key-store';
+import { getCartoAISettings } from './ai/carto';
 import { closeAllGraphs } from './carto/graph-engine';
 import { registerWatcherHandlers, closeAllRepoWatchers } from './ipc/watchers';
 import { authorizedRepoStore } from './ipc/authorized-repos';
@@ -350,6 +354,32 @@ if (!gotLock) {
     }
   });
 
+  /**
+   * Primer arranque sin gitcron.json: se crea con lo que GitCron ya usa (D10, tarea
+   * 3.7). Si existe, no se toca. Un fallo no impide abrir la app: se registra y se
+   * sigue, como hasta ahora, sin el archivo.
+   */
+  function migrateGitCronConfigOnStartup(): void {
+    try {
+      const result = migrateGitCronConfigIfMissing({
+        configPath: getDefaultConfigPath(),
+        readSources: () => {
+          const provider = readEncryptedStorage()['ai.activeProvider'];
+          const carto = getCartoAISettings();
+          return {
+            hasOpenRouterKey: hasKey('openrouter'),
+            hasAnthropicKey: hasKey('claude'),
+            temporalProvider: typeof provider === 'string' ? provider : null,
+            cartography: { enabled: carto.enabled, mode: carto.mode, model: carto.model },
+          };
+        },
+      });
+      if (result.created) console.info('[gitcron-config] creado', result.path);
+    } catch (error) {
+      console.warn('[gitcron-config] no se pudo crear el archivo inicial:', error instanceof Error ? error.message : error);
+    }
+  }
+
   void app.whenReady().then(() => {
     // Register the 'app://' protocol to serve the Next.js static export.
     // app://./index.html → out/index.html
@@ -374,6 +404,7 @@ if (!gotLock) {
       });
     }
     bootstrapTemporalAgentHistoryDatabase();
+    migrateGitCronConfigOnStartup();
     createWindow();
     if (!isDev) setupAutoUpdater(getMainWindow);
   });

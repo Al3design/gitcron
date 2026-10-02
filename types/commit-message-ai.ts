@@ -234,7 +234,7 @@ export interface CommitAiConfigFileStatus {
  * (D4, tarea 3.5). Es una advertencia: el campo se respeta y el uso sigue.
  */
 export interface CommitAiConfigWarning {
-  kind: 'unknown-key' | 'wrong-type' | 'model-temperature-number';
+  kind: 'unknown-key' | 'wrong-type' | 'model-temperature-number' | 'mcp-in-gitcron';
   /** Ruta por segmentos (los ids de modelo llevan puntos y barras). */
   segments: string[];
   expected?: 'string' | 'number' | 'boolean' | 'object';

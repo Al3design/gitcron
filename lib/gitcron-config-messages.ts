@@ -59,6 +59,9 @@ export function configWarningLines(
   const list = warnings ?? [];
   const lines = list.slice(0, max).map((warning) => {
     const vars = { path: warning.segments.join('.') };
+    if (warning.kind === 'mcp-in-gitcron') {
+      return t('pipeline.openspec.prepare.aiConfigWarnMcp');
+    }
     if (warning.kind === 'model-temperature-number') {
       return t('pipeline.openspec.prepare.aiConfigWarnModelTemperature', vars);
     }
