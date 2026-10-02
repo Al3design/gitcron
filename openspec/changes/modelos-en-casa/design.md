@@ -386,6 +386,17 @@ repositorio. Propuesta a confirmar al empezar 4.6:
   sensibles), cuánto tiempo se conserva, y dónde se mira (un panel por repositorio, o junto a cada commit en
   Graph).
 
+*Decidido por Ale el 2026-10-02 (antes de 4.6):*
+- **Lo enviado se guarda completo**: el pedido entero que se le mandó al modelo (instrucciones y contenido:
+  el diff, las notas de la versión, el código de Cartografía). Nunca claves, valores de cabeceras ni
+  variables: el pedido efectivo (D14) se guarda como ya se muestra, con procedencias.
+- **Se conserva para siempre**: no se borra nada solo; se puede vaciar a mano el historial de un repositorio
+  desde la pantalla, con confirmación.
+- **Se mira en un panel por repositorio**: una vista más del repositorio («Historial de IA»), con todos los
+  usos y filtros por uso y resultado. No va junto a cada commit en Graph.
+- Va en la base SQLite de la carpeta de datos de GitCron (la de las predicciones y la caché de Cartografía),
+  con una migración nueva; nada se escribe en el repositorio.
+
 ### D20. La IA tiene su color (pedido de Ale, 2026-10-01)
 Todo lo que hace o escribió una IA se distingue de un vistazo, sin colores nuevos:
 - **Violeta = IA.** `--color-accent-purple` ya se usaba sólo para eso (revisión de propuestas de un agente,
