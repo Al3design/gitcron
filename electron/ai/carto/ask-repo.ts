@@ -82,7 +82,7 @@ export async function askRepo(
   const { system, user } = buildAskPrompts(question, context);
   const promptChars = system.length + user.length;
 
-  const provider = getCartoProvider(settings);
+  const provider = getCartoProvider(settings, repoPath);
   const answer = await provider.ask(question, context);
 
   return {

@@ -33,8 +33,11 @@ import type {
   PredictionResult,
   AIPredictionProvider,
 } from '../../types/temporal-agent';
-import { getProvider, type ProviderId } from './providers';
 import type { AssembledPrompts } from './provider-runtime';
+import { parseBranches } from './provider-parsing';
+import type { ResolvedModelFor } from './config/resolve-model-for';
+import { runTextUse, type TextUseDeps } from './text-use';
+import { resolveForUse } from './use-resolution';
 
 // --- skill text -------------------------------------------------------------
 
@@ -211,13 +214,65 @@ function assemblePrompts(
   return { systemPrompt, userPrompt, input };
 }
 
+// --- provider ---------------------------------------------------------------
+
+/**
+ * El modelo elegido por repositorio en los ajustes del Agente Temporal sale del
+ * catálogo de OpenRouter, así que sólo vale cuando el uso va a OpenRouter (D10:
+ * «el modelo de cada repositorio queda donde está»). Con otro proveedor manda
+ * gitcron.json, que tiene su propio archivo por repositorio (D2).
+ */
+function withRepoModel(target: ResolvedModelFor, repoModel?: string): ResolvedModelFor {
+  const model = repoModel?.trim();
+  if (target.status !== 'resolved' || !model) return target;
+  const { resolved } = target;
+  const isOpenRouter = typeof resolved.baseURL === 'string' && /(^|\.)openrouter\.ai$/i.test(safeHost(resolved.baseURL));
+  if (!isOpenRouter) return target;
+  return {
+    ...target,
+    resolved: {
+      ...resolved,
+      modelId: model,
+      provenance: { ...resolved.provenance, model: 'modelo elegido en el Agente Temporal para este repositorio' },
+    },
+  };
+}
+
+function safeHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** El proveedor del uso `gitcron-temporal`, por el camino común de texto (4.3). */
+export function createTemporalProvider(target: ResolvedModelFor, deps: TextUseDeps = {}): AIPredictionProvider {
+  const label = target.status === 'resolved' ? `${target.resolved.providerName} · ${target.resolved.modelId}` : 'gitcron-temporal';
+  return {
+    id: target.status === 'resolved' ? target.resolved.providerId : 'gitcron-temporal',
+    label,
+    kind: target.status === 'resolved' && target.resolved.destination !== 'external-service' ? 'local' : 'cloud',
+    async predictTimelines(prompts: AssembledPrompts): Promise<PredictionResult> {
+      const result = await runTextUse(target, { system: prompts.systemPrompt, user: prompts.userPrompt, maxTokens: 4096 }, deps);
+      if (!result.text && result.finishReason === 'length') {
+        throw new Error('La respuesta del modelo quedó cortada (max_tokens muy bajo).');
+      }
+      return {
+        branches: parseBranches(result.text),
+        provider: `${result.providerId}:${result.modelId}`,
+        generatedAt: new Date().toISOString(),
+      };
+    },
+  };
+}
+
 // --- orchestrator -----------------------------------------------------------
 
 export interface RunPredictionArgs {
   repoPath: string;
   config: TemporalAgentConfig;
   notes: TemporalAgentNotes;
-  providerId: ProviderId;
   lang?: string;
   /**
    * Optional adapter override. When present, it replaces the registry lookup —
@@ -233,7 +288,7 @@ export interface RunPredictionWithInputResult {
 }
 
 export async function runPredictionWithInput(args: RunPredictionArgs): Promise<RunPredictionWithInputResult> {
-  const { repoPath, config, notes, providerId, lang = 'es', providerOverride } = args;
+  const { repoPath, config, notes, lang = 'es', providerOverride } = args;
 
   const raw = await gatherRawContext(repoPath);
   const input = applyPrivacyScope(raw, config.privacyScope);
@@ -241,7 +296,7 @@ export async function runPredictionWithInput(args: RunPredictionArgs): Promise<R
   const prompts = assemblePrompts(loadSkillText(), loadDoctrineText(), feedbackBlock, input, lang);
 
   const provider =
-    providerOverride ?? getProvider(providerId, { model: config.model?.trim() || undefined });
+    providerOverride ?? createTemporalProvider(withRepoModel(resolveForUse('gitcron-temporal', repoPath), config.model));
   const result = await provider.predictTimelines(prompts);
 
   // Tag each branch with its 1-based index from the original prediction array.

@@ -27,16 +27,20 @@ import type {
   ParameterProvenance,
 } from '../../types/commit-message-ai';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
-import { buildCodexDraftArgs, draftCommitWithCodex, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
+import { draftCommitWithCli, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
+import { describeCliTextCommand, type CliTextId } from '../ai/cli-text-client';
+import { anthropicMessagesEndpoint, buildAnthropicBody, completeAnthropic } from '../ai/anthropic-client';
+import { resolveModelFor, type ResolvedModelFor } from '../ai/config/resolve-model-for';
+import { requireResolved, withSameModels } from '../ai/text-use';
+import { setUseConfigPathForTesting } from '../ai/use-resolution';
 import {
   getDefaultConfigPath,
   GitCronConfigError,
   loadGitCronConfig,
-  resolveUse,
   type GitCronConfigFileStatus,
   type ResolvedUse,
 } from '../ai/config/gitcron-config';
-import { authorizedRepoStore } from './authorized-repos';
+import { authorizedRepoRoot, authorizedRepoStore } from './authorized-repos';
 import { getStoredEnvVar } from '../ai/key-store';
 import { createGitCronConfigWatcher, type GitCronConfigWatcher } from '../ai/config/gitcron-config-watcher';
 import { validateGitCronConfig } from '../ai/config/gitcron-config-validate';
@@ -50,7 +54,6 @@ import {
 } from '../ai/commit-message/device-names';
 import {
   DEFAULT_LOCAL_BASE_URL,
-  draftCommitSubject,
   parseDraftResponse,
   fetchModelCatalog,
   hasEnoughContext,
@@ -181,6 +184,7 @@ const loadControllers = new Map<string, AbortController>();
 let configPathOverride: string | null = null;
 export function setCommitAiConfigPathForTesting(p: string | null): void {
   configPathOverride = p;
+  setUseConfigPathForTesting(p);
 }
 
 /**
@@ -230,6 +234,14 @@ function watchConfigFor(sender: Electron.WebContents, globalPath: string, repoPa
   }
   configWatcher.watchGlobal();
   if (repoPath) configWatcher.watchRepo(repoPath);
+}
+
+/**
+ * Que esta pantalla se entere cuando cambie el gitcron.json global o el del
+ * repositorio (si es una pestaña abierta). Lo usan los demás usos de texto (4.3).
+ */
+export function watchGitCronConfigFor(sender: Electron.WebContents, repoPath: string | null): void {
+  watchConfigFor(sender, configPathOverride ?? getDefaultConfigPath(), repoPath ? authorizedRepoRoot(repoPath) : null);
 }
 
 /** Sólo para pruebas: qué repositorios se observan. */
@@ -322,21 +334,6 @@ type Result<T> = { success: boolean; data?: T; error?: string };
 
 const ok = <T>(data: T): Result<T> => ({ success: true, data });
 const fail = <T>(error: unknown): Result<T> => ({ success: false, error: errMsg(error) });
-
-/**
- * La raíz canónica de un repositorio abierto, o `null`. El `gitcron.json` del
- * repositorio sólo se lee de una pestaña que la persona abrió: una ruta suelta
- * del renderer no alcanza (misma regla que los canales de OpenSpec).
- */
-function authorizedRepoRoot(candidate: unknown): string | null {
-  if (typeof candidate !== 'string' || !candidate.trim()) return null;
-  try {
-    const real = fs.realpathSync(candidate.trim());
-    return authorizedRepoStore.isAuthorized(real) ? real : null;
-  } catch {
-    return null;
-  }
-}
 
 function toFileStatus(file: GitCronConfigFileStatus): CommitAiConfigFileStatus {
   return {
@@ -627,8 +624,18 @@ export function registerCommitMessageAiHandlers(): void {
     const configWarnings = loaded.config ? validateGitCronConfig(loaded.config, loaded.originOf) : [];
     try {
       // {env:} se busca en el sistema y después en las variables guardadas en GitCron (D5).
-      const resolved = resolveUse('gitcron-commit', { configPath, repoPath, loaded, stored: getStoredEnvVar });
-      if (!resolved) return ok(null);
+      const target = resolveModelFor('gitcron-commit', { configPath, repoPath, loaded, stored: getStoredEnvVar });
+      // Sin modelo, la pantalla muestra el selector y ofrece escribir el elegido.
+      if (target.status === 'unset') return ok(null);
+      if (target.status === 'disabled') {
+        return ok({
+          status: 'error',
+          error: 'La redacción del commit está desactivada en gitcron.json (agent.gitcron-commit.disable).',
+          sourceFile: target.sourceFile ?? configPath,
+          configFiles,
+        });
+      }
+      const resolved = target.resolved;
       if (!resolved.available) {
         return ok({
           status: 'error',
@@ -770,7 +777,7 @@ export function registerCommitMessageAiHandlers(): void {
 
   ipcMain.handle('commit-ai:draft', async (_e, args: DraftArgs): Promise<Result<CommitDraftResult>> => {
     try {
-      const { repoPath, paths, changeId, intent, model, baseUrl, maxTokens, draftId } = args ?? ({} as DraftArgs);
+      const { repoPath, paths, changeId, intent, model, maxTokens, draftId } = args ?? ({} as DraftArgs);
       if (!repoPath || !Array.isArray(paths) || paths.length === 0) {
         return fail(new Error('No hay archivos elegidos para describir.'));
       }
@@ -784,205 +791,216 @@ export function registerCommitMessageAiHandlers(): void {
           sender: _e.sender,
           controller,
           run: async (signal) => {
-            const resolved = resolveUse('gitcron-commit', {
-              configPath: configPathOverride ?? undefined,
-              repoPath: authorizedRepoRoot(repoPath),
-              stored: getStoredEnvVar,
-            });
-            if (resolved) {
-              if (!resolved.available) {
-                return ok({
-                  status: 'unavailable',
-                  detail: resolved.unavailableReason ?? 'Proveedor no disponible.',
-                });
-              }
-
-              const effectiveModel = resolved.modelId;
-              const user = await collectDraftPrompt(
-                repoPath,
-                paths,
-                changeId ?? null,
-                intent ?? null,
-                resolved.contextLength ?? MIN_CONTEXT_LENGTH,
-              );
-
-              return await runDraftWithPump(_e.sender, effectiveDraftId, effectiveModel, signal, async (sig, pump) => {
-                if (resolved.kind === 'cli') {
-                  if (resolved.providerId === 'codex') {
-                    const codexCommand = ['codex', ...buildCodexDraftArgs(effectiveModel)].join(' ');
-                    const codexParams: Record<string, ParameterProvenance> = {};
-                    if (resolved.temperature !== undefined) {
-                      codexParams.temperature = {
-                        value: resolved.temperature,
-                        provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
-                        ...repoFileFor(resolved, 'temperature'),
-                      };
-                    }
-                    for (const [k, v] of Object.entries(resolved.options ?? {})) {
-                      codexParams[k] = {
-                        value: v,
-                        provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
-                        ...repoFileFor(resolved, `options.${k}`),
-                      };
-                    }
-
-                    lastCommitAiRequest = {
-                      kind: 'cli',
-                      endpoint: codexCommand,
-                      model: {
-                        value: effectiveModel,
-                        provenance: resolved.provenance.model,
-                        ...repoFileFor(resolved, 'model'),
-                      },
-                      parameters: codexParams,
-                      headers: [],
-                      timestamp: Date.now(),
-                    };
-
-                    const fullPrompt = `${SYSTEM_PROMPT}\n\n${user}`;
-                    return await draftCommitWithCodex({
-                      model: effectiveModel,
-                      prompt: fullPrompt,
-                      signal: sig,
-                      onChunk: (chunks) => pump.push(chunks),
-                      spawnFn: codexSpawnOverride ?? undefined,
-                      resolveExecutable: codexResolveOverride ?? undefined,
-                    });
-                  }
-                  return {
-                    status: 'unavailable',
-                    detail: 'todavía no conectado',
-                  };
-                }
-
-                // openai-compatible: sin caída a DEFAULT_LOCAL_BASE_URL (D7)
-                if (!resolved.baseURL) {
-                  return {
-                    status: 'unavailable',
-                    detail: `el proveedor ${resolved.providerId} no declara options.baseURL`,
-                  };
-                }
-
-                const chatEndpoint = buildChatCompletionsEndpoint(resolved.baseURL);
-                const effectiveMaxTokens = resolved.maxTokens ?? (maxTokens ?? DEFAULT_MAX_TOKENS);
-
-                const streamOpts = {
-                  model: effectiveModel,
-                  system: SYSTEM_PROMPT,
-                  user,
-                  temperature: resolved.temperature,
-                  maxTokens: effectiveMaxTokens,
-                  options: resolved.options,
-                  signal: sig,
-                  onChunk: (chunks: DraftChunk[]) => pump.push(chunks),
-                };
-
-                // Lo que se muestra sale del mismo cuerpo que viaja: si los valores por
-                // omisión o el filtrado de `options` cambian en text-client, la vista no
-                // puede quedar diciendo otra cosa (D14).
-                const sentBody = buildStreamRequestBody(streamOpts);
-                const provenanceOf = (key: string): string => {
-                  if (key in (resolved.options ?? {})) return resolved.provenance.options[key] ?? `options.${key}`;
-                  if (key === 'temperature') return resolved.provenance.temperature ?? 'valor por omisión de GitCron';
-                  if (key === 'max_tokens') return resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`;
-                  return 'parámetro de GitCron';
-                };
-                const openAiParams: Record<string, ParameterProvenance> = {};
-                for (const [key, value] of Object.entries(sentBody)) {
-                  if (key === 'model' || key === 'messages') continue;
-                  const originKey = key in (resolved.options ?? {}) ? `options.${key}` : key;
-                  openAiParams[key] = { value, provenance: provenanceOf(key), ...repoFileFor(resolved, originKey) };
-                }
-
-                const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
-                  name,
-                  provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
-                  ...repoFileFor(resolved, `headers.${name}`),
-                }));
-
-                lastCommitAiRequest = {
-                  kind: 'openai-compatible',
-                  endpoint: chatEndpoint,
-                  model: {
-                    value: effectiveModel,
-                    provenance: resolved.provenance.model,
-                    ...repoFileFor(resolved, 'model'),
-                  },
-                  parameters: openAiParams,
-                  headers: headerList,
-                  auth: resolved.provenance.auth,
-                  timestamp: Date.now(),
-                };
-
-                const textConfig: TextClientConfig = {
-                  baseUrl: resolved.baseURL,
-                  apiKey: resolved.apiKey,
-                  headers: resolved.headers,
-                  providerLabel: resolved.providerName,
-                };
-
-                try {
-                  const genResult = await streamText(textConfig, streamOpts);
-                  return parseDraftResponse(genResult.rawPayload, effectiveModel);
-                } catch (error) {
-                  const msg = error instanceof Error ? error.message : String(error);
-                  const is4xx = /respondi[oó]\s+4\d\d/i.test(msg) || ((error as any)?.status >= 400 && (error as any)?.status < 500);
-                  if (is4xx) {
-                    const standardSet = new Set(OPENAI_STANDARD_PARAMS);
-                    const nonStandard: Array<{ key: string; provenance: string }> = [];
-                    for (const [key] of Object.entries(resolved.options ?? {})) {
-                      if (!standardSet.has(key)) {
-                        const prov = resolved.provenance.options[key] ?? `options.${key}`;
-                        nonStandard.push({ key, provenance: prov });
-                      }
-                    }
-                    if (nonStandard.length > 0) {
-                      const nonStandardDesc = nonStandard
-                        .map(({ key, provenance }) => `${key} (de ${provenance})`)
-                        .join(', ');
-                      return {
-                        status: 'unavailable',
-                        detail: `${msg} Parámetros enviados fuera del estándar de OpenAI: ${nonStandardDesc}.`,
-                      };
-                    }
-                  }
-                  return toUnavailable(error);
-                }
+            // La redacción usa lo que dice gitcron.json (4.3): la entrada del uso o la
+            // elección general. Sin modelo no hay a quién mandar el diff: no se cae a
+            // ningún servidor fijo, y la pantalla ofrece escribir el elegido (D7).
+            let target: ResolvedModelFor;
+            let resolved: ResolvedUse;
+            try {
+              target = resolveModelFor('gitcron-commit', {
+                configPath: configPathOverride ?? undefined,
+                repoPath: authorizedRepoRoot(repoPath),
+                stored: getStoredEnvVar,
+                // Sin modelo en el archivo, el del selector, por el proveedor
+                // «lmstudio» que declare gitcron.json (4.3).
+                screenModel: model,
               });
+              resolved = requireResolved(target).resolved;
+            } catch (error) {
+              return ok({ status: 'unavailable', detail: errMsg(error) });
             }
 
-            // Camino nativo LM Studio
-            const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
-
-            const catalog = await fetchModelCatalog(endpoint);
-            const chosen = catalog.find((entry) => entry.id === model);
-            if (!chosen) return fail(new Error('Ese modelo no está en el catálogo del servidor.'));
-            if (!hasEnoughContext(chosen)) {
-              return ok({
-                status: 'unavailable',
-                detail: `«${model}» no está cargado con al menos ${MIN_CONTEXT_LENGTH} de contexto. `
-                  + 'El contexto se define al cargar el modelo en LM Studio.',
-              });
-            }
-
+            const effectiveModel = resolved.modelId;
             const user = await collectDraftPrompt(
               repoPath,
               paths,
               changeId ?? null,
               intent ?? null,
-              chosen.loadedContextLength ?? MIN_CONTEXT_LENGTH,
+              resolved.contextLength ?? MIN_CONTEXT_LENGTH,
             );
 
-            return await runDraftWithPump(_e.sender, effectiveDraftId, model, signal, async (sig, pump) => {
-              return await draftCommitSubject({
-                baseUrl: endpoint,
-                model,
+            return await runDraftWithPump(_e.sender, effectiveDraftId, effectiveModel, signal, async (sig, pump) => {
+              const modelProvenance = {
+                value: effectiveModel,
+                provenance: resolved.provenance.model,
+                ...repoFileFor(resolved, 'model'),
+              };
+
+              if (resolved.kind === 'cli') {
+                const cli = resolved.providerId as CliTextId;
+                const cliParams: Record<string, ParameterProvenance> = {};
+                if (resolved.temperature !== undefined) {
+                  cliParams.temperature = {
+                    value: resolved.temperature,
+                    provenance: resolved.provenance.temperature ?? 'agent.gitcron-commit.temperature',
+                    ...repoFileFor(resolved, 'temperature'),
+                  };
+                }
+                for (const [k, v] of Object.entries(resolved.options ?? {})) {
+                  cliParams[k] = {
+                    value: v,
+                    provenance: resolved.provenance.options[k] ?? `agent.gitcron-commit.options.${k}`,
+                    ...repoFileFor(resolved, `options.${k}`),
+                  };
+                }
+
+                lastCommitAiRequest = {
+                  kind: 'cli',
+                  endpoint: describeCliTextCommand(cli, effectiveModel),
+                  model: modelProvenance,
+                  parameters: cliParams,
+                  headers: [],
+                  timestamp: Date.now(),
+                };
+
+                return await draftCommitWithCli({
+                  cli,
+                  model: effectiveModel,
+                  prompt: `${SYSTEM_PROMPT}\n\n${user}`,
+                  signal: sig,
+                  onChunk: (chunks) => pump.push(chunks),
+                  spawnFn: codexSpawnOverride ?? undefined,
+                  resolveExecutable: codexResolveOverride ?? undefined,
+                });
+              }
+
+              const effectiveMaxTokens = resolved.maxTokensFromModel
+                ? resolved.maxTokens
+                : (maxTokens ?? DEFAULT_MAX_TOKENS);
+
+              if (resolved.kind === 'anthropic') {
+                const anthropicRequest = {
+                  baseURL: resolved.baseURL!,
+                  apiKey: resolved.apiKey,
+                  headers: resolved.headers,
+                  providerLabel: resolved.providerName,
+                  model: effectiveModel,
+                  system: SYSTEM_PROMPT,
+                  user,
+                  maxTokens: effectiveMaxTokens ?? DEFAULT_MAX_TOKENS,
+                  temperature: resolved.temperature,
+                  options: resolved.options,
+                  signal: sig,
+                };
+                const sentBody = buildAnthropicBody(anthropicRequest);
+                const anthropicParams: Record<string, ParameterProvenance> = {};
+                for (const [key, value] of Object.entries(sentBody)) {
+                  if (key === 'model' || key === 'messages' || key === 'system') continue;
+                  const fromOptions = key in (resolved.options ?? {});
+                  anthropicParams[key] = {
+                    value,
+                    provenance: fromOptions
+                      ? (resolved.provenance.options[key] ?? `options.${key}`)
+                      : key === 'temperature'
+                        ? (resolved.provenance.temperature ?? 'valor por omisión de GitCron')
+                        : (resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`),
+                    ...repoFileFor(resolved, fromOptions ? `options.${key}` : key),
+                  };
+                }
+                lastCommitAiRequest = {
+                  kind: 'anthropic',
+                  endpoint: anthropicMessagesEndpoint(resolved.baseURL!),
+                  model: modelProvenance,
+                  parameters: anthropicParams,
+                  headers: Object.keys(resolved.headers ?? {}).map((name) => ({
+                    name,
+                    provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
+                    ...repoFileFor(resolved, `headers.${name}`),
+                  })),
+                  auth: resolved.provenance.auth,
+                  timestamp: Date.now(),
+                };
+                const answer = await completeAnthropic(anthropicRequest);
+                pump.push([{ kind: 'content', text: answer.text }]);
+                if (answer.usage) pump.push([{ kind: 'done', finishReason: answer.finishReason, usage: answer.usage }]);
+                return parseDraftResponse({ choices: [{ message: { content: answer.text } }] }, effectiveModel);
+              }
+
+              // Estándar de OpenAI: sin caída a ningún servidor fijo (D7).
+              const chatEndpoint = buildChatCompletionsEndpoint(resolved.baseURL!);
+
+              const streamOpts = {
+                model: effectiveModel,
                 system: SYSTEM_PROMPT,
                 user,
-                maxTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+                temperature: resolved.temperature,
+                maxTokens: effectiveMaxTokens,
+                options: resolved.options,
                 signal: sig,
-                onChunk: (chunks) => pump.push(chunks),
-              });
+                onChunk: (chunks: DraftChunk[]) => pump.push(chunks),
+              };
+
+              // Lo que se muestra sale del mismo cuerpo que viaja: si los valores por
+              // omisión o el filtrado de `options` cambian en text-client, la vista no
+              // puede quedar diciendo otra cosa (D14).
+              const sentBody = buildStreamRequestBody(streamOpts);
+              const provenanceOf = (key: string): string => {
+                if (key in (resolved.options ?? {})) return resolved.provenance.options[key] ?? `options.${key}`;
+                if (key === 'temperature') return resolved.provenance.temperature ?? 'valor por omisión de GitCron';
+                if (key === 'max_tokens') return resolved.provenance.max_tokens ?? `valor por omisión de GitCron (${DEFAULT_MAX_TOKENS})`;
+                return 'parámetro de GitCron';
+              };
+              const openAiParams: Record<string, ParameterProvenance> = {};
+              for (const [key, value] of Object.entries(sentBody)) {
+                if (key === 'model' || key === 'messages') continue;
+                const originKey = key in (resolved.options ?? {}) ? `options.${key}` : key;
+                openAiParams[key] = { value, provenance: provenanceOf(key), ...repoFileFor(resolved, originKey) };
+              }
+
+              const headerList: HeaderProvenance[] = Object.keys(resolved.headers ?? {}).map((name) => ({
+                name,
+                provenance: resolved.provenance.headers[name] ?? `provider.${resolved.providerId}.options.headers.${name}`,
+                ...repoFileFor(resolved, `headers.${name}`),
+              }));
+
+              lastCommitAiRequest = {
+                kind: 'openai-compatible',
+                endpoint: chatEndpoint,
+                model: modelProvenance,
+                parameters: openAiParams,
+                headers: headerList,
+                auth: resolved.provenance.auth,
+                timestamp: Date.now(),
+              };
+
+              const textConfig: TextClientConfig = {
+                baseUrl: resolved.baseURL!,
+                apiKey: resolved.apiKey,
+                headers: resolved.headers,
+                providerLabel: resolved.providerName,
+                friendlyConnError: withSameModels(
+                  `${resolved.providerName} no responde en ${resolved.baseURL}.`,
+                  target.status === 'resolved' ? target.alternatives : [],
+                ),
+              };
+
+              try {
+                const genResult = await streamText(textConfig, streamOpts);
+                return parseDraftResponse(genResult.rawPayload, effectiveModel);
+              } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                const is4xx = /respondi[oó]\s+4\d\d/i.test(msg) || ((error as any)?.status >= 400 && (error as any)?.status < 500);
+                if (is4xx) {
+                  const standardSet = new Set(OPENAI_STANDARD_PARAMS);
+                  const nonStandard: Array<{ key: string; provenance: string }> = [];
+                  for (const [key] of Object.entries(resolved.options ?? {})) {
+                    if (!standardSet.has(key)) {
+                      const prov = resolved.provenance.options[key] ?? `options.${key}`;
+                      nonStandard.push({ key, provenance: prov });
+                    }
+                  }
+                  if (nonStandard.length > 0) {
+                    const nonStandardDesc = nonStandard
+                      .map(({ key, provenance }) => `${key} (de ${provenance})`)
+                      .join(', ');
+                    return {
+                      status: 'unavailable',
+                      detail: `${msg} Parámetros enviados fuera del estándar de OpenAI: ${nonStandardDesc}.`,
+                    };
+                  }
+                }
+                return toUnavailable(error);
+              }
             });
           },
           resolve,

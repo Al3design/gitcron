@@ -10,7 +10,8 @@ import { findUnbalancedDeclarations, type CssSyntaxViolation } from '../css-synt
  * ALCANCE Y SUPUESTOS (Invariante 22):
  * - Recorre todos los archivos `.css` provistos por `getScannedUiFiles()`:
  *   1. `app/globals.css`: estilos globales, temas y utilidades.
- *   2. `components/pipeline/OpenSpecDashboard.module.css`: estilos del módulo Pipeline/SDD.
+ *   2. `components/ai/AiUseLine.module.css`: la línea del modelo de cada uso de IA (modelos-en-casa 4.3).
+ *   3. `components/pipeline/OpenSpecDashboard.module.css`: estilos del módulo Pipeline/SDD.
  * - Detecta declaraciones CSS con paréntesis desbalanceados en sus valores (e.g. `var(--foo))` o `color-mix(...`).
  * - Evita que errores tipográficos descarten propiedades visuales completas en el motor de renderizado.
  */
@@ -20,6 +21,7 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
   it('declara explícitamente los archivos CSS que recorre (Invariante 22)', () => {
     expect(scannedCssFiles).toEqual([
       'app/globals.css',
+      'components/ai/AiUseLine.module.css',
       'components/pipeline/OpenSpecDashboard.module.css',
     ]);
   });

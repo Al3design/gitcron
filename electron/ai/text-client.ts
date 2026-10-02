@@ -24,13 +24,12 @@ import { mergeConsecutive, readSseFrames, type DraftChunk } from './commit-messa
 
 /**
  * Configuración de un proveedor de texto compatible con OpenAI.
- * Cubre sin casos especiales:
- * - LM Studio: baseUrl local (ej. 'http://localhost:1234/v1'), sin apiKey.
- * - Unsloth Desktop: baseUrl remota (túnel Cloudflare o red local), apiKey opcional.
- * - OpenRouter: baseUrl fija ('https://openrouter.ai/api/v1'), apiKey obligatoria desde key-store.
+ * Cubre cualquier servidor del estándar sin casos especiales. La dirección, la clave
+ * y las cabeceras salen del proveedor que el uso elige en gitcron.json (tarea 4.3):
+ * acá no hay ningún proveedor fijo.
  */
 export interface TextClientConfig {
-  /** URL base que antecede a `/chat/completions` (ej. 'http://localhost:1234/v1' o 'https://openrouter.ai/api/v1') */
+  /** URL base que antecede a `/chat/completions`: el `options.baseURL` del proveedor de gitcron.json, con o sin `/v1`. */
   baseUrl: string;
   /** Clave de autenticación opcional (Bearer token). Si está ausente, no se envía cabecera de autorización. */
   apiKey?: string;
@@ -42,6 +41,8 @@ export interface TextClientConfig {
   providerLabel?: string;
   /** Mensaje amigable cuando la conexión falla (servidor local apagado, host inalcanzable). */
   friendlyConnError?: string;
+  /** Para pruebas: el fetch a usar en lugar del global. */
+  fetchFn?: typeof fetch;
 }
 
 /** Opciones para una generación de texto. */
@@ -68,11 +69,6 @@ export interface TextGenerationResult {
   finishReason?: string | null;
   rawPayload?: unknown;
 }
-
-export const DEFAULT_OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const DEFAULT_LMSTUDIO_BASE_URL = 'http://localhost:1234/v1';
-export const DEFAULT_LMSTUDIO_CONN_ERROR =
-  'Servidor de IA local no disponible. Abrí LM Studio, cargá un modelo y activá el servidor local (localhost:1234).';
 
 /**
  * Normaliza la URL del endpoint de chat completions.
@@ -174,7 +170,7 @@ export async function completeText(
 
   let res: Response;
   try {
-    res = await fetch(endpoint, {
+    res = await (config.fetchFn ?? fetch)(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildCompleteRequestBody(opts)),
@@ -229,7 +225,7 @@ export async function streamText(
 
   let res: Response;
   try {
-    res = await fetch(endpoint, {
+    res = await (config.fetchFn ?? fetch)(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
       body: JSON.stringify(buildStreamRequestBody(opts)),
@@ -307,86 +303,5 @@ export async function streamText(
     rawPayload: {
       choices: [{ message: { content: accumulatedText }, finish_reason: finishReason }],
     },
-  };
-}
-
-/**
- * Configurador de LM Studio (local, sin autenticación obligatoria).
- */
-export function createLmStudioConfig(opts?: {
-  baseUrl?: string;
-  timeoutMs?: number;
-  providerLabel?: string;
-}): TextClientConfig {
-  return {
-    baseUrl: opts?.baseUrl ?? DEFAULT_LMSTUDIO_BASE_URL,
-    providerLabel: opts?.providerLabel ?? 'El servidor local',
-    defaultTimeoutMs: opts?.timeoutMs ?? 300_000,
-    friendlyConnError: DEFAULT_LMSTUDIO_CONN_ERROR,
-  };
-}
-
-/**
- * Configurador de OpenRouter (online, con clave del vault y cabeceras de atribución).
- */
-export function createOpenRouterConfig(opts: {
-  apiKey: string;
-  timeoutMs?: number;
-  appName?: string;
-}): TextClientConfig {
-  return {
-    baseUrl: DEFAULT_OPENROUTER_BASE_URL,
-    apiKey: opts.apiKey,
-    providerLabel: 'OpenRouter',
-    defaultTimeoutMs: opts.timeoutMs ?? 60_000,
-    headers: {
-      'http-referer': 'https://github.com/alejandropd-1/gitcron',
-      'x-title': opts.appName ?? 'GitCron',
-    },
-    friendlyConnError: 'No se pudo contactar a OpenRouter. Revisá tu conexión a internet.',
-  };
-}
-
-/**
- * Opciones para configurar Unsloth Desktop (Tarea 9b.4 corregida).
- * Admite URL remota (ej. 'https://llm.aledesign.dev/v1'), token opcional del modelo (apiKey),
- * cabeceras HTTP arbitrarias (headers) y credenciales específicas de Cloudflare Access
- * (cfAccessClientId y cfAccessClientSecret).
- */
-export interface UnslothConfigOptions {
-  baseUrl: string;
-  apiKey?: string;
-  headers?: Record<string, string>;
-  cfAccessClientId?: string;
-  cfAccessClientSecret?: string;
-  timeoutMs?: number;
-}
-
-/**
- * Configurador de Unsloth Desktop (Tarea 9b.4).
- * URL remota (túnel Cloudflare o servidor en LAN) con token opcional y cabeceras
- * de autenticación perimetral (CF-Access-Client-Id y CF-Access-Client-Secret).
- */
-export function createUnslothConfig(opts: UnslothConfigOptions): TextClientConfig {
-  const headers: Record<string, string> = {
-    ...(opts.headers ?? {}),
-  };
-
-  if (opts.cfAccessClientId && opts.cfAccessClientId.trim().length > 0) {
-    headers['CF-Access-Client-Id'] = opts.cfAccessClientId.trim();
-  }
-
-  if (opts.cfAccessClientSecret && opts.cfAccessClientSecret.trim().length > 0) {
-    headers['CF-Access-Client-Secret'] = opts.cfAccessClientSecret.trim();
-  }
-
-  return {
-    baseUrl: opts.baseUrl,
-    apiKey: opts.apiKey,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-    providerLabel: 'Unsloth Desktop',
-    defaultTimeoutMs: opts.timeoutMs ?? 180_000,
-    friendlyConnError:
-      'Servidor Unsloth Desktop no disponible. Verificá la URL remota o el túnel de conexión.',
   };
 }

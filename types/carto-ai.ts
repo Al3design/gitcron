@@ -229,7 +229,8 @@ export interface CartoAIResponse {
  */
 export interface CartoAIProbe {
   available: boolean;
-  provider: CartoAIProviderId;
+  /** «Proveedor · modelo» de gitcron.json; vacío si no se llegó a resolver. */
+  provider: string;
   /** Mensaje claro cuando `available` es `false` (servidor local caído, falta key…). */
   detail?: string;
 }

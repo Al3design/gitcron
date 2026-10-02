@@ -119,13 +119,13 @@ export async function panoramaRepo(
   }
 
   try {
-    const provider = getCartoProvider(settings);
+    const provider = getCartoProvider(settings, repoPath);
     const response = await provider.panorama(context);
     const panorama = parsePanoramaText(response.text, response.provider, response.generatedAt);
     upsertCartoPanorama({
       ...key,
       provider: panorama.provider,
-      model: settings.model || null,
+      model: provider.modelId,
       oneLine: panorama.oneLine,
       paragraph: panorama.paragraph,
       flows: panorama.flows,

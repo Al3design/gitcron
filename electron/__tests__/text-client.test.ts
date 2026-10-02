@@ -3,17 +3,32 @@ import {
   buildChatCompletionsEndpoint,
   buildHeaders,
   completeText,
-  createLmStudioConfig,
-  createOpenRouterConfig,
-  createUnslothConfig,
   streamText,
   type TextClientConfig,
 } from '../ai/text-client';
 
-vi.mock('../ai/key-store', () => ({
-  getKey: vi.fn((provider: string) => (provider === 'openrouter' ? 'sk-mock-key' : null)),
-  hasKey: vi.fn((provider: string) => provider === 'openrouter'),
-}));
+// Desde la tarea 4.3 el cliente no trae proveedores armados: la dirección, la clave
+// y las cabeceras salen del proveedor de gitcron.json. Estas son las formas que la
+// resolución le pasa para los tres casos de siempre.
+const lmStudio = (extra: Partial<TextClientConfig> = {}): TextClientConfig => ({
+  baseUrl: 'http://localhost:1234/v1',
+  providerLabel: 'LM Studio',
+  ...extra,
+});
+const openRouter = (apiKey: string): TextClientConfig => ({
+  baseUrl: 'https://openrouter.ai/api/v1',
+  apiKey,
+  providerLabel: 'OpenRouter',
+  headers: { 'HTTP-Referer': 'https://github.com/alejandropd-1/gitcron', 'X-Title': 'GitCron' },
+  friendlyConnError: 'OpenRouter no responde en https://openrouter.ai/api/v1.',
+});
+const unsloth = (o: { apiKey: string; id: string; secret: string }): TextClientConfig => ({
+  baseUrl: 'https://llm.aledesign.dev/v1',
+  apiKey: o.apiKey,
+  providerLabel: 'Unsloth CASA',
+  headers: { 'CF-Access-Client-Id': o.id, 'CF-Access-Client-Secret': o.secret },
+  friendlyConnError: 'Unsloth CASA no responde en https://llm.aledesign.dev/v1.',
+});
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -40,7 +55,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
     });
   });
 
-  describe('las tres configuraciones (Tarea 9b.3 y 9b.4)', () => {
+  describe('las tres formas de proveedor (Tarea 9b.3 y 9b.4, armadas por gitcron.json desde 4.3)', () => {
     it('LM Studio: petición local sin cabecera authorization', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -51,7 +66,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       });
       globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-      const config = createLmStudioConfig({ baseUrl: 'http://localhost:1234/v1' });
+      const config = lmStudio();
       await completeText(config, {
         model: 'local-model',
         system: 'Eres un asistente',
@@ -82,10 +97,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       });
       globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-      const config = createOpenRouterConfig({
-        apiKey: 'sk-or-v1-secret-token-12345',
-        appName: 'GitCron Test',
-      });
+      const config = openRouter('sk-or-v1-secret-token-12345');
 
       await completeText(config, {
         model: 'anthropic/claude-sonnet-4.5',
@@ -98,8 +110,8 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       expect(calledUrl).toBe('https://openrouter.ai/api/v1/chat/completions');
       expect(calledInit.headers['content-type']).toBe('application/json');
       expect(calledInit.headers.authorization).toBe('Bearer sk-or-v1-secret-token-12345');
-      expect(calledInit.headers['http-referer']).toBe('https://github.com/alejandropd-1/gitcron');
-      expect(calledInit.headers['x-title']).toBe('GitCron Test');
+      expect(calledInit.headers['HTTP-Referer']).toBe('https://github.com/alejandropd-1/gitcron');
+      expect(calledInit.headers['X-Title']).toBe('GitCron');
 
       const body = JSON.parse(calledInit.body);
       expect(body.model).toBe('anthropic/claude-sonnet-4.5');
@@ -115,12 +127,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       });
       globalThis.fetch = mockFetch as unknown as typeof fetch;
 
-      const config = createUnslothConfig({
-        baseUrl: 'https://llm.aledesign.dev/v1',
-        apiKey: 'cf-tunnel-bearer-xyz',
-        cfAccessClientId: 'cf-client-id-123.access',
-        cfAccessClientSecret: 'cf-client-secret-456.access',
-      });
+      const config = unsloth({ apiKey: 'cf-tunnel-bearer-xyz', id: 'cf-client-id-123.access', secret: 'cf-client-secret-456.access' });
 
       await completeText(config, {
         model: 'unsloth/gemma-3-12b',
@@ -147,7 +154,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
         json: async () => ({ error: { message: `Unauthorized: ${SECRET_KEY}` } }),
       }) as unknown as typeof fetch;
 
-      const config = createOpenRouterConfig({ apiKey: SECRET_KEY });
+      const config = openRouter(SECRET_KEY);
 
       await expect(
         completeText(config, {
@@ -169,7 +176,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       const SECRET_KEY = 'another-sensitive-token';
       globalThis.fetch = vi.fn().mockRejectedValue(new Error(`fetch failed for token ${SECRET_KEY}`)) as unknown as typeof fetch;
 
-      const config = createOpenRouterConfig({ apiKey: SECRET_KEY });
+      const config = openRouter(SECRET_KEY);
 
       try {
         await completeText(config, { model: 'm', system: 's', user: 'u' });
@@ -177,7 +184,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       } catch (err) {
         const errorMsg = String(err);
         expect(errorMsg).not.toContain(SECRET_KEY);
-        expect(errorMsg).toContain('No se pudo contactar a OpenRouter');
+        expect(errorMsg).toContain('OpenRouter no responde');
       }
     });
 
@@ -193,19 +200,14 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
         json: async () => ({ error: 'Forbidden' }),
       }) as unknown as typeof fetch;
 
-      const config = createUnslothConfig({
-        baseUrl: 'https://llm.aledesign.dev/v1',
-        apiKey: MODEL_KEY,
-        cfAccessClientId: CF_ID,
-        cfAccessClientSecret: CF_SECRET,
-      });
+      const config = unsloth({ apiKey: MODEL_KEY, id: CF_ID, secret: CF_SECRET });
 
       try {
         await completeText(config, { model: 'm', system: 's', user: 'u' });
         expect.fail('Debería haber lanzado');
       } catch (err) {
         const msg = String(err);
-        expect(msg).toContain('Unsloth Desktop respondió 403');
+        expect(msg).toContain('Unsloth CASA respondió 403');
         expect(msg).not.toContain(MODEL_KEY);
         expect(msg).not.toContain(CF_ID);
         expect(msg).not.toContain(CF_SECRET);
@@ -218,7 +220,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
         expect.fail('Debería haber lanzado');
       } catch (err) {
         const msg = String(err);
-        expect(msg).toContain('Servidor Unsloth Desktop no disponible');
+        expect(msg).toContain('Unsloth CASA no responde');
         expect(msg).not.toContain(MODEL_KEY);
         expect(msg).not.toContain(CF_ID);
         expect(msg).not.toContain(CF_SECRET);
@@ -236,7 +238,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
         }),
       }) as unknown as typeof fetch;
 
-      const config = createLmStudioConfig();
+      const config = lmStudio();
       const res = await completeText(config, { model: 'm', system: 's', user: 'u' });
 
       expect(res.text).toBe('Texto completo y final');
@@ -272,7 +274,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       }) as unknown as typeof fetch;
 
       const receivedChunks: any[] = [];
-      const config = createLmStudioConfig();
+      const config = lmStudio();
       const res = await streamText(config, {
         model: 'm',
         system: 's',
@@ -297,70 +299,11 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
         }),
       }) as unknown as typeof fetch;
 
-      const config = createLmStudioConfig();
+      const config = lmStudio();
       const res = await streamText(config, { model: 'm', system: 's', user: 'u' });
 
       expect(res.text).toBe('Fallback a JSON sin stream');
       expect(res.finishReason).toBe('stop');
-    });
-  });
-
-  describe('centralización de endpoints y constantes (Tarea 9b.8)', () => {
-    it('declara DEFAULT_OPENROUTER_BASE_URL y DEFAULT_LMSTUDIO_BASE_URL en text-client', async () => {
-      const {
-        DEFAULT_OPENROUTER_BASE_URL,
-        DEFAULT_LMSTUDIO_BASE_URL,
-        DEFAULT_LMSTUDIO_CONN_ERROR,
-      } = await import('../ai/text-client');
-
-      expect(DEFAULT_OPENROUTER_BASE_URL).toBe('https://openrouter.ai/api/v1');
-      expect(DEFAULT_LMSTUDIO_BASE_URL).toBe('http://localhost:1234/v1');
-      expect(DEFAULT_LMSTUDIO_CONN_ERROR).toContain('Servidor de IA local no disponible');
-    });
-
-    it('providers/openrouter migró a text-client y genera branches con cabeceras de atribución', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  branches: [
-                    {
-                      title: 'Rama experimental',
-                      description: 'Descripción de prueba',
-                      suggestedCommands: ['git checkout -b exp'],
-                      confidence: 'high',
-                      source: 'heuristic',
-                    },
-                  ],
-                }),
-              },
-              finish_reason: 'stop',
-            },
-          ],
-        }),
-      });
-      globalThis.fetch = mockFetch as unknown as typeof fetch;
-
-      const { createOpenRouterProvider } = await import('../ai/providers/openrouter');
-      const provider = createOpenRouterProvider();
-      const result = await provider.predictTimelines({
-        systemPrompt: 'System prompt',
-        userPrompt: 'User prompt',
-        input: {} as never,
-      });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const [calledUrl, calledInit] = mockFetch.mock.calls[0];
-      expect(calledUrl).toBe('https://openrouter.ai/api/v1/chat/completions');
-      expect(calledInit.headers['authorization']).toBe('Bearer sk-mock-key');
-      expect(calledInit.headers['http-referer']).toBe('https://github.com/alejandropd-1/gitcron');
-      expect(calledInit.headers['x-title']).toBe('GitCron Temporal Agent');
-      expect(result.branches.length).toBe(1);
-      expect(result.branches[0].message).toBe('Rama experimental');
     });
   });
 
@@ -370,7 +313,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       timeoutErr.name = 'TimeoutError';
       globalThis.fetch = vi.fn().mockRejectedValue(timeoutErr) as unknown as typeof fetch;
 
-      const config = createLmStudioConfig({ providerLabel: 'LM Studio' });
+      const config = lmStudio();
       await expect(
         completeText(config, { model: 'm', system: 's', user: 'u', timeoutMs: 5000 }),
       ).rejects.toThrow(/LM Studio: la petición tardó demasiado \(5s\) y se canceló\./);
@@ -381,7 +324,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       timeoutErr.name = 'TimeoutError';
       globalThis.fetch = vi.fn().mockRejectedValue(timeoutErr) as unknown as typeof fetch;
 
-      const config = createLmStudioConfig({ providerLabel: 'LM Studio' });
+      const config = lmStudio();
       await expect(
         streamText(config, { model: 'm', system: 's', user: 'u', timeoutMs: 10000 }),
       ).rejects.toThrow(/LM Studio: la petición tardó demasiado \(10s\) y se canceló\./);
@@ -395,7 +338,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const config = createLmStudioConfig({ providerLabel: 'LM Studio' });
+      const config = lmStudio();
       await expect(
         completeText(config, { model: 'm', system: 's', user: 'u', signal: controller.signal }),
       ).rejects.toThrow(/LM Studio: operación cancelada por el usuario\./);

@@ -1,12 +1,16 @@
 // electron/ai/carto/index.ts
 //
-// Cartografía — Fase 4. Punto de entrada de la capa de IA: store de preferencias
-// (opt-in, apagado por defecto) + dispatcher que arma el proveedor correcto según
-// esas preferencias. Todo en main.
+// Cartografía — Fase 4. Punto de entrada de la capa de IA: el interruptor (opt-in,
+// apagado por defecto) y el proveedor del uso. Todo en main.
+//
+// Desde la tarea 4.3 de modelos-en-casa el modelo sale de gitcron.json
+// (`agent.gitcron-cartography` o la elección general). `carto-ai.json` guarda el
+// interruptor, que es la decisión de privacidad de mandar contexto del repositorio,
+// y la elección de antes (`mode`, `model`), que sólo sirve para ofrecer escribirla
+// en gitcron.json si el uso no tiene modelo.
 //
 // Las preferencias NO son secreto (no hay keys acá: las keys viven en el vault
-// cifrado `key-store`). Por eso se guardan en un JSON plano de `userData`, mismo
-// patrón que la config per-repo del Temporal Agent — no en el storage cifrado.
+// cifrado `key-store`). Por eso se guardan en un JSON plano de `userData`.
 
 import { app } from 'electron';
 import * as fs from 'fs';
@@ -15,9 +19,8 @@ import {
   type CartoAISettings,
   DEFAULT_CARTO_AI_SETTINGS,
 } from '../../../types/carto-ai';
-import type { CartoAIProvider } from './provider';
-import { createLmStudioProvider } from './lmstudio';
-import { createCartoOpenRouterProvider } from './openrouter';
+import { resolveForUse } from '../use-resolution';
+import { createCartoProvider, type CartoAIProvider } from './provider';
 
 function settingsPath(): string {
   return path.join(app.getPath('userData'), 'carto-ai.json');
@@ -50,15 +53,13 @@ export function setCartoAISettings(patch: Partial<CartoAISettings>): CartoAISett
 }
 
 /**
- * Construye el proveedor activo según las preferencias. Lanza si la IA está
- * apagada — el caller (IPC) lo traduce a un error claro y la vista sigue sin IA.
+ * El proveedor del uso según gitcron.json (el del repositorio, si es una pestaña
+ * abierta). Lanza si la IA está apagada o si el uso no tiene modelo: el IPC lo
+ * traduce a un error claro y la vista sigue sin IA.
  */
-export function getCartoProvider(settings = getCartoAISettings()): CartoAIProvider {
+export function getCartoProvider(settings = getCartoAISettings(), repoPath: string | null = null): CartoAIProvider {
   if (!settings.enabled) {
     throw new Error('La IA de Cartografía está desactivada. Activala en Ajustes → Cartografía.');
   }
-  if (settings.mode === 'online') {
-    return createCartoOpenRouterProvider({ model: settings.model });
-  }
-  return createLmStudioProvider({ model: settings.model });
+  return createCartoProvider(resolveForUse('gitcron-cartography', repoPath));
 }

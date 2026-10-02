@@ -26,31 +26,17 @@ import {
   setEnvVar,
   removeEnvVar,
 } from '../ai/key-store';
-import type { ProviderId } from '../ai/providers';
+import type { AIKeyProviderId as ProviderId } from '../ai/key-store';
 import type { AIPredictionProvider, PredictionResult, SpeculativeBranch, MaterializeIdeaInput } from '../../types/temporal-agent';
 import { buildMaterializationPlan } from '../../lib/materialize-idea';
 import { errMsg, sanitizeForLog, validRepoPath } from './shared';
-import { readEncryptedStorage } from './storage';
-
-const AI_PROVIDER_PREF_KEY = 'ai.activeProvider';
-
-function activeProviderId(): ProviderId {
-  try {
-    const pref = readEncryptedStorage()[AI_PROVIDER_PREF_KEY];
-    if (pref) return pref as ProviderId;
-  } catch {
-    /* fall through to default */
-  }
-  // Phase 3 note: OpenRouter is the primary provider (one key → many models).
-  return 'openrouter';
-}
 
 // PHASE 4: stub the provider so we don't spend OpenRouter credit yet. The real
 // adapter is wired in Phase 5 — flip this to false then. The mock still runs the
 // full orchestrator (read-only git context, privacy scope, feedback, threshold).
 const USE_MOCK_PREDICTION = false;
 
-function mockProvider(id: ProviderId): AIPredictionProvider {
+function mockProvider(id: string): AIPredictionProvider {
   const branches: SpeculativeBranch[] = [
     {
       id: 'mock-1',
@@ -105,17 +91,18 @@ export function registerAiHandlers(): void {
       if (typeof lang !== 'string' || !/^[a-zA-Z-]{2,10}$/.test(lang)) {
         return { success: false, error: 'INVALID_LANG' };
       }
-      const providerId = activeProviderId();
+      // El proveedor y el modelo salen de gitcron.json (agent.gitcron-temporal o la
+      // elección general), tarea 4.3 de modelos-en-casa.
       const config = await loadTemporalConfig(repoPath, repoName);
       const notes = await loadTemporalNotes(repoPath, repoName);
       const { result, input } = await runPredictionWithInput({
         repoPath,
         config,
         notes,
-        providerId,
         lang,
-        providerOverride: USE_MOCK_PREDICTION ? mockProvider(providerId) : undefined,
+        providerOverride: USE_MOCK_PREDICTION ? mockProvider('mock') : undefined,
       });
+      const providerId = result.provider.split(':')[0] || 'desconocido';
       // Capa 1: persist the last prediction per-repo so it survives close/reopen.
       try { await savePrediction(repoPath, result); } catch { /* non-fatal */ }
       void persistPredictionRun({

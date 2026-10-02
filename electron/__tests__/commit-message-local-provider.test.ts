@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   chatEndpoint,
-  draftCommitSubject,
   fetchModelCatalog,
   loadLocalModel,
   modelsEndpoint,
@@ -10,7 +9,33 @@ import {
   parseModelCatalog,
   serverErrorMessage,
 } from '../ai/commit-message/local-provider';
-import { filterDraftableModels, isDraftableModel, type LocalModel } from '../../types/commit-message-ai';
+import { filterDraftableModels, isDraftableModel, type CommitDraftResult, type DraftChunk, type LocalModel } from '../../types/commit-message-ai';
+import { streamText } from '../ai/text-client';
+
+/**
+ * La redacción por el estándar, como la corre `commit-ai:draft` desde la tarea 4.3:
+ * `streamText` con el proveedor de gitcron.json y `parseDraftResponse` sobre lo
+ * acumulado. Antes era `draftCommitSubject`, atado a la dirección fija de LM Studio.
+ */
+async function draftCommitSubject(request: {
+  baseUrl?: string;
+  model: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+  onChunk?: (chunks: DraftChunk[]) => void;
+}): Promise<CommitDraftResult> {
+  const { baseUrl = 'http://localhost:1234', ...opts } = request;
+  try {
+    const result = await streamText(
+      { baseUrl, providerLabel: 'El servidor local', friendlyConnError: `LM Studio no responde en ${baseUrl}.` },
+      opts,
+    );
+    return parseDraftResponse(result.rawPayload, request.model);
+  } catch (error) {
+    return { status: 'unavailable', detail: error instanceof Error ? error.message : String(error) };
+  }
+}
 
 /**
  * El proveedor local que redacta el asunto de un commit.

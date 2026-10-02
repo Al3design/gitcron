@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as path from 'node:path';
 
 const handlers = new Map<string, (_event: any, ...args: any[]) => Promise<any>>();
 
@@ -24,19 +26,36 @@ vi.mock('../git/repo-queue', () => ({
   withRepoLock: vi.fn(async (_path: string, fn: () => Promise<any>) => fn()),
 }));
 
+/**
+ * Lo que contesta el servidor en cada pedido. Desde la tarea 4.3 la redacción va
+ * por el proveedor de gitcron.json (acá, el `lmstudio` del archivo con el modelo
+ * del selector), así que se simula `streamText`: recibe las opciones del pedido,
+ * con su señal, y devuelve una redacción o un fallo.
+ */
 const mockDraftCommitSubject = vi.fn();
 const mockFetchModelCatalog = vi.fn();
 
-vi.mock('../ai/commit-message/local-provider', () => ({
-  DEFAULT_LOCAL_BASE_URL: 'http://localhost:1234',
-  DEFAULT_TTL_SECONDS: 600,
-  MIN_CONTEXT_LENGTH: 16384,
-  PREFERRED_CONTEXT_LENGTH: 65536,
+vi.mock('../ai/commit-message/local-provider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ai/commit-message/local-provider')>()),
   fetchModelCatalog: (...args: any[]) => mockFetchModelCatalog(...args),
   hasEnoughContext: () => true,
-  draftCommitSubject: (...args: any[]) => mockDraftCommitSubject(...args),
   loadLocalModel: vi.fn(),
   unloadLocalModel: vi.fn(),
+}));
+
+vi.mock('../ai/text-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ai/text-client')>()),
+  streamText: async (_config: unknown, opts: any) => {
+    const result = await mockDraftCommitSubject(opts);
+    if (result.status !== 'drafted') throw new Error(result.detail ?? 'falló');
+    return { text: result.subject, rawPayload: { choices: [{ message: { content: result.subject } }] } };
+  },
+}));
+
+const CONFIG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-cola-'));
+const CONFIG_PATH = path.join(CONFIG_DIR, 'gitcron.json');
+fs.writeFileSync(CONFIG_PATH, JSON.stringify({
+  provider: { lmstudio: { npm: '@ai-sdk/openai-compatible', name: 'LM Studio', options: { baseURL: 'http://localhost:1234/v1' } } },
 }));
 
 import {
@@ -50,7 +69,7 @@ describe('commit-ai queue en proceso principal (tarea 2.4 / D16)', () => {
     vi.clearAllMocks();
     handlers.clear();
     resetDraftQueueForTesting();
-    setCommitAiConfigPathForTesting(os.tmpdir() + '/no-gitcron-config.json');
+    setCommitAiConfigPathForTesting(CONFIG_PATH);
     registerCommitMessageAiHandlers();
 
     mockFetchModelCatalog.mockResolvedValue([

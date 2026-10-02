@@ -6,7 +6,6 @@ import type {
   NewPrediction,
   ProviderId as DbProviderId,
 } from '../db/types';
-import type { ProviderId as RuntimeProviderId } from './providers';
 import type {
   PredictionInput,
   PredictionResult,
@@ -16,7 +15,8 @@ import type {
 interface PersistPredictionArgs {
   repoPath: string;
   config: TemporalAgentConfig;
-  providerId: RuntimeProviderId;
+  /** El proveedor de gitcron.json que contestó (`openrouter`, `anthropic`, `codex`…). */
+  providerId: string;
   predictionInput: PredictionInput;
   result: PredictionResult;
 }
@@ -99,7 +99,7 @@ function buildNewPrediction(
 }
 
 function databaseProvider(
-  providerId: RuntimeProviderId,
+  providerId: string,
   resultProvider: string,
   configuredModel?: string,
 ): DbProviderId {
@@ -110,10 +110,10 @@ function databaseProvider(
   return model.split('/')[0] || model;
 }
 
+/** El modelo va después del primer `:` de `<proveedor>:<modelo>`. */
 function predictionModel(resultProvider: string, configuredModel?: string): string | undefined {
-  if (resultProvider.startsWith('openrouter:')) {
-    return resultProvider.slice('openrouter:'.length) || configuredModel?.trim() || undefined;
-  }
+  const colon = resultProvider.indexOf(':');
+  if (colon >= 0) return resultProvider.slice(colon + 1) || configuredModel?.trim() || undefined;
   return configuredModel?.trim() || undefined;
 }
 

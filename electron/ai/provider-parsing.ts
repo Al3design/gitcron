@@ -171,3 +171,28 @@ export function extractJson(text: string): string | null {
     extractBalanced(text)
   );
 }
+
+/**
+ * Las ramas de la respuesta del Agente Temporal. La skill pide sólo JSON; se lee a
+ * la defensiva y una salida mala da cero ramas. Acepta `branches` o `ramas`, o el
+ * arreglo suelto.
+ */
+export function parseBranches(text: string): SpeculativeBranch[] {
+  const jsonStr = extractJson(text);
+  if (!jsonStr) return [];
+  try {
+    const parsed = JSON.parse(cleanJsonString(jsonStr)) as unknown;
+    let rawBranches: unknown[] = [];
+    if (Array.isArray(parsed)) rawBranches = parsed;
+    else if (parsed && Array.isArray((parsed as { branches?: unknown }).branches)) rawBranches = (parsed as { branches: unknown[] }).branches;
+    else if (parsed && Array.isArray((parsed as { ramas?: unknown }).ramas)) rawBranches = (parsed as { ramas: unknown[] }).ramas;
+    const valid: SpeculativeBranch[] = [];
+    for (const raw of rawBranches) {
+      const branch = normalizeBranch(raw);
+      if (branch) valid.push(branch);
+    }
+    return valid;
+  } catch {
+    return [];
+  }
+}

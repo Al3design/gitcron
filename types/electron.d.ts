@@ -433,6 +433,14 @@ interface ElectronAPI {
     lastRequest(): Promise<GitResult<CommitAiLastRequest | null>>;
   };
   /**
+   * Qué modelo usa cada uso de texto según gitcron.json (tarea 4.3). Sin modelo,
+   * `offer` es «usar lo que tenías»: `adopt` lo escribe en el archivo global.
+   */
+  aiUse?: {
+    status(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<import('./ai-use').AiUseStatus>>;
+    adopt(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<{ written: boolean; modelRef: string }>>;
+  };
+  /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve
    * SIEMPRE el contrato normalizado (lib/carto-types), nunca la forma cruda del motor.
    * Las queries devuelven `data: null` mientras el índice no esté `ready`.

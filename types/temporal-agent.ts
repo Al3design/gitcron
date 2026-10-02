@@ -161,9 +161,13 @@ export interface PredictionResult {
   lang?: string;
 }
 
-/** Multi-provider adapter (brief §6.1). Cloud and local/gateway families. */
+/**
+ * Quien contesta la predicción. Desde la tarea 4.3 de modelos-en-casa, `id` es el
+ * proveedor de gitcron.json que eligió el uso `gitcron-temporal` (`openrouter`,
+ * `anthropic`, `codex`…), no una lista fija.
+ */
 export interface AIPredictionProvider {
-  id: 'claude' | 'openrouter' | 'openai' | 'gemini' | 'opencode';
+  id: string;
   label: string;
   kind: 'cloud' | 'local';
   predictTimelines(prompts: AssembledPrompts): Promise<PredictionResult>;

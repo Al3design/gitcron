@@ -668,36 +668,81 @@ describe('commit-ai:draft con uso resuelto (openai-compatible y codex CLI)', () 
     expect(res.data?.detail).toContain('400 not supported when using Codex with a ChatGPT account');
   });
 
-  it('claude-code y antigravity devuelven unavailable con «todavía no conectado»', async () => {
+  // Desde la tarea 4.2 los tres CLI de suscripción redactan por el mismo cliente de
+  // texto. Salidas medidas el 2026-10-01 (Claude Code 2.1.284, Antigravity 1.2.13).
+  it('claude-code redacta por su CLI: sin herramientas ni ajustes de la persona, pedido por stdin', async () => {
     const configPath = path.join(tmpDir, 'gitcron.json');
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify({
-        agent: {
-          'gitcron-commit': {
-            model: 'claude-code/haiku',
-          },
-        },
-      }),
-      'utf8',
-    );
+    fs.writeFileSync(configPath, JSON.stringify({ agent: { 'gitcron-commit': { model: 'claude-code/haiku' } } }), 'utf8');
     setCommitAiConfigPathForTesting(configPath);
+    let stdin = '';
+    let args: string[] = [];
+    const spawnFn = vi.fn((_cmd: string, a: string[]) => {
+      args = a;
+      const child = spawnEmitting(
+        [{ type: 'result', is_error: false, result: 'feat(core): redactado por claude', usage: { input_tokens: 9, cache_creation_input_tokens: 6783, cache_read_input_tokens: 0, output_tokens: 12 } }],
+        0,
+      )(_cmd, a, {});
+      child.stdin.on('data', (d: Buffer) => { stdin += d.toString('utf8'); });
+      return child;
+    });
+    setCodexSpawnForTesting(spawnFn as any);
+    setCodexResolveForTesting(async (name) => ({ file: `C:/tools/${name}.exe`, viaShell: false }));
 
-    const draftHandler = handlers.get('commit-ai:draft')!;
-    const res = await draftHandler(
+    const res = await handlers.get('commit-ai:draft')!(
       { sender: { isDestroyed: () => false, send: vi.fn() } },
-      {
-        repoPath: tmpDir,
-        paths: ['src/file.ts'],
-        changeId: null,
-        intent: null,
-        model: 'ignored',
-      },
+      { repoPath: tmpDir, paths: ['src/file.ts'], changeId: null, intent: null, model: 'ignored' },
     );
 
-    expect(res.success).toBe(true);
-    expect(res.data?.status).toBe('unavailable');
-    expect(res.data?.detail).toBe('todavía no conectado');
+    expect(res.data).toEqual({ status: 'drafted', subject: 'feat(core): redactado por claude', model: 'haiku' });
+    expect(spawnFn.mock.calls[0][0]).toBe('C:/tools/claude.exe');
+    expect(args).toEqual(['-p', '--output-format', 'json', '--tools=', '--no-session-persistence', '--setting-sources=', '--strict-mcp-config', '--disable-slash-commands', '--model', 'haiku']);
+    expect(stdin).toContain('hello world');
+  });
+
+  it('antigravity redacta por su CLI con el pedido en su formato de eventos', async () => {
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    fs.writeFileSync(configPath, JSON.stringify({ agent: { 'gitcron-commit': { model: 'antigravity/gemini-3.8-flash-low' } } }), 'utf8');
+    setCommitAiConfigPathForTesting(configPath);
+    let stdin = '';
+    const spawnFn = vi.fn((_cmd: string, a: string[]) => {
+      const child = spawnEmitting(
+        [
+          { event: 'step_update', step_update: { step_type: 'agent_response', text_delta: 'fix(ui): redactado por agy' } },
+          { event: 'result', result: { status: 'SUCCESS', response: 'fix(ui): redactado por agy', usage: { input_tokens: 13126, output_tokens: 8 } } },
+        ],
+        0,
+      )(_cmd, a, {});
+      child.stdin.on('data', (d: Buffer) => { stdin += d.toString('utf8'); });
+      return child;
+    });
+    setCodexSpawnForTesting(spawnFn as any);
+    setCodexResolveForTesting(async (name) => ({ file: `C:/tools/${name}.exe`, viaShell: false }));
+
+    const res = await handlers.get('commit-ai:draft')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { repoPath: tmpDir, paths: ['src/file.ts'], changeId: null, intent: null, model: 'ignored' },
+    );
+
+    expect(res.data).toEqual({ status: 'drafted', subject: 'fix(ui): redactado por agy', model: 'gemini-3.8-flash-low' });
+    expect(spawnFn.mock.calls[0][0]).toBe('C:/tools/agy.exe');
+    const line = JSON.parse(stdin.trim());
+    expect(line.event).toBe('user');
+    expect(line.message.content[0].text).toContain('hello world');
+  });
+
+  it('sin modelo en gitcron.json ni proveedor «lmstudio» declarado, no se cae a ninguna dirección fija', async () => {
+    const configPath = path.join(tmpDir, 'gitcron.json');
+    fs.writeFileSync(configPath, JSON.stringify({ provider: {} }), 'utf8');
+    setCommitAiConfigPathForTesting(configPath);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const res = await handlers.get('commit-ai:draft')!(
+      { sender: { isDestroyed: () => false, send: vi.fn() } },
+      { repoPath: tmpDir, paths: ['src/file.ts'], changeId: null, intent: null, model: 'google/gemma-4-12b' },
+    );
+
+    expect(res.data).toEqual({ status: 'unavailable', detail: 'lmstudio · google/gemma-4-12b: gitcron.json no declara el proveedor «lmstudio», por el que va el modelo elegido en el selector.' });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('commit-ai:last-request devuelve el pedido con procedencias y sin secretos, cabeceras secretas ni diff', async () => {

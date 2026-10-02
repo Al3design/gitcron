@@ -216,6 +216,14 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update:download-progress', handler);
     return () => ipcRenderer.removeListener('update:download-progress', handler);
   },
+  // Qué modelo usa cada uso de texto según gitcron.json, y «usar lo que tenías»
+  // (tarea 4.3 de modelos-en-casa). Sin secretos.
+  aiUse: {
+    status: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
+      ipcRenderer.invoke('ai-use:status', args),
+    adopt: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
+      ipcRenderer.invoke('ai-use:adopt', args),
+  },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.
   commitAi: {

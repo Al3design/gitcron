@@ -18,6 +18,7 @@ import { useGitStore } from '@/lib/git-store';
 import { Brain } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { OPENROUTER_MODELS } from '@/lib/openrouter-models';
+import { AiUseLine } from './ai/AiUseLine';
 
 const COLOR_SUCCESS = 'var(--color-git-add)';
 const COLOR_PRIMARY = 'var(--color-primary)';
@@ -450,6 +451,11 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
         <h4 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, margin: '0 0 var(--space-3)', color: COLOR_PRIMARY }}>
           {t('temporalAgent.aiAccessHeading')}
         </h4>
+        {/* El proveedor y el modelo salen de gitcron.json (tarea 4.3). La clave y el
+            modelo de abajo siguen valiendo cuando el uso va a OpenRouter. */}
+        <div style={{ marginBottom: 'var(--space-3)' }}>
+          <AiUseLine use="gitcron-temporal" repoPath={repoPath} />
+        </div>
         <Row label={t('temporalAgent.apiKeyStatus')}>
           {hasKey === null ? (
             <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{t('temporalAgent.keyChecking')}</span>

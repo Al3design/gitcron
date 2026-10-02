@@ -54,18 +54,18 @@ export function registerCartoAiHandlers(): void {
   });
 
   // ── Sondeo de disponibilidad (sin gastar una generación) ──
-  ipcMain.handle('carto:ai-probe', async (): Promise<Result<CartoAIProbe>> => {
+  // El proveedor sale de gitcron.json (tarea 4.3): se nombra con su modelo.
+  ipcMain.handle('carto:ai-probe', async (_e, repoPath?: unknown): Promise<Result<CartoAIProbe>> => {
     const settings = getCartoAISettings();
     if (!settings.enabled) {
-      return ok({ available: false, provider: settings.mode === 'online' ? 'openrouter' : 'lmstudio', detail: 'IA desactivada' });
+      return ok({ available: false, provider: '', detail: 'IA desactivada' });
     }
     try {
-      const provider = getCartoProvider(settings);
+      const provider = getCartoProvider(settings, typeof repoPath === 'string' ? repoPath : null);
       await provider.probe();
-      return ok({ available: true, provider: provider.id });
+      return ok({ available: true, provider: provider.label });
     } catch (error) {
-      const id = settings.mode === 'online' ? 'openrouter' : 'lmstudio';
-      return ok({ available: false, provider: id, detail: errMsg(error) });
+      return ok({ available: false, provider: '', detail: errMsg(error) });
     }
   });
 

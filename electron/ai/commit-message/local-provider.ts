@@ -1,28 +1,17 @@
 // electron/ai/commit-message/local-provider.ts
 //
-// Proveedor local para redactar el asunto de un commit. Hermano del de
-// Cartografía (`electron/ai/carto/lmstudio.ts`), ambos unificados en la capa
-// `electron/ai/text-client.ts`, con una diferencia deliberada:
-// el endpoint es configurable por el usuario en Ajustes.
-//
-// Ambos proveedores consumen `DEFAULT_LMSTUDIO_BASE_URL` centralizado en
-// `text-client.ts`. Permitir configurar la URL base alcanza tanto para el caso
-// común (modelo corriendo en la misma máquina en localhost:1234) como para el
-// caso real de Ale (notebook trabajando contra la PC donde está la GPU dedicada).
+// Lo propio de LM Studio para la redacción del commit: el catálogo con su API
+// nativa, cargar y expulsar modelos, y leer la respuesta de la redacción. La
+// redacción misma ya no pasa por acá: va por el proveedor que diga gitcron.json
+// (tarea 4.3), y el selector de LM Studio sirve para elegir qué escribir ahí.
 //
 // Privacidad: acá viaja el **diff del repositorio**. Es más sensible que el
 // contexto que manda Cartografía, y es el argumento fuerte para que la opción
 // local sea la primera: el código no sale a ningún tercero.
 
 import type { CommitDraftResult, LoadOutcome, LocalModel } from '../../../types/commit-message-ai';
-import {
-  createLmStudioConfig,
-  DEFAULT_LMSTUDIO_BASE_URL,
-  DEFAULT_LMSTUDIO_CONN_ERROR,
-  streamText,
-} from '../text-client';
+import { LEGACY_PROVIDER_BLOCKS } from '../config/gitcron-config-migration';
 import { fetchDeviceIndex, mergeDeviceInfo } from './device-index';
-import type { DraftChunk } from './sse';
 
 // Los dos pisos de contexto viven en `types/`, donde el panel también los ve: el
 // renderer no puede importar nada de `electron/`, y con el número escrito a mano
@@ -42,8 +31,13 @@ export function hasEnoughContext(model: LocalModel, minimum: number = MIN_CONTEX
   return model.loaded && (model.loadedContextLength ?? 0) >= minimum;
 }
 
-/** Servidor local por omisión, derivado de la URL base centralizada en text-client. */
-export const DEFAULT_LOCAL_BASE_URL = DEFAULT_LMSTUDIO_BASE_URL.replace(/\/v1\/?$/, '');
+/**
+ * El servidor del selector de LM Studio: el del proveedor `lmstudio` que la
+ * migración y «usar lo que tenías» escriben en gitcron.json. La dirección vive en
+ * un solo lugar, el módulo de configuración. Con la tarea 4.4 el selector sigue al
+ * proveedor del uso.
+ */
+export const DEFAULT_LOCAL_BASE_URL = String(LEGACY_PROVIDER_BLOCKS.lmstudio.options?.baseURL).replace(/\/v1\/?$/, '');
 
 /**
  * Ventana generosa para redactar: medido, un 12B tarda 25–57 s y un 9B con
@@ -79,8 +73,6 @@ function withTimeout(timeoutMs: number, signal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
-
-const CONN_ERROR = DEFAULT_LMSTUDIO_CONN_ERROR;
 
 /**
  * Catálogo de modelos, leído de la API **nativa** de LM Studio y no de la
@@ -317,37 +309,6 @@ export function normalizeSubject(raw: string): string | null {
   return cleanedSubject;
 }
 
-/** Traduce un fallo de red al motivo accionable, sin tapar el resto. */
-function unavailable(error: unknown): CommitDraftResult {
-  const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof Error && error.name === 'AbortError') {
-    return { status: 'unavailable', detail: 'La redacción tardó demasiado y se canceló.' };
-  }
-  return { status: 'unavailable', detail: /fetch failed|ECONNREFUSED/i.test(message) ? CONN_ERROR : message };
-}
-
-export interface DraftRequest {
-  baseUrl?: string;
-  model: string;
-  system: string;
-  user: string;
-  /**
-   * Techo de tokens. No puede ser una constante del código: medido, 3.000
-   * alcanza para gemma-4-12b y no para qwen3.5-9b, que recién contesta con 8.000
-   * —y tarda el doble—. Es un parámetro por modelo.
-   */
-  maxTokens: number;
-  signal?: AbortSignal;
-  /**
-   * Se llama con lo que va llegando, ya agrupado.
-   *
-   * Opcional: sin esto la redacción funciona igual y en silencio, que es el
-   * comportamiento anterior. Los pedazos llegan juntados por tipo, nunca de a
-   * uno: medido, son unos 45 cuadros por segundo.
-   */
-  onChunk?: (chunks: DraftChunk[]) => void;
-}
-
 /**
  * El catálogo, sólo por HTTP. Barato y sin procesos.
  *
@@ -382,38 +343,5 @@ export async function unloadLocalModel(baseUrl: string, instanceId: string): Pro
   if (!res.ok) {
     const raw = await res.text().catch(() => '');
     throw new Error(serverErrorMessage(raw) ?? `El servidor local respondió ${res.status}.`);
-  }
-}
-
-/**
- * Pide la redacción y, si quien llama lo quiere, la va contando mientras llega.
- *
- * Se pide siempre en modo stream. Medido: **308 cuadros en 6,9 segundos, 278 de
- * ellos de razonamiento**. Sin stream, esos 40 a 98 segundos son una pantalla
- * quieta; con stream se ve al modelo pensar, que es lo que Ale pidió ver.
- *
- * El resultado final es **el mismo** que producía la respuesta única: los
- * pedazos se acumulan y se arman en la misma forma sintética que
- * `parseDraftResponse` ya sabía leer. Esa función no se tocó, y por eso la
- * taxonomía de «no contestó» sigue valiendo igual.
- *
- * Si el servidor no devuelve un stream —una versión vieja, un proxy en el
- * medio—, se lee como respuesta única y no falla.
- */
-export async function draftCommitSubject(request: DraftRequest): Promise<CommitDraftResult> {
-  const { baseUrl = DEFAULT_LOCAL_BASE_URL, model, system, user, maxTokens, signal, onChunk } = request;
-  try {
-    const config = createLmStudioConfig({ baseUrl, providerLabel: 'El servidor local' });
-    const result = await streamText(config, {
-      model,
-      system,
-      user,
-      maxTokens,
-      signal,
-      onChunk,
-    });
-    return parseDraftResponse(result.rawPayload, model);
-  } catch (error) {
-    return unavailable(error);
   }
 }

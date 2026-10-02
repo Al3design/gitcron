@@ -262,7 +262,7 @@ export interface CommitAiResolvedModel {
   status?: 'resolved';
   providerName: string;
   modelId: string;
-  kind: 'openai-compatible' | 'cli';
+  kind: 'openai-compatible' | 'anthropic' | 'cli';
   destination: 'this-machine' | 'own-server' | 'external-service';
   sourceFile: string;
   /** El `gitcron.json` del repositorio, si aporta algún valor (D2). */
@@ -322,7 +322,7 @@ export interface HeaderProvenance {
  * Nunca contiene claves, valores de cabeceras secretas, ni el prompt o el diff.
  */
 export interface CommitAiLastRequest {
-  kind: 'openai-compatible' | 'cli';
+  kind: 'openai-compatible' | 'anthropic' | 'cli';
   endpoint: string;
   model: {
     value: string;

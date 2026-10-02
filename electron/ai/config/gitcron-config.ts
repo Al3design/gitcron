@@ -18,7 +18,14 @@ export const SCHEMA_PROVIDER_OPTION_KEYS: readonly string[] = Object.keys(
 );
 
 export type ProviderDestination = 'this-machine' | 'own-server' | 'external-service';
-export type ProviderKind = 'openai-compatible' | 'cli';
+/**
+ * `anthropic` es la excepción de D6: un bloque `provider` con `npm`
+ * `@ai-sdk/anthropic` habla la API de mensajes de Anthropic, no el estándar.
+ */
+export type ProviderKind = 'openai-compatible' | 'anthropic' | 'cli';
+
+export const ANTHROPIC_NPM = '@ai-sdk/anthropic';
+export const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com/v1';
 
 export const RESERVED_CLI_IDS = ['codex', 'claude-code', 'antigravity'] as const;
 export type ReservedCliId = (typeof RESERVED_CLI_IDS)[number];
@@ -115,8 +122,18 @@ export interface ResolvedUse {
   headers?: Record<string, string>;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Si `maxTokens` sale de `limit.output` del modelo. Si no, es el valor por
+   * omisión de GitCron y cada uso puede pedir el suyo.
+   */
+  maxTokensFromModel?: boolean;
   options?: Record<string, unknown>;
   contextLength?: number;
+  /**
+   * De dónde sale el modelo: la entrada del uso, la elección general (`model`) o,
+   * sin ninguna de las dos, el selector de la pantalla (4.3).
+   */
+  modelSource?: 'agent' | 'general' | 'screen';
   available: boolean;
   unavailableReason?: string;
   provenance: ResolvedProvenance;
@@ -527,6 +544,11 @@ export interface ResolveUseOptions {
   stored?: (name: string) => string | undefined;
   /** Configuración ya cargada, para no leer los archivos dos veces. */
   loaded?: LoadedGitCronConfig;
+  /**
+   * El modelo elegido en la pantalla (`<proveedor>/<modelo>`), que vale sólo si el
+   * uso no tiene modelo en el archivo. El proveedor tiene que estar declarado.
+   */
+  screenModelRef?: string;
 }
 
 /**
@@ -542,6 +564,7 @@ export function resolveUse(
   let repoPath: string | null | undefined;
   let preloaded: LoadedGitCronConfig | undefined;
   let stored: ResolveUseOptions['stored'];
+  let screenModelRef: string | undefined;
   let env: NodeJS.ProcessEnv = process.env;
 
   if (typeof customPathOrOptions === 'string') {
@@ -552,6 +575,7 @@ export function resolveUse(
     repoPath = customPathOrOptions.repoPath;
     preloaded = customPathOrOptions.loaded;
     stored = customPathOrOptions.stored;
+    screenModelRef = customPathOrOptions.screenModelRef?.trim() || undefined;
     if (customPathOrOptions.env) env = customPathOrOptions.env;
   }
 
@@ -564,21 +588,31 @@ export function resolveUse(
   const config = loaded.config;
   if (!config) return null;
 
-  const rawAgent = config.agent?.[use];
-  if (!rawAgent?.model || typeof rawAgent.model !== 'string') {
-    return null;
-  }
+  // Sin `model` en la entrada del uso, el uso sigue la elección general (`model`
+  // del nivel superior, como en OpenCode). Sin ninguna de las dos, no hay modelo.
+  const rawAgent: GitCronAgentConfig = config.agent?.[use] ?? {};
+  const agentModel = typeof rawAgent.model === 'string' && rawAgent.model.trim() ? rawAgent.model : undefined;
+  const generalModel = typeof config.model === 'string' && config.model.trim() ? config.model : undefined;
+  const chosenModel = agentModel ?? generalModel ?? screenModelRef;
+  if (!chosenModel) return null;
+  const modelSource: 'agent' | 'general' | 'screen' = agentModel ? 'agent' : generalModel ? 'general' : 'screen';
+  const modelSegments = agentModel ? ['agent', use, 'model'] : generalModel ? ['model'] : [];
+  const modelPath = agentModel
+    ? `agent.${use}.model`
+    : generalModel
+      ? 'model (elección general)'
+      : 'elegido en el selector de la pantalla';
 
   // De qué archivo sale cada valor (D2). `sourceFile` es el del modelo del uso.
   const globalFile = loaded.files.find((f) => f.scope === 'global')?.path ?? (configPath || getDefaultConfigPath());
-  const filePath = loaded.originOf(['agent', use, 'model']) ?? globalFile;
+  const filePath = loaded.originOf(modelSegments) ?? globalFile;
   const repoFile = loaded.files.find((f) => f.scope === 'repo')?.path;
   const fromRepo: string[] = [];
   const noteOrigin = (key: string, segments: string[]) => {
     if (repoFile && loaded.originOf(segments) === repoFile) fromRepo.push(key);
   };
   const filesOf = () => (repoFile && fromRepo.length > 0 ? { repoFile, fromRepo: [...fromRepo] } : {});
-  noteOrigin('model', ['agent', use, 'model']);
+  noteOrigin('model', modelSegments);
 
   // Referencias `{env:}` y `{file:}` (D5). Las rutas relativas de `{file:}` van
   // contra la carpeta del archivo que escribe ese valor.
@@ -618,7 +652,7 @@ export function resolveUse(
 
   const agentConfig = resolveRefs({ ...rawAgent }, ['agent', use]);
 
-  const modelRef = rawAgent.model.trim();
+  const modelRef = chosenModel.trim();
   const slashIdx = modelRef.indexOf('/');
   if (slashIdx === -1) {
     return {
@@ -632,7 +666,7 @@ export function resolveUse(
       unavailableReason: 'falta el proveedor: se escribe <proveedor>/<modelo>',
       provenance: {
         sourceFile: filePath,
-        model: `agent.${use}.model`,
+        model: modelPath,
         options: {},
         headers: {},
         ...filesOf(),
@@ -646,7 +680,6 @@ export function resolveUse(
 
   // CLI reservados
   if (RESERVED_CLI_IDS.includes(providerId as ReservedCliId)) {
-    const isCodex = providerId === 'codex';
     const cliOptionsProvenance: Record<string, string> = {};
     for (const k of Object.keys(agentConfig.options ?? {})) {
       cliOptionsProvenance[k] = `agent.${use}.options.${k}`;
@@ -664,11 +697,12 @@ export function resolveUse(
       temperature: agentConfig.temperature,
       maxTokens: undefined,
       options: agentConfig.options ?? {},
-      available: isCodex && !missing,
-      unavailableReason: missing ?? (isCodex ? undefined : 'todavía no conectado'),
+      modelSource,
+      available: !missing,
+      unavailableReason: missing,
       provenance: {
         sourceFile: filePath,
-        model: `agent.${use}.model`,
+        model: modelPath,
         temperature: agentConfig.temperature !== undefined ? `agent.${use}.temperature` : undefined,
         options: cliOptionsProvenance,
         headers: {},
@@ -688,11 +722,14 @@ export function resolveUse(
       kind: 'openai-compatible',
       destination: 'external-service',
       sourceFile: filePath,
+      modelSource,
       available: false,
-      unavailableReason: `Proveedor «${providerId}» no declarado en provider`,
+      unavailableReason: modelSource === 'screen'
+        ? `gitcron.json no declara el proveedor «${providerId}», por el que va el modelo elegido en el selector`
+        : `Proveedor «${providerId}» no declarado en provider`,
       provenance: {
         sourceFile: filePath,
-        model: `agent.${use}.model`,
+        model: modelPath,
         options: {},
         headers: {},
         ...filesOf(),
@@ -713,6 +750,19 @@ export function resolveUse(
       const fromEnv = env.OPENAI_BASE_URL || stored?.('OPENAI_BASE_URL');
       rawOptions.baseURL = fromEnv ? '{env:OPENAI_BASE_URL}' : 'https://api.openai.com/v1';
       baseURLIsOpenAiDefault = !fromEnv;
+    }
+  }
+  // Anthropic (D6): sin clave en el archivo usa ANTHROPIC_API_KEY (la guardada en
+  // GitCron es la que usaba el Agente Temporal); sin dirección, la pública.
+  const isAnthropic = rawProvider.npm === ANTHROPIC_NPM;
+  const kind: ProviderKind = isAnthropic ? 'anthropic' : 'openai-compatible';
+  const authScheme = isAnthropic ? 'x-api-key' : 'Bearer';
+  let baseURLIsAnthropicDefault = false;
+  if (isAnthropic) {
+    if (rawOptions.apiKey === undefined) rawOptions.apiKey = '{env:ANTHROPIC_API_KEY}';
+    if (rawOptions.baseURL === undefined) {
+      rawOptions.baseURL = ANTHROPIC_DEFAULT_BASE_URL;
+      baseURLIsAnthropicDefault = true;
     }
   }
   const substitutedOptions = resolveRefs(rawOptions, ['provider', providerId, 'options']);
@@ -746,7 +796,9 @@ export function resolveUse(
   if (typeof rawOptions.baseURL === 'string') {
     baseURLProvenance = baseURLIsOpenAiDefault
       ? 'dirección pública de la API de OpenAI (sin options.baseURL ni OPENAI_BASE_URL)'
-      : withVariable(`provider.${providerId}.options.baseURL`, rawOptions.baseURL);
+      : baseURLIsAnthropicDefault
+        ? 'dirección pública de la API de Anthropic (sin options.baseURL)'
+        : withVariable(`provider.${providerId}.options.baseURL`, rawOptions.baseURL);
     noteOrigin('baseURL', ['provider', providerId, 'options', 'baseURL']);
   }
 
@@ -754,11 +806,11 @@ export function resolveUse(
   if (typeof rawOptions.apiKey === 'string') {
     const apiEnvMatch = rawOptions.apiKey.match(/\{env:([A-Za-z0-9_]+)\}/);
     if (apiEnvMatch) {
-      authProvenance = `Bearer, de la variable ${apiEnvMatch[1]} (${sourceLabel(apiEnvMatch[1])})`;
+      authProvenance = `${authScheme}, de la variable ${apiEnvMatch[1]} (${sourceLabel(apiEnvMatch[1])})`;
     } else if (/\{file:[^}]+\}/.test(rawOptions.apiKey)) {
-      authProvenance = 'Bearer, de un archivo ({file:})';
+      authProvenance = `${authScheme}, de un archivo ({file:})`;
     } else if (rawOptions.apiKey.trim().length > 0) {
-      authProvenance = 'Bearer, valor escrito en el archivo';
+      authProvenance = `${authScheme}, valor escrito en el archivo`;
     }
     if (authProvenance) noteOrigin('auth', ['provider', providerId, 'options', 'apiKey']);
   }
@@ -779,6 +831,7 @@ export function resolveUse(
   }
 
   let maxTokens: number;
+  let maxTokensFromModel = true;
   let maxTokensProvenance: string;
   if (modelConfig?.limit?.output !== undefined) {
     maxTokens = modelConfig.limit.output;
@@ -787,6 +840,7 @@ export function resolveUse(
   } else {
     maxTokens = 3000;
     maxTokensProvenance = 'valor por omisión de GitCron (3000)';
+    maxTokensFromModel = false;
   }
   const contextLength = modelConfig?.limit?.context;
 
@@ -868,15 +922,16 @@ export function resolveUse(
       providerId,
       providerName,
       modelId,
-      kind: 'openai-compatible',
+      kind,
       destination: 'external-service',
       sourceFile: filePath,
+      modelSource,
       available: false,
       // Si la dirección venía de una variable que falta, eso es lo que hay que decir.
       unavailableReason: unavailableReason ?? `el proveedor ${providerId} no declara options.baseURL`,
       provenance: {
         sourceFile: filePath,
-        model: `agent.${use}.model`,
+        model: modelPath,
         options: optionsProvenance,
         headers: headersProvenance,
         auth: authProvenance,
@@ -887,13 +942,13 @@ export function resolveUse(
     };
   }
 
-  const destination = determineDestination(baseURL, 'openai-compatible');
+  const destination = determineDestination(baseURL, kind);
 
   return {
     providerId,
     providerName,
     modelId,
-    kind: 'openai-compatible',
+    kind,
     destination,
     sourceFile: filePath,
     baseURL,
@@ -901,13 +956,15 @@ export function resolveUse(
     headers,
     temperature,
     maxTokens,
+    maxTokensFromModel,
     options: Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined,
     contextLength,
+    modelSource,
     available,
     unavailableReason,
     provenance: {
       sourceFile: filePath,
-      model: `agent.${use}.model`,
+      model: modelPath,
       baseURL: baseURLProvenance,
       temperature: temperatureProvenance,
       max_tokens: maxTokensProvenance,

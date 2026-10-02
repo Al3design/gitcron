@@ -93,12 +93,12 @@ export async function explainNode(
 
   // ── Generación: dispara el proveedor activo y persiste el resultado ──
   try {
-    const provider = getCartoProvider(settings);
+    const provider = getCartoProvider(settings, repoPath);
     const data = await provider.explain(context.node, toAIContext(context, normLang));
     upsertCartoExplanation({
       ...key,
       provider: data.provider,
-      model: settings.model || null,
+      model: provider.modelId,
       explanation: data.text,
       generatedAt: data.generatedAt,
     });

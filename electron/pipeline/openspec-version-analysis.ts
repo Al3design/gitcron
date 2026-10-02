@@ -34,7 +34,9 @@ import {
   type OpenSpecVersionClass,
   type OpenSpecVersionRange,
 } from '../../lib/openspec-version';
-import { completeText, streamText, createLmStudioConfig, DEFAULT_LMSTUDIO_CONN_ERROR } from '../ai/text-client';
+import type { ResolvedModelFor } from '../ai/config/resolve-model-for';
+import { requireResolved, runTextUse, TextUseError, type TextUseDeps } from '../ai/text-use';
+import { resolveForUse } from '../ai/use-resolution';
 import type { DraftChunk } from '../ai/commit-message/sse';
 import { checkLatestOpenSpecVersion } from './openspec-registry';
 import {
@@ -467,29 +469,29 @@ export const VERSION_ANALYSIS_SYSTEM_PROMPT =
  */
 export async function draftVersionRedaction(
   measured: VersionAnalysisMeasured,
-  deps?: {
-    completeTextFn?: typeof completeText;
-    streamTextFn?: typeof streamText;
-    model?: string;
+  deps: {
+    /** El uso `gitcron-openspec-analysis` resuelto de gitcron.json (tarea 4.3). */
+    target: ResolvedModelFor;
+    textDeps?: TextUseDeps;
     signal?: AbortSignal;
     onChunk?: (chunks: DraftChunk[]) => void;
     installedContext?: OpenSpecInstalledContext | null;
   },
 ): Promise<VersionAnalysisRedaction> {
-  const model = deps?.model?.trim();
-  if (!model) {
+  // Sin modelo en gitcron.json no hay a quién mandar nada: la pantalla ofrece
+  // escribir el elegido en su selector (no se cae a ningún servidor fijo).
+  let provider: string;
+  try {
+    const { resolved } = requireResolved(deps.target);
+    provider = `${resolved.providerName} · ${resolved.modelId}`;
+  } catch (error) {
     return {
       provider: '',
       status: 'no-model',
       text: '',
-      error: null,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
-
-  const provider = `LM Studio · ${model}`;
-  const config = createLmStudioConfig({
-    providerLabel: 'LM Studio (redacción)',
-  });
 
   const installedContextSummary: string[] = [];
   if (deps?.installedContext) {
@@ -536,37 +538,17 @@ export async function draftVersionRedaction(
   ].join('\n');
 
   try {
-    let text = '';
-    if (deps?.streamTextFn) {
-      const res = await deps.streamTextFn(config, {
-        model,
+    const { text } = await runTextUse(
+      deps.target,
+      {
         system: VERSION_ANALYSIS_SYSTEM_PROMPT,
         user: promptSummary,
         maxTokens: 900,
-        signal: deps?.signal,
-        onChunk: deps?.onChunk,
-      });
-      text = res.text;
-    } else if (deps?.completeTextFn) {
-      const res = await deps.completeTextFn(config, {
-        model,
-        system: VERSION_ANALYSIS_SYSTEM_PROMPT,
-        user: promptSummary,
-        maxTokens: 900,
-        signal: deps?.signal,
-      });
-      text = res.text;
-    } else {
-      const res = await streamText(config, {
-        model,
-        system: VERSION_ANALYSIS_SYSTEM_PROMPT,
-        user: promptSummary,
-        maxTokens: 900,
-        signal: deps?.signal,
-        onChunk: deps?.onChunk,
-      });
-      text = res.text;
-    }
+        signal: deps.signal,
+        onChunk: deps.onChunk,
+      },
+      deps.textDeps,
+    );
 
     if (text && text.trim().length > 0) {
       return {
@@ -581,11 +563,11 @@ export async function draftVersionRedaction(
       provider,
       status: 'error',
       text: '',
-      error: 'El servidor local de IA devolvió una respuesta vacía.',
+      error: `${provider} devolvió una respuesta vacía.`,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (deps?.signal?.aborted || /cancelad/i.test(msg)) {
+    if (deps.signal?.aborted || (err instanceof TextUseError && err.reason === 'cancelled')) {
       return {
         provider,
         status: 'error',
@@ -594,9 +576,7 @@ export async function draftVersionRedaction(
       };
     }
 
-    const isConnError =
-      msg.includes(DEFAULT_LMSTUDIO_CONN_ERROR) ||
-      /ECONNREFUSED|fetch failed|getaddrinfo|ENOTFOUND/i.test(msg);
+    const isConnError = / no responde en |ECONNREFUSED|fetch failed|getaddrinfo|ENOTFOUND/i.test(msg);
 
     if (isConnError) {
       return {
@@ -631,10 +611,15 @@ export async function analyzeOpenSpecVersion(
       rawText: string | null;
       error?: string | null;
     }>;
-    completeTextFn?: typeof completeText;
-    streamTextFn?: typeof streamText;
+    /** Para pruebas: el uso ya resuelto, en lugar de leer gitcron.json. */
+    target?: ResolvedModelFor;
+    textDeps?: TextUseDeps;
     forceRefresh?: boolean;
     userDataDir?: string | null;
+    /**
+     * Que se pida la redacción, con el modelo del selector de la pantalla: vale si
+     * el uso no tiene modelo en gitcron.json (va por el proveedor `lmstudio` del archivo).
+     */
     model?: string;
     signal?: AbortSignal;
     onChunk?: (chunks: DraftChunk[]) => void;
@@ -749,14 +734,13 @@ export async function analyzeOpenSpecVersion(
     }).catch(() => null);
   }
 
-  // 9c.4 & 9c.5: Redacción con capa única 9b y modelo local, estrictamente separada.
-  // Sin modelo no redacta: sólo mide (idle) para no gastar GPU automáticamente.
+  // 9c.4 & 9c.5: Redacción separada de lo medido, con el modelo de gitcron.json
+  // (tarea 4.3). Sin pedido no redacta: sólo mide (idle) para no gastar nada solo.
   const redaction: VersionAnalysisRedaction =
     deps?.model && deps.model.trim().length > 0
       ? await draftVersionRedaction(measured, {
-          completeTextFn: deps?.completeTextFn,
-          streamTextFn: deps?.streamTextFn,
-          model: deps.model.trim(),
+          target: deps.target ?? resolveForUse('gitcron-openspec-analysis', repoPath, deps.model.trim()),
+          textDeps: deps.textDeps,
           signal: deps?.signal,
           onChunk: deps?.onChunk,
           installedContext: resolvedInstalledContext,

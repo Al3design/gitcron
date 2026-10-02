@@ -12,7 +12,7 @@
 
 import * as nodeFs from 'node:fs';
 import * as path from 'node:path';
-import { applyEdits, modify, type FormattingOptions } from 'jsonc-parser';
+import { applyEdits, findNodeAtLocation, modify, parseTree, type Edit, type FormattingOptions } from 'jsonc-parser';
 import { parseGitCronConfigText, type GitCronConfigParseError } from './gitcron-config';
 
 /** Texto de un gitcron.json nuevo. Otro archivo (mcp.json) pasa el suyo. */
@@ -40,6 +40,56 @@ export function detectFormatting(text: string): FormattingOptions {
   if (indented?.startsWith('\t')) return { insertSpaces: false, tabSize: 1, eol };
   const spaces = indented ? indented.match(/^ +/)?.[0].length ?? 2 : 2;
   return { insertSpaces: true, tabSize: spaces, eol };
+}
+
+/**
+ * El tramo de texto que pone `value` en `segments`, sin tocar nada más.
+ *
+ * `modify` de jsonc-parser con formato vuelve a formatear las líneas donde cae la
+ * edición: al agregar una clave después de `"mcp": { "x": {…} }` escrito en una
+ * línea, lo desplegaba entero (medido el 2026-10-02 con «usar lo que tenías»). Acá
+ * el texto nuevo se arma con la sangría de la línea donde va, y el resto queda
+ * byte a byte. Devuelve `null` si no puede (la raíz no es un objeto, se quita una
+ * clave…), y entonces se usa `modify`.
+ */
+export function pointEdits(base: string, segments: readonly string[], value: unknown, fmt: FormattingOptions): Edit[] | null {
+  if (value === undefined || segments.length === 0) return null;
+  const root = parseTree(base);
+  if (!root || root.type !== 'object') return null;
+  const eol = fmt.eol ?? '\n';
+  const unit = fmt.insertSpaces === false ? '\t' : ' '.repeat(fmt.tabSize ?? 2);
+  const lineIndent = (offset: number) => {
+    const start = base.lastIndexOf('\n', offset - 1) + 1;
+    return /^[ \t]*/.exec(base.slice(start))?.[0] ?? '';
+  };
+  const render = (v: unknown, indent: string) => (JSON.stringify(v, null, unit) ?? 'null').split('\n').join(eol + indent);
+
+  // Si ya está, se reemplaza sólo su valor.
+  const existing = findNodeAtLocation(root, [...segments]);
+  if (existing) {
+    return [{ offset: existing.offset, length: existing.length, content: render(value, lineIndent(existing.offset)) }];
+  }
+
+  // Si no, se agrega bajo el objeto más profundo que ya existe, anidando lo que falte.
+  let depth = segments.length - 1;
+  let parent = depth === 0 ? root : findNodeAtLocation(root, segments.slice(0, depth));
+  while (!parent && depth > 0) {
+    depth -= 1;
+    parent = depth === 0 ? root : findNodeAtLocation(root, segments.slice(0, depth));
+  }
+  if (!parent || parent.type !== 'object') return null;
+  let nested: unknown = value;
+  for (let i = segments.length - 1; i > depth; i -= 1) nested = { [segments[i]]: nested };
+
+  const props = parent.children ?? [];
+  const parentIndent = lineIndent(parent.offset);
+  const indent = props.length > 0 ? lineIndent(props[props.length - 1].offset) : parentIndent + unit;
+  const property = `${JSON.stringify(segments[depth])}: ${render(nested, indent)}`;
+  if (props.length > 0) {
+    const last = props[props.length - 1];
+    return [{ offset: last.offset + last.length, length: 0, content: `,${eol}${indent}${property}` }];
+  }
+  return [{ offset: parent.offset + 1, length: parent.length - 2, content: `${eol}${indent}${property}${eol}${parentIndent}` }];
 }
 
 /**
@@ -80,7 +130,9 @@ export function updateGitCronConfigValue(options: {
       if (parsed.kind === 'error') return { ok: false, reason: 'broken', error: parsed.error };
     }
 
-    const edits = modify(base, [...segments], value, { formattingOptions: detectFormatting(base) });
+    const formatting = detectFormatting(base);
+    const edits = pointEdits(base, segments, value, formatting)
+      ?? modify(base, [...segments], value, { formattingOptions: formatting });
     const next = applyEdits(base, edits);
 
     // ¿Cambió en disco mientras se editaba? Entonces se edita de nuevo sobre lo nuevo.

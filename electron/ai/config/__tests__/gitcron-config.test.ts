@@ -183,17 +183,17 @@ describe('gitcron-config', () => {
       expect(codexResolved?.available).toBe(true);
       expect(codexResolved?.temperature).toBe(0.1);
 
+      // Desde la tarea 4.2 los tres CLI tienen cliente de texto.
       const claudeResolved = resolveUse('gitcron-temporal', configPath);
       expect(claudeResolved?.kind).toBe('cli');
       expect(claudeResolved?.providerId).toBe('claude-code');
-      expect(claudeResolved?.available).toBe(false);
-      expect(claudeResolved?.unavailableReason).toBe('todavía no conectado');
+      expect(claudeResolved?.available).toBe(true);
+      expect(claudeResolved?.unavailableReason).toBeUndefined();
 
       const agyResolved = resolveUse('gitcron-sdd', configPath);
       expect(agyResolved?.kind).toBe('cli');
       expect(agyResolved?.providerId).toBe('antigravity');
-      expect(agyResolved?.available).toBe(false);
-      expect(agyResolved?.unavailableReason).toBe('todavía no conectado');
+      expect(agyResolved?.available).toBe(true);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

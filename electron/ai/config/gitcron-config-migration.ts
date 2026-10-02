@@ -1,12 +1,13 @@
 // electron/ai/config/gitcron-config-migration.ts
 //
 // Primer arranque sin gitcron.json: se crea con lo que GitCron ya usa, para que lo
-// que estaba escondido en ajustes quede escrito (D10, tarea 3.7). Nada cambia de
-// comportamiento: los usos que hoy no leen gitcron.json (Agente Temporal,
-// Cartografía) lo van a leer recién con la tarea 4.3, y la redacción del commit
-// sigue por su camino de siempre mientras el archivo no tenga `agent.gitcron-commit`.
+// que estaba escondido en ajustes quede escrito (D10, tarea 3.7). Desde la tarea 4.3
+// todos los usos leen gitcron.json, así que el archivo creado reproduce la elección
+// de cada uno.
 //
-// Si el archivo ya existe, no se toca. Las claves no se mueven: el archivo las
+// Si el archivo ya existe, no se toca: un uso sin entrada ofrece en su pantalla
+// escribir lo que la persona tenía elegido (legacy-choice.ts, decisión de Ale del
+// 2026-10-01: un botón, nunca solo). Las claves no se mueven: el archivo las
 // referencia con `{env:…}` y la resolución las encuentra en el baúl (D5).
 //
 // Medido el 2026-10-01 de dónde sale cada ajuste:
@@ -20,12 +21,46 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { GitCronConfig } from './gitcron-config';
+import type { GitCronConfig, GitCronProviderConfig } from './gitcron-config';
 
-/** Modelos por omisión de cada adaptador hoy (electron/ai/providers y electron/ai/carto). */
-const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
-const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-5';
-const LMSTUDIO_DEFAULT_MODEL = 'local-model';
+/**
+ * Modelos por omisión de los adaptadores que había antes de gitcron.json
+ * (Agente Temporal y Cartografía). Sólo sirven para escribir la elección vieja.
+ */
+export const OPENROUTER_DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5';
+export const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-5';
+export const LMSTUDIO_DEFAULT_MODEL = 'local-model';
+
+/**
+ * Los proveedores que GitCron usaba fijos antes de gitcron.json. Es el único lugar
+ * donde viven sus direcciones: la migración y «usar lo que tenías» los escriben en
+ * el archivo, y desde ahí se usan como cualquier otro.
+ */
+export const LEGACY_PROVIDER_BLOCKS: Readonly<Record<'lmstudio' | 'openrouter' | 'anthropic', GitCronProviderConfig>> = {
+  lmstudio: {
+    npm: '@ai-sdk/openai-compatible',
+    name: 'LM Studio',
+    options: { baseURL: 'http://localhost:1234/v1' },
+  },
+  openrouter: {
+    npm: '@ai-sdk/openai-compatible',
+    name: 'OpenRouter',
+    options: {
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: '{env:OPENROUTER_API_KEY}',
+      // La atribución que mandaban los adaptadores de antes (opcional en OpenRouter).
+      headers: { 'HTTP-Referer': 'https://github.com/alejandropd-1/gitcron', 'X-Title': 'GitCron' },
+    },
+  },
+  anthropic: {
+    npm: '@ai-sdk/anthropic',
+    name: 'Anthropic',
+    options: { apiKey: '{env:ANTHROPIC_API_KEY}' },
+  },
+};
+
+const copyBlock = (id: keyof typeof LEGACY_PROVIDER_BLOCKS): GitCronProviderConfig =>
+  JSON.parse(JSON.stringify(LEGACY_PROVIDER_BLOCKS[id]));
 
 export interface MigrationSources {
   hasOpenRouterKey: boolean;
@@ -40,13 +75,7 @@ export interface MigrationSources {
 export function buildInitialGitCronConfig(sources: MigrationSources): GitCronConfig {
   const config: GitCronConfig = {
     $schema: 'https://opencode.ai/config.json',
-    provider: {
-      lmstudio: {
-        npm: '@ai-sdk/openai-compatible',
-        name: 'LM Studio',
-        options: { baseURL: 'http://localhost:1234/v1' },
-      },
-    },
+    provider: { lmstudio: copyBlock('lmstudio') },
     agent: {},
   };
   const providers = config.provider!;
@@ -55,18 +84,10 @@ export function buildInitialGitCronConfig(sources: MigrationSources): GitCronCon
   const temporalIsAnthropic = sources.temporalProvider === 'claude';
   const cartoOnline = sources.cartography?.mode === 'online';
   if (sources.hasOpenRouterKey || !temporalIsAnthropic || cartoOnline) {
-    providers.openrouter = {
-      npm: '@ai-sdk/openai-compatible',
-      name: 'OpenRouter',
-      options: { baseURL: 'https://openrouter.ai/api/v1', apiKey: '{env:OPENROUTER_API_KEY}' },
-    };
+    providers.openrouter = copyBlock('openrouter');
   }
   if (sources.hasAnthropicKey || temporalIsAnthropic) {
-    providers.anthropic = {
-      npm: '@ai-sdk/anthropic',
-      name: 'Anthropic',
-      options: { apiKey: '{env:ANTHROPIC_API_KEY}' },
-    };
+    providers.anthropic = copyBlock('anthropic');
   }
 
   agents['gitcron-temporal'] = {

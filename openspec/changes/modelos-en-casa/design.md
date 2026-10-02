@@ -97,6 +97,12 @@ muestra el error con línea. Escritura con `jsonc-parser.modify` + `applyEdits` 
 el valor tocado, y los comentarios, el orden y los campos desconocidos quedan. Escritura atómica (archivo
 temporal + renombrar); si el archivo cambió en disco desde la última lectura, se relee antes de editar.
 
+*Medido el 2026-10-02 (tarea 4.3, «usar lo que tenías»):* `modify` con formato vuelve a formatear las líneas
+donde cae la edición. Al agregar `provider.openrouter` después de `"casa": { "options": {…} }` escrito en una
+línea, y `agent` después de `"mcp": { "x": {…} }`, desplegaba esos dos bloques ajenos. La escritura arma ahora
+el tramo nuevo con la sangría de la línea donde va (`pointEdits` en `gitcron-config-writer.ts`) y sólo usa
+`modify` para quitar una clave. Las pruebas de 3.3 no lo vieron porque sus archivos estaban desplegados.
+
 ### D4. Parámetros abiertos
 Petición = parámetros conocidos (`temperature`, `limit.output` como `max_tokens`) + `provider.options`
 fuera de las claves de conexión + `model.options` + la variante elegida, en ese orden de precedencia, y el
@@ -138,6 +144,25 @@ rompería la compatibilidad del archivo.
 | Antigravity 1.2.13 | `agy -p <prompt> --output-format json --mode plan --model <m> --print-timeout <n>s` | un JSON: `response`, `status`, `usage`, `conversation_id` | 16 s | ~13 mil tokens | Lista de modelos: `agy models` (id y nombre separados por tabulación). |
 
 Ninguno escribió en la carpeta temporal.
+
+*Medido al implementar el cliente de texto por CLI (2026-10-02, tarea 4.2):*
+- **Antigravity no lee el pedido de stdin con `-p`**: toma la opción siguiente como pedido («-p took
+  "--output-format" as its prompt») o `-` como texto literal. Por stdin entra con `-p= --input-format
+  stream-json --output-format stream-json` y una línea `{"event":"user","message":{"role":"user","content":
+  [{"type":"text","text":…}]}}`; la respuesta llega de a pedazos en `step_update` (`text_delta`) y entera
+  en `result`. Con `--disable-slash-commands` avisa que `--mode plan` no tiene efecto, así que no se usa.
+  Un pedido corto lo llevó a intentar un comando: se niega solo y `result` trae `denied_actions` con la
+  respuesta vacía. La salida sin sesión no se pudo medir (cambiar la carpeta de la persona no le quita la
+  sesión).
+- **Claude Code**: `--tools=` y `--setting-sources=` pegados dan lo mismo que con el argumento vacío
+  aparte (6,8 mil tokens), y no se pierden al pasar por el shell de Windows. Sin sesión (con
+  `CLAUDE_CONFIG_DIR` vacío): `is_error: true` y «Not logged in · Please run /login».
+- **Codex** sin sesión (`CODEX_HOME` vacío): cinco `type: "error"` «Reconnecting… n/5» y recién después
+  `turn.failed` con «401 Unauthorized: Missing bearer». Los «Reconnecting» son reintentos: si después llega
+  la respuesta, vale la respuesta.
+- Cancelar o vencer el tiempo termina el árbol del proceso (`taskkill /T` en Windows: detrás de un acceso de
+  npm el proceso real es hijo de `cmd.exe`) y espera a que cierre antes de devolver.
+
 `resolveModelFor(uso)` devuelve `{provider, model, params, destination, source}`; `destination` es
 `this-machine | own-server | external-service` por la dirección resuelta (localhost; IP privada; resto), y
 las suscripciones cuentan como `external-service`.
@@ -147,6 +172,10 @@ Si el proveedor no responde, el uso falla con el motivo. Si otro proveedor decla
 de modelo, la pantalla ofrece usarlo ahora (una vez) o hacerlo la elección del uso (escribe el archivo).
 *Alternativas descartadas:* cadena automática Unsloth → LM Studio → OpenRouter (manda contenido a un
 destino no elegido); un campo de «dirección alternativa» dentro del proveedor (no existe en el formato).
+
+*Implementado en 4.3 (2026-10-02):* `resolveModelFor` devuelve esas alternativas y el error del uso las
+nombra («"Unsloth CASA (túnel)" declara los mismos modelos: se puede elegir en gitcron.json»); nunca se llama
+al otro. Los botones de «usarlo ahora» y «hacerlo la elección» son de la pantalla de cada uso (4.4).
 
 ### D8. Agente sobre un servidor propio: OpenCode por `run`, con los modelos que OpenCode conoce
 *Revisado el 2026-09-29 tras migrar Ale a OpenCode 2.0.20 (decisión de Ale).* La v1 sumaba la configuración
@@ -222,6 +251,18 @@ Agente Temporal guarda su proveedor en el almacenamiento cifrado (`ai.activeProv
 y su modelo **por repositorio**; el archivo recibe el proveedor con su modelo por omisión y el de cada
 repositorio queda donde está. Cartografía apagada se escribe con `disable: true` (campo del formato). Como
 esos usos leen `gitcron.json` recién con 4.3, la migración no cambia ningún comportamiento hoy.
+
+*Decidido por Ale al llegar a 4.3 (2026-10-01):* un archivo que ya existía puede no tener entrada para un uso
+que antes andaba (el de Ale no tenía Cartografía, que usaba OpenRouter · deepseek desde `carto-ai.json`).
+Ese uso no cae a la elección vieja ni se completa el archivo solo: la pantalla dice «Este uso no tiene modelo
+en gitcron.json» y ofrece «Usar OpenRouter · deepseek…» con un botón, que escribe la entrada y, si falta, el
+proveedor en el archivo global (`legacy-choice.ts`, canal `ai-use:adopt`). Las direcciones de los
+proveedores de antes viven sólo en el módulo de configuración (`LEGACY_PROVIDER_BLOCKS`).
+
+*El selector de LM Studio de la redacción y del análisis* sigue redactando cuando el uso no tiene modelo,
+como «elección de la pantalla», pero por el proveedor `lmstudio` que declare el archivo: sin ese bloque no
+hay dirección y el pedido falla con el motivo; la línea del uso ofrece agregarlo. Con modelo en el archivo,
+manda el archivo. El selector pasa a escribir en el archivo con la elección por herramienta (4.5).
 
 ### D11b. El estándar de OpenAI como piso, las extensiones como capas
 Pedido de Ale: que cumpla con el estándar de OpenAI. Se separan dos cosas que suelen confundirse:

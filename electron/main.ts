@@ -9,7 +9,7 @@ import { pathToFileURL } from 'url';
 import { registerTemporalAgentHandlers } from './temporal-agent-ipc';
 import { bootstrapDatabase, getDatabase, temporalAgentDatabasePath } from './db/connection';
 import { sanitizeForLog } from './ipc/shared';
-import { readEncryptedStorage, registerStorageHandlers } from './ipc/storage';
+import { registerStorageHandlers } from './ipc/storage';
 import { registerAiHandlers } from './ipc/ai';
 import { registerGitHubHandlers } from './ipc/github';
 import { registerGitRepoHandlers } from './ipc/git-repo';
@@ -20,10 +20,9 @@ import { registerCartoHandlers } from './ipc/carto';
 import { registerCartoGraphHandlers } from './ipc/carto-graph';
 import { registerCartoAiHandlers } from './ipc/carto-ai';
 import { registerCommitMessageAiHandlers } from './ipc/commit-message-ai';
+import { readLegacySources, registerAiUseHandlers } from './ipc/ai-use';
 import { migrateGitCronConfigIfMissing } from './ai/config/gitcron-config-migration';
 import { getDefaultConfigPath } from './ai/config/gitcron-config';
-import { hasKey } from './ai/key-store';
-import { getCartoAISettings } from './ai/carto';
 import { closeAllGraphs } from './carto/graph-engine';
 import { registerWatcherHandlers, closeAllRepoWatchers } from './ipc/watchers';
 import { authorizedRepoStore } from './ipc/authorized-repos';
@@ -295,6 +294,7 @@ registerCartoHandlers();           // carto:* handlers generales (sin canales ac
 registerCartoGraphHandlers(getMainWindow); // carto:graph-* (CodeGraph embebido, local, solo lectura)
 registerCartoAiHandlers();         // carto:ai-* (proveedor de IA local/online; opt-in; secretos sólo en main)
 registerCommitMessageAiHandlers(); // commit-ai:* (redactar el asunto del commit con un modelo local; nunca solo)
+registerAiUseHandlers();           // ai-use:* (qué modelo usa cada uso de texto según gitcron.json; «usar lo que tenías»)
 const notifyPipelineRepoChanged = registerPipelineHandlers(getMainWindow); // pipeline:* read-only
 const pipelineControlBus = new PipelineControlBus();
 registerPipelineControlHandlers(pipelineControlBus); // pipeline:control:*
@@ -363,16 +363,7 @@ if (!gotLock) {
     try {
       const result = migrateGitCronConfigIfMissing({
         configPath: getDefaultConfigPath(),
-        readSources: () => {
-          const provider = readEncryptedStorage()['ai.activeProvider'];
-          const carto = getCartoAISettings();
-          return {
-            hasOpenRouterKey: hasKey('openrouter'),
-            hasAnthropicKey: hasKey('claude'),
-            temporalProvider: typeof provider === 'string' ? provider : null,
-            cartography: { enabled: carto.enabled, mode: carto.mode, model: carto.model },
-          };
-        },
+        readSources: readLegacySources,
       });
       if (result.created) console.info('[gitcron-config] creado', result.path);
     } catch (error) {

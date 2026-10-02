@@ -18,12 +18,19 @@ import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { OPENROUTER_MODELS, OPENROUTER_PROVIDER_ID } from '@/lib/openrouter-models';
 import type { CartoAISettings as Settings, CartoAIMode, CartoAIProbe } from '@/types/carto-ai';
+import type { AiUseStatus } from '@/types/ai-use';
+import { AiUseLine } from '../ai/AiUseLine';
 
 export function CartoAISettings() {
   const t = useT();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [probe, setProbe] = useState<CartoAIProbe | null>(null);
   const [probing, setProbing] = useState(false);
+  // El modelo sale de gitcron.json (tarea 4.3). Local u online y el modelo de acá
+  // son la elección de antes: se muestran sólo si el uso no tiene modelo, para
+  // elegir qué escribir en el archivo con «usar lo que tenías».
+  const [useStatus, setUseStatus] = useState<AiUseStatus | null>(null);
+  const showLegacyChoice = useStatus === null || useStatus.status === 'unset';
 
   useEffect(() => {
     let active = true;
@@ -95,6 +102,12 @@ export function CartoAISettings() {
       {/* Selector de proveedor + config: sólo visible si la IA está activa */}
       {settings.enabled && (
         <div className="space-y-4">
+          <AiUseLine
+            use="gitcron-cartography"
+            onStatus={setUseStatus}
+            refreshKey={`${settings.mode}:${settings.model ?? ''}`}
+          />
+          {showLegacyChoice && (
           <div>
             <span className="mb-2 block text-[length:var(--font-size-2xs)] font-bold uppercase tracking-wider text-text-secondary">
               {t('cartography.ai.providerLabel')}
@@ -120,9 +133,10 @@ export function CartoAISettings() {
             </div>
             <p className="mt-2 text-xs text-text-secondary/80 leading-relaxed">{activeHint}</p>
           </div>
+          )}
 
           {/* LOCAL: el modelo es el nombre cargado en LM Studio (texto libre). */}
-          {settings.mode === 'local' && (
+          {showLegacyChoice && settings.mode === 'local' && (
             <div>
               <label className="mb-2 block text-[length:var(--font-size-2xs)] font-bold uppercase tracking-wider text-text-secondary">
                 {t('cartography.ai.modelLabel')}
@@ -139,7 +153,7 @@ export function CartoAISettings() {
           )}
 
           {/* ONLINE: misma lógica que el Temporal Agent (key cifrada + modelo). */}
-          {settings.mode === 'online' && (
+          {showLegacyChoice && settings.mode === 'online' && (
             <OnlineAccess
               model={settings.model ?? ''}
               onModelChange={(v) => patch({ model: v })}

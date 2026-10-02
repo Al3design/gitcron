@@ -74,6 +74,7 @@ import { OpenSpecTasksView } from './OpenSpecTasksView';
 import { PipelineNewChangeFlow, type PipelineNewChangeMode } from './PipelineNewChangeFlow';
 import { ViewSwitcherRail, type ViewSwitcherItem } from './ViewSwitcherRail';
 import { AiModelControls } from './AiModelControls';
+import { AiUseLine } from '../ai/AiUseLine';
 import { useNewChangeDraft, useNewChangeDraftStore } from '@/lib/new-change-draft-store';
 import {
   composeArchiveInstruction,
@@ -2862,44 +2863,51 @@ export function OpenSpecDashboard({
                       )}
                     </section>
                   ) : (
-                    <AiModelControls
-                      repoPath={repoPath}
-                      models={aiModels}
-                      deviceNames={aiDeviceNames}
-                      onModelsChange={setAiModels}
-                      busy={aiBusy}
-                      phase={aiPhase}
-                      startedAt={aiStartedAt}
-                      opKind={aiOpKind}
-                      queueRunningRepoPath={queueRunningRepoPath}
-                      notice={!rightOpen ? aiNotice : null}
-                      onNoticeChange={setAiNotice}
-                      onLoad={confirmAiLoad}
-                      onUnload={unloadAiModel}
-                      actions={
-                        <>
-                          {!aiNeedsLoad && (
-                            <button
-                              type="button"
-                              className={cn(styles.secondaryAction, styles.aiDraftAction)}
-                              disabled={aiBusy || chosen.length === 0 || !aiModel}
-                              onClick={draftWithAi}
-                            >
-                              <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
-                                {aiPhase === 'drafting' || aiPhase === 'queued'
-                                  ? t('pipeline.openspec.prepare.aiBusy')
-                                  : t('pipeline.openspec.prepare.aiDraft')}
-                              </span>
-                            </button>
-                          )}
-                          {aiBusy && (
-                            <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
-                              {t('pipeline.openspec.prepare.aiCancel')}
-                            </button>
-                          )}
-                        </>
-                      }
-                    />
+                    <>
+                      {/* Sin modelo en gitcron.json (4.3): se redacta con el elegido
+                          en el selector, por el proveedor «lmstudio» que declara el
+                          archivo (sin dirección fija). La línea ofrece escribir la
+                          elección en el archivo con un botón; nunca se escribe sola. */}
+                      <AiUseLine use="gitcron-commit" repoPath={repoPath} screenModel={aiModel || null} screenChoice />
+                      <AiModelControls
+                        repoPath={repoPath}
+                        models={aiModels}
+                        deviceNames={aiDeviceNames}
+                        onModelsChange={setAiModels}
+                        busy={aiBusy}
+                        phase={aiPhase}
+                        startedAt={aiStartedAt}
+                        opKind={aiOpKind}
+                        queueRunningRepoPath={queueRunningRepoPath}
+                        notice={!rightOpen ? aiNotice : null}
+                        onNoticeChange={setAiNotice}
+                        onLoad={confirmAiLoad}
+                        onUnload={unloadAiModel}
+                        actions={
+                          <>
+                            {!aiNeedsLoad && (
+                              <button
+                                type="button"
+                                className={cn(styles.secondaryAction, styles.aiDraftAction)}
+                                disabled={aiBusy || chosen.length === 0 || !aiModel}
+                                onClick={draftWithAi}
+                              >
+                                <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
+                                  {aiPhase === 'drafting' || aiPhase === 'queued'
+                                    ? t('pipeline.openspec.prepare.aiBusy')
+                                    : t('pipeline.openspec.prepare.aiDraft')}
+                                </span>
+                              </button>
+                            )}
+                            {aiBusy && (
+                              <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
+                                {t('pipeline.openspec.prepare.aiCancel')}
+                              </button>
+                            )}
+                          </>
+                        }
+                      />
+                    </>
                   )}
                   {/* Cada grupo declara de dónde viene lo que contiene. Ninguno
                       entra preseleccionado: sin un cambio de referencia,

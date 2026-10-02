@@ -16,6 +16,8 @@ import {
   SUPPORTED_OPENSPEC_VERSIONS,
 } from '../../lib/openspec-version';
 import { authorizedRepoStore } from '../ipc/authorized-repos';
+import type { ResolvedModelFor } from '../ai/config/resolve-model-for';
+import { setUseConfigPathForTesting } from '../ai/use-resolution';
 
 vi.mock('../pipeline/openspec-engine', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../pipeline/openspec-engine')>();
@@ -151,153 +153,163 @@ describe('Verificación de versión de OpenSpec con criterio (Grupo 9c)', () => 
   });
 
   describe('9c.4 & 9c.5: Redacción en criollo y separación estricta de redacción vs hechos medidos', () => {
-    it('sin model devuelve status idle y NO llama a completeTextFn', async () => {
-      const mockComplete = vi.fn();
+    // Desde la tarea 4.3 el modelo sale del uso `gitcron-openspec-analysis` de
+    // gitcron.json y el pedido va por el camino común. Acá el uso viene resuelto a
+    // un LM Studio y el servidor es simulado.
+    const lmTarget = (model: string): ResolvedModelFor => ({
+      status: 'resolved',
+      use: 'gitcron-openspec-analysis',
+      alternatives: [],
+      resolved: {
+        providerId: 'lmstudio',
+        providerName: 'LM Studio',
+        modelId: model,
+        kind: 'openai-compatible',
+        destination: 'this-machine',
+        sourceFile: 'gitcron.json',
+        baseURL: 'http://localhost:1234/v1',
+        maxTokens: 3000,
+        maxTokensFromModel: false,
+        available: true,
+        provenance: { sourceFile: 'gitcron.json', model: 'agent.gitcron-openspec-analysis.model', options: {}, headers: {} },
+      },
+    });
 
+    /** Un servidor del estándar: contesta `reply`, falla con un estado o no responde. */
+    function server(reply: string | number | Error, opts: { stream?: boolean } = {}) {
+      const calls: Array<{ url: string; body: any }> = [];
+      const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        calls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+        if (init?.signal?.aborted) {
+          const err = new Error('The user aborted a request.');
+          err.name = 'AbortError';
+          throw err;
+        }
+        if (reply instanceof Error) throw reply;
+        if (typeof reply === 'number') return new Response('{}', { status: reply });
+        if (opts.stream) {
+          const frames = [
+            `data: ${JSON.stringify({ choices: [{ delta: { content: 'Informe parcial' } }] })}\n\n`,
+            `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
+            'data: [DONE]\n\n',
+          ];
+          return new Response(frames.join(''), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content: reply }, finish_reason: 'stop' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      });
+      return { fetchFn: fetchFn as unknown as typeof fetch, calls };
+    }
+
+    const measuredDeps = (rawText: string | null = '- Modificaciones en CLI') => ({
+      getInstalledVersion: async () => '1.12.0',
+      checkLatest: async () => ({
+        status: 'online' as const,
+        latestVersion: '1.13.0',
+        checkedAt: new Date().toISOString(),
+        fromCache: false,
+        cacheAgeSeconds: 0,
+        freshness: 'fresh' as const,
+        error: null,
+      }),
+      fetchChangelog: async () => ({
+        source: rawText === null ? 'unavailable' : 'GitHub Releases (fission-ai/openspec)',
+        sourceUrl: rawText === null ? null : 'https://github.com/fission-ai/openspec/releases/tag/v1.13.0',
+        fetched: rawText !== null,
+        rawText,
+        error: rawText === null ? 'Offline' : null,
+      }),
+    });
+
+    it('sin pedido de redacción devuelve status idle y no llama a ningún servidor', async () => {
+      const srv = server('no debería');
       const res = await analyzeOpenSpecVersion(process.cwd(), {
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases (fission-ai/openspec)',
-          sourceUrl: 'https://github.com/fission-ai/openspec/releases/tag/v1.13.0',
-          fetched: true,
-          rawText: '- Modificaciones en CLI',
-          error: null,
-        }),
-        completeTextFn: mockComplete as never,
+        ...measuredDeps(),
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
       });
 
-      expect(mockComplete).not.toHaveBeenCalled();
+      expect(srv.calls).toEqual([]);
       expect(res.measured).toBeDefined();
       expect(res.redaction.status).toBe('idle');
       expect(res.redaction.text).toBe('');
       expect(res.redaction.provider).toBe('');
     });
 
-    it('redacta con el modelo elegido cuando se provee model', async () => {
-      const mockComplete = vi.fn().mockResolvedValue({
-        text: 'Ale, mirá: salió la versión 1.12.0. Todavía no la subas porque GitCron consume el JSON de status e instructions...',
-        finishReason: 'stop',
-      });
-
+    it('redacta con el modelo del uso cuando se pide', async () => {
+      const srv = server('Ale, mirá: salió la versión 1.12.0. Todavía no la subas porque GitCron consume el JSON de status e instructions...');
       const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps(),
         model: 'qwen2.5-coder-7b',
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases (fission-ai/openspec)',
-          sourceUrl: 'https://github.com/fission-ai/openspec/releases/tag/v1.13.0',
-          fetched: true,
-          rawText: '- Modificaciones en CLI',
-          error: null,
-        }),
-        completeTextFn: mockComplete as never,
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
       });
 
       // 9c.5: Separación estricta
-      expect(res.measured).toBeDefined();
-      expect(res.redaction).toBeDefined();
-
-      // Hechos medidos determinados por código
       expect(res.measured.installedVersion).toBe('1.12.0');
       expect(res.measured.availableVersion).toBe('1.13.0');
       expect(res.measured.versionClass).toBe('supported');
       expect(res.measured.breakingChangesDetected).toBe(false);
       expect(res.measured.consumedSurfaces.length).toBe(6);
 
-      // Redacción del modelo
+      expect(srv.calls[0].url).toBe('http://localhost:1234/v1/chat/completions');
       expect(res.redaction.status).toBe('generated');
       expect(res.redaction.provider).toBe('LM Studio · qwen2.5-coder-7b');
       expect(res.redaction.text).toContain('Ale, mirá');
     });
 
-    it('construye el prompt del modelo con superficies consumidas, notas ampliadas y estructura de informe de 4 partes llevando el modelo elegido', async () => {
-      const longNotes = 'A'.repeat(2500);
-      const mockComplete = vi.fn().mockResolvedValue({
-        text: '## Qué hay de nuevo\nNotas.\n## Qué hace de hecho\nHechos.\n## Cómo afecta a GitCron\nSin impacto.\n## Cómo encararlo\nSin cambios.',
-        finishReason: 'stop',
-      });
-
+    it('sin modelo en gitcron.json no llama a nadie y lo dice', async () => {
+      const srv = server('no debería');
       const res = await analyzeOpenSpecVersion(process.cwd(), {
-        model: 'deepseek-r1',
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases (fission-ai/openspec)',
-          sourceUrl: 'https://github.com/fission-ai/openspec/releases/tag/v1.13.0',
-          fetched: true,
-          rawText: longNotes,
-          error: null,
-        }),
-        completeTextFn: mockComplete as never,
+        ...measuredDeps(),
+        model: 'qwen2.5-coder-7b',
+        target: { status: 'unset', use: 'gitcron-openspec-analysis' },
+        textDeps: { fetchFn: srv.fetchFn },
       });
 
-      expect(mockComplete).toHaveBeenCalledTimes(1);
-      const [, payload] = mockComplete.mock.calls[0];
-      expect(payload.model).toBe('deepseek-r1');
-      expect(payload.system).toContain('## Qué hay de nuevo');
-      expect(payload.system).toContain('## Qué hace de hecho');
-      expect(payload.system).toContain('## Cómo afecta a GitCron');
-      expect(payload.system).toContain('## Cómo encararlo');
-      expect(payload.system).toContain('Escribí para alguien que usa la herramienta pero no programa en este ecosistema');
-      expect(payload.system).toContain('cada término técnico');
-      expect(payload.system).toContain('partir de lo que Alejandro tiene instalado');
-      expect(payload.user).toContain('Superficie que GitCron consume: status');
-      expect(payload.user).toContain('A'.repeat(2000));
-      expect(payload.maxTokens).toBe(900);
+      expect(srv.calls).toEqual([]);
+      expect(res.redaction.status).toBe('no-model');
+      expect(res.redaction.error).toContain('no tiene modelo en gitcron.json');
+    });
+
+    it('construye el prompt del modelo con superficies consumidas, notas ampliadas y estructura de informe de 4 partes', async () => {
+      const srv = server('## Qué hay de nuevo\nNotas.\n## Qué hace de hecho\nHechos.\n## Cómo afecta a GitCron\nSin impacto.\n## Cómo encararlo\nSin cambios.');
+      const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps('A'.repeat(2500)),
+        model: 'deepseek-r1',
+        target: lmTarget('deepseek-r1'),
+        textDeps: { fetchFn: srv.fetchFn },
+      });
+
+      expect(srv.calls).toHaveLength(1);
+      const body = srv.calls[0].body;
+      const system = body.messages[0].content as string;
+      const user = body.messages[1].content as string;
+      expect(body.model).toBe('deepseek-r1');
+      expect(system).toContain('## Qué hay de nuevo');
+      expect(system).toContain('## Qué hace de hecho');
+      expect(system).toContain('## Cómo afecta a GitCron');
+      expect(system).toContain('## Cómo encararlo');
+      expect(system).toContain('Escribí para alguien que usa la herramienta pero no programa en este ecosistema');
+      expect(system).toContain('cada término técnico');
+      expect(system).toContain('partir de lo que Alejandro tiene instalado');
+      expect(user).toContain('Superficie que GitCron consume: status');
+      expect(user).toContain('A'.repeat(2000));
+      // El modelo no declara limit.output: vale el techo del uso.
+      expect(body.max_tokens).toBe(900);
       expect(res.redaction.provider).toBe('LM Studio · deepseek-r1');
       expect(res.redaction.status).toBe('generated');
     });
 
     it('incorpora lo que Alejandro tiene instalado en el prompt bajo «Lo que Alejandro tiene instalado:» cuando se provee installedContext', async () => {
-      const mockComplete = vi.fn().mockResolvedValue({
-        text: '## Qué hay de nuevo\nNotas.\n## Qué hace de hecho\nHechos.\n## Cómo afecta a GitCron\nSin impacto.\n## Cómo encararlo\nSin cambios.',
-        finishReason: 'stop',
-      });
-
+      const srv = server('## Qué hay de nuevo\nNotas.');
       await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps('Notas'),
         model: 'deepseek-r1',
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases',
-          sourceUrl: null,
-          fetched: true,
-          rawText: 'Notas',
-          error: null,
-        }),
+        target: lmTarget('deepseek-r1'),
+        textDeps: { fetchFn: srv.fetchFn },
         installedContext: {
           engineVersion: '1.12.0',
           integrationState: 'up-to-date',
@@ -308,161 +320,83 @@ describe('Verificación de versión de OpenSpec con criterio (Grupo 9c)', () => 
             { name: 'cursor', workflows: [] },
           ],
         },
-        completeTextFn: mockComplete as never,
       });
 
-      expect(mockComplete).toHaveBeenCalledTimes(1);
-      const [, payload] = mockComplete.mock.calls[0];
-      expect(payload.user).toContain('Lo que Alejandro tiene instalado:');
-      expect(payload.user).toContain('- Motor: 1.12.0 (estado: up-to-date)');
-      expect(payload.user).toContain('- Configuración global: perfil core, workflows: commit, pr');
-      expect(payload.user).toContain('- Agentes: claude (commit, pr); cursor (sin workflows)');
+      expect(srv.calls).toHaveLength(1);
+      const user = srv.calls[0].body.messages[1].content as string;
+      expect(user).toContain('Lo que Alejandro tiene instalado:');
+      expect(user).toContain('- Motor: 1.12.0 (estado: up-to-date)');
+      expect(user).toContain('- Configuración global: perfil core, workflows: commit, pr');
+      expect(user).toContain('- Agentes: claude (commit, pr); cursor (sin workflows)');
     });
 
     it('degrada a status offline sin voltear los hechos medidos ante rechazo de conexión', async () => {
-      const mockComplete = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
-
+      const srv = server(new Error('fetch failed ECONNREFUSED'));
       const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps(null),
         model: 'qwen2.5-coder-7b',
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'unavailable',
-          sourceUrl: null,
-          fetched: false,
-          rawText: null,
-          error: 'Offline',
-        }),
-        completeTextFn: mockComplete as never,
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
       });
 
-      // Hechos medidos intactos y completos
       expect(res.measured.installedVersion).toBe('1.12.0');
       expect(res.measured.availableVersion).toBe('1.13.0');
       expect(res.measured.breakingChangesDetected).toBe(false);
       expect(res.measured.consumedSurfaces.length).toBe(6);
 
-      // Redacción informa offline
       expect(res.redaction.status).toBe('offline');
       expect(res.redaction.provider).toBe('LM Studio · qwen2.5-coder-7b');
       expect(res.redaction.error).toBeNull();
     });
 
-    it('respuesta 400 del servidor devuelve status error con el mensaje real del servidor', async () => {
-      const serverMsg = '400 {"error":{"message":"No models loaded in LM Studio"}}';
-      const mockComplete = vi.fn().mockRejectedValue(new Error(serverMsg));
-
+    it('un estado de error del servidor devuelve status error con el estado, sin el cuerpo crudo', async () => {
+      const srv = server(400);
       const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps('Notes'),
         model: 'qwen2.5-coder-7b',
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases (fission-ai/openspec)',
-          sourceUrl: null,
-          fetched: true,
-          rawText: 'Notes',
-          error: null,
-        }),
-        completeTextFn: mockComplete as never,
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
       });
 
       expect(res.redaction.status).toBe('error');
       expect(res.redaction.provider).toBe('LM Studio · qwen2.5-coder-7b');
-      expect(res.redaction.error).toContain('No models loaded in LM Studio');
+      expect(res.redaction.error).toContain('LM Studio respondió 400');
     });
 
-    it('usa streamText con configuración sin timeoutMs acotado (defaults a 300s) y propaga signal y onChunk', async () => {
-      const mockStream = vi.fn().mockImplementation(async (_config, opts) => {
-        opts.onChunk?.([{ kind: 'content', text: 'Informe parcial' }]);
-        return { text: 'Informe completo', finishReason: 'stop' };
-      });
+    it('con onChunk transmite: propaga la señal y lo que va llegando', async () => {
+      const srv = server('', { stream: true });
       const chunksReceived: any[] = [];
       const abortController = new AbortController();
 
       const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps('Notes'),
         model: 'qwen2.5-coder-7b',
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
         signal: abortController.signal,
         onChunk: (chunks) => chunksReceived.push(...chunks),
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases',
-          sourceUrl: null,
-          fetched: true,
-          rawText: 'Notes',
-          error: null,
-        }),
-        streamTextFn: mockStream as never,
       });
 
-      expect(mockStream).toHaveBeenCalledTimes(1);
-      const [config, payload] = mockStream.mock.calls[0];
-      // Misma configuración que el commit: sin timeoutMs explícito (default 300_000 en text-client)
-      expect(config.timeoutMs).toBeUndefined();
-      expect(config.providerLabel).toBe('LM Studio (redacción)');
-      expect(payload.signal).toBe(abortController.signal);
-      expect(typeof payload.onChunk).toBe('function');
-      expect(chunksReceived).toEqual([{ kind: 'content', text: 'Informe parcial' }]);
+      expect(srv.calls[0].body.stream).toBe(true);
+      expect(chunksReceived).toContainEqual({ kind: 'content', text: 'Informe parcial' });
       expect(res.redaction.status).toBe('generated');
-      expect(res.redaction.text).toBe('Informe completo');
+      expect(res.redaction.text).toBe('Informe parcial');
     });
 
     it('devuelve status error con mensaje de cancelación cuando la redacción es abortada por el usuario (no offline)', async () => {
+      const srv = server('no debería');
       const abortController = new AbortController();
       abortController.abort();
 
-      const mockStream = vi.fn().mockRejectedValue(
-        new Error('LM Studio (redacción): operación cancelada por el usuario.'),
-      );
-
       const res = await analyzeOpenSpecVersion(process.cwd(), {
+        ...measuredDeps('Notes'),
         model: 'qwen2.5-coder-7b',
+        target: lmTarget('qwen2.5-coder-7b'),
+        textDeps: { fetchFn: srv.fetchFn },
         signal: abortController.signal,
-        getInstalledVersion: async () => '1.12.0',
-        checkLatest: async () => ({
-          status: 'online',
-          latestVersion: '1.13.0',
-          checkedAt: new Date().toISOString(),
-          fromCache: false,
-          cacheAgeSeconds: 0,
-          freshness: 'fresh',
-          error: null,
-        }),
-        fetchChangelog: async () => ({
-          source: 'GitHub Releases',
-          sourceUrl: null,
-          fetched: true,
-          rawText: 'Notes',
-          error: null,
-        }),
-        streamTextFn: mockStream as never,
+        onChunk: () => undefined,
       });
 
-      // Debe ser error, no offline
       expect(res.redaction.status).toBe('error');
       expect(res.redaction.provider).toBe('LM Studio · qwen2.5-coder-7b');
       expect(res.redaction.error).toContain('operación cancelada por el usuario');
@@ -599,6 +533,14 @@ describe('Verificación de versión de OpenSpec con criterio (Grupo 9c)', () => 
           'utf8',
         );
 
+        // El gitcron.json de la prueba, no el de la persona: declara el proveedor
+        // «lmstudio» por el que va el modelo elegido en el selector (4.3).
+        const configPath = path.join(tmpUserDir, 'gitcron.json');
+        fs.writeFileSync(configPath, JSON.stringify({
+          provider: { lmstudio: { name: 'LM Studio', options: { baseURL: 'http://localhost:1234/v1' } } },
+        }));
+        setUseConfigPathForTesting(configPath);
+
         // Mock de fetch para aislar peticiones de changelog y modelo local
         const mockFetch = vi.fn().mockImplementation((url: string) => {
           if (url.includes('chat/completions')) {
@@ -645,6 +587,7 @@ describe('Verificación de versión de OpenSpec con criterio (Grupo 9c)', () => 
           expect(resultWithModel.redaction.status).toBe('generated');
           expect(resultWithModel.redaction.provider).toBe('LM Studio · local-model');
         } finally {
+          setUseConfigPathForTesting(null);
           try {
             fs.rmSync(tmpUserDir, { recursive: true, force: true });
           } catch {

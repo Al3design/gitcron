@@ -139,3 +139,18 @@ export function isContainedWithin(parentPath: string, targetPath: string): boole
   // Si empieza con '..' o es absoluta, está fuera del contenedor
   return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
+
+/**
+ * La raíz canónica de un repositorio abierto, o `null`. El `gitcron.json` del
+ * repositorio sólo se lee de una pestaña que la persona abrió: una ruta suelta
+ * del renderer no alcanza (misma regla que los canales de OpenSpec).
+ */
+export function authorizedRepoRoot(candidate: unknown): string | null {
+  if (typeof candidate !== 'string' || !candidate.trim()) return null;
+  try {
+    const real = fs.realpathSync(candidate.trim());
+    return authorizedRepoStore.isAuthorized(real) ? real : null;
+  } catch {
+    return null;
+  }
+}
