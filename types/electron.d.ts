@@ -631,6 +631,11 @@ interface ElectronAPI {
     /** One-way: submits a key to be encrypted in main. The key never comes back. */
     setKey(provider: string, key: string): Promise<GitResult>;
     removeKey(provider: string): Promise<GitResult>;
+    /** De dónde sale cada variable de `{env:}`: del sistema, guardada en GitCron o falta. Nunca el valor (D5). */
+    envStatus(names: string[]): Promise<GitResult<Record<string, 'system' | 'stored' | 'missing'>>>;
+    /** De ida: guarda la variable cifrada en main. El valor no vuelve. */
+    setEnvVar(name: string, value: string): Promise<GitResult>;
+    removeEnvVar(name: string): Promise<GitResult>;
     cancelPrediction(): Promise<GitResult>;
   };
   temporalAgent: {

@@ -1,12 +1,13 @@
 // lib/gitcron-config-messages.ts
 //
-// Cómo se le cuenta a la persona que un gitcron.json está roto (D3).
+// Cómo se le cuenta a la persona lo que pasa con su gitcron.json: que está roto
+// (D3) o que trae campos que el formato de OpenCode no conoce (D4, tarea 3.5).
 //
 // El proceso principal manda el error con datos —archivo, línea, columna y el
 // código de jsonc-parser— y el texto se arma acá, en el idioma de la interfaz.
 // Antes llegaba armado y crudo: «Error de sintaxis en la línea 27: CommaExpected».
 
-import type { CommitAiConfigFileStatus, CommitAiConfigParseError } from '@/types/commit-message-ai';
+import type { CommitAiConfigFileStatus, CommitAiConfigParseError, CommitAiConfigWarning } from '@/types/commit-message-ai';
 
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -44,6 +45,33 @@ export function lastValidNotices(files: CommitAiConfigFileStatus[] | undefined, 
         reason: describeConfigParseCode(file.error!.code, t),
       }),
     );
+}
+
+/**
+ * Las advertencias del esquema (D4, tarea 3.5), en palabras de la persona. Se
+ * muestran pocas: con más, se dice cuántas faltan en vez de llenar la caja.
+ */
+export function configWarningLines(
+  warnings: CommitAiConfigWarning[] | undefined,
+  t: Translate,
+  max = 3,
+): string[] {
+  const list = warnings ?? [];
+  const lines = list.slice(0, max).map((warning) => {
+    const vars = { path: warning.segments.join('.') };
+    if (warning.kind === 'model-temperature-number') {
+      return t('pipeline.openspec.prepare.aiConfigWarnModelTemperature', vars);
+    }
+    if (warning.kind === 'wrong-type' && warning.expected) {
+      return t('pipeline.openspec.prepare.aiConfigWarnType', {
+        ...vars,
+        expected: t(`pipeline.openspec.prepare.configType.${warning.expected}`),
+      });
+    }
+    return t('pipeline.openspec.prepare.aiConfigWarnUnknown', vars);
+  });
+  if (list.length > max) lines.push(t('pipeline.openspec.prepare.aiConfigWarnMore', { count: list.length - max }));
+  return lines;
 }
 
 /**

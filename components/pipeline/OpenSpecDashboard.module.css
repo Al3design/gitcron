@@ -1003,6 +1003,15 @@
    con sus propios márgenes, el recuadro quedaba con el doble de aire arriba y
    abajo que a los costados. */
 .aiPanel > .aiRow { margin-block-start: 0; }
+
+/* Advertencias del esquema de gitcron.json (3.5): no bloquean, así que van con el
+   gris atenuado de la app (secundario al 70 %) y en la letra chica de los metadatos. */
+.aiConfigWarning {
+  margin: var(--sp-1) 0 0;
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+  font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
 .aiPanel > :last-child { margin-block-end: 0; }
 
 /* El botón «Redactar con IA» se distingue como acción de IA (borde y texto violeta, D20)

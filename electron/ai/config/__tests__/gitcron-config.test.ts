@@ -395,10 +395,10 @@ describe('gitcron-config', () => {
       expect(resolved?.provenance.model).toBe('agent.gitcron-commit.model');
 
       // baseURL con variable X
-      expect(resolved?.provenance.baseURL).toBe('provider.unslothpc.options.baseURL (variable UNSLOTH_BASE_URL)');
+      expect(resolved?.provenance.baseURL).toBe('provider.unslothpc.options.baseURL (variable UNSLOTH_BASE_URL, del sistema)'); // D5: dice de dónde sale
 
       // apiKey con variable X
-      expect(resolved?.provenance.auth).toBe('Bearer, de la variable UNSLOTH_API_KEY');
+      expect(resolved?.provenance.auth).toBe('Bearer, de la variable UNSLOTH_API_KEY (del sistema)');
 
       // Precedencia agente > modelo en temperature
       expect(resolved?.temperature).toBe(0.2);
@@ -414,7 +414,7 @@ describe('gitcron-config', () => {
       expect(resolved?.provenance.options['extra_provider_param']).toBe('provider.unslothpc.options.extra_provider_param');
 
       // Headers por bloque
-      expect(resolved?.provenance.headers['CF-Access-Client-Id']).toBe('provider.unslothpc.options.headers.CF-Access-Client-Id');
+      expect(resolved?.provenance.headers['CF-Access-Client-Id']).toBe('provider.unslothpc.options.headers.CF-Access-Client-Id (variable CF_ID, del sistema)');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

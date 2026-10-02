@@ -98,7 +98,7 @@ import {
   isInstalledBehindCycle,
 } from '@/lib/openspec-version';
 import { readEngineStatus } from '@/lib/engine-status-reader';
-import { contributingConfigFiles, formatConfigParseError, lastValidNotices } from '@/lib/gitcron-config-messages';
+import { configWarningLines, contributingConfigFiles, formatConfigParseError, lastValidNotices } from '@/lib/gitcron-config-messages';
 import styles from './OpenSpecDashboard.module.css';
 
 const INTEGRATION_STATE_KEY_MAP: Record<string, string> = {
@@ -2736,6 +2736,13 @@ export function OpenSpecDashboard({
                           válida y se dice (requisito «El archivo y la pantalla dicen lo mismo»). */}
                       {lastValidNotices(resolvedCommitModel.configFiles, t).map((text) => (
                         <p key={text} className={styles.aiNotice} role="status">
+                          {text}
+                        </p>
+                      ))}
+                      {/* Campos que el formato de OpenCode no conoce o trae con otro tipo
+                          (3.5): se respetan y no bloquean, así que van atenuados. */}
+                      {configWarningLines(resolvedCommitModel.configWarnings, t).map((text) => (
+                        <p key={text} className={styles.aiConfigWarning}>
                           {text}
                         </p>
                       ))}

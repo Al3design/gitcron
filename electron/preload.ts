@@ -455,6 +455,10 @@ contextBridge.exposeInMainWorld('api', {
     // One-way: the key goes IN to be encrypted; it never comes back out.
     setKey: (provider: string, key: string) => ipcRenderer.invoke('ai:set-key', provider, key),
     removeKey: (provider: string) => ipcRenderer.invoke('ai:remove-key', provider),
+    // Variables de {env:} (D5): si existen y de dónde salen, guardar y borrar. El valor no vuelve.
+    envStatus: (names: string[]) => ipcRenderer.invoke('ai:env-status', names),
+    setEnvVar: (name: string, value: string) => ipcRenderer.invoke('ai:set-env-var', name, value),
+    removeEnvVar: (name: string) => ipcRenderer.invoke('ai:remove-env-var', name),
     cancelPrediction: () => ipcRenderer.invoke('ai:cancel-prediction'),
   },
   temporalAgent: {

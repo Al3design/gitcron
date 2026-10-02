@@ -161,6 +161,78 @@ export function getKeyFingerprint(provider: ProviderId, secretName?: string): st
   return createHash('sha256').update(key).digest('hex').slice(0, 8);
 }
 
+// ─── Variables guardadas para `{env:NOMBRE}` (modelos-en-casa D5, tarea 3.2) ───
+//
+// `gitcron.json` referencia los secretos con `{env:NOMBRE}`, como OpenCode. Si la
+// variable no está en el sistema, se busca acá: la persona la guardó desde GitCron,
+// cifrada igual que las claves. Mismo contrato que las claves: el renderer puede
+// preguntar si existe, guardarla y borrarla; el valor no sale nunca del proceso
+// principal. Van en su propio espacio (`env:<NOMBRE>`) porque no son de un
+// proveedor: una misma variable puede usarla más de uno.
+
+const ENV_VAR_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+
+export function validateEnvVarName(name: unknown): asserts name is string {
+  if (typeof name !== 'string' || !ENV_VAR_NAME_REGEX.test(name)) {
+    throw new Error('INVALID_ENV_VAR_NAME');
+  }
+}
+
+const envStorageKey = (name: string) => `env:${name}`;
+
+/**
+ * Las claves que GitCron ya guardaba por proveedor se ven también como variables
+ * (D5): un `gitcron.json` que dice `{env:OPENROUTER_API_KEY}` usa la clave de
+ * OpenRouter que la persona ya cargó, sin tener que volver a escribirla.
+ */
+export const LEGACY_ENV_ALIASES: Readonly<Record<string, AIKeyProviderId>> = {
+  OPENROUTER_API_KEY: 'openrouter',
+  ANTHROPIC_API_KEY: 'claude',
+};
+
+/** Guarda o reemplaza una variable (cifrada). De ida, desde la vista del renderer. */
+export function setEnvVar(name: string, value: string): void {
+  validateEnvVarName(name);
+  validateKeyString(value);
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('OS encryption unavailable; refusing to store key in plaintext');
+  }
+  const data = readFile();
+  data[envStorageKey(name)] = safeStorage.encryptString(value).toString('base64');
+  writeFile(data);
+}
+
+/** SÓLO INTERNO — nunca por IPC. Lo usa la resolución de `{env:}` en main. */
+export function getStoredEnvVar(name: string): string | undefined {
+  if (!ENV_VAR_NAME_REGEX.test(name)) return undefined;
+  const enc = readFile()[envStorageKey(name)];
+  if (enc) {
+    try {
+      return safeStorage.decryptString(Buffer.from(enc, 'base64'));
+    } catch {
+      return undefined;
+    }
+  }
+  const alias = LEGACY_ENV_ALIASES[name];
+  return alias ? getKey(alias) : undefined;
+}
+
+/** Seguro de exponer: si la variable está guardada (propia o por alias de una clave vieja). */
+export function hasStoredEnvVar(name: string): boolean {
+  validateEnvVarName(name);
+  if (readFile()[envStorageKey(name)]) return true;
+  const alias = LEGACY_ENV_ALIASES[name];
+  return alias ? hasKey(alias) : false;
+}
+
+/** Borra la variable guardada. No toca las claves de proveedor que hacen de alias. */
+export function removeEnvVar(name: string): void {
+  validateEnvVarName(name);
+  const data = readFile();
+  delete data[envStorageKey(name)];
+  writeFile(data);
+}
+
 /**
  * Recupera las credenciales de Unsloth Desktop guardadas en el baúl seguro:
  * token del modelo, ID de cliente de Cloudflare Access y secreto de cliente de Cloudflare Access.

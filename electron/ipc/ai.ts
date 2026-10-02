@@ -21,6 +21,10 @@ import {
   validateProviderId,
   validateSecretName,
   validateKeyString,
+  validateEnvVarName,
+  hasStoredEnvVar,
+  setEnvVar,
+  removeEnvVar,
 } from '../ai/key-store';
 import type { ProviderId } from '../ai/providers';
 import type { AIPredictionProvider, PredictionResult, SpeculativeBranch, MaterializeIdeaInput } from '../../types/temporal-agent';
@@ -184,6 +188,49 @@ export function registerAiHandlers(): void {
       validateSecretName(secretName);
       // Returns a SHA-256-derived id (8 hex chars), never any part of the key.
       return { success: true, data: getAiKeyFingerprint(provider, secretName) };
+    } catch (error: any) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  // ─── Variables de `{env:NOMBRE}` (modelos-en-casa D5, tarea 3.2) ───
+  // Mismo contrato que las claves: se pregunta si existe y de dónde sale, se
+  // guarda y se borra. El valor no vuelve nunca al renderer, ni siquiera el del
+  // sistema: la pantalla sólo necesita saber si está y dónde.
+  ipcMain.handle('ai:env-status', async (_event, names: unknown) => {
+    try {
+      if (!Array.isArray(names) || names.length > 64) throw new Error('INVALID_ENV_VAR_NAME');
+      const status: Record<string, 'system' | 'stored' | 'missing'> = {};
+      for (const name of names) {
+        validateEnvVarName(name);
+        const fromSystem = process.env[name];
+        status[name] = fromSystem !== undefined && fromSystem !== ''
+          ? 'system'
+          : hasStoredEnvVar(name) ? 'stored' : 'missing';
+      }
+      return { success: true, data: status };
+    } catch (error: any) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  ipcMain.handle('ai:set-env-var', async (_event, name: unknown, value: unknown) => {
+    try {
+      validateEnvVarName(name);
+      validateKeyString(value);
+      setEnvVar(name, value);
+      return { success: true };
+    } catch (error: any) {
+      // Nunca se repite el valor en el error.
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  ipcMain.handle('ai:remove-env-var', async (_event, name: unknown) => {
+    try {
+      validateEnvVarName(name);
+      removeEnvVar(name);
+      return { success: true };
     } catch (error: any) {
       return { success: false, error: errMsg(error) };
     }

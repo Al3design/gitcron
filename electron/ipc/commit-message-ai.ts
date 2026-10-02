@@ -37,7 +37,9 @@ import {
   type ResolvedUse,
 } from '../ai/config/gitcron-config';
 import { authorizedRepoStore } from './authorized-repos';
+import { getStoredEnvVar } from '../ai/key-store';
 import { createGitCronConfigWatcher, type GitCronConfigWatcher } from '../ai/config/gitcron-config-watcher';
+import { validateGitCronConfig } from '../ai/config/gitcron-config-validate';
 import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
@@ -620,8 +622,11 @@ export function registerCommitMessageAiHandlers(): void {
     watchConfigFor(_e.sender, configPath, repoPath);
     const loaded = loadGitCronConfig({ globalPath: configPath, repoPath });
     const configFiles = loaded.files.map(toFileStatus);
+    // Advertencias del esquema (3.5): se muestran y no bloquean.
+    const configWarnings = loaded.config ? validateGitCronConfig(loaded.config, loaded.originOf) : [];
     try {
-      const resolved = resolveUse('gitcron-commit', { configPath, repoPath, loaded });
+      // {env:} se busca en el sistema y después en las variables guardadas en GitCron (D5).
+      const resolved = resolveUse('gitcron-commit', { configPath, repoPath, loaded, stored: getStoredEnvVar });
       if (!resolved) return ok(null);
       if (!resolved.available) {
         return ok({
@@ -641,6 +646,7 @@ export function registerCommitMessageAiHandlers(): void {
         ...(resolved.provenance.repoFile ? { repoSourceFile: resolved.provenance.repoFile } : {}),
         available: true,
         configFiles,
+        ...(configWarnings.length > 0 ? { configWarnings } : {}),
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -741,6 +747,7 @@ export function registerCommitMessageAiHandlers(): void {
             const resolved = resolveUse('gitcron-commit', {
               configPath: configPathOverride ?? undefined,
               repoPath: authorizedRepoRoot(repoPath),
+              stored: getStoredEnvVar,
             });
             if (resolved) {
               if (!resolved.available) {

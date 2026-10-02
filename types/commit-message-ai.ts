@@ -230,6 +230,18 @@ export interface CommitAiConfigFileStatus {
 }
 
 /**
+ * Un campo de gitcron.json que el esquema de OpenCode no conoce o trae con otro tipo
+ * (D4, tarea 3.5). Es una advertencia: el campo se respeta y el uso sigue.
+ */
+export interface CommitAiConfigWarning {
+  kind: 'unknown-key' | 'wrong-type' | 'model-temperature-number';
+  /** Ruta por segmentos (los ids de modelo llevan puntos y barras). */
+  segments: string[];
+  expected?: 'string' | 'number' | 'boolean' | 'object';
+  file?: string;
+}
+
+/**
  * Modelo resuelto según la configuración de gitcron.json para redacción de commits.
  * Sin secretos (D6, D13).
  */
@@ -245,6 +257,7 @@ export interface CommitAiResolvedModel {
   available?: boolean;
   unavailableReason?: string;
   configFiles?: CommitAiConfigFileStatus[];
+  configWarnings?: CommitAiConfigWarning[];
 }
 
 /**

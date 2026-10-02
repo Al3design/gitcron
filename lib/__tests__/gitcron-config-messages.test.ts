@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { translate, type Lang } from '@/lib/i18n';
 import {
+  configWarningLines,
   contributingConfigFiles,
   describeConfigParseCode,
   formatConfigParseError,
@@ -35,5 +36,22 @@ describe('mensajes del gitcron.json roto', () => {
       'g.json tiene un error en la línea 27 (falta una coma). Se sigue usando la última versión válida.',
     ]);
     expect(contributingConfigFiles(files)).toEqual(['g.json']);
+  });
+
+  it('las advertencias del esquema se dicen en palabras de la persona, y con muchas se resume', () => {
+    const warnings = [
+      { kind: 'unknown-key' as const, segments: ['provider', 'casa', 'raro'] },
+      { kind: 'wrong-type' as const, segments: ['agent', 'gitcron-commit', 'temperature'], expected: 'number' as const },
+      { kind: 'model-temperature-number' as const, segments: ['provider', 'casa', 'models', 'unsloth/Qwen3.8', 'temperature'] },
+      { kind: 'unknown-key' as const, segments: ['gitcron'] },
+      { kind: 'unknown-key' as const, segments: ['otra'] },
+    ];
+    expect(configWarningLines(warnings, tFor('es'))).toEqual([
+      '«provider.casa.raro»: el formato de OpenCode no lo conoce; se respeta.',
+      '«agent.gitcron-commit.temperature»: se esperaba un número; se respeta como está.',
+      '«provider.casa.models.unsloth/Qwen3.8.temperature»: en el formato de OpenCode es sí/no (si el modelo admite temperatura). Para fijarla, usá agent.<uso>.temperature.',
+      'y 2 advertencias más.',
+    ]);
+    expect(configWarningLines(undefined, tFor('es'))).toEqual([]);
   });
 });

@@ -32,7 +32,16 @@ export interface GitCronModelConfig {
   name?: string;
   limit?: GitCronModelLimit;
   options?: Record<string, unknown>;
-  temperature?: number;
+  /**
+   * En el formato de OpenCode es un sí/no: si el modelo admite temperatura. No es
+   * la temperatura a usar (ésa va en `agent.<uso>.temperature`). Un número acá se
+   * sigue usando por compatibilidad y la validación lo advierte; un sí/no no viaja.
+   */
+  temperature?: number | boolean;
+  /** Cabeceras propias del modelo, encima de las del proveedor (D4). */
+  headers?: Record<string, string>;
+  /** Variantes del modelo: parámetros que se eligen con `agent.<uso>.variant` (D4). */
+  variants?: Record<string, { disabled?: boolean; [key: string]: unknown }>;
   [key: string]: unknown;
 }
 
@@ -55,6 +64,8 @@ export interface GitCronProviderConfig {
 export interface GitCronAgentConfig {
   description?: string;
   model?: string;
+  /** Variante del modelo que usa este uso (D4). */
+  variant?: string;
   temperature?: number;
   options?: Record<string, unknown>;
   [key: string]: unknown;
@@ -108,6 +119,11 @@ export interface ResolvedUse {
   available: boolean;
   unavailableReason?: string;
   provenance: ResolvedProvenance;
+  /**
+   * Las variables `{env:}` que usa este uso y de dónde salió cada una (D5): del
+   * sistema, guardada en GitCron o falta. Nunca el valor.
+   */
+  variables?: Array<{ name: string; source: VariableSource | 'missing' }>;
 }
 
 export function getDefaultConfigPath(): string {
@@ -357,55 +373,122 @@ export function determineDestination(baseURL?: string, kind?: ProviderKind): Pro
   }
 }
 
-/**
- * Sustituye `{env:NOMBRE}` en cadenas. Si una variable falta, nunca se manda un valor vacío
- * y se registra la variable faltante.
- */
-export function substituteEnvInValue<T>(
-  val: T,
-  env: NodeJS.ProcessEnv = process.env,
-): { value: T; missingVars: string[] } {
-  const missingVars: string[] = [];
+/** De dónde salió una variable `{env:}` (D5). La pantalla lo dice; el valor, nunca. */
+export type VariableSource = 'system' | 'stored';
 
-  function walk(current: any): any {
-    if (typeof current === 'string') {
-      const match = current.match(/\{env:([A-Za-z0-9_]+)\}/g);
-      if (match) {
-        let hasMissing = false;
-        const replaced = current.replace(/\{env:([A-Za-z0-9_]+)\}/g, (_m, varName) => {
-          const envVal = env[varName];
-          if (envVal === undefined || envVal === '') {
-            missingVars.push(varName);
-            hasMissing = true;
-            return '';
-          }
-          return envVal;
-        });
-        if (hasMissing) {
-          return undefined;
-        }
-        return replaced;
+export interface MissingReference {
+  kind: 'env' | 'file';
+  /** El nombre de la variable o la ruta tal como está escrita en el archivo. */
+  name: string;
+}
+
+export interface ReferenceResolution<T> {
+  value: T;
+  missing: MissingReference[];
+  /** Variable → de dónde salió, sólo las que se resolvieron. */
+  sources: Record<string, VariableSource>;
+}
+
+export interface ReferenceOptions {
+  env?: NodeJS.ProcessEnv;
+  /**
+   * Variables guardadas en GitCron (`key-store`, espacio `env:<NOMBRE>`). Se inyecta
+   * desde el proceso principal: este módulo no depende de Electron.
+   */
+  stored?: (name: string) => string | undefined;
+  /** Carpeta contra la que se resuelven las rutas relativas de `{file:}`: la del archivo que las escribe. */
+  baseDir?: string;
+}
+
+const ENV_REF = /\{env:([A-Za-z0-9_]+)\}/g;
+const FILE_REF = /\{file:([^}]+)\}/g;
+
+/**
+ * Sustituye `{env:NOMBRE}` y `{file:ruta}` en cualquier texto del valor, con la
+ * sintaxis de OpenCode (D5). `{env:}` se busca primero en el sistema y después en
+ * las variables guardadas en GitCron. `{file:}` lee el archivo (sin los espacios de
+ * los bordes, como OpenCode), con `~` como la carpeta de la persona y las rutas
+ * relativas contra la carpeta del archivo de configuración.
+ *
+ * Un texto con una referencia que no se resuelve se quita entero: nunca se manda
+ * un valor vacío o a medias (requisito «Los secretos se referencian…»).
+ */
+export function substituteReferences<T>(val: T, options: ReferenceOptions = {}): ReferenceResolution<T> {
+  const env = options.env ?? process.env;
+  const missing: MissingReference[] = [];
+  const sources: Record<string, VariableSource> = {};
+
+  const resolveFile = (raw: string): string | undefined => {
+    const trimmed = raw.trim();
+    const expanded = trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')
+      ? path.join(os.homedir(), trimmed.slice(1))
+      : trimmed;
+    const full = path.isAbsolute(expanded) ? expanded : path.resolve(options.baseDir ?? process.cwd(), expanded);
+    try {
+      return fs.readFileSync(full, 'utf8').trim();
+    } catch {
+      return undefined;
+    }
+  };
+
+  function walkString(current: string): string | undefined {
+    let unresolved = false;
+    const withEnv = current.replace(ENV_REF, (_m, name: string) => {
+      const fromSystem = env[name];
+      if (fromSystem !== undefined && fromSystem !== '') {
+        sources[name] = 'system';
+        return fromSystem;
       }
-      return current;
-    }
-    if (Array.isArray(current)) {
-      return current.map(walk).filter((item) => item !== undefined);
-    }
+      const fromStored = options.stored?.(name);
+      if (fromStored !== undefined && fromStored !== '') {
+        sources[name] = 'stored';
+        return fromStored;
+      }
+      missing.push({ kind: 'env', name });
+      unresolved = true;
+      return '';
+    });
+    const withFiles = withEnv.replace(FILE_REF, (_m, ref: string) => {
+      const content = resolveFile(ref);
+      if (content === undefined || content === '') {
+        missing.push({ kind: 'file', name: ref.trim() });
+        unresolved = true;
+        return '';
+      }
+      return content;
+    });
+    return unresolved ? undefined : withFiles;
+  }
+
+  function walk(current: unknown): unknown {
+    if (typeof current === 'string') return walkString(current);
+    if (Array.isArray(current)) return current.map(walk).filter((item) => item !== undefined);
     if (current !== null && typeof current === 'object') {
-      const result: Record<string, any> = {};
+      const result: Record<string, unknown> = {};
       for (const [key, propVal] of Object.entries(current)) {
         const walked = walk(propVal);
-        if (walked !== undefined) {
-          result[key] = walked;
-        }
+        if (walked !== undefined) result[key] = walked;
       }
       return result;
     }
     return current;
   }
 
-  const substituted = walk(val);
-  return { value: substituted, missingVars: [...new Set(missingVars)] };
+  const value = walk(val) as T;
+  const unique = new Map(missing.map((m) => [`${m.kind}:${m.name}`, m]));
+  return { value, missing: [...unique.values()], sources };
+}
+
+/**
+ * Sustituye sólo `{env:NOMBRE}` del entorno dado. Envoltura de `substituteReferences`
+ * para quien no necesita las variables guardadas ni `{file:}`.
+ */
+export function substituteEnvInValue<T>(
+  val: T,
+  env: NodeJS.ProcessEnv = process.env,
+): { value: T; missingVars: string[] } {
+  const { value, missing } = substituteReferences(val, { env });
+  return { value, missingVars: missing.filter((m) => m.kind === 'env').map((m) => m.name) };
 }
 
 function cliDisplayName(cliId: string): string {
@@ -421,20 +504,31 @@ function cliDisplayName(cliId: string): string {
   }
 }
 
+export interface ResolveUseOptions {
+  /** Ruta del gitcron.json global (por omisión, el de la carpeta de la persona). */
+  configPath?: string;
+  /** Raíz del repositorio: su gitcron.json se mezcla encima del global (D2). */
+  repoPath?: string | null;
+  env?: NodeJS.ProcessEnv;
+  /** Variables guardadas en GitCron (D5); el proceso principal pasa las del key-store. */
+  stored?: (name: string) => string | undefined;
+  /** Configuración ya cargada, para no leer los archivos dos veces. */
+  loaded?: LoadedGitCronConfig;
+}
+
 /**
  * Resuelve el proveedor, modelo y parámetros para un uso específico.
  * Para `gitcron-commit`, lee `agent['gitcron-commit'].model`.
  */
 export function resolveUse(
   use: string = 'gitcron-commit',
-  customPathOrOptions?:
-    | string
-    | { configPath?: string; repoPath?: string | null; env?: NodeJS.ProcessEnv; loaded?: LoadedGitCronConfig },
+  customPathOrOptions?: string | ResolveUseOptions,
   envArg?: NodeJS.ProcessEnv,
 ): ResolvedUse | null {
   let configPath: string | undefined;
   let repoPath: string | null | undefined;
   let preloaded: LoadedGitCronConfig | undefined;
+  let stored: ResolveUseOptions['stored'];
   let env: NodeJS.ProcessEnv = process.env;
 
   if (typeof customPathOrOptions === 'string') {
@@ -444,6 +538,7 @@ export function resolveUse(
     configPath = customPathOrOptions.configPath;
     repoPath = customPathOrOptions.repoPath;
     preloaded = customPathOrOptions.loaded;
+    stored = customPathOrOptions.stored;
     if (customPathOrOptions.env) env = customPathOrOptions.env;
   }
 
@@ -456,8 +551,8 @@ export function resolveUse(
   const config = loaded.config;
   if (!config) return null;
 
-  const agentConfig = config.agent?.[use];
-  if (!agentConfig?.model || typeof agentConfig.model !== 'string') {
+  const rawAgent = config.agent?.[use];
+  if (!rawAgent?.model || typeof rawAgent.model !== 'string') {
     return null;
   }
 
@@ -472,7 +567,45 @@ export function resolveUse(
   const filesOf = () => (repoFile && fromRepo.length > 0 ? { repoFile, fromRepo: [...fromRepo] } : {});
   noteOrigin('model', ['agent', use, 'model']);
 
-  const modelRef = agentConfig.model.trim();
+  // Referencias `{env:}` y `{file:}` (D5). Las rutas relativas de `{file:}` van
+  // contra la carpeta del archivo que escribe ese valor.
+  const variables = new Map<string, VariableSource | 'missing'>();
+  const missingRefs: MissingReference[] = [];
+  const resolveRefs = <T>(value: T, segments: string[]): T => {
+    const result = substituteReferences(value, {
+      env,
+      stored,
+      baseDir: path.dirname(loaded.originOf(segments) ?? globalFile),
+    });
+    for (const [name, source] of Object.entries(result.sources)) variables.set(name, source);
+    for (const ref of result.missing) {
+      missingRefs.push(ref);
+      if (ref.kind === 'env') variables.set(ref.name, 'missing');
+    }
+    return result.value;
+  };
+  const varsOf = () => (variables.size > 0 ? { variables: [...variables].map(([name, source]) => ({ name, source })) } : {});
+  const missingReason = (): string | undefined => {
+    const first = missingRefs[0];
+    if (!first) return undefined;
+    return first.kind === 'env'
+      ? `Variable de entorno ${first.name} no definida`
+      : `Archivo ${first.name} no encontrado ({file:${first.name}})`;
+  };
+  // «del sistema» o «guardada en GitCron»: la pantalla dice de dónde sale cada variable, nunca su valor.
+  const sourceLabel = (name: string) => {
+    const source = variables.get(name);
+    return source === 'system' ? 'del sistema' : source === 'stored' ? 'guardada en GitCron' : 'falta';
+  };
+  const withVariable = (base: string, raw: unknown): string => {
+    if (typeof raw !== 'string') return base;
+    const match = raw.match(/\{env:([A-Za-z0-9_]+)\}/);
+    return match ? `${base} (variable ${match[1]}, ${sourceLabel(match[1])})` : base;
+  };
+
+  const agentConfig = resolveRefs({ ...rawAgent }, ['agent', use]);
+
+  const modelRef = rawAgent.model.trim();
   const slashIdx = modelRef.indexOf('/');
   if (slashIdx === -1) {
     return {
@@ -491,6 +624,7 @@ export function resolveUse(
         headers: {},
         ...filesOf(),
       },
+      ...varsOf(),
     };
   }
 
@@ -506,6 +640,7 @@ export function resolveUse(
       noteOrigin(`options.${k}`, ['agent', use, 'options', k]);
     }
     if (agentConfig.temperature !== undefined) noteOrigin('temperature', ['agent', use, 'temperature']);
+    const missing = missingReason();
     return {
       providerId,
       providerName: cliDisplayName(providerId),
@@ -516,8 +651,8 @@ export function resolveUse(
       temperature: agentConfig.temperature,
       maxTokens: undefined,
       options: agentConfig.options ?? {},
-      available: isCodex,
-      unavailableReason: isCodex ? undefined : 'todavía no conectado',
+      available: isCodex && !missing,
+      unavailableReason: missing ?? (isCodex ? undefined : 'todavía no conectado'),
       provenance: {
         sourceFile: filePath,
         model: `agent.${use}.model`,
@@ -526,6 +661,7 @@ export function resolveUse(
         headers: {},
         ...filesOf(),
       },
+      ...varsOf(),
     };
   }
 
@@ -548,30 +684,42 @@ export function resolveUse(
         headers: {},
         ...filesOf(),
       },
+      ...varsOf(),
     };
   }
 
   const providerName = rawProvider.name || providerId;
   const rawOptions = rawProvider.options ?? {};
-  const { value: substitutedOptions, missingVars } = substituteEnvInValue(rawOptions, env);
+  const substitutedOptions = resolveRefs(rawOptions, ['provider', providerId, 'options']);
+  const rawModel = rawProvider.models?.[modelId];
+  const modelConfig = rawModel ? resolveRefs(rawModel, ['provider', providerId, 'models', modelId]) : undefined;
 
-  const available = missingVars.length === 0;
-  const unavailableReason = available
-    ? undefined
-    : `Variable de entorno ${missingVars[0]} no definida`;
+  // Variante elegida por el uso (D4): sus parámetros van entre los del modelo y los del agente.
+  const variantName = typeof rawAgent.variant === 'string' && rawAgent.variant.trim() ? rawAgent.variant.trim() : undefined;
+  let variantParams: Record<string, unknown> = {};
+  let variantProblem: string | undefined;
+  if (variantName) {
+    const variant = modelConfig?.variants?.[variantName];
+    if (!variant || typeof variant !== 'object') {
+      variantProblem = `la variante «${variantName}» no existe en provider.${providerId}.models.${modelId}.variants`;
+    } else if (variant.disabled === true) {
+      variantProblem = `la variante «${variantName}» está deshabilitada`;
+    } else {
+      const { disabled: _disabled, ...rest } = variant;
+      variantParams = rest;
+    }
+  }
 
-  const baseURL = substitutedOptions?.baseURL;
-  const apiKey = substitutedOptions?.apiKey;
-  const headers = substitutedOptions?.headers as Record<string, string> | undefined;
+  const missing = missingReason();
+  const available = !missing && !variantProblem;
+  const unavailableReason = variantProblem ?? missing;
+
+  const baseURL = typeof substitutedOptions?.baseURL === 'string' ? substitutedOptions.baseURL : undefined;
+  const apiKey = typeof substitutedOptions?.apiKey === 'string' ? substitutedOptions.apiKey : undefined;
 
   let baseURLProvenance: string | undefined;
   if (typeof rawOptions.baseURL === 'string') {
-    const baseEnvMatch = rawOptions.baseURL.match(/\{env:([A-Za-z0-9_]+)\}/);
-    if (baseEnvMatch) {
-      baseURLProvenance = `provider.${providerId}.options.baseURL (variable ${baseEnvMatch[1]})`;
-    } else {
-      baseURLProvenance = `provider.${providerId}.options.baseURL`;
-    }
+    baseURLProvenance = withVariable(`provider.${providerId}.options.baseURL`, rawOptions.baseURL);
     noteOrigin('baseURL', ['provider', providerId, 'options', 'baseURL']);
   }
 
@@ -579,23 +727,25 @@ export function resolveUse(
   if (typeof rawOptions.apiKey === 'string') {
     const apiEnvMatch = rawOptions.apiKey.match(/\{env:([A-Za-z0-9_]+)\}/);
     if (apiEnvMatch) {
-      authProvenance = `Bearer, de la variable ${apiEnvMatch[1]}`;
+      authProvenance = `Bearer, de la variable ${apiEnvMatch[1]} (${sourceLabel(apiEnvMatch[1])})`;
+    } else if (/\{file:[^}]+\}/.test(rawOptions.apiKey)) {
+      authProvenance = 'Bearer, de un archivo ({file:})';
     } else if (rawOptions.apiKey.trim().length > 0) {
       authProvenance = 'Bearer, valor escrito en el archivo';
     }
     if (authProvenance) noteOrigin('auth', ['provider', providerId, 'options', 'apiKey']);
   }
 
-  const modelConfig = rawProvider.models?.[modelId];
-
   // Precedencia: agent encima de model. max_tokens sale de limit.output del modelo o 3000 por omisión.
+  // `temperature` del modelo es un sí/no en el formato de OpenCode («admite temperatura»):
+  // un sí/no nunca viaja como temperatura; un número se sigue usando y la validación lo advierte.
   let temperature: number | undefined;
   let temperatureProvenance: string | undefined;
   if (agentConfig.temperature !== undefined) {
     temperature = agentConfig.temperature;
     temperatureProvenance = `agent.${use}.temperature`;
     noteOrigin('temperature', ['agent', use, 'temperature']);
-  } else if (modelConfig?.temperature !== undefined) {
+  } else if (typeof modelConfig?.temperature === 'number') {
     temperature = modelConfig.temperature;
     temperatureProvenance = `provider.${providerId}.models.${modelId}.temperature`;
     noteOrigin('temperature', ['provider', providerId, 'models', modelId, 'temperature']);
@@ -613,7 +763,8 @@ export function resolveUse(
   }
   const contextLength = modelConfig?.limit?.context;
 
-  // options: provider.options (excluyendo claves del esquema y headers) + model.options + agent.options
+  // options: provider.options (excluyendo claves del esquema y headers) + model.options
+  // + la variante + agent.options, en ese orden (D4).
   const connectionKeys = new Set([...SCHEMA_PROVIDER_OPTION_KEYS, 'headers']);
   const providerExtraOptions: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(substitutedOptions ?? {})) {
@@ -625,11 +776,12 @@ export function resolveUse(
   const mergedOptions = {
     ...providerExtraOptions,
     ...(modelConfig?.options ?? {}),
+    ...variantParams,
     ...(agentConfig.options ?? {}),
   };
 
-  // El último que escribe una clave es el que vale (agent encima de model encima
-  // de provider), así que su ruta es la que dice de qué archivo sale.
+  // El último que escribe una clave es el que vale (agent encima de la variante, del
+  // modelo y del proveedor), así que su ruta es la que dice de qué archivo sale.
   const optionsProvenance: Record<string, string> = {};
   const optionSegments: Record<string, string[]> = {};
   for (const k of Object.keys(providerExtraOptions)) {
@@ -640,16 +792,29 @@ export function resolveUse(
     optionsProvenance[k] = `provider.${providerId}.models.${modelId}.options.${k}`;
     optionSegments[k] = ['provider', providerId, 'models', modelId, 'options', k];
   }
+  for (const k of Object.keys(variantParams)) {
+    optionsProvenance[k] = `provider.${providerId}.models.${modelId}.variants.${variantName}.${k}`;
+    optionSegments[k] = ['provider', providerId, 'models', modelId, 'variants', variantName as string, k];
+  }
   for (const k of Object.keys(agentConfig.options ?? {})) {
     optionsProvenance[k] = `agent.${use}.options.${k}`;
     optionSegments[k] = ['agent', use, 'options', k];
   }
   for (const [k, segments] of Object.entries(optionSegments)) noteOrigin(`options.${k}`, segments);
 
+  // Cabeceras: las del modelo encima de las del proveedor (D4).
+  const providerHeaders = (substitutedOptions?.headers ?? {}) as Record<string, string>;
+  const modelHeaders = (modelConfig?.headers ?? {}) as Record<string, string>;
+  const mergedHeaders = { ...providerHeaders, ...modelHeaders };
+  const headers = Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined;
   const headersProvenance: Record<string, string> = {};
-  for (const h of Object.keys(rawOptions.headers ?? {})) {
-    headersProvenance[h] = `provider.${providerId}.options.headers.${h}`;
+  for (const [h, raw] of Object.entries((rawOptions.headers ?? {}) as Record<string, unknown>)) {
+    headersProvenance[h] = withVariable(`provider.${providerId}.options.headers.${h}`, raw);
     noteOrigin(`headers.${h}`, ['provider', providerId, 'options', 'headers', h]);
+  }
+  for (const [h, raw] of Object.entries((rawModel?.headers ?? {}) as Record<string, unknown>)) {
+    headersProvenance[h] = withVariable(`provider.${providerId}.models.${modelId}.headers.${h}`, raw);
+    noteOrigin(`headers.${h}`, ['provider', providerId, 'models', modelId, 'headers', h]);
   }
 
   if (!baseURL) {
@@ -661,7 +826,8 @@ export function resolveUse(
       destination: 'external-service',
       sourceFile: filePath,
       available: false,
-      unavailableReason: `el proveedor ${providerId} no declara options.baseURL`,
+      // Si la dirección venía de una variable que falta, eso es lo que hay que decir.
+      unavailableReason: unavailableReason ?? `el proveedor ${providerId} no declara options.baseURL`,
       provenance: {
         sourceFile: filePath,
         model: `agent.${use}.model`,
@@ -670,6 +836,7 @@ export function resolveUse(
         auth: authProvenance,
         ...filesOf(),
       },
+      ...varsOf(),
     };
   }
 
@@ -702,5 +869,6 @@ export function resolveUse(
       auth: authProvenance,
       ...filesOf(),
     },
+    ...varsOf(),
   };
 }
