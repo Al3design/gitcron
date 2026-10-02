@@ -11,6 +11,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { parse, printParseErrorCode, type ParseError } from 'jsonc-parser';
 import schema from './opencode-config.schema.json';
+import { checkStandardParam, type StandardParamIssue } from './standard-params';
 
 export const SCHEMA_PROVIDER_OPTION_KEYS: readonly string[] = Object.keys(
   (schema as any)?.$defs?.ProviderConfig?.properties?.options?.properties ?? {},
@@ -124,6 +125,18 @@ export interface ResolvedUse {
    * sistema, guardada en GitCron o falta. Nunca el valor.
    */
   variables?: Array<{ name: string; source: VariableSource | 'missing' }>;
+  /**
+   * Parámetros del estándar con un valor que no cumple (D11b, tarea 4.1b): se
+   * envían como están y se avisa, con el lugar del archivo donde corregirlos.
+   */
+  paramWarnings?: ParamWarning[];
+}
+
+export interface ParamWarning extends StandardParamIssue {
+  /** Dónde está el valor en el archivo (por segmentos). */
+  segments: string[];
+  /** El archivo que lo escribe. */
+  file?: string;
 }
 
 export function getDefaultConfigPath(): string {
@@ -689,7 +702,19 @@ export function resolveUse(
   }
 
   const providerName = rawProvider.name || providerId;
-  const rawOptions = rawProvider.options ?? {};
+  // El proveedor `openai` reconoce las variables convencionales de OpenAI (D11b):
+  // sin clave en el archivo usa OPENAI_API_KEY; sin dirección, OPENAI_BASE_URL o la
+  // dirección pública de la API.
+  const rawOptions: GitCronProviderOptions = { ...(rawProvider.options ?? {}) };
+  let baseURLIsOpenAiDefault = false;
+  if (providerId === 'openai') {
+    if (rawOptions.apiKey === undefined) rawOptions.apiKey = '{env:OPENAI_API_KEY}';
+    if (rawOptions.baseURL === undefined) {
+      const fromEnv = env.OPENAI_BASE_URL || stored?.('OPENAI_BASE_URL');
+      rawOptions.baseURL = fromEnv ? '{env:OPENAI_BASE_URL}' : 'https://api.openai.com/v1';
+      baseURLIsOpenAiDefault = !fromEnv;
+    }
+  }
   const substitutedOptions = resolveRefs(rawOptions, ['provider', providerId, 'options']);
   const rawModel = rawProvider.models?.[modelId];
   const modelConfig = rawModel ? resolveRefs(rawModel, ['provider', providerId, 'models', modelId]) : undefined;
@@ -719,7 +744,9 @@ export function resolveUse(
 
   let baseURLProvenance: string | undefined;
   if (typeof rawOptions.baseURL === 'string') {
-    baseURLProvenance = withVariable(`provider.${providerId}.options.baseURL`, rawOptions.baseURL);
+    baseURLProvenance = baseURLIsOpenAiDefault
+      ? 'dirección pública de la API de OpenAI (sin options.baseURL ni OPENAI_BASE_URL)'
+      : withVariable(`provider.${providerId}.options.baseURL`, rawOptions.baseURL);
     noteOrigin('baseURL', ['provider', providerId, 'options', 'baseURL']);
   }
 
@@ -802,6 +829,25 @@ export function resolveUse(
   }
   for (const [k, segments] of Object.entries(optionSegments)) noteOrigin(`options.${k}`, segments);
 
+  // Valores fuera del estándar (4.1b): se avisan con su lugar en el archivo.
+  const paramWarnings: ParamWarning[] = [];
+  const checkParam = (key: string, value: unknown, segments: string[]) => {
+    const issue = checkStandardParam(key, value);
+    if (!issue) return;
+    const file = loaded.originOf(segments);
+    paramWarnings.push({ ...issue, segments, ...(file ? { file } : {}) });
+  };
+  for (const [k, segments] of Object.entries(optionSegments)) checkParam(k, mergedOptions[k], segments);
+  if (temperature !== undefined) {
+    checkParam('temperature', temperature, agentConfig.temperature !== undefined
+      ? ['agent', use, 'temperature']
+      : ['provider', providerId, 'models', modelId, 'temperature']);
+  }
+  if (modelConfig?.limit?.output !== undefined) {
+    checkParam('max_tokens', maxTokens, ['provider', providerId, 'models', modelId, 'limit', 'output']);
+  }
+  const warningsOf = () => (paramWarnings.length > 0 ? { paramWarnings } : {});
+
   // Cabeceras: las del modelo encima de las del proveedor (D4).
   const providerHeaders = (substitutedOptions?.headers ?? {}) as Record<string, string>;
   const modelHeaders = (modelConfig?.headers ?? {}) as Record<string, string>;
@@ -837,6 +883,7 @@ export function resolveUse(
         ...filesOf(),
       },
       ...varsOf(),
+      ...warningsOf(),
     };
   }
 
@@ -870,5 +917,6 @@ export function resolveUse(
       ...filesOf(),
     },
     ...varsOf(),
+    ...warningsOf(),
   };
 }

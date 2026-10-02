@@ -242,6 +242,19 @@ export interface CommitAiConfigWarning {
 }
 
 /**
+ * Un parámetro del estándar de OpenAI con un valor que no cumple (D11b, tarea 4.1b).
+ * Se envía como está; `suggestion` es la corrección que la persona puede aceptar.
+ */
+export interface CommitAiParamWarning {
+  key: string;
+  value: unknown;
+  expected: string;
+  suggestion?: unknown;
+  segments: string[];
+  file?: string;
+}
+
+/**
  * Modelo resuelto según la configuración de gitcron.json para redacción de commits.
  * Sin secretos (D6, D13).
  */
@@ -258,6 +271,7 @@ export interface CommitAiResolvedModel {
   unavailableReason?: string;
   configFiles?: CommitAiConfigFileStatus[];
   configWarnings?: CommitAiConfigWarning[];
+  paramWarnings?: CommitAiParamWarning[];
 }
 
 /**

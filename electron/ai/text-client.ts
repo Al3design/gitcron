@@ -152,6 +152,15 @@ export function buildStreamRequestBody(opts: TextGenerateOptions): Record<string
 }
 
 /**
+ * El cuerpo exacto que `completeText` manda. `stream: false` va siempre explícito
+ * (D11b): Unsloth contesta en eventos si el pedido omite `stream` (issue 5047 de
+ * unslothai/unsloth), al revés del estándar, y la respuesta dejaría de ser un JSON.
+ */
+export function buildCompleteRequestBody(opts: TextGenerateOptions): Record<string, unknown> {
+  return buildRequestBody(opts, { temperature: 0.4, maxTokens: 1024 }, { stream: false });
+}
+
+/**
  * Genera texto en una sola respuesta (modo síncrono / no streaming).
  */
 export async function completeText(
@@ -168,9 +177,7 @@ export async function completeText(
     res = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
-      body: JSON.stringify(
-        buildRequestBody(opts, { temperature: 0.4, maxTokens: 1024 }),
-      ),
+      body: JSON.stringify(buildCompleteRequestBody(opts)),
       signal,
     });
   } catch (err) {

@@ -7,7 +7,12 @@
 // código de jsonc-parser— y el texto se arma acá, en el idioma de la interfaz.
 // Antes llegaba armado y crudo: «Error de sintaxis en la línea 27: CommaExpected».
 
-import type { CommitAiConfigFileStatus, CommitAiConfigParseError, CommitAiConfigWarning } from '@/types/commit-message-ai';
+import type {
+  CommitAiConfigFileStatus,
+  CommitAiConfigParseError,
+  CommitAiConfigWarning,
+  CommitAiParamWarning,
+} from '@/types/commit-message-ai';
 
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -75,6 +80,18 @@ export function configWarningLines(
   });
   if (list.length > max) lines.push(t('pipeline.openspec.prepare.aiConfigWarnMore', { count: list.length - max }));
   return lines;
+}
+
+/**
+ * Un parámetro con un valor fuera del estándar de OpenAI (D11b): qué dice el
+ * archivo, dónde, y qué espera el estándar. Se envía como está.
+ */
+export function paramWarningText(warning: CommitAiParamWarning, t: Translate): string {
+  return t('pipeline.openspec.prepare.aiParamWarning', {
+    path: warning.segments.join('.'),
+    value: JSON.stringify(warning.value),
+    expected: warning.expected,
+  });
 }
 
 /**

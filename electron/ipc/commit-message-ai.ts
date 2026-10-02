@@ -40,6 +40,7 @@ import { authorizedRepoStore } from './authorized-repos';
 import { getStoredEnvVar } from '../ai/key-store';
 import { createGitCronConfigWatcher, type GitCronConfigWatcher } from '../ai/config/gitcron-config-watcher';
 import { validateGitCronConfig } from '../ai/config/gitcron-config-validate';
+import { updateGitCronConfigValue } from '../ai/config/gitcron-config-writer';
 import { buildChatCompletionsEndpoint, buildStreamRequestBody, streamText, type TextClientConfig } from '../ai/text-client';
 import {
   readCachedDeviceNames,
@@ -647,6 +648,7 @@ export function registerCommitMessageAiHandlers(): void {
         available: true,
         configFiles,
         ...(configWarnings.length > 0 ? { configWarnings } : {}),
+        ...(resolved.paramWarnings ? { paramWarnings: resolved.paramWarnings } : {}),
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -665,6 +667,44 @@ export function registerCommitMessageAiHandlers(): void {
         sourceFile: configPath,
         configFiles,
       });
+    }
+  });
+
+  /**
+   * Corregir en el archivo un valor fuera del estándar, sólo cuando la persona lo
+   * acepta (D11b, tarea 4.1b). Únicamente en uno de los gitcron.json en uso —el
+   * global o el de una pestaña abierta— y como escritura puntual.
+   */
+  ipcMain.handle('commit-ai:fix-param', async (_e, args: unknown): Promise<Result<{ written: boolean }>> => {
+    try {
+      const { repoPath: rawRepoPath, file, segments, value } = (args ?? {}) as {
+        repoPath?: unknown;
+        file?: unknown;
+        segments?: unknown;
+        value?: unknown;
+      };
+      const repoPath = rawRepoPath === undefined || rawRepoPath === null ? null : authorizedRepoRoot(rawRepoPath);
+      if (rawRepoPath !== undefined && rawRepoPath !== null && !repoPath) {
+        return fail(new Error('IPC Security Error: Invalid or unauthorized repository path'));
+      }
+      const validSegments = Array.isArray(segments)
+        && segments.length > 0 && segments.length <= 12
+        && segments.every((segment) => typeof segment === 'string' && segment.length > 0);
+      const validValue = ['string', 'number', 'boolean'].includes(typeof value);
+      if (!validSegments || !validValue || typeof file !== 'string') {
+        return fail(new Error('Corrección inválida.'));
+      }
+      const configPath = configPathOverride ?? getDefaultConfigPath();
+      const loaded = loadGitCronConfig({ globalPath: configPath, repoPath });
+      const sameFile = (a: string, b: string) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+      if (!loaded.files.some((f) => f.exists && sameFile(f.path, file))) {
+        return fail(new Error('IPC Security Error: el archivo no es un gitcron.json en uso'));
+      }
+      const result = updateGitCronConfigValue({ filePath: file, segments: segments as string[], value });
+      if (!result.ok) return fail(new Error(result.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.'));
+      return ok({ written: true });
+    } catch (error) {
+      return fail(error);
     }
   });
 

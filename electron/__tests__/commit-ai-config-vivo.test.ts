@@ -117,4 +117,22 @@ describe('commit-ai:resolved-model con el archivo vivo', () => {
     authorizedRepoStore.deauthorizeRepo(repoPath);
     expect(getWatchedConfigReposForTesting()).toEqual([]);
   });
+
+  it('corregir un valor fuera del estándar: sólo en un gitcron.json en uso, y escribe sólo ese valor', async () => {
+    fs.writeFileSync(globalPath, GLOBAL.replace('"unslothpc/qwen"', '"unslothpc/qwen", "options": { "reasoning_effort": "High" }'));
+    const res = await handlers.get('commit-ai:resolved-model')!({ sender });
+    const warning = res.data.paramWarnings[0];
+    expect(warning).toMatchObject({ key: 'reasoning_effort', suggestion: 'high', file: globalPath });
+
+    const fix = handlers.get('commit-ai:fix-param')!;
+    // Otro archivo cualquiera: no.
+    const otro = path.join(dir, 'otro.json');
+    fs.writeFileSync(otro, '{}');
+    expect((await fix({ sender }, { file: otro, segments: warning.segments, value: 'high' })).success).toBe(false);
+    expect(fs.readFileSync(otro, 'utf8')).toBe('{}');
+
+    const before = fs.readFileSync(globalPath, 'utf8');
+    expect(await fix({ sender }, { file: globalPath, segments: warning.segments, value: 'high' })).toEqual({ success: true, data: { written: true } });
+    expect(fs.readFileSync(globalPath, 'utf8')).toBe(before.replace('"High"', '"high"'));
+  });
 });

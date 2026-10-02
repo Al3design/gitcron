@@ -427,6 +427,8 @@ interface ElectronAPI {
     resolvedModel(repoPath?: string | null): Promise<GitResult<CommitAiResolvedResult>>;
     /** Cambió un gitcron.json: el global (`repoPath: null`) o el de ese repositorio (D3). */
     onConfigChanged?(cb: (event: { repoPath: string | null }) => void): () => void;
+    /** Corregir un valor fuera del estándar en el gitcron.json, sólo si la persona lo acepta (D11b). */
+    fixParam?(args: { repoPath?: string | null; file: string; segments: string[]; value: string | number | boolean }): Promise<GitResult<{ written: boolean }>>;
     /** Último pedido efectivo enviado al proveedor (con procedencias y sin secretos), o null si no hubo. */
     lastRequest(): Promise<GitResult<CommitAiLastRequest | null>>;
   };

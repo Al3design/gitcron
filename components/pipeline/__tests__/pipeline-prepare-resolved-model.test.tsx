@@ -590,4 +590,79 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     onChanged!({ repoPath: null });
     await waitFor(() => expect(resolvedModelMock.mock.calls.length).toBe(callsBefore + 2));
   });
+  it('valor fuera del estándar: se advierte y sólo el botón corrige el archivo', async () => {
+    const warning = {
+      key: 'reasoning_effort',
+      value: 'High',
+      expected: 'minimal | low | medium | high',
+      suggestion: 'high',
+      segments: ['provider', 'casa', 'models', 'qwen', 'options', 'reasoning_effort'],
+      file: 'C:/Users/ale/.config/gitcron/gitcron.json',
+    };
+    const resolvedModelMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        status: 'resolved',
+        providerName: 'Casa',
+        modelId: 'qwen',
+        kind: 'openai-compatible',
+        destination: 'own-server',
+        sourceFile: 'C:/Users/ale/.config/gitcron/gitcron.json',
+        available: true,
+        paramWarnings: [warning],
+      },
+    });
+    const fixParamMock = vi.fn().mockResolvedValue({ success: true, data: { written: true } });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        commitAi: {
+          catalog: vi.fn().mockResolvedValue({ success: true, data: [] }),
+          resolvedModel: resolvedModelMock,
+          fixParam: fixParamMock,
+          deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }),
+          draft: vi.fn(),
+          load: vi.fn(),
+          unload: vi.fn(),
+          cancel: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <StrictMode>
+        <OpenSpecDashboard
+          snapshot={snapshot()}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={false}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          projection={null as RuntimeProjection | null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />
+      </StrictMode>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /preparar/i }));
+    await screen.findByText(/el estándar de OpenAI espera minimal \| low \| medium \| high\. Se envía como está\./);
+    // Mostrar la advertencia no escribe nada.
+    expect(fixParamMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Corregir a "high"' }));
+    await waitFor(() => expect(fixParamMock).toHaveBeenCalledWith({
+      repoPath: 'C:/repo',
+      file: warning.file,
+      segments: warning.segments,
+      value: 'high',
+    }));
+  });
 });

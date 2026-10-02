@@ -269,6 +269,9 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('gitcron-config:changed', handler);
     },
     lastRequest: () => ipcRenderer.invoke('commit-ai:last-request'),
+    /** Corregir un valor fuera del estándar en el archivo, sólo si la persona lo acepta (D11b). */
+    fixParam: (args: { repoPath?: string | null; file: string; segments: string[]; value: string | number | boolean }) =>
+      ipcRenderer.invoke('commit-ai:fix-param', args),
   },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),

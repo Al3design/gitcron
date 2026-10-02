@@ -55,7 +55,7 @@ import { usePipelineStore } from '@/lib/pipeline-store';
 import { AiElapsed } from './AiElapsed';
 import { appendDraftChunks, clearDraftLog, finishDraftLog, startDraftLog } from '@/lib/commit-draft-log';
 import { adviceKeyForStreamError } from '@/lib/stream-error-advice';
-import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiLastRequest, type CommitAiResolvedError, type CommitAiResolvedModel, type CommitAiResolvedResult, type LocalModel } from '@/types/commit-message-ai';
+import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiLastRequest, type CommitAiParamWarning, type CommitAiResolvedError, type CommitAiResolvedModel, type CommitAiResolvedResult, type LocalModel } from '@/types/commit-message-ai';
 import { useRememberedAiModel, useRememberedAiSettings, rememberAiSettings, rememberAiModel as rememberAiModelGlobally, getRememberedAiModel, formatAiDeviceLabel } from '@/lib/ai-model-memory';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
@@ -98,7 +98,7 @@ import {
   isInstalledBehindCycle,
 } from '@/lib/openspec-version';
 import { readEngineStatus } from '@/lib/engine-status-reader';
-import { configWarningLines, contributingConfigFiles, formatConfigParseError, lastValidNotices } from '@/lib/gitcron-config-messages';
+import { configWarningLines, contributingConfigFiles, formatConfigParseError, lastValidNotices, paramWarningText } from '@/lib/gitcron-config-messages';
 import styles from './OpenSpecDashboard.module.css';
 
 const INTEGRATION_STATE_KEY_MAP: Record<string, string> = {
@@ -1662,6 +1662,20 @@ export function OpenSpecDashboard({
     ? (contributingConfigFiles(resolvedCommitModel.configFiles).join(t('pipeline.openspec.prepare.aiFilesJoin'))
         || resolvedCommitModel.sourceFile)
     : '';
+  // Corregir un valor fuera del estándar sólo cuando la persona aprieta el botón
+  // (D11b): escribe ese valor en su archivo y vuelve a pedir la configuración.
+  const fixParamInFile = async (warning: CommitAiParamWarning) => {
+    if (!warning.file || warning.suggestion === undefined) return;
+    const res = await window.api?.commitAi?.fixParam?.({
+      repoPath,
+      file: warning.file,
+      segments: warning.segments,
+      value: warning.suggestion as string | number | boolean,
+    });
+    if (!res?.success) return;
+    const refreshed = await window.api?.commitAi?.resolvedModel?.(repoPath);
+    if (refreshed?.success) setResolvedCommitModel(refreshed.data ?? null);
+  };
   // En «Ver lo enviado», un valor que sale del archivo del repositorio lo dice.
   const sentOrigin = (item: { provenance: string; file?: string }) =>
     item.file ? `${item.provenance} · ${t('pipeline.openspec.prepare.aiSentFromRepo')}` : item.provenance;
@@ -2744,6 +2758,25 @@ export function OpenSpecDashboard({
                       {configWarningLines(resolvedCommitModel.configWarnings, t).map((text) => (
                         <p key={text} className={styles.aiConfigWarning}>
                           {text}
+                        </p>
+                      ))}
+                      {/* Valores fuera del estándar de OpenAI (4.1b): se envían como están
+                          y el archivo se corrige sólo si la persona lo acepta. */}
+                      {resolvedCommitModel.paramWarnings?.map((warning) => (
+                        <p key={warning.segments.join('.')} className={styles.aiConfigWarning}>
+                          {paramWarningText(warning, t)}
+                          {warning.file && warning.suggestion !== undefined && (
+                            <>
+                              {' '}
+                              <button
+                                type="button"
+                                className={styles.aiSentToggle}
+                                onClick={() => { void fixParamInFile(warning); }}
+                              >
+                                {t('pipeline.openspec.prepare.aiParamFix', { value: JSON.stringify(warning.suggestion) })}
+                              </button>
+                            </>
+                          )}
                         </p>
                       ))}
                       {!rightOpen && aiNotice && (
