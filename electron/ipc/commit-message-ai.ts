@@ -53,7 +53,6 @@ import {
   type DeviceNames,
 } from '../ai/commit-message/device-names';
 import {
-  DEFAULT_LOCAL_BASE_URL,
   parseDraftResponse,
   fetchModelCatalog,
   hasEnoughContext,
@@ -64,6 +63,9 @@ import {
   PREFERRED_CONTEXT_LENGTH,
   unloadLocalModel,
 } from '../ai/commit-message/local-provider';
+import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
+import { loadServerFor } from '../ai/use-resolution';
+import { setLastRequestForUse } from '../ai/text-use';
 
 /**
  * Qué instancia cargó esta aplicación, por servidor.
@@ -312,12 +314,35 @@ export const OPENAI_STANDARD_PARAMS: readonly string[] = [
  */
 let lastCommitAiRequest: CommitAiLastRequest | null = null;
 
-export function getLastCommitAiRequestForTesting(): CommitAiLastRequest | null {
+/** El último pedido de la redacción (D14), sin secretos. */
+export function getLastCommitAiRequest(): CommitAiLastRequest | null {
   return lastCommitAiRequest;
 }
 
+export const getLastCommitAiRequestForTesting = getLastCommitAiRequest;
+
 export function resetLastCommitAiRequestForTesting(): void {
   lastCommitAiRequest = null;
+  setLastRequestForUse('gitcron-commit', null);
+}
+
+/**
+ * Para qué uso y repositorio se pide el catálogo, la carga o la expulsión. El
+ * servidor lo resuelve el proceso principal con gitcron.json (D6, D11): el renderer
+ * no manda direcciones. Sin uso, la redacción del commit.
+ */
+function loadTarget(raw: unknown): { use: TextUse; repoPath: string | null } {
+  const { use, repoPath } = (raw && typeof raw === 'object' ? raw : {}) as { use?: unknown; repoPath?: unknown };
+  return {
+    use: isTextUse(use) ? use : 'gitcron-commit',
+    repoPath: typeof repoPath === 'string' ? repoPath : null,
+  };
+}
+
+function serverForLoad(raw: unknown): { serverUrl?: string; error?: string } {
+  const { use, repoPath } = loadTarget(raw);
+  const found = loadServerFor(use, repoPath);
+  return 'server' in found ? { serverUrl: found.server.serverUrl } : { error: found.error };
 }
 import {
   buildUserPrompt,
@@ -400,9 +425,11 @@ interface DraftArgs {
 
 export function registerCommitMessageAiHandlers(): void {
   /** Qué modelos hay, con su estado y su contexto real. Barato y sin generar nada. */
-  ipcMain.handle('commit-ai:catalog', async (_e, baseUrl?: string): Promise<Result<LocalModel[]>> => {
+  ipcMain.handle('commit-ai:catalog', async (_e, target?: unknown): Promise<Result<LocalModel[]>> => {
     try {
-      return ok(await fetchModelCatalog(baseUrl || DEFAULT_LOCAL_BASE_URL));
+      const { serverUrl, error } = serverForLoad(target);
+      if (!serverUrl) return fail(new Error(error || 'No se pudo resolver el servidor de LM Studio.'));
+      return ok(await fetchModelCatalog(serverUrl));
     } catch (error) {
       return fail(error);
     }
@@ -417,11 +444,13 @@ export function registerCommitMessageAiHandlers(): void {
   ipcMain.handle('commit-ai:load', async (
     _e,
     model: string,
-    baseUrl?: string,
+    target?: unknown,
     contextLength?: number,
     ttlSeconds?: number,
   ): Promise<Result<LoadOutcome>> => {
-    const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
+    const { serverUrl, error } = serverForLoad(target);
+    if (!serverUrl) return fail(new Error(error || 'No se pudo resolver el servidor de LM Studio.'));
+    const endpoint = serverUrl;
 
     // Una carga a la vez por servidor. Sin esta guardia, dos pedidos simultáneos
     // —dos ventanas, o un doble clic— cargan las dos y la primera queda
@@ -533,10 +562,12 @@ export function registerCommitMessageAiHandlers(): void {
   ipcMain.handle('commit-ai:unload', async (
     _e,
     model: string,
-    baseUrl?: string,
+    target?: unknown,
   ): Promise<Result<{ unloaded: boolean }>> => {
     try {
-      const endpoint = baseUrl || DEFAULT_LOCAL_BASE_URL;
+      const { serverUrl, error } = serverForLoad(target);
+      if (!serverUrl) return fail(new Error(error || 'No se pudo resolver el servidor de LM Studio.'));
+      const endpoint = serverUrl;
       const catalog = await fetchModelCatalog(endpoint);
       const chosen = catalog.find((entry) => entry.id === model);
       if (!chosen?.loadedInstanceId) return ok({ unloaded: false });
@@ -852,6 +883,7 @@ export function registerCommitMessageAiHandlers(): void {
                   headers: [],
                   timestamp: Date.now(),
                 };
+                setLastRequestForUse('gitcron-commit', lastCommitAiRequest);
 
                 return await draftCommitWithCli({
                   cli,
@@ -910,6 +942,7 @@ export function registerCommitMessageAiHandlers(): void {
                   auth: resolved.provenance.auth,
                   timestamp: Date.now(),
                 };
+                setLastRequestForUse('gitcron-commit', lastCommitAiRequest);
                 const answer = await completeAnthropic(anthropicRequest);
                 pump.push([{ kind: 'content', text: answer.text }]);
                 if (answer.usage) pump.push([{ kind: 'done', finishReason: answer.finishReason, usage: answer.usage }]);
@@ -962,6 +995,7 @@ export function registerCommitMessageAiHandlers(): void {
                 auth: resolved.provenance.auth,
                 timestamp: Date.now(),
               };
+              setLastRequestForUse('gitcron-commit', lastCommitAiRequest);
 
               const textConfig: TextClientConfig = {
                 baseUrl: resolved.baseURL!,

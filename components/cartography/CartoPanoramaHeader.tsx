@@ -5,18 +5,37 @@ import { AlertTriangle, Blocks, Loader2, Sparkles } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { buildCartoPanorama } from '@/lib/carto-panorama';
 import type { CartoGraph, CartoGraphStatus } from '@/lib/carto-types';
+import { AiUseLine } from '../ai/AiUseLine';
+import { AiSentDetails } from '../ai/AiSentDetails';
 
 type CartoPanoramaHeaderProps = {
   repoPath: string | null;
   status: CartoGraphStatus | null;
   refreshKey: number;
+  aiEnabled?: boolean;
 };
 
-export function CartoPanoramaHeader({ repoPath, status, refreshKey }: CartoPanoramaHeaderProps) {
+export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: propAiEnabled }: CartoPanoramaHeaderProps) {
   const t = useT();
   const [graph, setGraph] = useState<CartoGraph | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [internalAiEnabled, setInternalAiEnabled] = useState(false);
+
+  useEffect(() => {
+    if (propAiEnabled !== undefined) return;
+    let active = true;
+    window.api?.cartoAi?.getSettings?.()
+      .then((s) => {
+        if (active && s?.success && s.data) setInternalAiEnabled(Boolean(s.data.enabled));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [propAiEnabled]);
+
+  const aiEnabled = propAiEnabled ?? internalAiEnabled;
 
   useEffect(() => {
     if (!repoPath || status?.state !== 'ready') {
@@ -55,7 +74,7 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey }: CartoPanor
   return (
     <details className="shrink-0 border-b border-carto-grid bg-carto-canvas/95">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-carto-node/[0.035] [&::-webkit-details-marker]:hidden">
-        <span className="flex min-w-0 items-center gap-2 text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-accent">
+        <span className={`flex min-w-0 items-center gap-2 text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest ${aiEnabled ? 'text-[var(--color-ai)]' : 'text-carto-accent'}`}>
           <Sparkles size={14} />
           {t('cartography.panorama.summary')}
         </span>
@@ -70,13 +89,30 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey }: CartoPanor
           </span>
         ) : null}
       </summary>
-      <section className="mx-4 mb-3 rounded-lg border border-carto-accent/25 bg-carto-node/[0.035] p-4">
+      <section className={`mx-4 mb-3 p-4 ${aiEnabled ? 'ai-panel' : 'rounded-lg border border-carto-accent/25 bg-carto-node/[0.035]'}`}>
+        {aiEnabled && (
+          <div className="mb-3 flex flex-col gap-1.5 border-b border-carto-grid pb-2">
+            <AiUseLine use="gitcron-cartography" repoPath={repoPath} />
+            <AiSentDetails use="gitcron-cartography" busy={loading} />
+          </div>
+        )}
         {status?.state === 'engine-unavailable' ? (
           <HeaderHint icon={<AlertTriangle size={16} />} text={t('cartography.graph.engineUnavailable')} />
         ) : status?.state === 'indexing' || status?.state === 'idle' ? (
           <HeaderHint icon={<Loader2 size={16} className="animate-spin" />} text={t('cartography.graph.indexing')} />
         ) : loading ? (
-          <HeaderHint icon={<Loader2 size={16} className="animate-spin" />} text={t('cartography.panorama.loading')} />
+          <HeaderHint
+            icon={<Loader2 size={16} className={`animate-spin ${aiEnabled ? 'text-[var(--color-ai)]' : ''}`} />}
+            text={
+              aiEnabled ? (
+                <span>
+                  <span className="ai-thinking-text">{t('cartography.panorama.loading')}</span>
+                </span>
+              ) : (
+                t('cartography.panorama.loading')
+              )
+            }
+          />
         ) : error ? (
           <HeaderHint icon={<AlertTriangle size={16} />} text={error} tone="error" />
         ) : panorama ? (
@@ -109,7 +145,7 @@ function HeaderHint({
   tone = 'muted',
 }: {
   icon: React.ReactNode;
-  text: string;
+  text: React.ReactNode;
   tone?: 'muted' | 'error';
 }) {
   return (

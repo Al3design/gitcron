@@ -40,10 +40,13 @@ const resolved: AiUseStatus = {
   kind: 'openai-compatible',
   destination: 'external-service',
   sourceFile: 'C:/Users/ale/.config/gitcron/gitcron.json',
+  sourceDir: 'C:/Users/ale/.config/gitcron',
   modelSource: 'agent',
+  isException: false,
   available: true,
   unavailableReason: null,
   alternatives: [],
+  canLoad: false,
 };
 
 beforeEach(() => {
@@ -81,10 +84,18 @@ describe('AiUseLine', () => {
   });
 
   it('con selector en la pantalla, dice que se usa el elegido abajo', async () => {
-    mountApi([{ status: 'unset', use: 'gitcron-commit', offer: null }]);
+    mountApi([{ status: 'unset', use: 'gitcron-commit', offer: null, canLoad: true }]);
     render(<AiUseLine use="gitcron-commit" screenChoice />);
     expect(await screen.findByText(/se usa el elegido abajo, con el proveedor «lmstudio» del archivo/)).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('sin servidor que cargue modelos no promete un selector que no está: dice qué escribir', async () => {
+    mountApi([{ status: 'unset', use: 'gitcron-commit', offer: null, canLoad: false }]);
+    render(<AiUseLine use="gitcron-commit" screenChoice />);
+    expect(await screen.findByText('Este uso no tiene modelo en gitcron.json.')).toBeTruthy();
+    expect(screen.getByText(/Escribí agent.gitcron-commit.model/)).toBeTruthy();
+    expect(screen.queryByText(/se usa el elegido abajo/)).toBeNull();
   });
 
   it('en inglés y en chino', async () => {
@@ -96,6 +107,66 @@ describe('AiUseLine', () => {
     useGitStore.setState({ language: 'zh' });
     render(<AiUseLine use="gitcron-cartography" />);
     expect(await screen.findByText(/使用 OpenRouter 的 deepseek\/deepseek-v4-pro · 外部服务/)).toBeTruthy();
+  });
+
+  it('con destino externo muestra aviso de salida de la máquina y sin herramientas; con esta máquina no', async () => {
+    // Destino externo
+    mountApi([resolved]);
+    const { unmount } = render(<AiUseLine use="gitcron-cartography" />);
+    expect(await screen.findByText('Lo que se pida sale de esta máquina hacia OpenRouter.')).toBeTruthy();
+    expect(screen.getByText(/se corre sin herramientas: no toca el repositorio/)).toBeTruthy();
+    unmount();
+
+    // Destino this-machine
+    const localResolved: AiUseStatus = {
+      ...resolved,
+      destination: 'this-machine' as const,
+      providerId: 'lmstudio',
+      providerName: 'LM Studio',
+    };
+    mountApi([localResolved]);
+    render(<AiUseLine use="gitcron-cartography" />);
+    expect(await screen.findByText(/esta máquina/)).toBeTruthy();
+    expect(screen.queryByText('Lo que se pida sale de esta máquina hacia OpenRouter.')).toBeNull();
+    expect(screen.getByText(/se corre sin herramientas: no toca el repositorio/)).toBeTruthy();
+  });
+
+  it('«Mostrar en la carpeta» llama a shellOpenPath con la carpeta del archivo y no escribe nada', async () => {
+    const shellOpenPath = vi.fn();
+    const api = mountApi([{
+      ...resolved,
+      sourceDir: 'C:/Users/ale/.config/gitcron',
+      isException: true,
+    }]);
+    (window as any).api.shellOpenPath = shellOpenPath;
+
+    render(<AiUseLine use="gitcron-cartography" />);
+
+    expect(await screen.findByText(/\(la excepción de este uso\)/)).toBeTruthy();
+    const folderBtn = screen.getByRole('button', { name: 'Mostrar en la carpeta' });
+    expect(folderBtn).toBeTruthy();
+
+    fireEvent.click(folderBtn);
+    expect(shellOpenPath).toHaveBeenCalledWith('C:/Users/ale/.config/gitcron');
+    expect(api.adopt).not.toHaveBeenCalled();
+  });
+
+  it('nombra proveedores alternativos cuando el elegido no está disponible', async () => {
+    mountApi([{
+      ...resolved,
+      available: false,
+      unavailableReason: 'LM Studio no está corriendo en http://127.0.0.1:1234',
+      alternatives: [
+        { providerId: 'ollama', providerName: 'Ollama', destination: 'this-machine' as const },
+        { providerId: 'openrouter', providerName: 'OpenRouter', destination: 'external-service' as const },
+      ],
+    }]);
+
+    render(<AiUseLine use="gitcron-cartography" />);
+
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(screen.getByText(/LM Studio no está corriendo/)).toBeTruthy();
+    expect(screen.getByText(/declaran los mismos modelos/)).toBeTruthy();
   });
 
   it('sin el canal no muestra nada ni escucha', () => {

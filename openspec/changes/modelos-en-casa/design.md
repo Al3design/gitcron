@@ -398,6 +398,12 @@ Sección de ajustes «Motores y modelos»: proveedores por familia con disponibi
 «Mostrar en la carpeta». En cada uso, una línea con motor, modelo, destino y origen, con acceso a su
 excepción. `AiModelControls` sólo con capacidad de carga.
 
+*Auditado en 4.4 (2026-10-02):* el catálogo, la carga y la expulsión se piden **por uso** (`{ use, repoPath }`)
+y el proceso principal resuelve el servidor con `loadServerFor`: el del proveedor del uso o, sin modelo, el
+`lmstudio` del archivo. La primera versión de la tanda resolvía siempre con el uso de la redacción, así que el
+análisis de versión le habría pedido la lista de LM Studio al servidor de la redacción (en la máquina de Ale,
+Unsloth). El renderer ya no manda direcciones.
+
 ## Risks / Trade-offs
 
 - [OpenCode cambia su esquema] → la copia empaquetada se actualiza con cada versión; mientras tanto lo

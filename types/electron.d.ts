@@ -10,6 +10,7 @@ import type { PredictionHistoryEntry } from '../electron/db/types';
 import type { PipelineState, RuntimeDiscoveryEntry, RuntimeProjection } from './pipeline';
 import type { CommitAiLastRequest, CommitAiResolvedModel, CommitAiResolvedResult, CommitDraftResult, DraftChunkEvent, DraftStateEvent, LoadOutcome, LocalModel } from './commit-message-ai';
 import type { ApplyHunkOptions, FileDiff } from '../lib/hunk-patch';
+import type { AiLoadTarget } from './ai-use';
 import type {
   CartoGraphStatus,
   CartoGraph,
@@ -393,13 +394,13 @@ interface ElectronAPI {
    */
   commitAi: {
     /** Modelos disponibles, con su estado y su contexto real. Barato. */
-    catalog(baseUrl?: string): Promise<GitResult<LocalModel[]>>;
+    catalog(target?: AiLoadTarget): Promise<GitResult<LocalModel[]>>;
     /** La acción con costo. Va siempre después de haberlo declarado. */
-    load(model: string, baseUrl?: string, contextLength?: number, ttlSeconds?: number): Promise<GitResult<LoadOutcome>>;
+    load(model: string, target?: AiLoadTarget, contextLength?: number, ttlSeconds?: number): Promise<GitResult<LoadOutcome>>;
     /** Corta la redacción en vuelo de verdad, no sólo descarta su respuesta. */
     cancel(draftId?: string): Promise<GitResult<{ cancelled: boolean }>>;
     /** Descarga el modelo a mano, sin esperar a que venza su TTL. */
-    unload(model: string, baseUrl?: string): Promise<GitResult<{ unloaded: boolean }>>;
+    unload(model: string, target?: AiLoadTarget): Promise<GitResult<{ unloaded: boolean }>>;
     /** Identificador de máquina → nombre legible. Resuelto una vez y guardado. */
     deviceNames(): Promise<GitResult<Record<string, string>>>;
     draft(args: {
@@ -439,6 +440,7 @@ interface ElectronAPI {
   aiUse?: {
     status(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<import('./ai-use').AiUseStatus>>;
     adopt(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<{ written: boolean; modelRef: string }>>;
+    lastRequest(args: { use: import('./ai-use').AiTextUse }): Promise<GitResult<import('./commit-message-ai').CommitAiLastRequest | null>>;
   };
   /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve

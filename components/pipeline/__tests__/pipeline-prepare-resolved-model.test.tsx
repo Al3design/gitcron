@@ -68,6 +68,42 @@ function snapshot(): PipelineSnapshot {
   } as PipelineSnapshot;
 }
 
+function makeAiUseMock() {
+  return {
+    status: vi.fn().mockImplementation(async (args: { use: string; repoPath?: string | null }) => {
+      const commitRes = await ((window as any).api?.commitAi?.resolvedModel?.(args?.repoPath ?? '') as Promise<any>);
+      if (!commitRes || !commitRes.success || !commitRes.data) {
+        return { success: false, data: null };
+      }
+      const d = commitRes.data;
+      if (d.status === 'error') {
+        return { success: true, data: { status: 'error', use: 'gitcron-commit', error: d.error, parseError: d.parseError } };
+      }
+      return {
+        success: true,
+        data: {
+          status: 'resolved',
+          use: 'gitcron-commit',
+          providerId: d.providerName,
+          providerName: d.providerName,
+          modelId: d.modelId,
+          kind: d.kind,
+          destination: d.destination,
+          sourceFile: d.sourceFile,
+          sourceDir: d.sourceFile ? '~/.config/gitcron' : undefined,
+          available: d.available !== false,
+          isException: false,
+          canLoad: Boolean(d.canLoad),
+        },
+      };
+    }),
+    adopt: vi.fn().mockResolvedValue({ success: true }),
+    lastRequest: vi.fn().mockImplementation(async () => {
+      return ((window as any).api?.commitAi?.lastRequest?.() as Promise<any>) ?? { success: true, data: null };
+    }),
+  };
+}
+
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
 describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000 }, () => {
@@ -122,6 +158,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: vi.fn(),
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -201,6 +238,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: vi.fn(),
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -230,9 +268,10 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
     fireEvent.click(openButton);
 
     const resolvedLine = await screen.findByText(
-      /Redacta con gpt-5\.6-luna de Codex · servicio externo · según ~[\/\\]\.config[\/\\]gitcron[\/\\]gitcron\.json \(sin herramientas\)/i,
+      /Redacta con gpt-5\.6-luna de Codex · servicio externo · según ~[\/\\]\.config[\/\\]gitcron[\/\\]gitcron\.json/i,
     );
     expect(resolvedLine).toBeDefined();
+    expect(resolvedLine.textContent).toMatch(/se corre sin herramientas: no toca el repositorio/i);
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
@@ -260,6 +299,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: vi.fn(),
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -329,6 +369,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: cancelMock,
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -431,6 +472,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           cancel: vi.fn(),
           lastRequest: lastRequestMock,
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -545,6 +587,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: vi.fn(),
         },
+        aiUse: makeAiUseMock(),
       },
     });
 
@@ -627,6 +670,7 @@ describe('Montaje del panel en <StrictMode> con uso resuelto', { timeout: 15_000
           unload: vi.fn(),
           cancel: vi.fn(),
         },
+        aiUse: makeAiUseMock(),
       },
     });
 

@@ -22,6 +22,8 @@ import { Bot, Send, Loader2, AlertTriangle, Trash2, User, FileCode } from 'lucid
 import { useGitStore } from '@/lib/git-store';
 import { useT } from '@/hooks/use-translation';
 import type { CartoNode } from '@/lib/carto-types';
+import { AiUseLine } from '../ai/AiUseLine';
+import { AiSentDetails } from '../ai/AiSentDetails';
 
 type Turn =
   | { id: number; role: 'user'; text: string }
@@ -105,7 +107,7 @@ export function CartoAskBox({ repoPath, onSelectNode }: CartoAskBoxProps) {
     <div className="flex h-full min-h-0 flex-col bg-carto-node/[0.02]">
       {/* Cabecera */}
       <div className="flex shrink-0 items-center gap-2 border-b border-carto-grid px-3 py-2">
-        <Bot size={13} className="shrink-0 text-carto-accent" />
+        <Bot size={13} className="shrink-0 text-[var(--color-ai)]" />
         <span className="truncate text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-text-muted">
           {t('cartography.ai.askTitle')}
         </span>
@@ -125,7 +127,7 @@ export function CartoAskBox({ repoPath, onSelectNode }: CartoAskBoxProps) {
       <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
         {turns.length === 0 && !loading ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-carto-text-muted">
-            <Bot size={20} className="text-carto-accent" />
+            <Bot size={20} className="text-[var(--color-ai)]" />
             <p className="max-w-[18rem] text-xs leading-relaxed">{t('cartography.ai.repoHint')}</p>
           </div>
         ) : (
@@ -135,12 +137,20 @@ export function CartoAskBox({ repoPath, onSelectNode }: CartoAskBoxProps) {
             ))}
             {loading && (
               <div className="flex items-center gap-2 text-xs text-carto-text-muted">
-                <Loader2 size={13} className="animate-spin text-carto-accent" />
-                {t('cartography.ai.thinking')}
+                <Loader2 size={13} className="animate-spin text-[var(--color-ai)]" />
+                <span>
+                  <span className="ai-thinking-text">{t('cartography.ai.thinking')}</span>
+                </span>
               </div>
             )}
           </div>
         )}
+      </div>
+
+      {/* Línea del modelo y detalles de lo enviado en Cartografía (D11, D14) */}
+      <div className="border-t border-carto-grid px-3 py-2 flex flex-col gap-1.5 bg-carto-canvas/50">
+        <AiUseLine use="gitcron-cartography" repoPath={repoPath} />
+        <AiSentDetails use="gitcron-cartography" busy={loading} />
       </div>
 
       {/* Caja de entrada */}
@@ -162,8 +172,19 @@ export function CartoAskBox({ repoPath, onSelectNode }: CartoAskBoxProps) {
           disabled={loading || !question.trim() || !repoPath}
           className="shrink-0 flex items-center gap-1.5 rounded border border-carto-accent/40 bg-carto-accent/10 px-2.5 py-1.5 text-xs font-semibold text-carto-accent transition-colors hover:bg-carto-accent/20 disabled:opacity-40"
         >
-          {loading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-          {t('cartography.ai.send')}
+          {loading ? (
+            <>
+              <Loader2 size={12} className="animate-spin text-[var(--color-ai)]" />
+              <span>
+                <span className="ai-thinking-text">{t('cartography.ai.send')}</span>
+              </span>
+            </>
+          ) : (
+            <>
+              <Send size={12} />
+              {t('cartography.ai.send')}
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -200,7 +221,7 @@ function Bubble({
   // Respuesta de la IA: prosa + nodos citados (clickeables) + procedencia.
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] rounded-lg border border-carto-grid bg-carto-canvas px-2.5 py-1.5 text-xs leading-relaxed text-carto-text">
+      <div className="max-w-[90%] ai-panel px-2.5 py-1.5 text-xs leading-relaxed text-carto-text">
         <p className="whitespace-pre-wrap break-words">{turn.text}</p>
 
         {turn.usedNodes.length > 0 ? (

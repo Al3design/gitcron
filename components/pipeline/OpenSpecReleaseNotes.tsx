@@ -7,10 +7,12 @@ import { summarizeReleaseNotes } from '@/lib/release-notes-summary';
 import type { OpenSpecVersionAnalysisResult } from '@/types/pipeline';
 import { filterDraftableModels, type LocalModel } from '@/types/commit-message-ai';
 import { useRememberedAiModel, rememberAiModel, getRememberedAiModel, getRememberedAiSettings, formatAiDeviceLabel } from '@/lib/ai-model-memory';
+import { cn } from '@/lib/utils';
 import { MarkdownViewer } from './MarkdownViewer';
 import { AiElapsed } from './AiElapsed';
 import { AiModelControls } from './AiModelControls';
 import { AiUseLine } from '../ai/AiUseLine';
+import { AiSentDetails } from '../ai/AiSentDetails';
 import type { AiUseStatus } from '@/types/ai-use';
 import styles from './OpenSpecDashboard.module.css';
 
@@ -81,7 +83,7 @@ export function OpenSpecReleaseNotes({
     let alive = true;
     if (typeof window !== 'undefined' && window.api?.commitAi?.catalog) {
       window.api.commitAi
-        .catalog()
+        .catalog({ use: 'gitcron-openspec-analysis', repoPath })
         .then((result) => {
           if (!alive) return;
           const disponibles = filterDraftableModels(result?.data ?? []);
@@ -147,7 +149,7 @@ export function OpenSpecReleaseNotes({
           const settings = getRememberedAiSettings(repoPath);
           const loadRes = await window.api.commitAi.load(
             aiModel,
-            undefined,
+            { use: 'gitcron-openspec-analysis', repoPath },
             settings.contextLength,
             settings.ttlMinutes * 60,
           );
@@ -155,7 +157,7 @@ export function OpenSpecReleaseNotes({
             setLoadError(loadRes.error || 'Error al cargar el modelo');
             return;
           }
-          const catalog = await window.api?.commitAi?.catalog?.();
+          const catalog = await window.api?.commitAi?.catalog?.({ use: 'gitcron-openspec-analysis', repoPath });
           if (catalog?.data) {
             setAiModels(filterDraftableModels(catalog.data));
           }
@@ -280,59 +282,74 @@ export function OpenSpecReleaseNotes({
             <p>{t('pipeline.openspec.releaseNotes.compatible')}</p>
           )}
 
-          <AiUseLine
-            use="gitcron-openspec-analysis"
-            repoPath={repoPath}
-            screenModel={aiModel || null}
-            screenChoice
-            onStatus={setUseStatus}
-          />
+          <div className={styles.aiPanel}>
+            <AiUseLine
+              use="gitcron-openspec-analysis"
+              repoPath={repoPath}
+              screenModel={aiModel || null}
+              screenChoice
+              onStatus={setUseStatus}
+            />
 
-          {resolvedUse ? (
-            <div className={styles.releaseNotesActions}>
-              <button
-                type="button"
-                className={styles.reviewCopyBtn}
-                disabled={!redacting && (isBusy || !resolvedUse.available)}
-                onClick={() => { void handleResolvedDraftClick(); }}
-              >
-                {redacting
-                  ? t('pipeline.openspec.releaseNotes.cancelDraft')
-                  : t('pipeline.openspec.releaseNotes.draftReport')}
-              </button>
-              {redacting && (
-                <AiElapsed key={effectiveStartedAt ?? 'drafting'} phase="drafting" startedAt={effectiveStartedAt} />
-              )}
-            </div>
-          ) : (
-          <AiModelControls
-            repoPath={repoPath}
-            models={aiModels}
-            deviceNames={aiDeviceNames}
-            onModelsChange={setAiModels}
-            busy={isBusy}
-            phase={redacting ? 'drafting' : loadingModel ? 'loading' : 'idle'}
-            startedAt={effectiveStartedAt}
-            opKind="draft"
-            showLoadButton={false}
-            actions={
-              <button
-                type="button"
-                className={styles.reviewCopyBtn}
-                disabled={redacting ? false : (!aiModel || isBusy)}
-                title={redacting ? undefined : buttonTitle}
-                onClick={handleDraftClick}
-              >
-                {redacting ? t('pipeline.openspec.releaseNotes.cancelDraft') : buttonLabel}
-              </button>
-            }
-            elapsedNode={
-              redacting ? (
-                <AiElapsed key={effectiveStartedAt ?? 'drafting'} phase="drafting" startedAt={effectiveStartedAt} />
-              ) : undefined
-            }
-          />
-          )}
+            {resolvedUse ? (
+              // Con modelo en gitcron.json se redacta con ése: el selector de LM Studio no
+              // elegiría nada. Elegir modelo e intensidad desde acá es la tarea 4.5.
+              (
+                <div className={styles.releaseNotesActions}>
+                  <button
+                    type="button"
+                    className={cn(styles.reviewCopyBtn, styles.aiDraftAction)}
+                    disabled={!redacting && (isBusy || !resolvedUse.available)}
+                    onClick={() => { void handleResolvedDraftClick(); }}
+                  >
+                    <span className={redacting ? 'ai-thinking-text' : undefined}>
+                      {redacting
+                        ? t('pipeline.openspec.releaseNotes.cancelDraft')
+                        : t('pipeline.openspec.releaseNotes.draftReport')}
+                    </span>
+                  </button>
+                  {redacting && (
+                    <AiElapsed key={effectiveStartedAt ?? 'drafting'} phase="drafting" startedAt={effectiveStartedAt} />
+                  )}
+                </div>
+              )
+            ) : (
+              (useStatus ? Boolean(useStatus.canLoad) : true) ? (
+                <AiModelControls
+                  repoPath={repoPath}
+                  use="gitcron-openspec-analysis"
+                  models={aiModels}
+                  deviceNames={aiDeviceNames}
+                  onModelsChange={setAiModels}
+                  busy={isBusy}
+                  phase={redacting ? 'drafting' : loadingModel ? 'loading' : 'idle'}
+                  startedAt={effectiveStartedAt}
+                  opKind="draft"
+                  showLoadButton={false}
+                  actions={
+                    <button
+                      type="button"
+                      className={cn(styles.reviewCopyBtn, styles.aiDraftAction)}
+                      disabled={redacting ? false : (!aiModel || isBusy)}
+                      title={redacting ? undefined : buttonTitle}
+                      onClick={handleDraftClick}
+                    >
+                      <span className={redacting ? 'ai-thinking-text' : undefined}>
+                        {redacting ? t('pipeline.openspec.releaseNotes.cancelDraft') : buttonLabel}
+                      </span>
+                    </button>
+                  }
+                  elapsedNode={
+                    redacting ? (
+                      <AiElapsed key={effectiveStartedAt ?? 'drafting'} phase="drafting" startedAt={effectiveStartedAt} />
+                    ) : undefined
+                  }
+                />
+              ) : null
+            )}
+
+            <AiSentDetails use="gitcron-openspec-analysis" busy={redacting} />
+          </div>
 
           {loadError && (
             <div role="alert" className={styles.blockedReasonInline}>

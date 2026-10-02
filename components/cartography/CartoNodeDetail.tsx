@@ -26,6 +26,8 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import type { CartoNode } from '@/lib/carto-types';
 import type { CartoExplainNodeResult } from '@/types/carto-ai';
+import { AiUseLine } from '../ai/AiUseLine';
+import { AiSentDetails } from '../ai/AiSentDetails';
 
 type CartoNodeDetailProps = {
   repoPath: string;
@@ -93,7 +95,7 @@ export function CartoNodeDetail({
         >
           <ArrowLeft size={12} />
         </button>
-        <Sparkles size={13} className="shrink-0 text-carto-accent" />
+        <Sparkles size={13} className="shrink-0 text-[var(--color-ai)]" />
         <span className="truncate text-xs font-bold tracking-wide text-carto-text" title={node.name}>
           {node.name}
         </span>
@@ -107,6 +109,14 @@ export function CartoNodeDetail({
         <p className="mb-3 truncate font-mono text-[length:var(--font-size-xs)] text-carto-text-muted" title={loc}>
           {loc}
         </p>
+
+        {/* Línea del modelo y detalles de lo enviado en Cartografía (D11, D14) */}
+        {aiEnabled && (
+          <div className="mb-3 flex flex-col gap-2">
+            <AiUseLine use="gitcron-cartography" repoPath={repoPath} />
+            <AiSentDetails use="gitcron-cartography" busy={loading} />
+          </div>
+        )}
 
         {/* Explicación de la IA (o estado) */}
         <ExplanationBlock
@@ -170,8 +180,14 @@ function ExplanationBlock({
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-xs text-carto-text-muted">
-        <Loader2 size={14} className="animate-spin text-carto-accent" />
-        {aiEnabled ? t('cartography.detail.explaining') : t('cartography.detail.loading')}
+        <Loader2 size={14} className="animate-spin text-[var(--color-ai)]" />
+        {aiEnabled ? (
+          <span>
+            <span className="ai-thinking-text">{t('cartography.detail.explaining')}</span>
+          </span>
+        ) : (
+          t('cartography.detail.loading')
+        )}
       </div>
     );
   }
@@ -189,14 +205,14 @@ function ExplanationBlock({
   }
   if (explanation) {
     return (
-      <div className="rounded-lg border border-carto-grid bg-carto-canvas px-3 py-2.5">
+      <div className="ai-panel px-3 py-2.5">
         <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-carto-text">
           {explanation.text}
         </p>
         <div className="mt-2 flex items-center gap-2 font-mono text-[length:var(--font-size-xs)] text-carto-text-muted/70">
           <span className="truncate">{explanation.provider}</span>
           {result?.cached && (
-            <span className="flex shrink-0 items-center gap-1 rounded border border-carto-accent/25 px-1 py-0.5 text-carto-accent/80">
+            <span className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-ai)]/25 px-1 py-0.5 text-[var(--color-ai)]">
               <DatabaseZap size={10} />
               {t('cartography.detail.cached')}
             </span>

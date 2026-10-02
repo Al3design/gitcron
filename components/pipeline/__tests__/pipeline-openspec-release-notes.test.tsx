@@ -16,6 +16,18 @@ describe('OpenSpecReleaseNotes', () => {
     mockShellOpenExternal = vi.fn();
     (window as unknown as { api: unknown }).api = {
       shellOpenExternal: mockShellOpenExternal,
+      aiUse: {
+        status: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            status: 'unset',
+            use: 'gitcron-openspec-analysis',
+            available: true,
+            canLoad: true,
+            source: 'none',
+          },
+        }),
+      },
     };
   });
 

@@ -25,6 +25,10 @@ export interface AiUseAlternative {
   destination: AiUseDestination;
 }
 
+import type { CommitAiLastRequest } from './commit-message-ai';
+
+export type AiLastRequest = CommitAiLastRequest;
+
 export type AiUseStatus =
   | {
       status: 'resolved';
@@ -35,18 +39,49 @@ export type AiUseStatus =
       kind: 'openai-compatible' | 'anthropic' | 'cli';
       destination: AiUseDestination;
       sourceFile: string;
+      sourceDir: string;
       /** La entrada del uso o la elección general (`model`). */
       modelSource: 'agent' | 'general';
+      /** Es la excepción de ese uso frente a la elección general configurada en el archivo. */
+      isException: boolean;
       available: boolean;
       unavailableReason: string | null;
       /** Proveedores que declaran los mismos modelos (D7): se ofrecen, nunca se usan solos. */
       alternatives: AiUseAlternative[];
+      /** Capacidad de carga detectada en el servidor (D11, D6). */
+      canLoad: boolean;
+      /** Dirección del servidor para el catálogo de LM Studio si canLoad es verdadero. */
+      serverUrl?: string;
     }
-  | { status: 'disabled'; use: AiTextUse; sourceFile: string | null }
-  | { status: 'unset'; use: AiTextUse; offer: AiUseOffer | null }
+  | {
+      status: 'disabled';
+      use: AiTextUse;
+      sourceFile: string | null;
+      sourceDir?: string;
+      canLoad?: boolean;
+      serverUrl?: string;
+    }
+  | {
+      status: 'unset';
+      use: AiTextUse;
+      offer: AiUseOffer | null;
+      canLoad?: boolean;
+      serverUrl?: string;
+    }
   | {
       status: 'error';
       use: AiTextUse;
       error: string;
       parseError?: { file: string; line: number; column: number; code: string };
+      canLoad?: boolean;
+      serverUrl?: string;
     };
+
+/**
+ * Para qué uso y repositorio se piden el catálogo, la carga o la expulsión de un
+ * modelo de LM Studio (4.4). La dirección la resuelve el proceso principal.
+ */
+export interface AiLoadTarget {
+  use?: AiTextUse;
+  repoPath?: string | null;
+}

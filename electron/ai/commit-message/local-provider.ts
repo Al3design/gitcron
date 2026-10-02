@@ -10,7 +10,7 @@
 // local sea la primera: el código no sale a ningún tercero.
 
 import type { CommitDraftResult, LoadOutcome, LocalModel } from '../../../types/commit-message-ai';
-import { LEGACY_PROVIDER_BLOCKS } from '../config/gitcron-config-migration';
+import { MIN_CONTEXT_LENGTH } from '../../../types/commit-message-ai';
 import { fetchDeviceIndex, mergeDeviceInfo } from './device-index';
 
 // Los dos pisos de contexto viven en `types/`, donde el panel también los ve: el
@@ -18,8 +18,6 @@ import { fetchDeviceIndex, mergeDeviceInfo } from './device-index';
 // en los dos lados cambiarlo en uno dejaba al otro mintiendo. Se re-exportan para
 // que quien ya los pedía acá los siga encontrando en el mismo lugar.
 export { MIN_CONTEXT_LENGTH, PREFERRED_CONTEXT_LENGTH } from '../../../types/commit-message-ai';
-
-import { MIN_CONTEXT_LENGTH } from '../../../types/commit-message-ai';
 
 /** Que la clave exista en el catálogo, antes de mandarla a ningún lado. */
 export function isKnownModel(modelKey: string, catalog: readonly LocalModel[]): boolean {
@@ -30,14 +28,6 @@ export function isKnownModel(modelKey: string, catalog: readonly LocalModel[]): 
 export function hasEnoughContext(model: LocalModel, minimum: number = MIN_CONTEXT_LENGTH): boolean {
   return model.loaded && (model.loadedContextLength ?? 0) >= minimum;
 }
-
-/**
- * El servidor del selector de LM Studio: el del proveedor `lmstudio` que la
- * migración y «usar lo que tenías» escriben en gitcron.json. La dirección vive en
- * un solo lugar, el módulo de configuración. Con la tarea 4.4 el selector sigue al
- * proveedor del uso.
- */
-export const DEFAULT_LOCAL_BASE_URL = String(LEGACY_PROVIDER_BLOCKS.lmstudio.options?.baseURL).replace(/\/v1\/?$/, '');
 
 /**
  * Ventana generosa para redactar: medido, un 12B tarda 25–57 s y un 9B con
@@ -316,7 +306,7 @@ export function normalizeSubject(raw: string): string | null {
  * de redactar o cargar—, que corren en cada acción y no necesitan saber en qué
  * máquina vive nada.
  */
-export async function fetchModelCatalog(baseUrl: string = DEFAULT_LOCAL_BASE_URL): Promise<LocalModel[]> {
+export async function fetchModelCatalog(baseUrl: string): Promise<LocalModel[]> {
   const res = await fetch(modelsEndpoint(baseUrl), { method: 'GET', signal: withTimeout(CATALOG_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`El servidor local respondió ${res.status}.`);
   const models = parseModelCatalog(await res.json());

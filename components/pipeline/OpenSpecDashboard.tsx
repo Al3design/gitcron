@@ -75,6 +75,8 @@ import { PipelineNewChangeFlow, type PipelineNewChangeMode } from './PipelineNew
 import { ViewSwitcherRail, type ViewSwitcherItem } from './ViewSwitcherRail';
 import { AiModelControls } from './AiModelControls';
 import { AiUseLine } from '../ai/AiUseLine';
+import { AiSentDetails } from '../ai/AiSentDetails';
+import type { AiUseStatus } from '@/types/ai-use';
 import { useNewChangeDraft, useNewChangeDraftStore } from '@/lib/new-change-draft-store';
 import {
   composeArchiveInstruction,
@@ -1283,6 +1285,7 @@ export function OpenSpecDashboard({
 
   const [lastAiRequest, setLastAiRequest] = useState<CommitAiLastRequest | null>(null);
   const [showSentDetails, setShowSentDetails] = useState<boolean>(false);
+  const [commitUseStatus, setCommitUseStatus] = useState<AiUseStatus | null>(null);
 
   /**
    * Deja el commit listo: archivos preparados y mensaje sugerido escrito.
@@ -1343,7 +1346,7 @@ export function OpenSpecDashboard({
         setLastAiRequest(res.data);
       }
     }).catch(() => undefined);
-    window.api?.commitAi?.catalog().then((result) => {
+    window.api?.commitAi?.catalog({ use: 'gitcron-commit', repoPath }).then((result) => {
       if (!alive) return;
       // Los de embeddings no redactan nada; se filtran acá y no en el proveedor,
       // que los conserva con su tipo para poder explicar por qué no sirven.
@@ -1496,14 +1499,14 @@ export function OpenSpecDashboard({
     }, repoPath);
     setAiNotice(null, repoPath);
     try {
-      const result = await window.api?.commitAi?.load(aiModel, undefined, aiContext, aiTtlMinutes * 60);
+      const result = await window.api?.commitAi?.load(aiModel, { use: 'gitcron-commit', repoPath }, aiContext, aiTtlMinutes * 60);
       if (!result?.success) {
         setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }), repoPath);
         return;
       }
       // Relee el catálogo: el modelo que se acaba de cargar tiene ahora un
       // contexto real, y el desplegable lo seguía mostrando «en disco».
-      const catalog = await window.api?.commitAi?.catalog();
+      const catalog = await window.api?.commitAi?.catalog({ use: 'gitcron-commit', repoPath });
       const disponibles = filterDraftableModels(catalog?.data ?? []);
       setAiModels(disponibles);
       // Se avisa que terminó, y se lo confirma contra el catálogo en vez de
@@ -1565,7 +1568,7 @@ export function OpenSpecDashboard({
       // diciendo «cargado», apretó expulsar y vio la animación de una expulsión
       // que no expulsaba nada. Sin esta comprobación el panel actúa sobre una
       // instancia que ya no existe y le informa un éxito inventado.
-      const previo = await window.api?.commitAi?.catalog();
+      const previo = await window.api?.commitAi?.catalog({ use: 'gitcron-commit', repoPath });
       const antes = filterDraftableModels(previo?.data ?? []);
       setAiModels(antes);
       const vigente = antes.find((model) => model.id === aiModel);
@@ -1574,7 +1577,7 @@ export function OpenSpecDashboard({
         return;
       }
 
-      const result = await window.api?.commitAi?.unload(aiModel);
+      const result = await window.api?.commitAi?.unload(aiModel, { use: 'gitcron-commit', repoPath });
       if (!result?.success) {
         setAiNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }), repoPath);
         return;
@@ -2714,21 +2717,7 @@ export function OpenSpecDashboard({
                   ) : resolvedCommitModel ? (
                     <section className={styles.aiPanel}>
                       <div className={styles.aiRow}>
-                        <p className={styles.aiResolvedLine}>
-                          {resolvedCommitModel.kind === 'cli'
-                            ? t('pipeline.openspec.prepare.aiResolvedLineCli', {
-                                model: resolvedCommitModel.modelId,
-                                provider: resolvedCommitModel.providerName,
-                                destination: getDestinationLabel(resolvedCommitModel.destination),
-                                file: resolvedFilesText,
-                              })
-                            : t('pipeline.openspec.prepare.aiResolvedLine', {
-                                model: resolvedCommitModel.modelId,
-                                provider: resolvedCommitModel.providerName,
-                                destination: getDestinationLabel(resolvedCommitModel.destination),
-                                file: resolvedFilesText,
-                              })}
-                        </p>
+                        <AiUseLine use="gitcron-commit" repoPath={repoPath} sourceFile={resolvedFilesText || undefined} />
                         <button
                           type="button"
                           className={cn(styles.secondaryAction, styles.aiDraftAction)}
@@ -2798,69 +2787,7 @@ export function OpenSpecDashboard({
                           }
                         />
                       )}
-                      {lastAiRequest && (
-                        <div className={styles.aiSentSection}>
-                          <button
-                            type="button"
-                            className={styles.aiSentToggle}
-                            onClick={() => setShowSentDetails((prev) => !prev)}
-                            aria-expanded={showSentDetails}
-                          >
-                            {showSentDetails
-                              ? t('pipeline.openspec.prepare.aiHideSent')
-                              : t('pipeline.openspec.prepare.aiShowSent')}
-                          </button>
-                          {showSentDetails && (
-                            <div className={styles.aiSentDetails} data-testid="ai-sent-details">
-                              <dl className={styles.aiSentList}>
-                                <dt>{t('pipeline.openspec.prepare.aiSentEndpoint')}</dt>
-                                <dd>{lastAiRequest.endpoint}</dd>
-                                <dt>{t('pipeline.openspec.prepare.aiSentModel')}</dt>
-                                <dd>
-                                  {String(lastAiRequest.model.value)}
-                                  <span className={styles.aiSentProvenance}> ({sentOrigin(lastAiRequest.model)})</span>
-                                </dd>
-                                <dt>{t('pipeline.openspec.prepare.aiSentParams')}</dt>
-                                <dd>
-                                  {Object.keys(lastAiRequest.parameters).length > 0 ? (
-                                    <ul className={styles.aiSentParamList}>
-                                      {Object.entries(lastAiRequest.parameters).map(([key, item]) => (
-                                        <li key={key}>
-                                          <code>{key}</code>: <span>{typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value)}</span>
-                                          <span className={styles.aiSentProvenance}> ({sentOrigin(item)})</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : (
-                                    <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
-                                  )}
-                                </dd>
-                                <dt>{t('pipeline.openspec.prepare.aiSentHeaders')}</dt>
-                                <dd>
-                                  {lastAiRequest.headers.length > 0 ? (
-                                    <ul className={styles.aiSentHeaderList}>
-                                      {lastAiRequest.headers.map((h) => (
-                                        <li key={h.name}>
-                                          <code>{h.name}</code>
-                                          <span className={styles.aiSentProvenance}> ({sentOrigin(h)})</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : (
-                                    <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
-                                  )}
-                                </dd>
-                                {lastAiRequest.auth && (
-                                  <>
-                                    <dt>{t('pipeline.openspec.prepare.aiSentAuth')}</dt>
-                                    <dd>{lastAiRequest.auth}</dd>
-                                  </>
-                                )}
-                              </dl>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <AiSentDetails use="gitcron-commit" request={lastAiRequest} />
                     </section>
                   ) : (
                     <>
@@ -2868,45 +2795,64 @@ export function OpenSpecDashboard({
                           en el selector, por el proveedor «lmstudio» que declara el
                           archivo (sin dirección fija). La línea ofrece escribir la
                           elección en el archivo con un botón; nunca se escribe sola. */}
-                      <AiUseLine use="gitcron-commit" repoPath={repoPath} screenModel={aiModel || null} screenChoice />
-                      <AiModelControls
+                      <AiUseLine
+                        use="gitcron-commit"
                         repoPath={repoPath}
-                        models={aiModels}
-                        deviceNames={aiDeviceNames}
-                        onModelsChange={setAiModels}
-                        busy={aiBusy}
-                        phase={aiPhase}
-                        startedAt={aiStartedAt}
-                        opKind={aiOpKind}
-                        queueRunningRepoPath={queueRunningRepoPath}
-                        notice={!rightOpen ? aiNotice : null}
-                        onNoticeChange={setAiNotice}
-                        onLoad={confirmAiLoad}
-                        onUnload={unloadAiModel}
-                        actions={
-                          <>
-                            {!aiNeedsLoad && (
-                              <button
-                                type="button"
-                                className={cn(styles.secondaryAction, styles.aiDraftAction)}
-                                disabled={aiBusy || chosen.length === 0 || !aiModel}
-                                onClick={draftWithAi}
-                              >
-                                <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
-                                  {aiPhase === 'drafting' || aiPhase === 'queued'
-                                    ? t('pipeline.openspec.prepare.aiBusy')
-                                    : t('pipeline.openspec.prepare.aiDraft')}
-                                </span>
-                              </button>
-                            )}
-                            {aiBusy && (
-                              <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
-                                {t('pipeline.openspec.prepare.aiCancel')}
-                              </button>
-                            )}
-                          </>
-                        }
+                        screenModel={aiModel || null}
+                        screenChoice
+                        onStatus={setCommitUseStatus}
                       />
+                      {commitUseStatus?.canLoad && (
+                        <AiModelControls
+                          repoPath={repoPath}
+                          models={aiModels}
+                          deviceNames={aiDeviceNames}
+                          onModelsChange={setAiModels}
+                          busy={aiBusy}
+                          phase={aiPhase}
+                          startedAt={aiStartedAt}
+                          opKind={aiOpKind}
+                          queueRunningRepoPath={queueRunningRepoPath}
+                          notice={!rightOpen ? aiNotice : null}
+                          onNoticeChange={setAiNotice}
+                          onLoad={confirmAiLoad}
+                          onUnload={unloadAiModel}
+                          actions={
+                            <>
+                              {!aiNeedsLoad && (
+                                <button
+                                  type="button"
+                                  className={cn(styles.secondaryAction, styles.aiDraftAction)}
+                                  disabled={aiBusy || chosen.length === 0 || !aiModel}
+                                  onClick={draftWithAi}
+                                >
+                                  <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
+                                    {aiPhase === 'drafting' || aiPhase === 'queued'
+                                      ? t('pipeline.openspec.prepare.aiBusy')
+                                      : t('pipeline.openspec.prepare.aiDraft')}
+                                  </span>
+                                </button>
+                              )}
+                              {aiBusy && (
+                                <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
+                                  {t('pipeline.openspec.prepare.aiCancel')}
+                                </button>
+                              )}
+                            </>
+                          }
+                        />
+                      )}
+                      {!commitUseStatus?.canLoad && !rightOpen && aiNotice && (
+                        <p className={styles.aiNotice} role="status">
+                          {aiNotice}
+                        </p>
+                      )}
+                      {aiBusy && !commitUseStatus?.canLoad && (
+                        <button type="button" className={styles.secondaryAction} onClick={cancelAiDraft}>
+                          {t('pipeline.openspec.prepare.aiCancel')}
+                        </button>
+                      )}
+                      <AiSentDetails use="gitcron-commit" request={lastAiRequest} />
                     </>
                   )}
                   {/* Cada grupo declara de dónde viene lo que contiene. Ninguno

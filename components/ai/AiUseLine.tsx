@@ -24,9 +24,11 @@ interface Props {
    * el elegido ahí, por el proveedor «lmstudio» de gitcron.json, y la línea lo dice.
    */
   screenChoice?: boolean;
+  /** Nombre o lista de archivos de donde proviene la configuración (si la pantalla ya los resolvió). */
+  sourceFile?: string;
 }
 
-export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, refreshKey, screenChoice = false }: Props) {
+export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, refreshKey, screenChoice = false, sourceFile }: Props) {
   const t = useT();
   const [status, setStatus] = useState<AiUseStatus | null>(null);
   const [adopting, setAdopting] = useState(false);
@@ -78,35 +80,92 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
   if (!status) return null;
 
   if (status.status === 'resolved') {
+    const hasAlternatives = !status.available && status.alternatives && status.alternatives.length > 0;
+    const altProviders = hasAlternatives
+      ? status.alternatives.map((a) => `«${a.providerName}»`).join(', ')
+      : '';
+    // El plural va en la clave y no armado acá: «declaran» no se arma igual en cada idioma.
+    const altKey = (status.alternatives?.length ?? 0) > 1 ? 'aiUse.alternativesMany' : 'aiUse.alternativesOne';
+
+    const lineKey = use === 'gitcron-commit'
+      ? 'pipeline.openspec.prepare.aiResolvedLine'
+      : 'aiUse.resolved';
+
     return (
       <div className={styles.block}>
         <p className={styles.line}>
-          {t('aiUse.resolved', {
+          {t(lineKey, {
             model: status.modelId,
             provider: status.providerName,
             destination: destination(status.destination),
-            file: status.sourceFile,
+            file: sourceFile || status.sourceFile,
           })}
-          {status.modelSource === 'general' ? t('aiUse.general') : ''}
+          {status.modelSource === 'general' ? t('aiUse.general') : status.isException ? t('aiUse.exception') : ''}
+          {' · '}
+          {t('aiUse.toolsNone')}
         </p>
+        {status.destination === 'external-service' && (
+          <p className={styles.externalNotice}>{t('aiUse.externalNotice', { provider: status.providerName })}</p>
+        )}
+        {(() => {
+          const dir = status.sourceDir;
+          if (!dir) return null;
+          return (
+            <div className={styles.actionRow}>
+              <button
+                type="button"
+                className={styles.showInFolder}
+                onClick={() => {
+                  window.api?.shellOpenPath?.(dir);
+                }}
+              >
+                {t('aiUse.showInFolder')}
+              </button>
+            </div>
+          );
+        })()}
         {!status.available && status.unavailableReason && (
           <p className={styles.problem} role="alert">{status.unavailableReason}</p>
+        )}
+        {hasAlternatives && (
+          <p className={styles.alternativesNote}>
+            {t(altKey, { providers: altProviders })}
+          </p>
         )}
       </div>
     );
   }
 
   if (status.status === 'disabled') {
-    return <p className={styles.line}>{t('aiUse.disabled')}</p>;
+    const dir = status.sourceDir;
+    return (
+      <div className={styles.block}>
+        <p className={styles.line}>{t('aiUse.disabled')}</p>
+        {dir && (
+          <div className={styles.actionRow}>
+            <button
+              type="button"
+              className={styles.showInFolder}
+              onClick={() => {
+                window.api?.shellOpenPath?.(dir);
+              }}
+            >
+              {t('aiUse.showInFolder')}
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (status.status === 'error') {
     return <p className={styles.problem} role="alert">{status.error}</p>;
   }
 
+  const withSelector = screenChoice && Boolean(status.canLoad);
   return (
     <div className={styles.block}>
-      <p className={styles.line}>{screenChoice ? t('aiUse.unsetScreen') : t('aiUse.unset')}</p>
+      <p className={styles.line}>{withSelector ? t('aiUse.unsetScreen') : t('aiUse.unset')}</p>
       {status.offer ? (
         <p className={styles.offer}>
           <button type="button" className={styles.adopt} disabled={adopting} onClick={() => { void adopt(); }}>
@@ -118,7 +177,7 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
               : t('aiUse.adoptNote', { file: status.offer.file })}
           </span>
         </p>
-      ) : screenChoice ? null : (
+      ) : withSelector ? null : (
         <p className={styles.note}>{t('aiUse.unsetHint', { use })}</p>
       )}
       {adoptError && <p className={styles.problem} role="alert">{adoptError}</p>}

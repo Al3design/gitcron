@@ -110,7 +110,18 @@ beforeEach(() => {
     commitMessage: '',
     setCommitMessage,
   } as Partial<ReturnType<typeof useGitStore.getState>>);
-  Object.defineProperty(window, 'api', { configurable: true, value: { commitAi: { catalog, draft, load, cancel, unload, deviceNames } } });
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      commitAi: { catalog, draft, load, cancel, unload, deviceNames },
+      aiUse: {
+        status: vi.fn().mockResolvedValue({
+          success: true,
+          data: { status: 'unset', use: 'gitcron-commit', canLoad: true, available: true },
+        }),
+      },
+    },
+  });
 });
 
 afterEach(() => {
@@ -287,7 +298,7 @@ describe('cargar el modelo desde el panel', () => {
 
     // El contexto y el TTL viajan con la carga: los dos se fijan ahí y no se
     // pueden cambiar después.
-    await vi.waitFor(() => expect(load).toHaveBeenCalledWith('ornith-1.0-9b', undefined, 65536, 1800));
+    await vi.waitFor(() => expect(load).toHaveBeenCalledWith('ornith-1.0-9b', { use: 'gitcron-commit', repoPath: 'C:/repo' }, 65536, 1800));
     // Sin releer, el desplegable seguiría diciendo «en disco» sobre un modelo
     // que ya está cargado.
     await vi.waitFor(() => expect(catalog).toHaveBeenCalled());
@@ -327,7 +338,7 @@ describe('la salida manual', () => {
     await elegirModelo();
 
     fireEvent.click(screen.getByRole('button', { name: /prepare\.aiEject/ }));
-    await vi.waitFor(() => expect(unload).toHaveBeenCalledWith('google/gemma-4-12b'));
+    await vi.waitFor(() => expect(unload).toHaveBeenCalledWith('google/gemma-4-12b', { use: 'gitcron-commit', repoPath: 'C:/repo' }));
   });
 
   it('no la ofrece si el modelo está en disco: no hay nada que descargar', async () => {

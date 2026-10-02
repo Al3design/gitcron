@@ -10,7 +10,8 @@ import { PassThrough } from 'node:stream';
 import { loadGitCronConfig, resetGitCronConfigCacheForTesting } from '../config/gitcron-config';
 import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../config/legacy-choice';
 import { resolveModelFor, TEXT_USES, type TextUse } from '../config/resolve-model-for';
-import { probeTextUse, runTextUse, TextUseError, type TextUseDeps } from '../text-use';
+import { clearLastRequestsForTesting, getLastRequestForUse, probeTextUse, runTextUse, TextUseError, type TextUseDeps } from '../text-use';
+import { loadServerFor, setUseConfigPathForTesting } from '../use-resolution';
 import { createCartoProvider } from '../carto/provider';
 import { createTemporalProvider } from '../predict';
 
@@ -323,5 +324,74 @@ describe('4.3 sin proveedores fijos', () => {
       .map(rel);
     expect(hits.every((f) => f.startsWith('ai/config/'))).toBe(true);
     expect(hits.sort()).toEqual(['ai/config/gitcron-config-migration.ts', 'ai/config/gitcron-config.ts']);
+  });
+});
+
+describe('4.4 el pedido efectivo de cada uso (D14)', () => {
+  const families = [
+    { ref: 'casa/qwen-27b', endpoint: 'http://192.168.1.7:8888/v1/chat/completions', kind: 'openai-compatible' },
+    { ref: 'anthropic/claude-sonnet-4-5', endpoint: 'https://api.anthropic.com/v1/messages', kind: 'anthropic' },
+    { ref: 'codex/gpt-5.5', endpoint: 'codex exec --json', kind: 'cli' },
+  ];
+
+  for (const { ref, endpoint, kind } of families) {
+    it(`${kind}: lo guardado es lo que viajó, sin clave, cabeceras secretas ni el pedido`, async () => {
+      write({
+        provider: {
+          ...PROVIDERS,
+          casa: { ...PROVIDERS.casa, options: { ...PROVIDERS.casa.options, headers: { 'CF-Access-Client-Secret': 'cf-secreto-valor' } } },
+        },
+        agent: { 'gitcron-cartography': { model: ref }, 'gitcron-temporal': { model: 'casa/qwen-27b' } },
+      });
+      clearLastRequestsForTesting();
+      const srv = server((url) => (url.endsWith('/messages')
+        ? { content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }
+        : { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }));
+      const fake = cli('ok');
+      await runTextUse(resolveFor('gitcron-cartography'), { system: 'SISTEMA-PRIVADO', user: 'CODIGO-DEL-REPO', maxTokens: 777 }, { ...fake.deps, fetchFn: srv.fetchFn });
+
+      const saved = getLastRequestForUse('gitcron-cartography')!;
+      expect(saved.kind).toBe(kind);
+      expect(saved.endpoint.startsWith(endpoint)).toBe(true);
+      if (kind !== 'cli') {
+        expect(srv.calls[0].url).toBe(saved.endpoint);
+        expect(saved.parameters.max_tokens.value).toBe(srv.calls[0].body.max_tokens);
+      }
+      const json = JSON.stringify(saved);
+      for (const secret of ['k-casa', 'sk-ant-test', 'cf-secreto-valor', 'SISTEMA-PRIVADO', 'CODIGO-DEL-REPO']) {
+        expect(json).not.toContain(secret);
+      }
+      // Un uso no ve el pedido de otro.
+      expect(getLastRequestForUse('gitcron-temporal')).toBeNull();
+    });
+  }
+});
+
+describe('4.4 el servidor donde se cargan modelos, por uso', () => {
+  it('cada uso va a su servidor; sin modelo, al «lmstudio» del archivo; sin él, el motivo y ninguna dirección', () => {
+    setUseConfigPathForTesting(configPath);
+    try {
+      write({
+        provider: {
+          lmstudio: { options: { baseURL: 'http://127.0.0.1:1234/v1' } },
+          casa: { options: { baseURL: 'http://192.168.1.7:8888/v1', apiKey: '{env:GITCRON_TEST_CASA}' } },
+        },
+        agent: { 'gitcron-commit': { model: 'casa/qwen' }, 'gitcron-temporal': { model: 'codex/gpt-5.5' } },
+      });
+      process.env.GITCRON_TEST_CASA = 'k-casa';
+      expect(loadServerFor('gitcron-commit')).toEqual({
+        server: { serverUrl: 'http://192.168.1.7:8888', headers: { authorization: 'Bearer k-casa' } },
+      });
+      // El análisis no tiene modelo: el selector va por el «lmstudio» del archivo, no por el de la redacción.
+      expect(loadServerFor('gitcron-openspec-analysis')).toEqual({ server: { serverUrl: 'http://127.0.0.1:1234', headers: {} } });
+      expect(loadServerFor('gitcron-temporal')).toEqual({ error: 'Codex no es un servidor donde se carguen modelos.' });
+
+      write({ provider: {} });
+      resetGitCronConfigCacheForTesting();
+      expect(loadServerFor('gitcron-openspec-analysis')).toMatchObject({ error: expect.stringContaining('no declara el proveedor «lmstudio»') });
+    } finally {
+      delete process.env.GITCRON_TEST_CASA;
+      setUseConfigPathForTesting(null);
+    }
   });
 });

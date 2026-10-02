@@ -44,6 +44,18 @@ const onDraftState = vi.fn((cb) => {
 });
 const resolvedModel = vi.fn().mockResolvedValue({ success: true, data: null });
 const lastRequest = vi.fn().mockResolvedValue({ success: true, data: null });
+const aiUseStatus = vi.fn().mockResolvedValue({
+  success: true,
+  data: {
+    status: 'unset',
+    use: 'gitcron-commit',
+    canLoad: true,
+    serverUrl: 'http://127.0.0.1:1234',
+    offer: null,
+  },
+});
+const aiUseLastRequest = vi.fn().mockResolvedValue({ success: true, data: null });
+const aiUseAdopt = vi.fn().mockResolvedValue({ success: true, data: { written: true, modelRef: 'x' } });
 
 function snapshot(repoId = 'repoA'): PipelineSnapshot {
   return {
@@ -214,6 +226,12 @@ beforeEach(() => {
         onDraftState,
         resolvedModel,
         lastRequest,
+        onConfigChanged: vi.fn(),
+      },
+      aiUse: {
+        status: aiUseStatus,
+        lastRequest: aiUseLastRequest,
+        adopt: aiUseAdopt,
       },
     },
   });

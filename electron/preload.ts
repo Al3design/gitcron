@@ -223,15 +223,19 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-use:status', args),
     adopt: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
       ipcRenderer.invoke('ai-use:adopt', args),
+    lastRequest: (args: { use: string }) =>
+      ipcRenderer.invoke('ai-use:last-request', args),
   },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.
   commitAi: {
-    catalog: (baseUrl?: string) => ipcRenderer.invoke('commit-ai:catalog', baseUrl),
-    load: (model: string, baseUrl?: string, contextLength?: number, ttlSeconds?: number) =>
-      ipcRenderer.invoke('commit-ai:load', model, baseUrl, contextLength, ttlSeconds),
+    // Catálogo, carga y expulsión van al servidor del uso según gitcron.json (4.4):
+    // se dice para qué uso y repositorio; la dirección la resuelve el proceso principal.
+    catalog: (target?: { use?: string; repoPath?: string | null }) => ipcRenderer.invoke('commit-ai:catalog', target),
+    load: (model: string, target?: { use?: string; repoPath?: string | null }, contextLength?: number, ttlSeconds?: number) =>
+      ipcRenderer.invoke('commit-ai:load', model, target, contextLength, ttlSeconds),
     cancel: (draftId?: string) => ipcRenderer.invoke('commit-ai:cancel', draftId),
-    unload: (model: string, baseUrl?: string) => ipcRenderer.invoke('commit-ai:unload', model, baseUrl),
+    unload: (model: string, target?: { use?: string; repoPath?: string | null }) => ipcRenderer.invoke('commit-ai:unload', model, target),
     deviceNames: () => ipcRenderer.invoke('commit-ai:device-names'),
     draft: (args: {
       repoPath: string;

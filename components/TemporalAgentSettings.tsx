@@ -19,6 +19,7 @@ import { Brain } from 'lucide-react';
 import { CopyButton } from './CopyButton';
 import { OPENROUTER_MODELS } from '@/lib/openrouter-models';
 import { AiUseLine } from './ai/AiUseLine';
+import { AiSentDetails } from './ai/AiSentDetails';
 
 const COLOR_SUCCESS = 'var(--color-git-add)';
 const COLOR_PRIMARY = 'var(--color-primary)';
@@ -453,9 +454,6 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
         </h4>
         {/* El proveedor y el modelo salen de gitcron.json (tarea 4.3). La clave y el
             modelo de abajo siguen valiendo cuando el uso va a OpenRouter. */}
-        <div style={{ marginBottom: 'var(--space-3)' }}>
-          <AiUseLine use="gitcron-temporal" repoPath={repoPath} />
-        </div>
         <Row label={t('temporalAgent.apiKeyStatus')}>
           {hasKey === null ? (
             <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{t('temporalAgent.keyChecking')}</span>
@@ -520,7 +518,12 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
       </div>
 
       {/* Prediction trigger — visually distinct from save/config: this is the expensive action. */}
-      <div style={{ ...cardStyle, borderColor: 'color-mix(in srgb, var(--color-primary) 31.4%, transparent)' }}>
+      {/* El borde y el degradé de IA salen de la clase compartida `.ai-panel` (D20); acá
+          sólo el aire y el redondeo de las demás tarjetas. */}
+      <div className="ai-panel" style={aiCardStyle}>
+        <div style={{ marginBottom: 'var(--space-3)' }}>
+          <AiUseLine use="gitcron-temporal" repoPath={repoPath} />
+        </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', flex: 1, minWidth: 200, lineHeight: 1.4 }}>
             {t('temporalAgent.predictDesc')}{' '}
@@ -534,8 +537,8 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
                   style={{
                     ...primaryBtn,
                     background: 'var(--color-bg-surface)',
-                    color: COLOR_PRIMARY,
-                    border: '1px solid color-mix(in srgb, var(--color-primary) 25.1%, transparent)',
+                    color: 'var(--color-ai)',
+                    border: '1px solid color-mix(in srgb, var(--color-ai) 35%, transparent)',
                     fontWeight: 600,
                     fontSize: 'var(--font-size-sm)',
                     padding: 'var(--space-3) var(--space-5)',
@@ -543,7 +546,9 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
                     cursor: 'wait',
                   }}
                 >
-                  {t('temporalAgent.generating')}
+                  <span>
+                    <span className="ai-thinking-text">{t('temporalAgent.generating')}</span>
+                  </span>
                 </button>
                 <button
                   onClick={cancelPrediction}
@@ -563,7 +568,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
                 onClick={predict}
                 style={{
                   ...primaryBtn,
-                  background: COLOR_PRIMARY,
+                  background: 'var(--color-ai)',
                   color: 'var(--color-bg-base)',
                   fontWeight: 700,
                   fontSize: 'var(--font-size-base)',
@@ -571,7 +576,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
                   border: 'none',
                   borderRadius: 'var(--radius-lg)',
                   minWidth: 180,
-                  boxShadow: '0 0 14px color-mix(in srgb, var(--color-primary) 14.5%, transparent)',
+                  boxShadow: '0 0 14px color-mix(in srgb, var(--color-ai) 25%, transparent)',
                   cursor: 'pointer',
                 }}
               >
@@ -580,14 +585,23 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
             )}
           </div>
         </div>
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          <AiSentDetails use="gitcron-temporal" busy={predicting} />
+        </div>
         {predicting && (
           <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--font-size-xs)' }}>
-              <span style={{ color: COLOR_PRIMARY, display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontWeight: 500 }}>
-                <Brain size={14} className="animate-pulse" style={{ color: COLOR_PRIMARY }} />
-                <span style={{ color: 'var(--color-text-primary)', opacity: 0.95 }}>{currentThought}</span>
+              <span style={{ color: 'var(--color-ai)', display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontWeight: 500 }}>
+                <Brain size={14} className="animate-pulse" style={{ color: 'var(--color-ai)' }} />
+                <span>
+                  <span className="ai-thinking-text">{currentThought}</span>
+                </span>
               </span>
-              <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'monospace', fontSize: 'var(--font-size-xs)' }}>{Math.round(progress)}%</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontFamily: 'monospace', fontSize: 'var(--font-size-xs)' }}>
+                <span>
+                  <span className="ai-thinking-text">{Math.round(progress)}%</span>
+                </span>
+              </span>
             </div>
             {/* Progress Bar Container */}
             <div style={{ width: '100%', height: 4, background: 'var(--color-bg-surface)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--color-border-subtle)' }}>
@@ -595,7 +609,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
                 style={{
                   height: '100%',
                   width: `${progress}%`,
-                  background: `linear-gradient(90deg, ${COLOR_PRIMARY}, ${COLOR_SUCCESS})`,
+                  background: `linear-gradient(90deg, var(--color-ai), ${COLOR_SUCCESS})`,
                   borderRadius: 'var(--radius-sm)',
                   transition: 'width 0.3s cubic-bezier(0.1, 0.8, 0.25, 1)',
                 }}
@@ -625,7 +639,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
           <div style={{ marginTop: 'var(--space-4)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
             <div style={{ color: COLOR_SUCCESS, marginBottom: 'var(--space-1)' }}>
               {result.branches.length} branch{result.branches.length === 1 ? '' : 'es'} {t('temporalAgent.resultFrom')}{' '}
-              <span style={{ color: COLOR_PRIMARY }}>{result.provider}</span>
+              <span style={{ color: 'var(--color-ai)' }}>{result.provider}</span>
             </div>
             <ul style={{ margin: 0, paddingLeft: 'var(--space-4)' }}>
               {result.branches.map((b) => (
@@ -889,6 +903,12 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid var(--color-border-subtle)',
   borderRadius: 'var(--radius-lg)',
   padding: 'var(--space-4)',
+};
+
+/** La tarjeta de la predicción: como las demás, sin fondo ni borde propios (los pone `.ai-panel`). */
+const aiCardStyle: React.CSSProperties = {
+  borderRadius: cardStyle.borderRadius,
+  padding: cardStyle.padding,
 };
 
 const primaryBtn: React.CSSProperties = {

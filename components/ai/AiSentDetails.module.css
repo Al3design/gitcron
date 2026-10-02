@@ -1,0 +1,75 @@
+/* Detalle del pedido efectivo de un uso de IA (D14).
+   Letra chica de metadatos, gris secundario y bordes sutiles. */
+.aiSentSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.aiSentToggle {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-default);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.aiSentToggle:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.aiSentDetails {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-base);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  color: var(--color-text-secondary);
+}
+
+.aiSentList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+}
+
+.aiSentList dt {
+  font-weight: 650;
+  color: var(--color-text-primary);
+}
+
+.aiSentList dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aiSentProvenance {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.aiSentParamList,
+.aiSentHeaderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.aiSentParamList code,
+.aiSentHeaderList code {
+  color: var(--color-text-primary);
+  font-family: inherit;
+}

@@ -837,6 +837,15 @@ body, .font-sans {
   }
 }
 
+/* Bloque con degradé suave de IA (D20), usado en las superficies de IA. */
+.ai-panel {
+  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent)),
+    var(--color-bg-overlay);
+}
+
 .pipeline-icon {
   flex-shrink: 0;
 }

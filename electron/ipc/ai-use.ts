@@ -7,17 +7,20 @@
 // Ningún canal devuelve claves ni valores de variables: sólo nombres, destino y
 // de qué archivo sale cada cosa.
 
+import path from 'node:path';
 import { ipcMain } from 'electron';
 import type { AiUseOffer, AiUseStatus } from '../../types/ai-use';
 import { getCartoAISettings } from '../ai/carto';
 import { GitCronConfigError, loadGitCronConfig } from '../ai/config/gitcron-config';
 import type { MigrationSources } from '../ai/config/gitcron-config-migration';
 import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../ai/config/legacy-choice';
+import { detectCanLoad } from '../ai/config/provider-models';
 import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
 import { hasKey } from '../ai/key-store';
-import { activeConfigPath, resolveForUse } from '../ai/use-resolution';
+import { getLastRequestForUse } from '../ai/text-use';
+import { activeConfigPath, loadServerFor, resolveForUse } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
-import { watchGitCronConfigFor } from './commit-message-ai';
+import { getLastCommitAiRequest, watchGitCronConfigFor } from './commit-message-ai';
 import { errMsg } from './shared';
 import { readEncryptedStorage } from './storage';
 
@@ -71,10 +74,35 @@ export function registerAiUseHandlers(): void {
       // Guardar el archivo a mano vuelve a preguntar (D3), como en la redacción.
       if (_e?.sender) watchGitCronConfigFor(_e.sender, repoPath);
       try {
+        const repo = repoPath ? authorizedRepoRoot(repoPath) : null;
+        const loaded = loadGitCronConfig({ globalPath: activeConfigPath(), repoPath: repo });
         const target = resolveForUse(use, repoPath);
-        if (target.status === 'disabled') return ok({ status: 'disabled', use, sourceFile: target.sourceFile ?? null });
-        if (target.status === 'unset') return ok({ status: 'unset', use, offer: offerFor(use, repoPath, screenModel) });
+        if (target.status === 'disabled') {
+          const sourceFile = target.sourceFile ?? null;
+          const sourceDir = sourceFile ? path.dirname(sourceFile) : undefined;
+          return ok({ status: 'disabled', use, sourceFile, ...(sourceDir ? { sourceDir } : {}) });
+        }
+        // Capacidad de carga: el servidor del uso (o, sin modelo, el «lmstudio» del
+        // archivo) responde la API nativa de LM Studio. Nunca una dirección fija.
+        const load = loadServerFor(use, repoPath);
+        const canLoad = 'server' in load
+          ? await detectCanLoad(load.server.serverUrl, { headers: load.server.headers })
+          : false;
+        const serverUrl = canLoad && 'server' in load ? load.server.serverUrl : undefined;
+        if (target.status === 'unset') {
+          return ok({
+            status: 'unset',
+            use,
+            offer: offerFor(use, repoPath, screenModel),
+            canLoad,
+            ...(serverUrl ? { serverUrl } : {}),
+          });
+        }
         const { resolved, alternatives } = target;
+        const sourceFile = resolved.sourceFile;
+        const sourceDir = path.dirname(sourceFile);
+        const isException = resolved.modelSource === 'agent'
+          && Boolean(loaded.config?.model && typeof loaded.config.model === 'string' && loaded.config.model.trim());
         return ok({
           status: 'resolved',
           use,
@@ -83,12 +111,16 @@ export function registerAiUseHandlers(): void {
           modelId: resolved.modelId,
           kind: resolved.kind,
           destination: resolved.destination,
-          sourceFile: resolved.sourceFile,
+          sourceFile,
+          sourceDir,
           // Acá no entra el selector de la pantalla: sin modelo en el archivo, el uso es «unset».
           modelSource: resolved.modelSource === 'general' ? 'general' : 'agent',
+          isException,
           available: resolved.available,
           unavailableReason: resolved.unavailableReason ?? null,
           alternatives,
+          canLoad,
+          ...(serverUrl ? { serverUrl } : {}),
         });
       } catch (error) {
         if (error instanceof GitCronConfigError) {
@@ -96,6 +128,19 @@ export function registerAiUseHandlers(): void {
         }
         throw error;
       }
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-use:last-request', async (_e, args: unknown): Promise<Result<import('../../types/commit-message-ai').CommitAiLastRequest | null>> => {
+    try {
+      const { use } = (args ?? {}) as { use?: unknown };
+      if (!isTextUse(use)) throw new Error('Uso de IA desconocido.');
+      const req = use === 'gitcron-commit'
+        ? (getLastRequestForUse(use) ?? getLastCommitAiRequest())
+        : getLastRequestForUse(use);
+      return ok(req);
     } catch (error) {
       return fail(error);
     }

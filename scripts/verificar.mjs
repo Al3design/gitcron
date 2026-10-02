@@ -42,9 +42,12 @@ const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 
  * actualiza acá con causa. Medidos el 2026-09-21.
  */
 const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1114 }, // corrido de 1113 en modelos-en-casa 13: import de components/ai/AiUseLine (antes de 1112 en 09 y de 1109 en 05)
+  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1116 }, // corrido de 1114 en modelos-en-casa 14: import de components/ai/AiSentDetails (antes de 1113 en 13, 1112 en 09 y de 1109 en 05)
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 162 }, // corrido de 135 al agregar efecto de atención/foco en tanda 07
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 218 }, // corrido de 191 al agregar efecto de atención/foco en tanda 07
+  { archivo: 'components/cartography/CartoAskBox.tsx', linea: 65 }, // preexistente (linea 63 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
+  { archivo: 'components/cartography/CartoNodeDetail.tsx', linea: 60 }, // preexistente (linea 58 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
+  { archivo: 'components/cartography/CartoPanoramaHeader.tsx', linea: 42 }, // preexistente (linea 24 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
 ];
 
 /** Errores de eslint de la salida, menos los preexistentes. */

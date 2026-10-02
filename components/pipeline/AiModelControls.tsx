@@ -1,5 +1,6 @@
 'use client';
 
+import type { AiTextUse } from '@/types/ai-use';
 import React, { useEffect, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
 import {
@@ -27,6 +28,8 @@ export function EjectIcon({ size = 13 }: { size?: number }) {
 
 export interface AiModelControlsProps {
   repoPath?: string | null;
+  /** El uso de IA de la pantalla: el catálogo y la carga van a su servidor (4.4). */
+  use?: AiTextUse;
   models?: LocalModel[];
   deviceNames?: Record<string, string>;
   onModelsChange?: (models: LocalModel[]) => void;
@@ -47,6 +50,7 @@ export interface AiModelControlsProps {
 
 export function AiModelControls({
   repoPath,
+  use = 'gitcron-commit',
   models: externalModels,
   deviceNames: externalDeviceNames,
   onModelsChange,
@@ -89,7 +93,7 @@ export function AiModelControls({
     let alive = true;
     if (typeof window !== 'undefined' && window.api?.commitAi?.catalog) {
       window.api.commitAi
-        .catalog()
+        .catalog({ use, repoPath })
         .then((result) => {
           if (!alive) return;
           const disponibles = filterDraftableModels(result?.data ?? []);
@@ -151,7 +155,7 @@ export function AiModelControls({
     try {
       const result = await window.api?.commitAi?.load?.(
         aiModel,
-        undefined,
+        { use, repoPath },
         settings.contextLength,
         settings.ttlMinutes * 60,
       );
@@ -159,7 +163,7 @@ export function AiModelControls({
         setNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
         return;
       }
-      const catalog = await window.api?.commitAi?.catalog?.();
+      const catalog = await window.api?.commitAi?.catalog?.({ use, repoPath });
       const disponibles = filterDraftableModels(catalog?.data ?? []);
       setInternalModels(disponibles);
       onModelsChange?.(disponibles);
@@ -190,7 +194,7 @@ export function AiModelControls({
     setInternalStartedAt(Date.now());
     setNotice(null);
     try {
-      const previo = await window.api?.commitAi?.catalog?.();
+      const previo = await window.api?.commitAi?.catalog?.({ use, repoPath });
       const antes = filterDraftableModels(previo?.data ?? []);
       setInternalModels(antes);
       onModelsChange?.(antes);
@@ -199,12 +203,12 @@ export function AiModelControls({
         setNotice(t('pipeline.openspec.prepare.aiAlreadyEjected', { model: aiModel }));
         return;
       }
-      const result = await window.api?.commitAi?.unload?.(aiModel);
+      const result = await window.api?.commitAi?.unload?.(aiModel, { use, repoPath });
       if (!result?.success) {
         setNotice(t('pipeline.openspec.prepare.aiFailed', { detail: result?.error ?? '—' }));
         return;
       }
-      const catalog = await window.api?.commitAi?.catalog?.();
+      const catalog = await window.api?.commitAi?.catalog?.({ use, repoPath });
       const despues = filterDraftableModels(catalog?.data ?? []);
       setInternalModels(despues);
       onModelsChange?.(despues);

@@ -150,7 +150,17 @@ beforeEach(() => {
   } as Partial<ReturnType<typeof useGitStore.getState>>);
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { commitAi: { catalog, draft, cancel, onChunk, load: vi.fn(), unload: vi.fn(), deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }) } },
+    value: {
+      commitAi: { catalog, draft, cancel, onChunk, load: vi.fn(), unload: vi.fn(), deviceNames: vi.fn().mockResolvedValue({ success: true, data: {} }) },
+      aiUse: {
+        status: vi.fn().mockResolvedValue({
+          success: true,
+          data: { status: 'unset', use: 'gitcron-commit', canLoad: true, available: true },
+        }),
+        lastRequest: vi.fn().mockResolvedValue({ success: true, data: null }),
+        adopt: vi.fn().mockResolvedValue({ success: true }),
+      },
+    },
   });
 });
 

@@ -66,6 +66,53 @@ export function serverOrigin(baseURL: string): string {
   return baseURL.replace(/\/+$/, '').replace(/\/v1$/, '');
 }
 
+interface CanLoadCacheEntry {
+  canLoad: boolean;
+  timestamp: number;
+}
+const canLoadCache = new Map<string, CanLoadCacheEntry>();
+const CAN_LOAD_CACHE_TTL_MS = 15_000;
+let canLoadFetchOverride: FetchFn | null = null;
+
+export function setCanLoadFetchForTesting(fn: FetchFn | null): void {
+  canLoadFetchOverride = fn;
+}
+
+export function clearCanLoadCacheForTesting(): void {
+  canLoadCache.clear();
+}
+
+/**
+ * Capacidad de carga (D11, D6): el servidor del proveedor responde la API nativa
+ * de LM Studio (`/api/v1/models`). Con una caché corta de 15 s para no golpearlo
+ * en cada consulta de estado.
+ */
+export async function detectCanLoad(
+  serverUrl: string,
+  options: { fetchFn?: FetchFn; timeoutMs?: number; headers?: Record<string, string> } = {},
+): Promise<boolean> {
+  const origin = serverOrigin(serverUrl);
+  const cached = canLoadCache.get(origin);
+  if (cached && Date.now() - cached.timestamp < CAN_LOAD_CACHE_TTL_MS) {
+    return cached.canLoad;
+  }
+  const fetchFn = options.fetchFn ?? canLoadFetchOverride ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 2000;
+  let canLoad = false;
+  try {
+    const res = await fetchFn(`${origin}/api/v1/models`, {
+      method: 'GET',
+      headers: options.headers ?? {},
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    canLoad = res.ok;
+  } catch {
+    canLoad = false;
+  }
+  canLoadCache.set(origin, { canLoad, timestamp: Date.now() });
+  return canLoad;
+}
+
 export async function listProviderModels(
   providerId: string,
   options: {
