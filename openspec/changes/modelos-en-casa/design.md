@@ -344,7 +344,15 @@ herramienta (bajo, medio, alto, ultra…), sin una lista fija en GitCron. Fuente
 | Antigravity 1.2.13 | `agy models` (id y nombre; algunos ya traen el nivel en el id: `gemini-3.8-flash-high`) | `--effort low\|medium\|high\|max` | `--effort` |
 | OpenCode 2.0.20 | `opencode models` | variantes del modelo | `-m proveedor/modelo#variante` |
 | Servidores con la API de OpenAI | `GET /models` y el archivo | `reasoning_effort` del estándar (minimal, low, medium, high) | cuerpo del pedido |
-| Claude Code 2.1.284 | por medir | por medir | por medir |
+| Claude Code 2.1.284 | sin orden para listar: alias `fable`, `opus`, `sonnet`, `haiku` o el nombre completo (`modelUsage` de la salida JSON trae el que respondió) | `--effort low|medium|high|xhigh|max`, la misma lista para todo modelo; no declara el de por omisión | `--effort` |
+
+*Medido el 2026-10-02 (antes de 4.5):* capturas recortadas en `electron/__tests__/fixtures/modelos-en-casa/`. Codex
+hoy trae seis modelos, cuatro con `visibility: "list"`; `gpt-5.6-sol` viene por omisión en `low`. La caché ya no
+tiene `gpt-6.1-sol` (el catálogo se actualizó); la captura de la caché lo conserva con la forma del 2026-10-01
+para probar que un modelo de la caché que la cuenta no admite no se ofrece. En Claude Code un nivel desconocido
+no falla: avisa por stderr, usa el de por omisión y contesta, así que GitCron no puede mandar uno que no esté en
+la lista. `opencode models` (2.0.20) no imprime nada fuera de una terminal, ni con `--standalone`: OpenCode no
+corre usos de texto (D13), así que su lista queda para el lanzador del agente de SDD (grupo 5).
 
 GitCron muestra, para el modelo elegido, sólo los niveles que esa herramienta declara para ese modelo, con su
 nivel por omisión marcado; un nivel que el modelo no admite no se ofrece. La elección se guarda en

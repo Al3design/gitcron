@@ -12,10 +12,11 @@
 //                                  diff --check, trampas. Crece con el cambio, no con la
 //                                  app: 17 s por un panel, 75 s si se tocan los textos
 //                                  (lib/i18n.ts lo importa casi todo).
-//   pnpm verificar --rapido        arreglos que tocan piezas centrales: toda la suite una
-//                                  vez, sin build.
-//   pnpm verificar                 cierre de tanda, su auditoría y antes de fusionar:
-//                                  build, test ×2 y todo lo demás.
+//   pnpm verificar --rapido        cierre de la IA ejecutora y arreglos que tocan piezas
+//                                  centrales: toda la suite una vez, sin build (~2 min).
+//   pnpm verificar                 auditoría antes del commit y antes de fusionar: build,
+//                                  test ×2 y todo lo demás (~5 min). Ale, 2026-10-02: el
+//                                  ejecutor y la auditoría corrían los dos la completa.
 //
 //   --desde <ref>                  compara contra <ref> en vez de HEAD (p. ej. `--desde main`
 //                                  para todo el change, o `--desde HEAD~2` después de commitear)
