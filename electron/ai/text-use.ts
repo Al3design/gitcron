@@ -160,9 +160,12 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
         ...repoFileFor(resolved, `options.${k}`),
       };
     }
+    const effort = typeof resolved.options?.reasoning_effort === 'string'
+      ? resolved.options.reasoning_effort
+      : undefined;
     const effectiveReq: CommitAiLastRequest = {
       kind: 'cli',
-      endpoint: describeCliTextCommand(cli, resolved.modelId),
+      endpoint: describeCliTextCommand(cli, resolved.modelId, effort),
       model: modelProvenance,
       parameters: cliParams,
       headers: [],
@@ -173,6 +176,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
     const result = await runCliText({
       cli,
       model: resolved.modelId,
+      effort,
       prompt: `${req.system}\n\n${req.user}`,
       signal: req.signal,
       timeoutMs: req.timeoutMs,

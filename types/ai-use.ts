@@ -85,3 +85,49 @@ export interface AiLoadTarget {
   use?: AiTextUse;
   repoPath?: string | null;
 }
+
+export interface AiToolModel {
+  id: string;
+  name?: string;
+  supportedLevels?: string[];
+  defaultLevel?: string;
+  variants?: string[];
+}
+
+export interface AiToolProvider {
+  id: string;
+  name: string;
+  kind: 'cli' | 'openai-compatible' | 'anthropic';
+  available: boolean;
+  unavailableReason?: string;
+  models: AiToolModel[];
+}
+
+export interface AiUseCurrentChoice {
+  providerId: string;
+  modelId: string;
+  fullModelRef: string;
+  effort?: string;
+  variant?: string;
+  sourceFile?: string;
+  scope?: 'global' | 'repo';
+}
+
+export interface AiUseModelsResult {
+  use: AiTextUse;
+  providers: AiToolProvider[];
+  current: AiUseCurrentChoice | null;
+}
+
+export interface AiUseChoosePayload {
+  use: AiTextUse;
+  repoPath?: string | null;
+  model: string;
+  effort?: string;
+  variant?: string;
+}
+
+export interface AiUseChooseResult {
+  written: boolean;
+  file: string;
+}

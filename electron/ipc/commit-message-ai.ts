@@ -875,9 +875,12 @@ export function registerCommitMessageAiHandlers(): void {
                   };
                 }
 
+                const effort = typeof resolved.options?.reasoning_effort === 'string'
+                  ? resolved.options.reasoning_effort
+                  : undefined;
                 lastCommitAiRequest = {
                   kind: 'cli',
-                  endpoint: describeCliTextCommand(cli, effectiveModel),
+                  endpoint: describeCliTextCommand(cli, effectiveModel, effort),
                   model: modelProvenance,
                   parameters: cliParams,
                   headers: [],
@@ -888,6 +891,7 @@ export function registerCommitMessageAiHandlers(): void {
                 return await draftCommitWithCli({
                   cli,
                   model: effectiveModel,
+                  effort,
                   prompt: `${SYSTEM_PROMPT}\n\n${user}`,
                   signal: sig,
                   onChunk: (chunks) => pump.push(chunks),

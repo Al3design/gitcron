@@ -99,3 +99,20 @@
   border-color: var(--color-text-primary);
   color: var(--color-text-primary);
 }
+
+.chooseModel {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-ai) 60%, transparent);
+  border-radius: var(--radius-default);
+  background: transparent;
+  color: var(--color-ai);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.chooseModel:hover:not(:disabled) {
+  border-color: var(--color-ai);
+  background: color-mix(in srgb, var(--color-ai) 10%, transparent);
+}

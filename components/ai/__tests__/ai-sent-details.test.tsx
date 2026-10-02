@@ -103,4 +103,35 @@ describe('AiSentDetails', () => {
     render(<AiSentDetails request={sampleRequest} />);
     expect(screen.getByText('查看已发送内容')).toBeTruthy();
   });
+
+  it('un uso con CLI y nivel muestra el argumento del nivel en «Ver lo enviado»', async () => {
+    const cliRequest: CommitAiLastRequest = {
+      kind: 'cli',
+      endpoint: 'codex exec --model gpt-5.6-sol -c model_reasoning_effort=ultra --json',
+      model: {
+        value: 'gpt-5.6-sol',
+        provenance: 'agent.gitcron-commit.model',
+      },
+      headers: [],
+      parameters: {
+        command: {
+          value: 'codex exec --model gpt-5.6-sol -c model_reasoning_effort=ultra --json',
+          provenance: 'cli',
+        },
+        effort: {
+          value: 'ultra',
+          provenance: 'agent.gitcron-commit.options.reasoning_effort',
+        },
+      },
+      timestamp: 1775000000000,
+    };
+
+    render(<AiSentDetails request={cliRequest} />);
+    const summary = screen.getByText('Ver lo enviado');
+    fireEvent.click(summary);
+
+    const details = screen.getByTestId('ai-sent-details');
+    expect(details.textContent).toContain('-c model_reasoning_effort=ultra');
+    expect(details.textContent).toContain('ultra');
+  });
 });

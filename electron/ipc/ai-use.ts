@@ -7,16 +7,20 @@
 // Ningún canal devuelve claves ni valores de variables: sólo nombres, destino y
 // de qué archivo sale cada cosa.
 
+import * as nodeFs from 'node:fs';
 import path from 'node:path';
 import { ipcMain } from 'electron';
-import type { AiUseOffer, AiUseStatus } from '../../types/ai-use';
+import { findNodeAtLocation, parseTree } from 'jsonc-parser';
+import type { AiUseChooseResult, AiUseModelsResult, AiUseOffer, AiUseStatus } from '../../types/ai-use';
 import { getCartoAISettings } from '../ai/carto';
 import { GitCronConfigError, loadGitCronConfig } from '../ai/config/gitcron-config';
 import type { MigrationSources } from '../ai/config/gitcron-config-migration';
+import { updateGitCronConfigValue } from '../ai/config/gitcron-config-writer';
 import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../ai/config/legacy-choice';
 import { detectCanLoad } from '../ai/config/provider-models';
 import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
-import { hasKey } from '../ai/key-store';
+import { getToolModelsForUse } from '../ai/config/tool-models';
+import { getStoredEnvVar, hasKey } from '../ai/key-store';
 import { getLastRequestForUse } from '../ai/text-use';
 import { activeConfigPath, loadServerFor, resolveForUse } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
@@ -141,6 +145,152 @@ export function registerAiUseHandlers(): void {
         ? (getLastRequestForUse(use) ?? getLastCommitAiRequest())
         : getLastRequestForUse(use);
       return ok(req);
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-use:models', async (_e, args: unknown): Promise<Result<AiUseModelsResult>> => {
+    try {
+      const { use, repoPath } = parseArgs(args);
+      const res = await getToolModelsForUse({
+        use,
+        repoPath: repoPath ? authorizedRepoRoot(repoPath) : null,
+        configPath: activeConfigPath(),
+        stored: getStoredEnvVar,
+      });
+      return ok(res);
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-use:choose', async (_e, args: unknown): Promise<Result<AiUseChooseResult>> => {
+    try {
+      const { use, repoPath } = parseArgs(args);
+      const raw = (args ?? {}) as { model?: unknown; effort?: unknown; variant?: unknown };
+      const model = typeof raw.model === 'string' ? raw.model.trim() : '';
+      if (!model) throw new Error('Debe especificar un modelo.');
+
+      const slashIdx = model.indexOf('/');
+      if (slashIdx === -1) {
+        throw new Error('El modelo debe especificarse en formato <proveedor>/<modelo>.');
+      }
+      const providerId = model.slice(0, slashIdx);
+      const modelId = model.slice(slashIdx + 1);
+
+      const effort = typeof raw.effort === 'string' && raw.effort.trim() ? raw.effort.trim() : undefined;
+      const variant = typeof raw.variant === 'string' && raw.variant.trim() ? raw.variant.trim() : undefined;
+
+      const toolModels = await getToolModelsForUse({
+        use,
+        repoPath: repoPath ? authorizedRepoRoot(repoPath) : null,
+        configPath: activeConfigPath(),
+        stored: getStoredEnvVar,
+      });
+
+      const provider = toolModels.providers.find((p) => p.id === providerId);
+      if (!provider || !provider.available) {
+        throw new Error(`El proveedor «${providerId}» no existe o no está disponible${provider?.unavailableReason ? ` (${provider.unavailableReason})` : ''}.`);
+      }
+
+      const modelEntry = provider.models.find((m) => m.id === modelId);
+      if (!modelEntry) {
+        throw new Error(`El modelo «${modelId}» no está en la lista de ${provider.name}.`);
+      }
+
+      if (effort !== undefined) {
+        if (!/^[a-z]+$/.test(effort)) {
+          throw new Error(`El nivel de razonamiento «${effort}» no es válido.`);
+        }
+        if (!modelEntry.supportedLevels?.includes(effort)) {
+          throw new Error(`El nivel «${effort}» no está admitido para el modelo «${modelId}».`);
+        }
+      }
+
+      if (variant !== undefined) {
+        if (!modelEntry.variants?.includes(variant)) {
+          throw new Error(`La variante «${variant}» no está admitida para el modelo «${modelId}».`);
+        }
+      }
+
+      // Determinar archivo destino (D2)
+      const globalPath = activeConfigPath();
+      const repo = repoPath ? authorizedRepoRoot(repoPath) : null;
+      const loaded = loadGitCronConfig({ globalPath, repoPath: repo });
+
+      let targetFile = globalPath;
+      const repoFile = loaded.files.find((f) => f.scope === 'repo');
+      if (repo && repoFile?.exists && repoFile.path) {
+        if (loaded.originOf(['agent', use]) === repoFile.path) {
+          targetFile = repoFile.path;
+        }
+      }
+
+      // Escribir modelo puntual
+      let res = updateGitCronConfigValue({
+        filePath: targetFile,
+        segments: ['agent', use, 'model'],
+        value: model,
+      });
+      if (!res.ok) {
+        throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+      }
+
+      // Escribir o borrar variante
+      res = updateGitCronConfigValue({
+        filePath: targetFile,
+        segments: ['agent', use, 'variant'],
+        value: variant || undefined,
+      });
+      if (!res.ok) {
+        throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+      }
+
+      // Escribir o borrar nivel de razonamiento
+      if (effort) {
+        res = updateGitCronConfigValue({
+          filePath: targetFile,
+          segments: ['agent', use, 'options', 'reasoning_effort'],
+          value: effort,
+        });
+        if (!res.ok) {
+          throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+        }
+      } else {
+        // Quitar reasoning_effort sin dejar options vacío
+        try {
+          if (nodeFs.existsSync(targetFile)) {
+            const content = nodeFs.readFileSync(targetFile, 'utf8');
+            const root = parseTree(content);
+            const optionsNode = root ? findNodeAtLocation(root, ['agent', use, 'options']) : null;
+            if (optionsNode && optionsNode.type === 'object') {
+              const props = optionsNode.children ?? [];
+              const remainingProps = props.filter((prop) => {
+                const keyNode = prop.children?.[0];
+                return keyNode?.value !== 'reasoning_effort';
+              });
+              if (remainingProps.length === 0) {
+                res = updateGitCronConfigValue({
+                  filePath: targetFile,
+                  segments: ['agent', use, 'options'],
+                  value: undefined,
+                });
+              } else {
+                res = updateGitCronConfigValue({
+                  filePath: targetFile,
+                  segments: ['agent', use, 'options', 'reasoning_effort'],
+                  value: undefined,
+                });
+              }
+            }
+          }
+        } catch {
+          // Continuar si la lectura falla
+        }
+      }
+
+      return ok({ written: true, file: targetFile });
     } catch (error) {
       return fail(error);
     }

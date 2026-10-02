@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
 import type { AiTextUse, AiUseDestination, AiUseStatus } from '@/types/ai-use';
+import { AiModelPicker } from './AiModelPicker';
 import styles from './AiUseLine.module.css';
 
 interface Props {
@@ -33,6 +34,7 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
   const [status, setStatus] = useState<AiUseStatus | null>(null);
   const [adopting, setAdopting] = useState(false);
   const [adoptError, setAdoptError] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   // Sube cuando hay que volver a preguntar: cambió un gitcron.json o se escribió.
   const [version, setVersion] = useState(0);
@@ -107,23 +109,37 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
         {status.destination === 'external-service' && (
           <p className={styles.externalNotice}>{t('aiUse.externalNotice', { provider: status.providerName })}</p>
         )}
-        {(() => {
-          const dir = status.sourceDir;
-          if (!dir) return null;
-          return (
-            <div className={styles.actionRow}>
-              <button
-                type="button"
-                className={styles.showInFolder}
-                onClick={() => {
-                  window.api?.shellOpenPath?.(dir);
-                }}
-              >
-                {t('aiUse.showInFolder')}
-              </button>
-            </div>
-          );
-        })()}
+        <div className={styles.actionRow}>
+          <button
+            type="button"
+            className={styles.chooseModel}
+            onClick={() => setShowPicker((v) => !v)}
+          >
+            {t('aiUse.chooseModel')}
+          </button>
+          {status.sourceDir && (
+            <button
+              type="button"
+              className={styles.showInFolder}
+              onClick={() => {
+                window.api?.shellOpenPath?.(status.sourceDir);
+              }}
+            >
+              {t('aiUse.showInFolder')}
+            </button>
+          )}
+        </div>
+        {showPicker && (
+          <AiModelPicker
+            use={use}
+            repoPath={repoPath}
+            onClose={() => setShowPicker(false)}
+            onSaved={() => {
+              setShowPicker(false);
+              setVersion((v) => v + 1);
+            }}
+          />
+        )}
         {!status.available && status.unavailableReason && (
           <p className={styles.problem} role="alert">{status.unavailableReason}</p>
         )}
@@ -141,8 +157,15 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
     return (
       <div className={styles.block}>
         <p className={styles.line}>{t('aiUse.disabled')}</p>
-        {dir && (
-          <div className={styles.actionRow}>
+        <div className={styles.actionRow}>
+          <button
+            type="button"
+            className={styles.chooseModel}
+            onClick={() => setShowPicker((v) => !v)}
+          >
+            {t('aiUse.chooseModel')}
+          </button>
+          {dir && (
             <button
               type="button"
               className={styles.showInFolder}
@@ -152,7 +175,18 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
             >
               {t('aiUse.showInFolder')}
             </button>
-          </div>
+          )}
+        </div>
+        {showPicker && (
+          <AiModelPicker
+            use={use}
+            repoPath={repoPath}
+            onClose={() => setShowPicker(false)}
+            onSaved={() => {
+              setShowPicker(false);
+              setVersion((v) => v + 1);
+            }}
+          />
         )}
       </div>
     );
@@ -166,18 +200,41 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
   return (
     <div className={styles.block}>
       <p className={styles.line}>{withSelector ? t('aiUse.unsetScreen') : t('aiUse.unset')}</p>
-      {status.offer ? (
-        <p className={styles.offer}>
-          <button type="button" className={styles.adopt} disabled={adopting} onClick={() => { void adopt(); }}>
-            {adopting ? t('aiUse.adopting') : t('aiUse.adopt', { label: status.offer.label })}
+      <div className={styles.actionRow}>
+        {!withSelector && (
+          <button
+            type="button"
+            className={styles.chooseModel}
+            onClick={() => setShowPicker((v) => !v)}
+          >
+            {t('aiUse.chooseModel')}
           </button>
-          <span className={styles.note}>
-            {status.offer.addsProvider
-              ? t('aiUse.adoptNoteProvider', { file: status.offer.file, provider: status.offer.addsProvider })
-              : t('aiUse.adoptNote', { file: status.offer.file })}
-          </span>
-        </p>
-      ) : withSelector ? null : (
+        )}
+        {status.offer && (
+          <p className={styles.offer}>
+            <button type="button" className={styles.adopt} disabled={adopting} onClick={() => { void adopt(); }}>
+              {adopting ? t('aiUse.adopting') : t('aiUse.adopt', { label: status.offer.label })}
+            </button>
+            <span className={styles.note}>
+              {status.offer.addsProvider
+                ? t('aiUse.adoptNoteProvider', { file: status.offer.file, provider: status.offer.addsProvider })
+                : t('aiUse.adoptNote', { file: status.offer.file })}
+            </span>
+          </p>
+        )}
+      </div>
+      {showPicker && !withSelector && (
+        <AiModelPicker
+          use={use}
+          repoPath={repoPath}
+          onClose={() => setShowPicker(false)}
+          onSaved={() => {
+            setShowPicker(false);
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
+      {!status.offer && !withSelector && (
         <p className={styles.note}>{t('aiUse.unsetHint', { use })}</p>
       )}
       {adoptError && <p className={styles.problem} role="alert">{adoptError}</p>}

@@ -221,6 +221,10 @@ contextBridge.exposeInMainWorld('api', {
   aiUse: {
     status: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
       ipcRenderer.invoke('ai-use:status', args),
+    models: (args: { use: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-use:models', args),
+    choose: (args: { use: string; repoPath?: string | null; model: string; effort?: string; variant?: string }) =>
+      ipcRenderer.invoke('ai-use:choose', args),
     adopt: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
       ipcRenderer.invoke('ai-use:adopt', args),
     lastRequest: (args: { use: string }) =>

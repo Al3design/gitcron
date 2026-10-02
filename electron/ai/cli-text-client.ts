@@ -77,6 +77,18 @@ export function cliExecutable(cli: CliTextId): string {
   return CLI_EXECUTABLE[cli];
 }
 
+export const CLI_EFFORT_LEVELS: Record<CliTextId, readonly string[]> = {
+  codex: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const,
+  'claude-code': ['low', 'medium', 'high', 'xhigh', 'max'] as const,
+  antigravity: ['low', 'medium', 'high', 'max'] as const,
+};
+
+export function isValidCliEffort(cli: CliTextId, effort?: string): effort is string {
+  if (!effort || typeof effort !== 'string') return false;
+  if (!/^[a-z]+$/.test(effort)) return false;
+  return CLI_EFFORT_LEVELS[cli].includes(effort);
+}
+
 /**
  * Los argumentos de Codex. Exportados para que «Ver lo enviado» muestre los
  * mismos que corren y no una copia que se desactualice.
@@ -88,8 +100,8 @@ export function cliExecutable(cli: CliTextId): string {
  * con los dos, 12 556 y sin avisos. La sesión de la cuenta sigue andando
  * (vive en `CODEX_HOME`, no en el archivo).
  */
-export function buildCodexTextArgs(model: string): string[] {
-  return [
+export function buildCodexTextArgs(model: string, effort?: string): string[] {
+  const args = [
     'exec',
     '--json',
     '--sandbox',
@@ -98,10 +110,12 @@ export function buildCodexTextArgs(model: string): string[] {
     '--ephemeral',
     '--ignore-user-config',
     '--ignore-rules',
-    '-m',
-    model,
-    '-',
   ];
+  if (isValidCliEffort('codex', effort)) {
+    args.push('-c', `model_reasoning_effort=${effort}`);
+  }
+  args.push('-m', model, '-');
+  return args;
 }
 
 /**
@@ -109,8 +123,8 @@ export function buildCodexTextArgs(model: string): string[] {
  * CLAUDE.md, skills ni MCP de la persona: con ellos, la misma línea costó 131 mil
  * tokens (D6). `--bare` no sirve: ignora la sesión de suscripción.
  */
-export function buildClaudeTextArgs(model: string): string[] {
-  return [
+export function buildClaudeTextArgs(model: string, effort?: string): string[] {
+  const args = [
     '-p',
     '--output-format',
     'json',
@@ -119,14 +133,17 @@ export function buildClaudeTextArgs(model: string): string[] {
     '--setting-sources=',
     '--strict-mcp-config',
     '--disable-slash-commands',
-    '--model',
-    model,
   ];
+  if (isValidCliEffort('claude-code', effort)) {
+    args.push('--effort', effort);
+  }
+  args.push('--model', model);
+  return args;
 }
 
 /** Antigravity en modo plan, con el pedido por stdin en su formato de eventos. */
-export function buildAntigravityTextArgs(model: string, timeoutMs: number): string[] {
-  return [
+export function buildAntigravityTextArgs(model: string, timeoutMs: number, effort?: string): string[] {
+  const args = [
     '-p=',
     '--input-format',
     'stream-json',
@@ -134,11 +151,17 @@ export function buildAntigravityTextArgs(model: string, timeoutMs: number): stri
     'stream-json',
     '--mode',
     'plan',
+  ];
+  if (isValidCliEffort('antigravity', effort)) {
+    args.push('--effort', effort);
+  }
+  args.push(
     '--model',
     model,
     '--print-timeout',
     `${Math.max(1, Math.ceil(timeoutMs / 1000))}s`,
-  ];
+  );
+  return args;
 }
 
 export function buildAntigravityStdin(prompt: string): string {
@@ -151,24 +174,35 @@ export interface CliTextCommand {
   stdin: string;
 }
 
-export function buildCliTextCommand(cli: CliTextId, model: string, prompt: string, timeoutMs: number): CliTextCommand {
+export function buildCliTextCommand(
+  cli: CliTextId,
+  model: string,
+  prompt: string,
+  timeoutMs: number,
+  effort?: string,
+): CliTextCommand {
   switch (cli) {
     case 'codex':
-      return { executable: CLI_EXECUTABLE.codex, args: buildCodexTextArgs(model), stdin: prompt };
+      return { executable: CLI_EXECUTABLE.codex, args: buildCodexTextArgs(model, effort), stdin: prompt };
     case 'claude-code':
-      return { executable: CLI_EXECUTABLE['claude-code'], args: buildClaudeTextArgs(model), stdin: prompt };
+      return { executable: CLI_EXECUTABLE['claude-code'], args: buildClaudeTextArgs(model, effort), stdin: prompt };
     case 'antigravity':
       return {
         executable: CLI_EXECUTABLE.antigravity,
-        args: buildAntigravityTextArgs(model, timeoutMs),
+        args: buildAntigravityTextArgs(model, timeoutMs, effort),
         stdin: buildAntigravityStdin(prompt),
       };
   }
 }
 
 /** La orden como se muestra en «Ver lo enviado» (D14), sin el pedido. */
-export function describeCliTextCommand(cli: CliTextId, model: string, timeoutMs = DEFAULT_CLI_TIMEOUT_MS): string {
-  const { executable, args } = buildCliTextCommand(cli, model, '', timeoutMs);
+export function describeCliTextCommand(
+  cli: CliTextId,
+  model: string,
+  effort?: string,
+  timeoutMs = DEFAULT_CLI_TIMEOUT_MS,
+): string {
+  const { executable, args } = buildCliTextCommand(cli, model, '', timeoutMs, effort);
   return [executable, ...args].join(' ');
 }
 
@@ -182,6 +216,7 @@ export interface CliTextOptions {
   cli: CliTextId;
   model: string;
   prompt: string;
+  effort?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
   onChunk?: (chunks: DraftChunk[]) => void;
@@ -421,7 +456,7 @@ export async function runCliText(options: CliTextOptions): Promise<CliTextResult
   }
   if (signal?.aborted) return { status: 'failed', reason: 'cancelled', detail: 'Cancelado.' };
 
-  const command = buildCliTextCommand(cli, model, prompt, timeoutMs);
+  const command = buildCliTextCommand(cli, model, prompt, timeoutMs, options.effort);
   let resolution: RuntimeExecutableResolution;
   try {
     resolution = await resolveExecutable(command.executable, process.env);

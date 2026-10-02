@@ -147,6 +147,8 @@ export interface ResolvedUse {
    * envían como están y se avisa, con el lugar del archivo donde corregirlos.
    */
   paramWarnings?: ParamWarning[];
+  /** Variante elegida en agent.<uso>.variant (D4). */
+  variant?: string;
 }
 
 export interface ParamWarning extends StandardParamIssue {
@@ -939,6 +941,7 @@ export function resolveUse(
       },
       ...varsOf(),
       ...warningsOf(),
+      ...(variantName ? { variant: variantName } : {}),
     };
   }
 
@@ -975,5 +978,6 @@ export function resolveUse(
     },
     ...varsOf(),
     ...warningsOf(),
+    ...(variantName ? { variant: variantName } : {}),
   };
 }

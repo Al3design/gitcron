@@ -31,6 +31,7 @@ export interface CliDraftOptions {
   cli: CliTextId;
   model: string;
   prompt: string;
+  effort?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
   onChunk?: (chunks: DraftChunk[]) => void;

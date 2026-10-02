@@ -365,6 +365,24 @@ describe('4.4 el pedido efectivo de cada uso (D14)', () => {
       expect(getLastRequestForUse('gitcron-temporal')).toBeNull();
     });
   }
+
+  it('cli con nivel de razonamiento: lo guardado muestra el argumento del nivel', async () => {
+    write({
+      agent: {
+        'gitcron-cartography': {
+          model: 'codex/gpt-5.6-sol',
+          options: { reasoning_effort: 'ultra' },
+        },
+      },
+    });
+    clearLastRequestsForTesting();
+    const fake = cli('ok');
+    await runTextUse(resolveFor('gitcron-cartography'), { system: 'sys', user: 'user' }, fake.deps);
+
+    const saved = getLastRequestForUse('gitcron-cartography')!;
+    expect(saved.kind).toBe('cli');
+    expect(saved.endpoint).toContain('-c model_reasoning_effort=ultra');
+  });
 });
 
 describe('4.4 el servidor donde se cargan modelos, por uso', () => {
