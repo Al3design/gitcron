@@ -1,7 +1,7 @@
 /**
  * Catálogo de descripciones de herramientas de OpenSpec para GitCron (D4).
  *
- * Fuente: medición 1.2 en openspec/changes/actualizar-ciclo-openspec-1-14/mediciones/descripciones.md
+ * Fuente: medición 1.2 en openspec/changes/archive/2026-10-01-actualizar-ciclo-openspec-1-14/mediciones/descripciones.md
  * investigada el 2026-10-01 sobre la lista de OpenSpec 1.14.0.
  *
  * REGLA: Los textos se copian tal cual fueron verificados en la medición.

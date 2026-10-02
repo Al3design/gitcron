@@ -240,7 +240,7 @@ async function main() {
   }
 
   const measurementsCandidatePaths = [
-    path.resolve('openspec', 'changes', 'actualizar-ciclo-openspec-1-14', 'mediciones', 'herramientas-por-version.json'),
+    path.resolve('openspec', 'changes', 'archive', '2026-10-01-actualizar-ciclo-openspec-1-14', 'mediciones', 'herramientas-por-version.json'),
     path.resolve('mediciones', 'herramientas-por-version.json'),
   ];
   let initialMeasurements = null;
