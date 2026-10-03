@@ -51,12 +51,12 @@ export function toResponse(text: string, provider: string): CartoAIResponse {
 }
 
 /** Lanza si el uso no tiene modelo, está apagado o su proveedor no está disponible. */
-export function createCartoProvider(target: ResolvedModelFor, deps: TextUseDeps = {}): CartoAIProvider {
+export function createCartoProvider(target: ResolvedModelFor, deps: TextUseDeps = {}, repoPath?: string | null): CartoAIProvider {
   const { resolved } = requireResolved(target);
   const tag = `${resolved.providerId}:${resolved.modelId}`;
 
   async function run(system: string, user: string): Promise<CartoAIResponse> {
-    const { text, finishReason } = await runTextUse(target, { system, user, timeoutMs: CARTO_TIMEOUT_MS }, deps);
+    const { text, finishReason } = await runTextUse(target, { system, user, timeoutMs: CARTO_TIMEOUT_MS, repoPath }, deps);
     if (!text) {
       if (finishReason === 'length') throw new Error(`${modelLabel(resolved)}: respuesta cortada (max_tokens muy bajo)`);
       throw new Error(`${modelLabel(resolved)}: respuesta vacía del modelo`);

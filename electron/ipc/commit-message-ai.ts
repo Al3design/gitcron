@@ -21,11 +21,13 @@ import type {
   CommitDraftResult,
   DraftChunk,
   DraftStateEvent,
+  DraftUsage,
   HeaderProvenance,
   LoadOutcome,
   LocalModel,
   ParameterProvenance,
 } from '../../types/commit-message-ai';
+import { recordAiUse, type AiUseResultStatus } from '../db/ai-use-history';
 import { createChunkPump } from '../ai/commit-message/chunk-pump';
 import { draftCommitWithCli, type ResolveExecutableFunction, type SpawnFunction } from '../ai/commit-message/codex-cli';
 import { describeCliTextCommand, type CliTextId } from '../ai/cli-text-client';
@@ -92,7 +94,7 @@ interface QueuedDraftItem {
   repoPath: string;
   sender: Electron.WebContents;
   controller: AbortController;
-  run: (signal: AbortSignal) => Promise<Result<CommitDraftResult>>;
+  run: (signal: AbortSignal, startedAt: number) => Promise<Result<CommitDraftResult>>;
   resolve: (res: Result<CommitDraftResult>) => void;
   status: 'queued' | 'running' | 'completed' | 'cancelled';
 }
@@ -134,7 +136,7 @@ async function startQueueItem(item: QueuedDraftItem): Promise<void> {
     if (item.controller.signal.aborted) {
       result = ok({ status: 'unavailable', detail: 'Redacción cancelada.' });
     } else {
-      result = await item.run(item.controller.signal);
+      result = await item.run(item.controller.signal, startedAt);
     }
   } catch (error) {
     result = ok(toUnavailable(error));
@@ -784,9 +786,19 @@ export function registerCommitMessageAiHandlers(): void {
     draftId: string | null,
     effectiveModel: string,
     signal: AbortSignal,
+    repoPath: string,
+    resolved: ResolvedUse,
+    user: string,
+    startedAt: number,
     runner: (signal: AbortSignal, pump: { push: (chunks: DraftChunk[]) => void }) => Promise<CommitDraftResult>,
   ): Promise<Result<CommitDraftResult>> {
+    let capturedUsage: DraftUsage | null = null;
     const pump = createChunkPump((chunks) => {
+      for (const c of chunks) {
+        if (c.kind === 'done' && c.usage) {
+          capturedUsage = c.usage;
+        }
+      }
       if (sender.isDestroyed()) return;
       sender.send('commit-ai:chunk', { draftId, chunks });
     });
@@ -801,8 +813,53 @@ export function registerCommitMessageAiHandlers(): void {
     }
 
     if (result.status === 'drafted' && !isConventionalSubject(result.subject)) {
-      return ok({ status: 'malformed', subject: result.subject, model: effectiveModel });
+      result = { status: 'malformed', subject: result.subject, model: effectiveModel };
     }
+
+    const finishedAt = Date.now();
+    const durationMs = Math.max(0, finishedAt - startedAt);
+
+    let resultStatus: AiUseResultStatus;
+    let resultText: string | null = null;
+
+    if (result.status === 'drafted') {
+      resultStatus = 'generated';
+      resultText = result.subject;
+    } else if (result.status === 'malformed') {
+      resultStatus = 'malformed';
+      resultText = result.subject;
+    } else if (result.status === 'no-answer') {
+      resultStatus = 'no-answer';
+      resultText = null;
+    } else {
+      const isCancelled = signal.aborted || /cancelad/i.test(result.detail);
+      resultStatus = isCancelled ? 'cancelled' : 'failed';
+      resultText = result.detail;
+    }
+
+    const recordId = recordAiUse({
+      repoPath,
+      use: 'gitcron-commit',
+      startedAt,
+      endedAt: finishedAt,
+      durationMs,
+      family: resolved.kind,
+      providerId: resolved.providerId,
+      providerName: resolved.providerName,
+      modelId: effectiveModel,
+      reasoningEffort: typeof resolved.options?.reasoning_effort === 'string' ? resolved.options.reasoning_effort : null,
+      variant: resolved.variant ?? null,
+      effectiveRequest: lastCommitAiRequest!,
+      promptSent: `${SYSTEM_PROMPT}\n\n${user}`,
+      resultStatus,
+      resultText,
+      usage: capturedUsage,
+    });
+
+    if (recordId) {
+      result.recordId = recordId;
+    }
+
     return ok(result);
   }
 
@@ -821,7 +878,7 @@ export function registerCommitMessageAiHandlers(): void {
           repoPath,
           sender: _e.sender,
           controller,
-          run: async (signal) => {
+          run: async (signal, startedAt) => {
             // La redacción usa lo que dice gitcron.json (4.3): la entrada del uso o la
             // elección general. Sin modelo no hay a quién mandar el diff: no se cae a
             // ningún servidor fijo, y la pantalla ofrece escribir el elegido (D7).
@@ -850,7 +907,16 @@ export function registerCommitMessageAiHandlers(): void {
               resolved.contextLength ?? MIN_CONTEXT_LENGTH,
             );
 
-            return await runDraftWithPump(_e.sender, effectiveDraftId, effectiveModel, signal, async (sig, pump) => {
+            return await runDraftWithPump(
+              _e.sender,
+              effectiveDraftId,
+              effectiveModel,
+              signal,
+              repoPath,
+              resolved,
+              user,
+              startedAt,
+              async (sig, pump) => {
               const modelProvenance = {
                 value: effectiveModel,
                 provenance: resolved.provenance.model,

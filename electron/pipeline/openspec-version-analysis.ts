@@ -472,6 +472,7 @@ export async function draftVersionRedaction(
   deps: {
     /** El uso `gitcron-openspec-analysis` resuelto de gitcron.json (tarea 4.3). */
     target: ResolvedModelFor;
+    repoPath?: string | null;
     textDeps?: TextUseDeps;
     signal?: AbortSignal;
     onChunk?: (chunks: DraftChunk[]) => void;
@@ -546,6 +547,7 @@ export async function draftVersionRedaction(
         maxTokens: 900,
         signal: deps.signal,
         onChunk: deps.onChunk,
+        repoPath: deps.repoPath,
       },
       deps.textDeps,
     );
@@ -739,6 +741,7 @@ export async function analyzeOpenSpecVersion(
   const redaction: VersionAnalysisRedaction =
     deps?.model && deps.model.trim().length > 0
       ? await draftVersionRedaction(measured, {
+          repoPath,
           target: deps.target ?? resolveForUse('gitcron-openspec-analysis', repoPath, deps.model.trim()),
           textDeps: deps.textDeps,
           signal: deps?.signal,

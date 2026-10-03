@@ -37,6 +37,32 @@ export const useWorkingTreeActions = () => {
       }
       const result = await window.api.gitCommand(repoPath, ['commit', '-m', commitMessage]);
       if (result.success) {
+        const store = useGitStore.getState();
+        const currentRepo = store.openRepos.find((r) => r.path === repoPath);
+        const aiDraftRecord = currentRepo?.aiDraftRecord;
+        if (aiDraftRecord?.recordId && window.api?.aiUseHistory?.linkCommit) {
+          let commitHash: string | null = null;
+          if (result.data) {
+            try {
+              const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+              if (parsed && typeof parsed.commit === 'string') {
+                commitHash = parsed.commit;
+              }
+            } catch {
+              // ignore json parse error
+            }
+          }
+          if (commitHash) {
+            const commitEdited = commitMessage.trim() !== aiDraftRecord.originalSubject.trim();
+            await window.api.aiUseHistory.linkCommit({
+              repoPath,
+              recordId: aiDraftRecord.recordId,
+              commitHash,
+              edited: commitEdited,
+            }).catch(() => undefined);
+          }
+        }
+        store.updateRepoByPath(repoPath, { aiDraftRecord: null });
         setCommitMessage('');
         setSuccess('Commit realizado correctamente');
         await refreshStatus();

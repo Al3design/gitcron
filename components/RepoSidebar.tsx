@@ -527,6 +527,7 @@ export function RepoSidebar({
     { key: 'Graph', label: t('tab.graph'), icon: <GitMerge size={14} />, shortcut: 'Ctrl + G' },
     { key: 'History', label: t('tab.history'), icon: <RotateCcw size={14} />, shortcut: 'Ctrl + H' },
     { key: 'Pipeline', label: t('tab.pipeline'), icon: <Zap size={14} />, shortcut: 'Ctrl + Shift + O' },
+    { key: 'AiHistory', label: t('tab.aiHistory'), icon: <Sparkles size={14} /> },
   ];
   const currentView = viewOptions.find((v) => v.key === activeTab) ?? viewOptions[0];
 

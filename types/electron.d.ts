@@ -445,6 +445,15 @@ interface ElectronAPI {
     lastRequest(args: { use: import('./ai-use').AiTextUse }): Promise<GitResult<import('./commit-message-ai').CommitAiLastRequest | null>>;
   };
   /**
+   * Historial de usos de IA por repositorio (tarea 4.6, D19).
+   */
+  aiUseHistory?: {
+    list(args: ListAiUseHistoryArgs): Promise<GitResult<ListAiUseHistoryResult>>;
+    get(args: { repoPath: string; id: string }): Promise<GitResult<AiUseHistoryDetail | null>>;
+    clear(args: { repoPath: string }): Promise<GitResult<{ cleared: number }>>;
+    linkCommit(args: { repoPath: string; recordId: string; commitHash: string; edited: boolean }): Promise<GitResult<{ linked: boolean }>>;
+  };
+  /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve
    * SIEMPRE el contrato normalizado (lib/carto-types), nunca la forma cruda del motor.
    * Las queries devuelven `data: null` mientras el índice no esté `ready`.
@@ -714,4 +723,53 @@ declare global {
   interface Window {
     api: ElectronAPI;
   }
+}
+
+export type AiUseResultStatus = 'generated' | 'no-answer' | 'malformed' | 'failed' | 'cancelled';
+
+export interface AiUseHistoryItem {
+  id: string;
+  repoPath: string;
+  branch: string | null;
+  deviceId: string;
+  /** El nombre de la máquina; puede faltar. */
+  deviceLabel: string | null;
+  use: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  family: 'openai-compatible' | 'anthropic' | 'cli';
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  reasoningEffort: string | null;
+  variant: string | null;
+  resultStatus: AiUseResultStatus;
+  resultText: string | null;
+  promptTokens: number | null;
+  cachedPromptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  commitHash: string | null;
+  commitEdited: boolean | null;
+  promptSentBytes: number;
+  createdAt: string;
+}
+
+export interface AiUseHistoryDetail extends AiUseHistoryItem {
+  effectiveRequest: import('./commit-message-ai').CommitAiLastRequest;
+  promptSent: string;
+}
+
+export interface ListAiUseHistoryArgs {
+  repoPath: string;
+  use?: string;
+  resultStatus?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListAiUseHistoryResult {
+  items: AiUseHistoryItem[];
+  total: number;
 }

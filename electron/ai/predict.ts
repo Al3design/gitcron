@@ -247,14 +247,14 @@ function safeHost(url: string): string {
 }
 
 /** El proveedor del uso `gitcron-temporal`, por el camino común de texto (4.3). */
-export function createTemporalProvider(target: ResolvedModelFor, deps: TextUseDeps = {}): AIPredictionProvider {
+export function createTemporalProvider(target: ResolvedModelFor, deps: TextUseDeps = {}, repoPath?: string | null): AIPredictionProvider {
   const label = target.status === 'resolved' ? `${target.resolved.providerName} · ${target.resolved.modelId}` : 'gitcron-temporal';
   return {
     id: target.status === 'resolved' ? target.resolved.providerId : 'gitcron-temporal',
     label,
     kind: target.status === 'resolved' && target.resolved.destination !== 'external-service' ? 'local' : 'cloud',
     async predictTimelines(prompts: AssembledPrompts): Promise<PredictionResult> {
-      const result = await runTextUse(target, { system: prompts.systemPrompt, user: prompts.userPrompt, maxTokens: 4096 }, deps);
+      const result = await runTextUse(target, { system: prompts.systemPrompt, user: prompts.userPrompt, maxTokens: 4096, repoPath }, deps);
       if (!result.text && result.finishReason === 'length') {
         throw new Error('La respuesta del modelo quedó cortada (max_tokens muy bajo).');
       }
@@ -296,7 +296,7 @@ export async function runPredictionWithInput(args: RunPredictionArgs): Promise<R
   const prompts = assemblePrompts(loadSkillText(), loadDoctrineText(), feedbackBlock, input, lang);
 
   const provider =
-    providerOverride ?? createTemporalProvider(withRepoModel(resolveForUse('gitcron-temporal', repoPath), config.model));
+    providerOverride ?? createTemporalProvider(withRepoModel(resolveForUse('gitcron-temporal', repoPath), config.model), {}, repoPath);
   const result = await provider.predictTimelines(prompts);
 
   // Tag each branch with its 1-based index from the original prediction array.

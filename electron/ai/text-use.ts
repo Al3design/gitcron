@@ -15,6 +15,7 @@ import type { ResolvedUse } from './config/gitcron-config';
 import { resolveRuntimeExecutable } from '../pipeline/runtime-adapters/process-runner';
 import { TEXT_USE_LABEL, type ModelAlternative, type ResolvedModelFor, type TextUse } from './config/resolve-model-for';
 import { buildChatCompletionsEndpoint, buildCompleteRequestBody, buildStreamRequestBody, completeText, streamText } from './text-client';
+import { recordAiUse } from '../db/ai-use-history';
 
 export type TextUseErrorReason =
   | 'unset'
@@ -49,6 +50,8 @@ export interface TextUseRequest {
   signal?: AbortSignal;
   /** Con esto, la respuesta llega de a pedazos donde la familia lo permite. */
   onChunk?: (chunks: DraftChunk[]) => void;
+  /** El repositorio del uso (si es una pestaña abierta, se registra el historial D19). */
+  repoPath?: string | null;
 }
 
 export interface TextUseResult {
@@ -136,6 +139,36 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
   const base = { label: modelLabel(resolved), providerId: resolved.providerId, modelId: resolved.modelId };
   const maxTokens = resolved.maxTokensFromModel ? resolved.maxTokens : (req.maxTokens ?? resolved.maxTokens);
   const temperature = resolved.temperature ?? req.temperature;
+  const startedAt = Date.now();
+
+  const saveHistory = (
+    resultStatus: 'generated' | 'failed' | 'cancelled',
+    resultText: string | null,
+    usage: DraftUsage | null,
+  ) => {
+    if (!req.repoPath) return;
+    const finishedAt = Date.now();
+    const effectiveReq = getLastRequestForUse(target.use);
+    if (!effectiveReq) return;
+    recordAiUse({
+      repoPath: req.repoPath,
+      use: target.use,
+      startedAt,
+      endedAt: finishedAt,
+      durationMs: Math.max(0, finishedAt - startedAt),
+      family: resolved.kind,
+      providerId: resolved.providerId,
+      providerName: resolved.providerName,
+      modelId: resolved.modelId,
+      reasoningEffort: typeof resolved.options?.reasoning_effort === 'string' ? resolved.options.reasoning_effort : null,
+      variant: resolved.variant ?? null,
+      effectiveRequest: effectiveReq,
+      promptSent: `${req.system}\n\n${req.user}`,
+      resultStatus,
+      resultText,
+      usage,
+    });
+  };
 
   const modelProvenance = {
     value: resolved.modelId,
@@ -173,22 +206,34 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
     };
     setLastRequestForUse(target.use, effectiveReq);
 
-    const result = await runCliText({
-      cli,
-      model: resolved.modelId,
-      effort,
-      prompt: `${req.system}\n\n${req.user}`,
-      signal: req.signal,
-      timeoutMs: req.timeoutMs,
-      onChunk: req.onChunk,
-      spawnFn: deps.spawnFn,
-      resolveExecutable: deps.resolveExecutable,
-      killTree: deps.killTree,
-    });
+    let result;
+    try {
+      result = await runCliText({
+        cli,
+        model: resolved.modelId,
+        effort,
+        prompt: `${req.system}\n\n${req.user}`,
+        signal: req.signal,
+        timeoutMs: req.timeoutMs,
+        onChunk: req.onChunk,
+        spawnFn: deps.spawnFn,
+        resolveExecutable: deps.resolveExecutable,
+        killTree: deps.killTree,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isCancelled = req.signal?.aborted || /cancelad/i.test(message);
+      saveHistory(isCancelled ? 'cancelled' : 'failed', message, null);
+      throw error;
+    }
+
     if (result.status === 'failed') {
+      const isCancelled = result.reason === 'cancelled' || req.signal?.aborted;
+      saveHistory(isCancelled ? 'cancelled' : 'failed', result.detail, null);
       const reason: TextUseErrorReason = result.reason === 'invalid-model' || result.reason === 'error' ? 'failed' : result.reason;
       throw new TextUseError(`${resolved.providerName}: ${result.detail}`, reason, target.use);
     }
+    saveHistory('generated', result.text.trim(), result.usage);
     return { ...base, text: result.text.trim(), finishReason: null, usage: result.usage };
   }
 
@@ -242,6 +287,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
 
       const result = await completeAnthropic(anthropicRequest);
       if (result.text) req.onChunk?.([{ kind: 'content', text: result.text }]);
+      saveHistory('generated', result.text, result.usage);
       return { ...base, text: result.text, finishReason: result.finishReason, usage: result.usage };
     }
 
@@ -321,10 +367,23 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
           },
         })
       : await completeText(config, opts);
+    if (!usage && result.rawPayload && typeof result.rawPayload === 'object' && (result.rawPayload as any).usage) {
+      const u = (result.rawPayload as any).usage;
+      const int = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : null);
+      const promptTokens = int(u.prompt_tokens);
+      const completionTokens = int(u.completion_tokens);
+      const cachedPromptTokens = int(u.prompt_tokens_details?.cached_tokens);
+      const reasoningTokens = int(u.completion_tokens_details?.reasoning_tokens);
+      if (promptTokens !== null || completionTokens !== null) {
+        usage = { promptTokens, cachedPromptTokens, completionTokens, reasoningTokens };
+      }
+    }
+    saveHistory('generated', result.text, usage);
     return { ...base, text: result.text, finishReason: result.finishReason ?? null, usage };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const reason: TextUseErrorReason = /cancelad/i.test(message) ? 'cancelled' : /tardó demasiado/i.test(message) ? 'timeout' : 'failed';
+    saveHistory(reason === 'cancelled' ? 'cancelled' : 'failed', message, null);
     throw new TextUseError(reason === 'failed' ? withSameModels(message, alternatives) : message, reason, target.use, alternatives);
   }
 }

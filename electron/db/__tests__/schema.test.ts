@@ -13,6 +13,7 @@ import {
   PIPELINE_EVENT_TABLE,
   PIPELINE_CURSOR_TABLE,
   PIPELINE_RUNTIME_SESSION_TABLE,
+  AI_USE_RECORD_TABLE,
 } from '../schema';
 
 type SqliteNameRow = { name: string };
@@ -246,8 +247,9 @@ describe('Temporal Agent SQLite schema', () => {
   it('upgrades an existing Pipeline v4 database without recreating its evidence tables', () => {
     withDb((db) => {
       // Se reconstruye el estado de una base v4 real: sin la tabla de sesiones,
-      // que llega en la 5, y **con** la de cursores, que la 6 elimina.
+      // que llega en la 5, sin la tabla de historial de IA de la 7, y **con** la de cursores, que la 6 elimina.
       db.exec(`DROP TABLE ${PIPELINE_RUNTIME_SESSION_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${AI_USE_RECORD_TABLE}`);
       db.exec(`CREATE TABLE ${PIPELINE_CURSOR_TABLE} (
         repo_id TEXT NOT NULL, source_ref TEXT NOT NULL, offset INTEGER NOT NULL,
         pending TEXT NOT NULL, generation TEXT, updated_at TEXT NOT NULL,
@@ -257,7 +259,7 @@ describe('Temporal Agent SQLite schema', () => {
 
       runMigrations(db);
 
-      expect(pragmaNumber(db, 'user_version')).toBe(6);
+      expect(pragmaNumber(db, 'user_version')).toBe(LATEST_SCHEMA_VERSION);
       const tables = sqliteNames(db, 'table');
       expect(tables).toContain(PIPELINE_RUNTIME_SESSION_TABLE);
       expect(tables).toContain(PIPELINE_SNAPSHOT_TABLE);
@@ -265,6 +267,27 @@ describe('Temporal Agent SQLite schema', () => {
       expect(tables).not.toContain(PIPELINE_CURSOR_TABLE);
       expect(tables).toContain(PIPELINE_EVENT_TABLE);
       expect(tables).toContain(PIPELINE_REPO_TABLE);
+    });
+  });
+
+  it('upgrades an existing database from version 6 to 7 preserving all data', () => {
+    withDb((db) => {
+      const runId = insertRun(db);
+      const branchId = insertBranch(db, runId);
+      db.exec(`DROP TABLE IF EXISTS ${AI_USE_RECORD_TABLE}`);
+      db.exec('PRAGMA user_version = 6');
+
+      runMigrations(db);
+
+      expect(pragmaNumber(db, 'user_version')).toBe(7);
+      const tables = sqliteNames(db, 'table');
+      expect(tables).toContain(AI_USE_RECORD_TABLE);
+
+      // Verify data from v6 was preserved
+      const runRow = db.prepare('SELECT id FROM prediction_run WHERE id = ?').get(runId) as { id: string };
+      expect(runRow.id).toBe(runId);
+      const branchRow = db.prepare('SELECT id FROM speculative_branch WHERE id = ?').get(branchId) as { id: string };
+      expect(branchRow.id).toBe(branchId);
     });
   });
 });

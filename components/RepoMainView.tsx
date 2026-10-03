@@ -21,6 +21,7 @@ import { SettingsPanel, type SettingsPanelProps } from '@/components/SettingsPan
 import { HelpPanel, type HelpPanelProps } from '@/components/HelpPanel';
 import { ProfilePanel, type ProfilePanelProps } from '@/components/ProfilePanel';
 import { CartographyView } from '@/components/cartography/CartographyView';
+import { AiHistoryView } from '@/components/ai/AiHistoryView';
 import InteractiveRebasePanel from '@/components/InteractiveRebasePanel';
 import type { GraphColumnKey } from '@/hooks/use-panel-layout';
 import { useT } from '@/hooks/use-translation';
@@ -278,6 +279,7 @@ export function RepoMainView({
   }
   if (tabViews.activeTab === 'History') return <HistoryTabView {...tabViews} />;
   if (tabViews.activeTab === 'Commit') return <CommitWorkspaceView {...tabViews} />;
+  if (tabViews.activeTab === 'AiHistory') return <AiHistoryView repoPath={tabViews.repoPath} />;
   // `key` per-repo: cambiar de repositorio desmonta y remonta el workspace, así
   // no se muestra el snapshot del repo anterior mientras carga el nuevo.
   if (tabViews.activeTab === 'Pipeline') {

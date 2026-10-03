@@ -142,10 +142,10 @@ export interface LoadOutcome {
  * contestó es mentir sobre lo que pasó.
  */
 export type CommitDraftResult =
-  | { status: 'drafted'; subject: string; model: string }
-  | { status: 'no-answer'; reason: 'budget' | 'empty'; model: string }
-  | { status: 'malformed'; subject: string; model: string }
-  | { status: 'unavailable'; detail: string };
+  | { status: 'drafted'; subject: string; model: string; recordId?: string }
+  | { status: 'no-answer'; reason: 'budget' | 'empty'; model: string; recordId?: string }
+  | { status: 'malformed'; subject: string; model: string; recordId?: string }
+  | { status: 'unavailable'; detail: string; recordId?: string };
 
 /**
  * Un pedazo de lo que el modelo va produciendo, mientras lo produce.

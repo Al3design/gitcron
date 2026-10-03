@@ -61,5 +61,5 @@ export function getCartoProvider(settings = getCartoAISettings(), repoPath: stri
   if (!settings.enabled) {
     throw new Error('La IA de Cartografía está desactivada. Activala en Ajustes → Cartografía.');
   }
-  return createCartoProvider(resolveForUse('gitcron-cartography', repoPath));
+  return createCartoProvider(resolveForUse('gitcron-cartography', repoPath), {}, repoPath);
 }

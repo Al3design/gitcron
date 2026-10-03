@@ -3,7 +3,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 6;
+export const LATEST_SCHEMA_VERSION = 7;
 
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
@@ -13,6 +13,7 @@ export const PIPELINE_SNAPSHOT_TABLE = 'pipeline_snapshot';
 export const PIPELINE_EVENT_TABLE = 'pipeline_event';
 export const PIPELINE_CURSOR_TABLE = 'pipeline_cursor';
 export const PIPELINE_RUNTIME_SESSION_TABLE = 'pipeline_runtime_session';
+export const AI_USE_RECORD_TABLE = 'ai_use_record';
 
 export const TEMPORAL_AGENT_INDEXES = [
   'idx_run_repo',
@@ -186,6 +187,41 @@ const CREATE_PIPELINE_RUNTIME_SESSION_TABLES = [
   'CREATE INDEX idx_pipeline_runtime_session_change ON pipeline_runtime_session(repo_id, change_id, started_at DESC);',
 ];
 
+const CREATE_AI_USE_RECORD_TABLE = `
+CREATE TABLE ai_use_record (
+  id                     TEXT    PRIMARY KEY,
+  repo_path              TEXT    NOT NULL,
+  branch                 TEXT,
+  device_id              TEXT    NOT NULL,
+  device_label           TEXT,
+  use                    TEXT    NOT NULL,
+  started_at             TEXT    NOT NULL,
+  ended_at               TEXT    NOT NULL,
+  duration_ms            INTEGER NOT NULL,
+  family                 TEXT    NOT NULL,
+  provider_id            TEXT    NOT NULL,
+  provider_name          TEXT    NOT NULL,
+  model_id               TEXT    NOT NULL,
+  reasoning_effort       TEXT,
+  variant                TEXT,
+  effective_request_json TEXT    NOT NULL,
+  prompt_sent            TEXT    NOT NULL,
+  result_status          TEXT    NOT NULL,
+  result_text            TEXT,
+  prompt_tokens          INTEGER,
+  cached_prompt_tokens   INTEGER,
+  completion_tokens      INTEGER,
+  reasoning_tokens       INTEGER,
+  commit_hash            TEXT,
+  commit_edited          INTEGER,
+  created_at             TEXT    NOT NULL
+) STRICT;
+`;
+
+const CREATE_AI_USE_RECORD_INDEXES = [
+  'CREATE INDEX idx_ai_use_record_repo_started ON ai_use_record(repo_path, started_at DESC);',
+];
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -229,5 +265,15 @@ export const MIGRATIONS: Migration[] = [
     // ruidoso pero correcto.
     version: 6,
     statements: ['DROP TABLE IF EXISTS pipeline_cursor;'],
+  },
+  {
+    // Historial de usos de IA por repositorio (tarea 4.6 de modelos-en-casa, D19).
+    // Guarda qué escribió cada IA, motor, modelo, máquina, cuándo, duración, tokens,
+    // el pedido efectivo saneado y lo enviado completo, fuera del repositorio.
+    version: 7,
+    statements: [
+      CREATE_AI_USE_RECORD_TABLE,
+      ...CREATE_AI_USE_RECORD_INDEXES,
+    ],
   },
 ];

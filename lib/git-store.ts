@@ -61,6 +61,10 @@ export interface RepoState {
   lastFetchError: string | null;
   mergeInProgress: boolean;
   rebaseInProgress: boolean;
+  aiDraftRecord?: {
+    recordId: string;
+    originalSubject: string;
+  } | null;
 }
 
 interface GitStore {
@@ -193,6 +197,7 @@ function createEmptyRepoFields(): EmptyRepoFields {
     lastFetchError: null,
     mergeInProgress: false,
     rebaseInProgress: false,
+    aiDraftRecord: null,
   };
 }
 

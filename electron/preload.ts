@@ -289,6 +289,16 @@ contextBridge.exposeInMainWorld('api', {
     fixParam: (args: { repoPath?: string | null; file: string; segments: string[]; value: string | number | boolean }) =>
       ipcRenderer.invoke('commit-ai:fix-param', args),
   },
+  aiUseHistory: {
+    list: (args: { repoPath: string; use?: string; resultStatus?: string; limit?: number; offset?: number }) =>
+      ipcRenderer.invoke('ai-use-history:list', args),
+    get: (args: { repoPath: string; id: string }) =>
+      ipcRenderer.invoke('ai-use-history:get', args),
+    clear: (args: { repoPath: string }) =>
+      ipcRenderer.invoke('ai-use-history:clear', args),
+    linkCommit: (args: { repoPath: string; recordId: string; commitHash: string; edited: boolean }) =>
+      ipcRenderer.invoke('ai-use-history:link-commit', args),
+  },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),
     status: (repoPath: string) => ipcRenderer.invoke('carto:graph-status', repoPath),

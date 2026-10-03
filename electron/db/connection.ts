@@ -55,6 +55,11 @@ export function bootstrapDatabase(dbPath: string): DatabaseSync {
   return db;
 }
 
+/** La base ya abierta (la que abre GitCron al arrancar, o una prueba), o `null`. */
+export function currentDatabase(): DatabaseSync | null {
+  return database;
+}
+
 export function getDatabase(userDataPath: string): DatabaseSync {
   if (!database) {
     database = openTemporalAgentDatabase(temporalAgentDatabasePath(userDataPath));

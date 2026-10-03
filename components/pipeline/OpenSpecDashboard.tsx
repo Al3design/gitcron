@@ -1729,9 +1729,11 @@ export function OpenSpecDashboard({
         const originRepo = gitStore.openRepos.find((repo) => repo.path === originRepoPath);
         const originRepoName = originRepo?.name ?? originRepoPath.split(/[\\/]/).filter(Boolean).pop() ?? originRepoPath;
 
+        const aiDraftRecord = draft.recordId ? { recordId: draft.recordId, originalSubject: draft.subject } : null;
         if (originRepo) {
           gitStore.updateRepoByPath(originRepoPath, {
             commitMessage: draft.subject,
+            aiDraftRecord,
           });
         }
         const isCurrentRepo = !gitStore.repoPath || gitStore.repoPath === originRepoPath;
