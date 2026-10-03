@@ -412,6 +412,12 @@ Todo lo que hace o escribió una IA se distingue de un vistazo, sin colores nuev
 - Se aplica primero en la preparación del commit; 4.4 lo lleva a las demás pantallas de uso.
 
 ### D11. Dónde se ve
+*Ampliado a pedido de Ale (2026-10-03):* la sección se piensa como la del Agente Temporal, para que nada
+obligue a abrir `gitcron.json`: la clave de cada proveedor se carga desde la pantalla (al baúl, D5) y, donde
+hay capacidad de carga, el contexto y el tiempo de carga del modelo se eligen y se guardan ahí. El archivo
+sigue siendo la fuente y se puede editar a mano; la pantalla lo escribe con escritura puntual (D3). La sección
+va antes de los agentes de SDD (grupo 5).
+
 Sección de ajustes «Motores y modelos»: proveedores por familia con disponibilidad y variables, modelos
 (declarados y reportados), elección general y rápida, usos con su excepción, MCP, y «Abrir el archivo» /
 «Mostrar en la carpeta». En cada uso, una línea con motor, modelo, destino y origen, con acceso a su

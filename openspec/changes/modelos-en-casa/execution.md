@@ -4,7 +4,7 @@ Estado: propuesta escrita el 2026-09-29, sin implementación.
 
 ## Orden y dependencias
 
-Segundo cambio de la secuencia, después de cerrar conexiones operativas de SDD. El grupo 1 va primero: sus mediciones fijan el formato de Antigravity, cómo OpenCode recibe la configuración de GitCron, el modo texto de los CLI y el esquema con el que se valida. El grupo 2 es un recorrido completo angosto con una familia de cada lado (D15): si la forma común no encaja, se corrige antes de construir el resto. El grupo 3 (archivo completo) va antes que los usos; los grupos 4 y 5 pueden alternarse. La asistencia contextual consume esta configuración.
+Segundo cambio de la secuencia, después de cerrar conexiones operativas de SDD. El grupo 1 va primero: sus mediciones fijan el formato de Antigravity, cómo OpenCode recibe la configuración de GitCron, el modo texto de los CLI y el esquema con el que se valida. El grupo 2 es un recorrido completo angosto con una familia de cada lado (D15): si la forma común no encaja, se corrige antes de construir el resto. El grupo 3 (archivo completo) va antes que los usos. Después del grupo 4 va la sección de ajustes (6.1) y recién después el grupo 5 (pedido de Ale del 2026-10-03: configurar todo desde la pantalla le importa antes que los agentes de SDD). La asistencia contextual consume esta configuración.
 
 ## Mapa de trabajo
 
