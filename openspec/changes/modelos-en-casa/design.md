@@ -125,6 +125,20 @@ claves ya guardadas de OpenRouter y Anthropic se exponen como `OPENROUTER_API_KE
 guardadas, y el archivo inicial las referencia así. *Alternativa descartada:* un `{secret:…}` propio;
 rompería la compatibilidad del archivo.
 
+*Auditado en 6.1 (2026-10-04), importar:* un valor escrito a mano en el archivo de origen (la clave o una
+cabecera de un proveedor de `opencode.json`; `env` y `headers` de un servidor MCP de Cursor, LM Studio u
+OpenCode) no se copia. El plan pone `{env:NOMBRE}` (`${env:NOMBRE}` en `mcp.json`), al aplicar el valor se
+relee del origen y va al baúl, y la pantalla ve sólo nombres (`electron/ai/config/literal-secrets.ts`). El
+nombre propuesto (`<PROVEEDOR>_API_KEY`, `<PROVEEDOR>_<CABECERA>`, la variable de `env` tal cual,
+`<SERVIDOR>_<CABECERA>`) lleva sufijo si ya lo ocupa otro valor en el baúl, en el sistema o en el mismo plan:
+la primera versión pisaba una clave ya guardada y mandaba dos `Authorization` de proveedores distintos a la
+misma variable. En la vista previa sólo se esconden los campos secretos; la primera versión escondía todo
+texto (también `baseURL` y modelos) con una cadena fija en español que la pantalla comparaba. Los canales no
+aceptan rutas de la pantalla: la primera versión dejaba leer cualquier archivo y escribir un `mcp.json` en
+cualquier carpeta. La importación MCP va siempre al `mcp.json` global, como la de OpenCode al `gitcron.json`
+global, y de cada servidor la pantalla ve el programa o el host, no los argumentos ni la dirección completa
+(una URL de base de datos en los argumentos lleva contraseña).
+
 ### D6. Tipos de proveedor y resolución por uso
 - Bloque `provider` con `npm` `@ai-sdk/openai-compatible` u OpenRouter: `text-client` con la URL, cabeceras
   y clave resueltas; lista por `GET /models`. Capacidad de carga sólo si el servidor expone la API nativa

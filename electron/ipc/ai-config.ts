@@ -6,6 +6,8 @@
 // - Contexto guardado en gitcron.json como limit.context del modelo.
 // - Tiempo de carga (TTL) guardado en la carpeta de datos en archivo JSON por proveedor y modelo.
 // - Apertura de gitcron.json en uso validada contra traversal y archivos ajenos.
+// - Importar desde OpenCode y servidores MCP: las rutas las decide este proceso, nunca
+//   la pantalla; un valor escrito a mano en el archivo de origen va al baúl y no viaja.
 
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +46,27 @@ import {
   setEnvVar,
   validateEnvVarName,
 } from '../ai/key-store';
+import { leafChanges, type FieldChange } from '../ai/config/config-diff';
+import {
+  applyOpenCodeImport,
+  getDefaultOpenCodePath,
+  isProviderSecretField,
+  planOpenCodeImport,
+  type ImportSourceStatus,
+} from '../ai/config/opencode-import';
+import {
+  applyMcpImport,
+  getDefaultMcpPath,
+  getDefaultMcpSourcePath,
+  isMcpServerMarkedDisabled,
+  loadMcpConfig,
+  mcpServerKind,
+  planMcpImport,
+  updateMcpServer,
+  type McpImportSource,
+  type McpServer,
+} from '../ai/config/mcp-config';
+import { referenceName } from '../ai/config/literal-secrets';
 import { activeConfigPath, loadServerFor, setUseConfigPathForTesting } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
 import { errMsg } from './shared';
@@ -53,14 +76,106 @@ const ok = <T>(data: T): Result<T> => ({ success: true, data });
 const fail = <T>(error: unknown): Result<T> => ({ success: false, error: errMsg(error) });
 
 let configPathOverride: string | null = null;
+let openCodePathOverride: string | null = null;
+let mcpPathOverride: string | null = null;
+const mcpImportSourceOverrides = new Map<McpImportSource, string>();
 
 export function setAiConfigPathForTesting(p: string | null): void {
   configPathOverride = p;
   setUseConfigPathForTesting(p);
 }
 
+export function setOpenCodePathForTesting(p: string | null): void {
+  openCodePathOverride = p;
+}
+
+export function setMcpPathForTesting(p: string | null): void {
+  mcpPathOverride = p;
+}
+
+export function setMcpImportSourcePathForTesting(source: McpImportSource, p: string | null): void {
+  if (p) mcpImportSourceOverrides.set(source, p);
+  else mcpImportSourceOverrides.delete(source);
+}
+
 function resolveActiveConfigPath(): string {
   return configPathOverride ?? activeConfigPath() ?? getDefaultConfigPath();
+}
+
+/** El mcp.json global: el destino de toda importación (como gitcron.json para OpenCode). */
+function resolveGlobalMcpPath(): string {
+  return mcpPathOverride ?? getDefaultMcpPath();
+}
+
+const MCP_IMPORT_SOURCES: readonly McpImportSource[] = ['cursor', 'lmstudio', 'opencode'];
+
+function mcpImportSourceArg(rawArgs: unknown): McpImportSource {
+  const source = (rawArgs as { source?: unknown } | null)?.source;
+  if (!MCP_IMPORT_SOURCES.includes(source as McpImportSource)) {
+    throw new Error(`Origen de importación MCP desconocido: ${String(source)}`);
+  }
+  return source as McpImportSource;
+}
+
+/** Variables de sistema primero: le ganan a las guardadas al resolver `{env:}` (D5). */
+function envVarStatus(name: string): 'system' | 'stored' | 'missing' {
+  const fromSystem = process.env[name];
+  if (fromSystem !== undefined && fromSystem !== '') return 'system';
+  try {
+    return hasStoredEnvVar(name) ? 'stored' : 'missing';
+  } catch {
+    // Un nombre que el baúl no admite (empieza con un número, por ejemplo) no puede estar guardado.
+    return 'missing';
+  }
+}
+
+/** Ausente e ilegible se dicen distinto; la ruta va siempre. */
+function importSourceInfo(source: ImportSourceStatus) {
+  return source.status === 'invalid'
+    ? { status: source.status, path: source.path, error: { ...source.error } }
+    : { status: source.status, path: source.path };
+}
+
+/** Un cambio de campo para la pantalla: en un campo secreto, un valor escrito a mano no viaja. */
+function rendererChange(change: FieldChange, secretField: boolean) {
+  const hidden = (value: unknown) => secretField && value !== undefined && referenceName(value) === undefined;
+  return {
+    segments: change.segments,
+    ...(hidden(change.before) ? { beforeHidden: true } : { before: change.before }),
+    ...(hidden(change.after) ? { afterHidden: true } : { after: change.after }),
+  };
+}
+
+/**
+ * Lo que la pantalla ve de un servidor MCP: el programa (sin carpeta) o el host,
+ * y los nombres de sus variables y cabeceras. Ni los argumentos ni la dirección
+ * completa: también pueden llevar tokens (una contraseña en una URL de base de datos).
+ */
+function mcpServerSummary(server: McpServer) {
+  let host: string | undefined;
+  if (typeof server.url === 'string') {
+    try {
+      host = new URL(server.url).host || undefined;
+    } catch {
+      host = undefined;
+    }
+  }
+  const keysOf = (value: unknown) =>
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? Object.keys(value) : [];
+  return {
+    kind: mcpServerKind(server),
+    command: typeof server.command === 'string' ? path.basename(server.command) : undefined,
+    host,
+    envVarNames: keysOf(server.env),
+    headerNames: keysOf(server.headers),
+  };
+}
+
+function throwIfNotWritten(results: Array<{ result: ConfigWriteResult }>): void {
+  const failed = results.find((r) => !r.result.ok)?.result;
+  if (failed && !failed.ok) {
+    throw new Error(failed.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+  }
 }
 
 const sameFile = (a: string, b: string) =>
@@ -230,20 +345,11 @@ export function registerAiConfigHandlers(): void {
         const allVars = extractEnvVarNames(p.options ?? {});
         const apiKeyVars = extractEnvVarNames(p.options?.apiKey);
 
-        const envVars = allVars.map((name) => {
-          const fromSystem = process.env[name];
-          const status: 'system' | 'stored' | 'missing' =
-            fromSystem !== undefined && fromSystem !== ''
-              ? 'system'
-              : hasStoredEnvVar(name)
-                ? 'stored'
-                : 'missing';
-          return {
-            name,
-            isApiKey: apiKeyVars.includes(name),
-            status,
-          };
-        });
+        const envVars = allVars.map((name) => ({
+          name,
+          isApiKey: apiKeyVars.includes(name),
+          status: envVarStatus(name),
+        }));
 
         const missingRequired = envVars.some((v) => v.status === 'missing');
         let available = true;
@@ -800,7 +906,7 @@ export function registerAiConfigHandlers(): void {
     }
   });
 
-  // ─── «Abrir el archivo» (rechaza cualquier ruta que no sea un gitcron.json en uso) ───
+  // ─── «Abrir el archivo» (rechaza cualquier ruta que no sea un gitcron.json o mcp.json en uso) ───
   ipcMain.handle('ai-config:open-file', async (_e, rawArgs: unknown) => {
     try {
       const args = (rawArgs ?? {}) as { filePath?: unknown; repoPath?: unknown };
@@ -810,10 +916,12 @@ export function registerAiConfigHandlers(): void {
       const globalPath = resolveActiveConfigPath();
       const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
       const loaded = loadGitCronConfig({ globalPath, repoPath });
+      const mcpLoaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
 
-      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath))
+        || mcpLoaded.files.find((f) => f.exists && sameFile(f.path, filePath));
       if (!matched) {
-        throw new Error('IPC Security Error: el archivo no es un gitcron.json en uso');
+        throw new Error('IPC Security Error: el archivo no es un gitcron.json ni un mcp.json en uso');
       }
 
       const err = await shell.openPath(matched.path);
@@ -834,14 +942,183 @@ export function registerAiConfigHandlers(): void {
       const globalPath = resolveActiveConfigPath();
       const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
       const loaded = loadGitCronConfig({ globalPath, repoPath });
+      const mcpLoaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
 
-      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath))
+        || mcpLoaded.files.find((f) => f.exists && sameFile(f.path, filePath));
       if (!matched) {
-        throw new Error('IPC Security Error: el archivo no es un gitcron.json en uso');
+        throw new Error('IPC Security Error: el archivo no es un gitcron.json ni un mcp.json en uso');
       }
 
       shell.showItemInFolder(matched.path);
       return ok({ shown: true });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // ─── 4. Importar desde OpenCode (opencode.json, tarea 3.6) ───
+  // Sólo hacia el gitcron.json global en uso. El plan ya trae `{env:NOMBRE}` en lugar de
+  // cada clave o cabecera escrita a mano; al aplicar, el valor se relee y va al baúl.
+  const openCodeImportPaths = () => ({
+    opencodePath: openCodePathOverride ?? getDefaultOpenCodePath(),
+    gitcronPath: resolveActiveConfigPath(),
+  });
+
+  ipcMain.handle('ai-config:plan-opencode-import', async () => {
+    try {
+      const plan = planOpenCodeImport({ ...openCodeImportPaths(), stored: getStoredEnvVar });
+      return ok({
+        source: importSourceInfo(plan.source),
+        target: plan.target,
+        entries: plan.entries.map((entry) => ({
+          kind: entry.kind,
+          id: entry.id,
+          status: entry.status,
+          changes: entry.changes.flatMap(leafChanges).map((change) =>
+            rendererChange(change, entry.kind === 'provider' && isProviderSecretField(change.segments)),
+          ),
+          variables: entry.variables.map((name) => {
+            const status = envVarStatus(name);
+            return { name, status: status === 'missing' && entry.fromFile.includes(name) ? ('fromFile' as const) : status };
+          }),
+        })),
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-config:apply-opencode-import', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { entries?: unknown };
+      const chosen = Array.isArray(args.entries) ? (args.entries as Array<{ kind?: unknown; id?: unknown }>) : [];
+      const paths = openCodeImportPaths();
+      const plan = planOpenCodeImport({ ...paths, stored: getStoredEnvVar });
+      const results = applyOpenCodeImport({
+        ...paths,
+        entries: plan.entries.filter((entry) => chosen.some((c) => c?.kind === entry.kind && c?.id === entry.id)),
+        saveSecret: setEnvVar,
+      });
+      throwIfNotWritten(results);
+      return ok({ count: results.length });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // ─── 5. Servidores MCP (mcp.json, D12) ───
+  // Ningún uso de GitCron los consume todavía. La pantalla ve nombres, tipo, programa
+  // o host y los nombres de `env` y `headers`; nunca sus valores.
+  ipcMain.handle('ai-config:get-mcp-status', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { repoPath?: unknown };
+      const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
+      const loaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
+
+      const texts = new Map<string, string>();
+      const textOf = (filePath: string) => {
+        if (!texts.has(filePath)) {
+          try {
+            texts.set(filePath, nodeFs.readFileSync(filePath, 'utf8'));
+          } catch {
+            texts.set(filePath, '');
+          }
+        }
+        return texts.get(filePath)!;
+      };
+
+      const servers = Object.entries(loaded.servers).map(([name, server]) => {
+        const origin = loaded.origins[name];
+        return {
+          name,
+          ...mcpServerSummary(server),
+          disabled: server.disabled === true || isMcpServerMarkedDisabled(textOf(origin), name),
+          origin,
+          scope: loaded.files.find((f) => f.path === origin)?.scope ?? ('global' as const),
+        };
+      });
+
+      const files = loaded.files.map((f) => ({
+        path: f.path,
+        scope: f.scope,
+        exists: f.exists,
+        error: f.error ? { ...f.error } : undefined,
+        usingLastValid: f.usingLastValid,
+      }));
+
+      return ok({ servers, files });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-config:remove-mcp-server', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { filePath?: unknown; name?: unknown; repoPath?: unknown };
+      const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      if (!filePath || !name) throw new Error('Parámetros inválidos para quitar servidor MCP.');
+
+      const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
+      const loaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      if (!matched) {
+        throw new Error('IPC Security Error: el archivo no es un mcp.json en uso');
+      }
+
+      throwIfNotWritten([{ result: updateMcpServer(matched.path, name, undefined) }]);
+      return ok({ removed: true });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // Importar va siempre al mcp.json global: lo de Cursor, LM Studio y OpenCode es de la
+  // persona, no del repositorio (el del repositorio se puede versionar).
+  const mcpImportPaths = (source: McpImportSource) => ({
+    sourcePath: mcpImportSourceOverrides.get(source) ?? getDefaultMcpSourcePath(source),
+    targetPath: resolveGlobalMcpPath(),
+  });
+
+  ipcMain.handle('ai-config:plan-mcp-import', async (_e, rawArgs: unknown) => {
+    try {
+      const source = mcpImportSourceArg(rawArgs);
+      const plan = planMcpImport({ source, ...mcpImportPaths(source), stored: getStoredEnvVar });
+      return ok({
+        source: importSourceInfo(plan.source),
+        target: plan.target,
+        entries: plan.entries.map((entry) => ({
+          name: entry.name,
+          status: entry.status,
+          disabled: entry.disabled,
+          ...mcpServerSummary(entry.server),
+          // Sólo qué campos cambian: los argumentos y la dirección pueden llevar tokens.
+          changedFields: [...new Set(entry.changes.flatMap(leafChanges).map((change) => change.segments.join('.')))],
+          fromFile: entry.fromFile,
+        })),
+        skipped: plan.skipped,
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-config:apply-mcp-import', async (_e, rawArgs: unknown) => {
+    try {
+      const source = mcpImportSourceArg(rawArgs);
+      const args = (rawArgs ?? {}) as { entries?: unknown };
+      const chosen = Array.isArray(args.entries) ? args.entries.filter((n): n is string => typeof n === 'string') : [];
+      const paths = mcpImportPaths(source);
+      const plan = planMcpImport({ source, ...paths, stored: getStoredEnvVar });
+      const results = applyMcpImport({
+        ...paths,
+        source,
+        entries: plan.entries.filter((entry) => chosen.includes(entry.name)),
+        saveSecret: setEnvVar,
+      });
+      throwIfNotWritten(results);
+      return ok({ count: results.length });
     } catch (error) {
       return fail(error);
     }

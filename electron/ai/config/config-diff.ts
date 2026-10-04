@@ -27,6 +27,20 @@ export function diffValues(before: unknown, after: unknown, prefix: string[] = [
   return [{ segments: prefix, before, after }];
 }
 
+/**
+ * Un cambio de un bloque que aparece o desaparece entero, abierto en sus campos
+ * hoja: la vista previa decide campo por campo qué valores puede mostrar (una
+ * clave escrita a mano dentro de `options` no viaja aunque cambie `options` entero).
+ */
+export function leafChanges(change: FieldChange): FieldChange[] {
+  const { before, after, segments } = change;
+  const opened =
+    isObject(before) && after === undefined ? diffValues(before, {}, segments)
+    : before === undefined && isObject(after) ? diffValues({}, after, segments)
+    : null;
+  return opened && opened.length > 0 ? opened.flatMap(leafChanges) : [change];
+}
+
 /** Los nombres de las variables `{env:NOMBRE}` y `${env:NOMBRE}` que usa un valor. */
 export function referencedVariables(value: unknown): string[] {
   const names = new Set<string>();

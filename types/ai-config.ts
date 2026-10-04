@@ -96,3 +96,114 @@ export interface SetModelLoadSettingsPayload {
   contextLength?: number;
   ttlMinutes?: number;
 }
+
+// ─── Importar desde OpenCode y servidores MCP (6.1, segunda parte) ───
+// Nada de esto trae un valor secreto: de una clave o un token sólo viaja el nombre
+// de la variable donde queda guardado.
+
+export interface AiImportVariable {
+  name: string;
+  /** `fromFile`: el valor estaba escrito a mano en el archivo de origen; se guarda en GitCron al importar. */
+  status: 'system' | 'stored' | 'missing' | 'fromFile';
+}
+
+/** Un campo que cambia. En un campo secreto, un valor escrito a mano no viaja: sólo la marca `…Hidden`. */
+export interface AiImportFieldChange {
+  segments: string[];
+  before?: unknown;
+  after?: unknown;
+  beforeHidden?: boolean;
+  afterHidden?: boolean;
+}
+
+/** El archivo de origen: ausente e ilegible se dicen distinto (ninguno quiere decir «vacío»). */
+export interface AiImportSourceInfo {
+  status: 'absent' | 'invalid' | 'ok';
+  path: string;
+  error?: CommitAiConfigParseError;
+}
+
+/** El archivo de destino: si está roto, no hay plan. */
+export interface AiImportTargetInfo {
+  path: string;
+  error?: CommitAiConfigParseError;
+}
+
+export interface AiOpenCodeImportPlanEntry {
+  kind: 'provider' | 'agent';
+  id: string;
+  status: 'new' | 'same' | 'changed';
+  changes: AiImportFieldChange[];
+  variables: AiImportVariable[];
+}
+
+export interface AiOpenCodeImportPlanResult {
+  source: AiImportSourceInfo;
+  target: AiImportTargetInfo;
+  entries: AiOpenCodeImportPlanEntry[];
+}
+
+export interface ApplyOpenCodeImportPayload {
+  entries: Array<{ kind: 'provider' | 'agent'; id: string }>;
+}
+
+export type AiMcpImportSource = 'cursor' | 'lmstudio' | 'opencode';
+
+/**
+ * Lo que la pantalla ve de un servidor MCP: el programa (sin carpeta) o el host, y
+ * los nombres de `env` y `headers`. Ni sus valores ni los argumentos ni la dirección
+ * completa, que también pueden llevar tokens.
+ */
+export interface AiMcpServerSummary {
+  kind: 'local' | 'remote' | 'unknown';
+  command?: string;
+  host?: string;
+  envVarNames: string[];
+  headerNames: string[];
+}
+
+export interface AiMcpServerInfo extends AiMcpServerSummary {
+  name: string;
+  disabled: boolean;
+  /** El mcp.json de donde sale. */
+  origin: string;
+  scope: 'global' | 'repo';
+}
+
+export interface AiMcpStatusResult {
+  servers: AiMcpServerInfo[];
+  files: AiConfigFileInfo[];
+}
+
+export interface RemoveMcpServerPayload {
+  filePath: string;
+  name: string;
+  repoPath?: string | null;
+}
+
+export interface AiMcpImportPlanEntry extends AiMcpServerSummary {
+  name: string;
+  status: 'new' | 'same' | 'changed';
+  disabled: boolean;
+  /** Los campos que cambian, sin sus valores. */
+  changedFields: string[];
+  /** Variables cuyo valor estaba escrito a mano en el origen: se guardan en GitCron al importar. */
+  fromFile: string[];
+}
+
+export interface AiMcpImportPlanResult {
+  source: AiImportSourceInfo;
+  target: AiImportTargetInfo;
+  entries: AiMcpImportPlanEntry[];
+  /** Servidores de OpenCode que no son locales ni remotos: no se convierten. */
+  skipped: string[];
+}
+
+export interface PlanMcpImportPayload {
+  source: AiMcpImportSource;
+}
+
+export interface ApplyMcpImportPayload {
+  source: AiMcpImportSource;
+  entries: string[];
+}

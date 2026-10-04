@@ -166,7 +166,7 @@ Desktop Git client built with modern web tooling. GitCron is meant to cover a pe
 - **Panel Centauro**: Al clickear una rama especulativa, el HUD inferior muestra el rationale de la IA con evidencia del repositorio.
 - **Materialización one-click**: El botón "Materializar" convierte una rama soñada en un branch real de Git (`imagined/<slug>`) con tag `flight/<nivel>` y un `IDEA.md` documentando la decisión.
 - **Brief copiable limpio**: La confirmación de materialización separa metadata fija del bloque copiable para agentes, manteniendo el `IDEA.md` completo en la rama creada.
-- **Configuración por repositorio**: Settings → Temporal Agent permite elegir modelo de IA (catálogo de modelos OpenRouter verificados en `lib/openrouter-models.ts`), scope de privacidad, threshold de confianza, y focus areas.
+- **Configuración por repositorio**: Settings → Temporal Agent permite elegir scope de privacidad, threshold de confianza y focus areas. El motor y el modelo se eligen en Settings → Motores y modelos (`gitcron.json`), como el resto de los usos de IA.
 - **Persistencia**: Las predicciones se guardan en `prediction.json` por repo y sobreviven a cierre/re-apertura de la app.
 - **Seguridad**: API keys cifradas con `safeStorage` del OS (DPAPI/Keychain/libsecret). Fingerprint SHA-256 como identificador visible. Las keys nunca salen del proceso main.
 - **Toggle FUTUROS**: Botón en la esquina superior del grafo cronométrico para mostrar/ocultar las ramas especulativas. Se activa automáticamente tras una predicción.

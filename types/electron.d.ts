@@ -462,6 +462,12 @@ interface ElectronAPI {
     removeUseParam(args: { use: string; param: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
     openFile(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ opened: boolean }>>;
     showInFolder(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ shown: boolean }>>;
+    planOpenCodeImport(): Promise<GitResult<import('./ai-config').AiOpenCodeImportPlanResult>>;
+    applyOpenCodeImport(args: import('./ai-config').ApplyOpenCodeImportPayload): Promise<GitResult<{ count: number }>>;
+    getMcpStatus(args?: { repoPath?: string | null }): Promise<GitResult<import('./ai-config').AiMcpStatusResult>>;
+    removeMcpServer(args: import('./ai-config').RemoveMcpServerPayload): Promise<GitResult<{ removed: boolean }>>;
+    planMcpImport(args: import('./ai-config').PlanMcpImportPayload): Promise<GitResult<import('./ai-config').AiMcpImportPlanResult>>;
+    applyMcpImport(args: import('./ai-config').ApplyMcpImportPayload): Promise<GitResult<{ count: number }>>;
   };
   /**
    * Historial de usos de IA por repositorio (tarea 4.6, D19).

@@ -4,12 +4,13 @@
 // Sección de ajustes «Motores y modelos» (tarea 6.1 de modelos-en-casa).
 // Configura proveedores, claves, modelos, elección general y los 4 usos de texto
 // desde la pantalla sin abrir gitcron.json, con escritura puntual (D3) y baúl seguro (D5).
+// También importa desde opencode.json y muestra, quita e importa servidores MCP (D12).
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Cpu, Server, Key, Plus, Trash2, ExternalLink, FolderOpen,
   AlertCircle, CheckCircle2, RefreshCw, X, ShieldAlert, Sliders,
-  ChevronDown, ChevronRight, Terminal, Lock
+  ChevronDown, ChevronRight, Terminal, Lock, Download
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,16 @@ import type {
   AiConfigFileInfo,
   AiConfigProviderInfo,
   AiConfigUseInfo,
+  AiImportFieldChange,
+  AiImportSourceInfo,
+  AiImportTargetInfo,
+  AiImportVariable,
+  AiMcpImportPlanResult,
+  AiMcpImportSource,
+  AiMcpServerInfo,
+  AiMcpServerSummary,
+  AiMcpStatusResult,
+  AiOpenCodeImportPlanResult,
 } from '@/types/ai-config';
 import type { AiTextUse } from '@/types/ai-use';
 
@@ -101,16 +112,38 @@ export function AiSettingsSection({ repoPath = null }: Props) {
     newValue?: string;
   }>>({});
 
+  // Importar desde OpenCode: nada se escribe hasta «Importar lo elegido»
+  const [openCodePlan, setOpenCodePlan] = useState<AiOpenCodeImportPlanResult | null>(null);
+  const [loadingOpenCodePlan, setLoadingOpenCodePlan] = useState(false);
+  const [openCodeSelected, setOpenCodeSelected] = useState<Record<string, boolean>>({});
+  const [applyingOpenCode, setApplyingOpenCode] = useState(false);
+
+  // Servidores MCP (GitCron todavía no los usa) y su importación al mcp.json global
+  const [mcpStatus, setMcpStatus] = useState<AiMcpStatusResult | null>(null);
+  const [mcpServerToRemove, setMcpServerToRemove] = useState<AiMcpServerInfo | null>(null);
+  const [removingMcpServer, setRemovingMcpServer] = useState(false);
+  const [mcpImportSource, setMcpImportSource] = useState<AiMcpImportSource>('cursor');
+  const [mcpPlan, setMcpPlan] = useState<AiMcpImportPlanResult | null>(null);
+  const [loadingMcpPlan, setLoadingMcpPlan] = useState(false);
+  const [mcpSelected, setMcpSelected] = useState<Record<string, boolean>>({});
+  const [applyingMcp, setApplyingMcp] = useState(false);
+
   const reload = useCallback(async () => {
     try {
       const api = window.api?.aiConfig;
       if (!api) return;
-      const res = await api.status({ repoPath });
-      if (res?.success && res.data) {
-        setStatus(res.data);
+      const [configRes, mcpRes] = await Promise.all([
+        api.status({ repoPath }),
+        api.getMcpStatus({ repoPath }),
+      ]);
+      if (configRes?.success && configRes.data) {
+        setStatus(configRes.data);
         setLoadError(null);
       } else {
-        setLoadError(res?.error ?? t('aiConfig.unexpectedError'));
+        setLoadError(configRes?.error ?? t('aiConfig.unexpectedError'));
+      }
+      if (mcpRes?.success && mcpRes.data) {
+        setMcpStatus(mcpRes.data);
       }
     } catch (err: any) {
       setLoadError(err?.message ?? t('aiConfig.unexpectedError'));
@@ -264,6 +297,8 @@ export function AiSettingsSection({ repoPath = null }: Props) {
         setSuccessNotice(t('aiConfig.keySavedNotice'));
         setTimeout(() => setSuccessNotice(null), 3000);
         await reload();
+        // La vista previa de la importación dice qué variables faltan: se pone al día sin perder lo elegido.
+        if (openCodePlan) await loadOpenCodePlan(true);
       } else {
         setActionError(res?.error ?? t('aiConfig.unexpectedError'));
       }
@@ -496,6 +531,125 @@ export function AiSettingsSection({ repoPath = null }: Props) {
     }));
   };
 
+  // ─── Importar desde OpenCode ───
+  /** Pide el plan. Con `keepSelection`, lo ya elegido se respeta (por ejemplo, después de guardar una variable). */
+  const loadOpenCodePlan = async (keepSelection = false) => {
+    setLoadingOpenCodePlan(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.planOpenCodeImport();
+      if (res?.success && res.data) {
+        const entries = res.data.entries;
+        setOpenCodePlan(res.data);
+        setOpenCodeSelected((prev) => {
+          const sel: Record<string, boolean> = {};
+          for (const entry of entries) {
+            const key = `${entry.kind}:${entry.id}`;
+            sel[key] = keepSelection && key in prev ? prev[key] : entry.status !== 'same';
+          }
+          return sel;
+        });
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setLoadingOpenCodePlan(false);
+    }
+  };
+
+  const handleApplyOpenCodeImport = async () => {
+    if (!openCodePlan) return;
+    setApplyingOpenCode(true);
+    setActionError(null);
+    try {
+      const entries = openCodePlan.entries
+        .filter((entry) => openCodeSelected[`${entry.kind}:${entry.id}`])
+        .map((entry) => ({ kind: entry.kind, id: entry.id }));
+      const res = await window.api?.aiConfig?.applyOpenCodeImport({ entries });
+      if (res?.success && res.data) {
+        setSuccessNotice(t('aiConfig.importSuccess', { count: res.data.count }));
+        setOpenCodePlan(null);
+        await reload();
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setApplyingOpenCode(false);
+    }
+  };
+
+  // ─── Servidores MCP ───
+  const handleRemoveMcpServer = async () => {
+    if (!mcpServerToRemove) return;
+    setRemovingMcpServer(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.removeMcpServer({
+        filePath: mcpServerToRemove.origin,
+        name: mcpServerToRemove.name,
+        repoPath,
+      });
+      if (res?.success) {
+        setMcpServerToRemove(null);
+        await reload();
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setRemovingMcpServer(false);
+    }
+  };
+
+  const handlePlanMcpImport = async (source: AiMcpImportSource) => {
+    setLoadingMcpPlan(true);
+    setActionError(null);
+    setMcpImportSource(source);
+    try {
+      const res = await window.api?.aiConfig?.planMcpImport({ source });
+      if (res?.success && res.data) {
+        setMcpPlan(res.data);
+        const sel: Record<string, boolean> = {};
+        for (const entry of res.data.entries) {
+          sel[entry.name] = entry.status !== 'same';
+        }
+        setMcpSelected(sel);
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setLoadingMcpPlan(false);
+    }
+  };
+
+  const handleApplyMcpImport = async () => {
+    if (!mcpPlan) return;
+    setApplyingMcp(true);
+    setActionError(null);
+    try {
+      const entries = mcpPlan.entries.filter((entry) => mcpSelected[entry.name]).map((entry) => entry.name);
+      const res = await window.api?.aiConfig?.applyMcpImport({ source: mcpImportSource, entries });
+      if (res?.success && res.data) {
+        setSuccessNotice(t('aiConfig.mcpImportSuccess', { count: res.data.count }));
+        setMcpPlan(null);
+        await reload();
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setApplyingMcp(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-text-secondary">
@@ -599,60 +753,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
           <span>{t('aiConfig.filesInUse')}</span>
         </h4>
         <div className="grid gap-2">
-          {files.map((file) => (
-            <div
-              key={file.path}
-              className="rounded-lg border border-border-subtle/15 bg-bg-base/70 p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={cn(
-                    'px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold uppercase',
-                    file.scope === 'repo'
-                      ? 'bg-secondary/15 text-secondary'
-                      : 'bg-bg-surface text-text-secondary'
-                  )}>
-                    {file.scope === 'repo' ? t('aiConfig.scopeRepo') : t('aiConfig.scopeGlobal')}
-                  </span>
-                  {!file.exists && (
-                    <span className="text-[length:var(--font-size-2xs)] text-text-secondary/70 italic">
-                      ({t('aiConfig.fileNotFound')})
-                    </span>
-                  )}
-                  {file.error && (
-                    <span className="text-[length:var(--font-size-2xs)] text-error font-bold flex items-center gap-1">
-                      <AlertCircle size={11} />
-                      Línea {file.error.line}
-                    </span>
-                  )}
-                </div>
-                <p className="font-mono text-[length:var(--font-size-2xs)] text-text-secondary select-all truncate" title={file.path}>
-                  {file.path}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleOpenFile(file)}
-                  className="px-2.5 py-1.5 rounded border border-border-subtle/20 bg-bg-surface hover:bg-border-subtle/30 text-text-primary text-xs flex items-center gap-1.5 transition-colors font-medium"
-                  title={t('aiConfig.openFile')}
-                >
-                  <ExternalLink size={12} />
-                  <span>{t('aiConfig.openFile')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShowInFolder(file)}
-                  className="px-2.5 py-1.5 rounded border border-border-subtle/20 bg-bg-surface hover:bg-border-subtle/30 text-text-secondary hover:text-text-primary text-xs flex items-center gap-1.5 transition-colors font-medium"
-                  title={t('aiConfig.showInFolder')}
-                >
-                  <FolderOpen size={12} />
-                  <span>{t('aiConfig.showInFolder')}</span>
-                </button>
-              </div>
-            </div>
-          ))}
+          {files.map((file) => renderFileRow(file))}
         </div>
       </section>
 
@@ -760,6 +861,379 @@ export function AiSettingsSection({ repoPath = null }: Props) {
             {t('aiConfig.textUses')}
           </div>
           {uses.map((useInfo) => renderUseCard(useInfo))}
+        </div>
+      </section>
+
+      {/* ─── 4. Importar desde OpenCode ─── */}
+      {/* Sólo hacia el gitcron.json global. Una clave o cabecera escrita a mano en opencode.json
+          no llega a la pantalla: se ve como «valor escrito en el archivo» y va al baúl al importar. */}
+      <section className="space-y-4 pt-4 border-t border-border-subtle/15">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+              <Download size={13} />
+              <span>{t('aiConfig.importOpenCode')}</span>
+            </h4>
+            <p className="text-xs text-text-secondary mt-1">
+              {t('aiConfig.importOpenCodeDesc')}
+            </p>
+          </div>
+          {!openCodePlan && (
+            <button
+              type="button"
+              onClick={() => void loadOpenCodePlan()}
+              disabled={loadingOpenCodePlan}
+              className="shrink-0 px-3 py-1.5 rounded-lg border border-secondary/40 bg-secondary/15 hover:bg-secondary/25 text-secondary text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-40"
+            >
+              {loadingOpenCodePlan ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+              <span>{t('aiConfig.importOpenCodeCheck')}</span>
+            </button>
+          )}
+        </div>
+
+        {openCodePlan && (
+          <div className="rounded-lg border border-border-subtle/20 bg-bg-base/60 p-4 space-y-4">
+            <div className="flex items-center justify-between text-xs pb-3 border-b border-border-subtle/15">
+              <span className="font-semibold text-text-primary">
+                {t('aiConfig.importOpenCode')} ({openCodePlan.entries.length})
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sel: Record<string, boolean> = {};
+                    for (const e of openCodePlan.entries) sel[`${e.kind}:${e.id}`] = true;
+                    setOpenCodeSelected(sel);
+                  }}
+                  className="text-xs text-secondary hover:underline"
+                >
+                  {t('aiConfig.importSelectAll')}
+                </button>
+                <span className="text-border-subtle">|</span>
+                <button
+                  type="button"
+                  onClick={() => setOpenCodeSelected({})}
+                  className="text-xs text-text-secondary hover:underline"
+                >
+                  {t('aiConfig.importDeselectAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenCodePlan(null)}
+                  aria-label={t('common.cancel')}
+                  title={t('common.cancel')}
+                  className="text-text-secondary hover:text-text-primary ml-2 p-1"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {renderImportProblem(openCodePlan, 'opencode')}
+
+            {openCodePlan.source.status === 'ok' && !openCodePlan.target.error && (
+              openCodePlan.entries.length === 0 ? (
+                <p className="text-xs text-text-secondary italic">{t('aiConfig.importNoEntries')}</p>
+              ) : (
+                <div className="space-y-3">
+                  {openCodePlan.entries.map((entry) => {
+                    const key = `${entry.kind}:${entry.id}`;
+                    const isChecked = Boolean(openCodeSelected[key]);
+                    return (
+                      <div
+                        key={key}
+                        className={cn(
+                          'p-3 rounded-lg border text-xs space-y-2 transition-colors',
+                          isChecked
+                            ? 'border-secondary/40 bg-bg-surface/50'
+                            : 'border-border-subtle/15 bg-bg-base/30 opacity-70',
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="flex items-center gap-2 cursor-pointer font-medium text-text-primary">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) =>
+                                setOpenCodeSelected((prev) => ({ ...prev, [key]: e.target.checked }))
+                              }
+                              className="rounded border-border-subtle accent-[color:var(--color-ai)]"
+                            />
+                            <span className="font-mono">{entry.kind}: {entry.id}</span>
+                          </label>
+                          {renderImportStatusBadge(entry.status)}
+                        </div>
+
+                        {entry.changes.length > 0 && (
+                          <div className="pl-6 pt-1 space-y-1 text-text-secondary">
+                            <span className="font-semibold text-[length:var(--font-size-2xs)] block text-text-primary">
+                              {t('aiConfig.importChangesHeading')}
+                            </span>
+                            {entry.changes.map((ch, idx) => (
+                              <div key={idx} className="font-mono text-[length:var(--font-size-2xs)] break-all">
+                                <span className="text-secondary">{ch.segments.join('.')}:</span>{' '}
+                                <span className="line-through opacity-70">{renderChangeValue(ch, 'before')}</span>{' '}
+                                &rarr;{' '}
+                                <span className="text-git-add">{renderChangeValue(ch, 'after')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {entry.variables.length > 0 && (
+                          <div className="pl-6 pt-1 space-y-1.5">
+                            <span className="font-semibold text-[length:var(--font-size-2xs)] block text-text-primary">
+                              {t('aiConfig.importVariables')}
+                            </span>
+                            {entry.variables.map((v) => renderEnvVarRow(v))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-subtle/15">
+              <button
+                type="button"
+                onClick={() => setOpenCodePlan(null)}
+                className="px-3 py-1.5 rounded-lg border border-border-subtle/30 bg-bg-base/70 text-text-secondary hover:text-text-primary text-xs"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyOpenCodeImport}
+                disabled={
+                  applyingOpenCode ||
+                  Boolean(openCodePlan.target.error) ||
+                  !openCodePlan.entries.some((e) => openCodeSelected[`${e.kind}:${e.id}`])
+                }
+                className="px-3 py-1.5 rounded-lg border border-secondary/40 bg-secondary/15 hover:bg-secondary/25 text-secondary text-xs font-bold transition-colors disabled:opacity-40"
+              >
+                {applyingOpenCode ? t('aiConfig.importing') : t('aiConfig.importExecute')}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ─── 5. Servidores MCP (D12) ─── */}
+      {/* GitCron todavía no los usa: se muestran, se quitan y se importan. De cada servidor
+          se ve el programa o el host y los nombres de sus variables y cabeceras, nunca sus valores. */}
+      <section className="space-y-4 pt-4 border-t border-border-subtle/15">
+        <div>
+          <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
+            <Cpu size={13} />
+            <span>{t('aiConfig.mcpTitle')}</span>
+          </h4>
+          <div className="rounded-lg border border-secondary/30 bg-secondary/10 p-3 text-xs text-text-secondary mt-2 space-y-1">
+            <span className="font-bold text-secondary block">{t('aiConfig.mcpNotice')}</span>
+            <p className="leading-relaxed">{t('aiConfig.mcpNoticeDetail')}</p>
+          </div>
+        </div>
+
+        {/* Los mcp.json en uso, con «Abrir el archivo» y «Mostrar en la carpeta» */}
+        {mcpStatus && mcpStatus.files.length > 0 && (
+          <div className="grid gap-2">
+            {mcpStatus.files.map((file) => renderFileRow(file))}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {(!mcpStatus || mcpStatus.servers.length === 0) ? (
+            <div className="rounded-lg border border-border-subtle/15 bg-bg-base/30 p-3 text-xs text-text-secondary italic">
+              {t('aiConfig.mcpNoServers')}
+            </div>
+          ) : (
+            mcpStatus.servers.map((server) => (
+              <div
+                key={`${server.scope}:${server.name}`}
+                className="p-3 rounded-lg border border-border-subtle/15 bg-bg-base/60 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="space-y-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-text-primary font-mono">{server.name}</span>
+                    {renderMcpKindBadge(server.kind)}
+                    {server.disabled && (
+                      <span className="px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold uppercase tracking-wider bg-bg-surface border border-border-subtle/25 text-text-secondary">
+                        {t('aiConfig.mcpDisabled')}
+                      </span>
+                    )}
+                    <span className="text-[length:var(--font-size-2xs)] text-text-secondary/70">
+                      {server.scope === 'repo' ? t('aiConfig.scopeRepo') : t('aiConfig.scopeGlobal')}
+                    </span>
+                  </div>
+                  {renderMcpServerDetails(server)}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setMcpServerToRemove(server)}
+                  disabled={mcpStatus.files.some((f) => f.path === server.origin && Boolean(f.error))}
+                  className="shrink-0 self-end sm:self-center px-2 py-1 rounded border border-border-subtle/20 bg-bg-base/70 text-text-secondary hover:text-error hover:border-error/40 transition-colors flex items-center gap-1.5 text-xs disabled:opacity-40"
+                  title={t('aiConfig.mcpRemove')}
+                >
+                  <Trash2 size={12} />
+                  <span>{t('aiConfig.mcpRemove')}</span>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Importar servidores MCP al mcp.json global */}
+        <div className="rounded-lg border border-border-subtle/15 bg-bg-base/40 p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-semibold text-text-primary block">
+                {t('aiConfig.mcpImport')}
+              </span>
+              <span className="text-[length:var(--font-size-2xs)] text-text-secondary">
+                {t('aiConfig.mcpImportDesc')}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-text-secondary mr-1">{t('aiConfig.mcpImportSelectSource')}</span>
+              {(['cursor', 'lmstudio', 'opencode'] as const).map((src) => (
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => handlePlanMcpImport(src)}
+                  disabled={loadingMcpPlan}
+                  className={cn(
+                    'px-2.5 py-1 rounded border bg-bg-base/70 hover:border-secondary/40 hover:text-secondary text-xs font-medium transition-colors disabled:opacity-40',
+                    mcpPlan && mcpImportSource === src ? 'border-secondary/40 text-secondary' : 'border-border-subtle/30',
+                  )}
+                >
+                  {mcpSourceLabel(src)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {mcpPlan && (
+            <div className="rounded border border-border-subtle/20 bg-bg-surface/30 p-3 space-y-3 mt-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-text-primary">
+                  {t('aiConfig.mcpImportFrom', { source: mcpSourceLabel(mcpImportSource) })} ({mcpPlan.entries.length})
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sel: Record<string, boolean> = {};
+                      for (const e of mcpPlan.entries) sel[e.name] = true;
+                      setMcpSelected(sel);
+                    }}
+                    className="text-xs text-secondary hover:underline"
+                  >
+                    {t('aiConfig.importSelectAll')}
+                  </button>
+                  <span className="text-border-subtle">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setMcpSelected({})}
+                    className="text-xs text-text-secondary hover:underline"
+                  >
+                    {t('aiConfig.importDeselectAll')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMcpPlan(null)}
+                    aria-label={t('common.cancel')}
+                    title={t('common.cancel')}
+                    className="text-text-secondary hover:text-text-primary ml-2 p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {renderImportProblem(mcpPlan, 'mcp')}
+
+              {mcpPlan.skipped.length > 0 && (
+                <div className="rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
+                  {t('aiConfig.mcpImportSkipped', { servers: mcpPlan.skipped.join(', ') })}
+                </div>
+              )}
+
+              {mcpPlan.source.status === 'ok' && !mcpPlan.target.error && (
+                mcpPlan.entries.length === 0 ? (
+                  <p className="text-xs text-text-secondary italic">{t('aiConfig.mcpImportNoEntries')}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {mcpPlan.entries.map((entry) => {
+                      const isChecked = Boolean(mcpSelected[entry.name]);
+                      return (
+                        <div
+                          key={entry.name}
+                          className={cn(
+                            'p-2.5 rounded border text-xs space-y-1 transition-colors',
+                            isChecked ? 'border-secondary/40 bg-bg-surface/50' : 'border-border-subtle/15 bg-bg-base/30 opacity-70',
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer font-medium text-text-primary">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) =>
+                                  setMcpSelected((prev) => ({ ...prev, [entry.name]: e.target.checked }))
+                                }
+                                className="rounded border-border-subtle accent-[color:var(--color-ai)]"
+                              />
+                              <span className="font-mono">{entry.name}</span>
+                              {renderMcpKindBadge(entry.kind)}
+                            </label>
+                            {renderImportStatusBadge(entry.status)}
+                          </div>
+                          <div className="pl-6 space-y-1">
+                            {renderMcpServerDetails(entry)}
+                            {entry.changedFields.length > 0 && (
+                              <div className="text-[length:var(--font-size-2xs)] text-text-secondary">
+                                {t('aiConfig.importChangesHeading')}{' '}
+                                <span className="font-mono">{entry.changedFields.join(', ')}</span>
+                              </div>
+                            )}
+                            {entry.fromFile.length > 0 && (
+                              <div className="text-[length:var(--font-size-2xs)] text-text-secondary">
+                                {t('aiConfig.mcpFromFile', { vars: entry.fromFile.join(', ') })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border-subtle/15">
+                <button
+                  type="button"
+                  onClick={() => setMcpPlan(null)}
+                  className="px-3 py-1.5 rounded-lg border border-border-subtle/30 bg-bg-base/70 text-text-secondary hover:text-text-primary text-xs"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyMcpImport}
+                  disabled={
+                    applyingMcp ||
+                    Boolean(mcpPlan.target.error) ||
+                    !mcpPlan.entries.some((e) => mcpSelected[e.name])
+                  }
+                  className="px-3 py-1.5 rounded-lg border border-secondary/40 bg-secondary/15 hover:bg-secondary/25 text-secondary text-xs font-bold transition-colors disabled:opacity-40"
+                >
+                  {applyingMcp ? t('aiConfig.importing') : t('aiConfig.importExecute')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -922,7 +1396,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
             message={
               hasStoredVar ? (
                 <span className="block space-y-2">
-                  <span className="block">Se quitará la configuración de este proveedor de gitcron.json.</span>
+                  <span className="block">{t('aiConfig.removeProviderMessage')}</span>
                   <label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-border-subtle/15 text-xs text-text-primary">
                     <input
                       type="checkbox"
@@ -936,7 +1410,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
                   </label>
                 </span>
               ) : (
-                'Se quitará la configuración de este proveedor de gitcron.json.'
+                t('aiConfig.removeProviderMessage')
               )
             }
             warning={affectedText}
@@ -960,6 +1434,20 @@ export function AiSettingsSection({ repoPath = null }: Props) {
           disabled={removingModel}
           onCancel={() => setModelToRemove(null)}
           onConfirm={handleConfirmRemoveModel}
+        />
+      )}
+
+      {/* Diálogo de Confirmación: Quitar Servidor MCP */}
+      {mcpServerToRemove && (
+        <DangerConfirmDialog
+          open={Boolean(mcpServerToRemove)}
+          title={t('aiConfig.mcpRemoveTitle', { name: mcpServerToRemove.name })}
+          message={t('aiConfig.mcpRemoveMessage', { file: mcpServerToRemove.origin })}
+          confirmLabel={removingMcpServer ? t('aiConfig.saving') : t('aiConfig.mcpRemove')}
+          cancelLabel={t('aiConfig.cancel')}
+          disabled={removingMcpServer}
+          onCancel={() => setMcpServerToRemove(null)}
+          onConfirm={handleRemoveMcpServer}
         />
       )}
 
@@ -1076,7 +1564,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
             {modelsState?.loading ? (
               <div className="text-xs text-text-secondary flex items-center gap-1.5 py-2">
                 <RefreshCw size={12} className="animate-spin text-secondary" />
-                <span>Cargando catálogo…</span>
+                <span>{t('aiConfig.loadingCatalog')}</span>
               </div>
             ) : modelsState?.models && modelsState.models.length > 0 ? (
               <div className="grid gap-2">
@@ -1120,7 +1608,69 @@ export function AiSettingsSection({ repoPath = null }: Props) {
     );
   }
 
-  function renderEnvVarRow(v: { name: string; isApiKey: boolean; status: 'system' | 'stored' | 'missing' }) {
+  /** Una fila de archivo en uso (gitcron.json o mcp.json) con «Abrir el archivo» y «Mostrar en la carpeta». */
+  function renderFileRow(file: AiConfigFileInfo) {
+    return (
+      <div
+        key={file.path}
+        className="rounded-lg border border-border-subtle/15 bg-bg-base/70 p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={cn(
+              'px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold uppercase',
+              file.scope === 'repo'
+                ? 'bg-secondary/15 text-secondary'
+                : 'bg-bg-surface text-text-secondary'
+            )}>
+              {file.scope === 'repo' ? t('aiConfig.scopeRepo') : t('aiConfig.scopeGlobal')}
+            </span>
+            {!file.exists && (
+              <span className="text-[length:var(--font-size-2xs)] text-text-secondary/70 italic">
+                ({t('aiConfig.fileNotFound')})
+              </span>
+            )}
+            {file.error && (
+              <span className="text-[length:var(--font-size-2xs)] text-error font-bold flex items-center gap-1">
+                <AlertCircle size={11} />
+                {t('aiConfig.errorLineTag', { line: file.error.line })}
+              </span>
+            )}
+          </div>
+          <p className="font-mono text-[length:var(--font-size-2xs)] text-text-secondary select-all truncate" title={file.path}>
+            {file.path}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleOpenFile(file)}
+            className="px-2.5 py-1.5 rounded border border-border-subtle/20 bg-bg-surface hover:bg-border-subtle/30 text-text-primary text-xs flex items-center gap-1.5 transition-colors font-medium"
+            title={t('aiConfig.openFile')}
+          >
+            <ExternalLink size={12} />
+            <span>{t('aiConfig.openFile')}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleShowInFolder(file)}
+            className="px-2.5 py-1.5 rounded border border-border-subtle/20 bg-bg-surface hover:bg-border-subtle/30 text-text-secondary hover:text-text-primary text-xs flex items-center gap-1.5 transition-colors font-medium"
+            title={t('aiConfig.showInFolder')}
+          >
+            <FolderOpen size={12} />
+            <span>{t('aiConfig.showInFolder')}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Una variable `{env:}` con su estado y el campo para cargarla. `fromFile` (sólo en la
+   * vista previa de importar): el valor está escrito en opencode.json y se guarda al importar.
+   */
+  function renderEnvVarRow(v: { name: string; status: AiImportVariable['status'] }) {
     const isSaving = Boolean(savingKey[v.name]);
     const draft = keyDrafts[v.name] ?? '';
 
@@ -1131,46 +1681,133 @@ export function AiSettingsSection({ repoPath = null }: Props) {
           <code className="font-mono text-text-primary">{`{env:${v.name}}`}</code>
           <span className={cn(
             'px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold',
-            v.status === 'stored' && 'bg-secondary/15 text-secondary',
+            (v.status === 'stored' || v.status === 'fromFile') && 'bg-secondary/15 text-secondary',
             v.status === 'system' && 'bg-border-subtle/20 text-text-secondary',
             v.status === 'missing' && 'bg-warning/15 text-warning',
           )}>
             {v.status === 'stored' && t('aiConfig.envVarStored')}
             {v.status === 'system' && t('aiConfig.envVarSystem')}
             {v.status === 'missing' && t('aiConfig.envVarMissing')}
+            {v.status === 'fromFile' && t('aiConfig.importVarFromFile')}
           </span>
         </div>
 
         {/* Input de contraseña para la clave */}
-        <div className="flex items-center gap-2 flex-1 justify-end min-w-[260px]">
-          <input
-            type="password"
-            autoComplete="off"
-            value={draft}
-            onChange={(e) => setKeyDrafts({ ...keyDrafts, [v.name]: e.target.value })}
-            placeholder={v.status !== 'missing' ? t('aiConfig.keyPlaceholderSet') : t('aiConfig.keyPlaceholderMissing')}
-            className="px-2.5 py-1 rounded border bg-bg-base border-border-subtle/25 text-xs text-text-primary w-44 focus:outline-none focus:border-secondary"
-          />
-          <button
-            type="button"
-            onClick={() => handleSaveKey(v.name)}
-            disabled={isSaving || !draft.trim()}
-            className="px-2.5 py-1 rounded bg-secondary text-bg-surface font-bold text-xs hover:bg-secondary/90 disabled:opacity-40 transition-colors"
-          >
-            {isSaving ? t('aiConfig.saving') : t('aiConfig.saveKey')}
-          </button>
-          {v.status === 'stored' && (
+        {v.status !== 'fromFile' && (
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-[260px]">
+            <input
+              type="password"
+              autoComplete="off"
+              value={draft}
+              onChange={(e) => setKeyDrafts({ ...keyDrafts, [v.name]: e.target.value })}
+              placeholder={v.status !== 'missing' ? t('aiConfig.keyPlaceholderSet') : t('aiConfig.keyPlaceholderMissing')}
+              className="px-2.5 py-1 rounded border bg-bg-base border-border-subtle/25 text-xs text-text-primary w-44 focus:outline-none focus:border-secondary"
+            />
             <button
               type="button"
-              onClick={() => handleRemoveKey(v.name)}
-              className="px-2.5 py-1 rounded border border-border-subtle/20 text-text-secondary hover:text-error text-xs transition-colors"
+              onClick={() => handleSaveKey(v.name)}
+              disabled={isSaving || !draft.trim()}
+              className="px-2.5 py-1 rounded bg-secondary text-bg-surface font-bold text-xs hover:bg-secondary/90 disabled:opacity-40 transition-colors"
             >
-              {t('aiConfig.removeKey')}
+              {isSaving ? t('aiConfig.saving') : t('aiConfig.saveKey')}
             </button>
-          )}
-        </div>
+            {v.status === 'stored' && (
+              <button
+                type="button"
+                onClick={() => handleRemoveKey(v.name)}
+                className="px-2.5 py-1 rounded border border-border-subtle/20 text-text-secondary hover:text-error text-xs transition-colors"
+              >
+                {t('aiConfig.removeKey')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
+  }
+
+  function renderImportStatusBadge(status: 'new' | 'same' | 'changed') {
+    return (
+      <span className={cn(
+        'px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold border uppercase tracking-wider',
+        status === 'new' && 'bg-git-add/15 text-git-add border-git-add/30',
+        status === 'changed' && 'bg-warning/15 text-warning border-warning/30',
+        status === 'same' && 'bg-bg-base/70 text-text-secondary border-border-subtle/30',
+      )}>
+        {status === 'new' && t('aiConfig.importPlanStatusNew')}
+        {status === 'changed' && t('aiConfig.importPlanStatusChanged')}
+        {status === 'same' && t('aiConfig.importPlanStatusSame')}
+      </span>
+    );
+  }
+
+  /** Por qué no hay plan: el origen no existe o no se puede leer, o el archivo de destino está roto. */
+  function renderImportProblem(plan: { source: AiImportSourceInfo; target: AiImportTargetInfo }, kind: 'opencode' | 'mcp') {
+    const { source, target } = plan;
+    let message: string | null = null;
+    if (source.status === 'absent') {
+      message = t(kind === 'opencode' ? 'aiConfig.importSourceNotFound' : 'aiConfig.mcpImportSourceNotFound', { path: source.path });
+    } else if (source.status === 'invalid') {
+      message = t(kind === 'opencode' ? 'aiConfig.importSourceInvalid' : 'aiConfig.mcpImportSourceInvalid', {
+        path: source.path,
+        line: source.error?.line ?? 0,
+      });
+    } else if (target.error) {
+      message = t(kind === 'opencode' ? 'aiConfig.importTargetBroken' : 'aiConfig.mcpImportTargetBroken');
+    }
+    if (!message) return null;
+    return (
+      <div className="rounded border border-warning/30 bg-warning/10 p-2 text-xs text-warning flex items-center gap-2">
+        <AlertCircle size={13} className="shrink-0" />
+        <span>{message}</span>
+      </div>
+    );
+  }
+
+  /** Un lado de un cambio de campo. Un valor escrito a mano en un campo secreto no llega: se dice que está. */
+  function renderChangeValue(change: AiImportFieldChange, side: 'before' | 'after') {
+    if (side === 'before' ? change.beforeHidden : change.afterHidden) return t('aiConfig.importSecretInFile');
+    const value = side === 'before' ? change.before : change.after;
+    if (value === undefined) return '—';
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  function renderMcpKindBadge(kind: AiMcpServerInfo['kind']) {
+    if (kind === 'unknown') return null;
+    return (
+      <span className="px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold uppercase tracking-wider bg-bg-surface border border-border-subtle/25 text-text-secondary">
+        {kind === 'local' ? t('aiConfig.mcpTypeLocal') : t('aiConfig.mcpTypeRemote')}
+      </span>
+    );
+  }
+
+  /** El programa o el host, y los nombres de variables y cabeceras (nunca sus valores). */
+  function renderMcpServerDetails(server: AiMcpServerSummary) {
+    return (
+      <>
+        {(server.command || server.host) && (
+          <div className="font-mono text-[length:var(--font-size-2xs)] text-text-secondary truncate">
+            {server.command ?? server.host}
+          </div>
+        )}
+        {server.envVarNames.length > 0 && (
+          <div className="text-[length:var(--font-size-2xs)] text-text-secondary">
+            {t('aiConfig.mcpEnvVars', { vars: server.envVarNames.join(', ') })}
+          </div>
+        )}
+        {server.headerNames.length > 0 && (
+          <div className="text-[length:var(--font-size-2xs)] text-text-secondary">
+            {t('aiConfig.mcpHeaders', { headers: server.headerNames.join(', ') })}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  function mcpSourceLabel(source: AiMcpImportSource) {
+    if (source === 'cursor') return t('aiConfig.mcpImportSourceCursor');
+    if (source === 'lmstudio') return t('aiConfig.mcpImportSourceLmStudio');
+    return t('aiConfig.mcpImportSourceOpenCode');
   }
 
   function renderModelItem(provider: AiConfigProviderInfo, m: ProviderModelDetail, canLoad: boolean) {

@@ -14,6 +14,13 @@ import * as path from 'node:path';
 import { diffValues, referencedVariables, type FieldChange } from './config-diff';
 import { getDefaultConfigPath, parseGitCronConfigText, type GitCronConfig, type GitCronConfigParseError } from './gitcron-config';
 import { updateGitCronConfigValue, type ConfigWriteResult } from './gitcron-config-writer';
+import {
+  envVarNameFrom,
+  literalSecretsToSave,
+  replaceLiteralSecrets,
+  type SecretNaming,
+  type SecretSlot,
+} from './literal-secrets';
 
 /** `~/.config/opencode/opencode.json`, o `opencode.jsonc` si sólo existe ése. */
 export function getDefaultOpenCodePath(): string {
@@ -21,6 +28,28 @@ export function getDefaultOpenCodePath(): string {
   const json = path.join(dir, 'opencode.json');
   const jsonc = path.join(dir, 'opencode.jsonc');
   return !fs.existsSync(json) && fs.existsSync(jsonc) ? jsonc : json;
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** Dónde puede traer un proveedor de opencode.json una clave o una cabecera escrita a mano. */
+export function providerSecretSlots(id: string, provider: unknown): SecretSlot[] {
+  const apiKeyName = envVarNameFrom(`${id}_API_KEY`);
+  const slots: SecretSlot[] = [
+    { segments: ['options', 'apiKey'], baseName: apiKeyName },
+    { segments: ['apiKey'], baseName: apiKeyName },
+  ];
+  const headers = isObject(provider) && isObject(provider.options) ? provider.options.headers : undefined;
+  for (const header of isObject(headers) ? Object.keys(headers) : []) {
+    slots.push({ segments: ['options', 'headers', header], baseName: envVarNameFrom(`${id}_${header}`) });
+  }
+  return slots;
+}
+
+/** Los campos de un proveedor que guardan secretos: la vista previa no muestra sus valores. */
+export function isProviderSecretField(segments: string[]): boolean {
+  return segments[0] === 'apiKey' || (segments[0] === 'options' && (segments[1] === 'apiKey' || segments[1] === 'headers'));
 }
 
 /**
@@ -45,12 +74,17 @@ export interface ImportPlanEntry {
   id: string;
   /** `new`: no está en gitcron.json; `same`: ya está igual; `changed`: está distinto. */
   status: 'new' | 'same' | 'changed';
-  /** El bloque tal como está en opencode.json, con sus referencias. */
+  /**
+   * El bloque como quedaría en gitcron.json: el de opencode.json con sus referencias,
+   * y cada clave o cabecera escrita a mano cambiada por `{env:NOMBRE}` (D5).
+   */
   value: unknown;
   /** Para `changed`: qué campos cambian (antes en gitcron.json, después desde OpenCode). */
   changes: FieldChange[];
   /** Variables `{env:}` que usa el bloque, para decir cuáles están definidas y cuáles faltan. */
   variables: string[];
+  /** Las variables cuyo valor estaba escrito a mano en opencode.json: van al baúl al aplicar. */
+  fromFile: string[];
 }
 
 export interface OpenCodeImportPlan {
@@ -60,7 +94,15 @@ export interface OpenCodeImportPlan {
   entries: ImportPlanEntry[];
 }
 
-export function planOpenCodeImport(options: { opencodePath?: string; gitcronPath?: string } = {}): OpenCodeImportPlan {
+export interface PlanOpenCodeImportOptions {
+  opencodePath?: string;
+  gitcronPath?: string;
+  /** Las variables guardadas en el baúl: un nombre ocupado con otro valor no se pisa. */
+  stored?: (name: string) => string | undefined;
+  env?: NodeJS.ProcessEnv;
+}
+
+export function planOpenCodeImport(options: PlanOpenCodeImportOptions = {}): OpenCodeImportPlan {
   const sourceRead = readJsoncSource(options.opencodePath ?? getDefaultOpenCodePath());
   const { data, ...source } = sourceRead;
   const targetPath = options.gitcronPath ?? getDefaultConfigPath();
@@ -77,11 +119,19 @@ export function planOpenCodeImport(options: { opencodePath?: string; gitcronPath
     current = parsed.config;
   }
 
+  const naming: SecretNaming = {
+    stored: options.stored ?? (() => undefined),
+    env: options.env ?? process.env,
+    taken: new Map(),
+  };
   for (const kind of ['provider', 'agent'] as const) {
     const blocks = (data[kind] ?? {}) as Record<string, unknown>;
     const existing = (current[kind] ?? {}) as Record<string, unknown>;
-    for (const [id, value] of Object.entries(blocks)) {
+    for (const [id, raw] of Object.entries(blocks)) {
       const before = existing[id];
+      const { value, fromFile } = kind === 'provider'
+        ? replaceLiteralSecrets(raw, providerSecretSlots(id, raw), before, 'opencode', naming)
+        : { value: raw, fromFile: [] };
       const changes = before === undefined ? [] : diffValues(before, value);
       plan.entries.push({
         kind,
@@ -90,6 +140,7 @@ export function planOpenCodeImport(options: { opencodePath?: string; gitcronPath
         value,
         changes,
         variables: referencedVariables(value),
+        fromFile,
       });
     }
   }
@@ -101,17 +152,35 @@ export function planOpenCodeImport(options: { opencodePath?: string; gitcronPath
  * confirmación: la pantalla muestra el plan y manda sólo lo que la persona aceptó.
  * Los bloques `same` no se reescriben. Cada bloque es una escritura puntual: el
  * resto del archivo (comentarios, otros bloques) no cambia.
+ *
+ * Si un bloque trae valores escritos a mano (`fromFile`), se releen de opencode.json
+ * y se guardan con `saveSecret` antes de escribir: el archivo nunca queda apuntando
+ * a una variable que no se guardó. opencode.json sólo se lee.
  */
 export function applyOpenCodeImport(options: {
   gitcronPath?: string;
   entries: ImportPlanEntry[];
+  opencodePath?: string;
+  saveSecret?: (name: string, value: string) => void;
 }): Array<{ kind: ImportPlanEntry['kind']; id: string; result: ConfigWriteResult }> {
   const filePath = options.gitcronPath ?? getDefaultConfigPath();
-  return options.entries
-    .filter((entry) => entry.status !== 'same')
-    .map((entry) => ({
-      kind: entry.kind,
-      id: entry.id,
-      result: updateGitCronConfigValue({ filePath, segments: [entry.kind, entry.id], value: entry.value }),
-    }));
+  const toWrite = options.entries.filter((entry) => entry.status !== 'same');
+
+  if (toWrite.some((entry) => entry.fromFile.length > 0)) {
+    if (!options.saveSecret) throw new Error('applyOpenCodeImport: falta saveSecret para los valores escritos a mano');
+    const providers = readJsoncSource(options.opencodePath ?? getDefaultOpenCodePath()).data?.provider;
+    for (const entry of toWrite) {
+      if (entry.kind !== 'provider' || entry.fromFile.length === 0) continue;
+      const raw = isObject(providers) ? providers[entry.id] : undefined;
+      for (const { name, value } of literalSecretsToSave(raw, entry.value, providerSecretSlots(entry.id, raw))) {
+        options.saveSecret(name, value);
+      }
+    }
+  }
+
+  return toWrite.map((entry) => ({
+    kind: entry.kind,
+    id: entry.id,
+    result: updateGitCronConfigValue({ filePath, segments: [entry.kind, entry.id], value: entry.value }),
+  }));
 }

@@ -546,7 +546,7 @@ export function SettingsPanel({
                       opt-in e independiente del switch de la vista. */}
                   {enableCartography && (
                     <div className="border-t border-border-subtle/15 pt-4">
-                      <CartoAISettings />
+                      <CartoAISettings onNavigateToAiModels={() => setSelectedSettingsSection('aiModels')} />
                     </div>
                   )}
                 </div>
@@ -660,6 +660,7 @@ export function SettingsPanel({
                       repoName={repoName}
                       onPrediction={onTemporalPrediction}
                       onConfigSaved={onTemporalConfigSaved}
+                      onNavigateToAiModels={() => setSelectedSettingsSection('aiModels')}
                     />
                   ) : (
                     <p className="text-sm text-text-secondary">

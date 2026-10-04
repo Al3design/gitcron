@@ -15,19 +15,14 @@ import type {
 } from '@/types/temporal-agent';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
-import { Brain } from 'lucide-react';
+import { Brain, Cpu } from 'lucide-react';
 import { CopyButton } from './CopyButton';
-import { OPENROUTER_MODELS } from '@/lib/openrouter-models';
 import { AiUseLine } from './ai/AiUseLine';
 import { AiSentDetails } from './ai/AiSentDetails';
 
 const COLOR_SUCCESS = 'var(--color-git-add)';
 const COLOR_PRIMARY = 'var(--color-primary)';
 const COLOR_WARNING = 'var(--color-warning)';
-
-// Phase 3 / Phase 4: OpenRouter is the primary provider (one key → many models).
-// The model catalogue lives in lib/openrouter-models (shared with Cartografía).
-const ACTIVE_PROVIDER = 'openrouter';
 
 interface Props {
   repoPath: string;
@@ -36,9 +31,11 @@ interface Props {
   onPrediction?: (result: PredictionResult) => void;
   /** Capa 2C: notify parent when config is saved so threshold filters reactively. */
   onConfigSaved?: (config: TemporalAgentConfig) => void;
+  /** Navegar a la sección Motores y modelos en Ajustes. */
+  onNavigateToAiModels?: () => void;
 }
 
-export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConfigSaved }: Props) {
+export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConfigSaved, onNavigateToAiModels }: Props) {
   const t = useT();
   const language = useGitStore((s) => s.language);
   const [config, setConfig] = useState<TemporalAgentConfig | null>(null);
@@ -47,13 +44,6 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  // AI key state — only a boolean ("is there a key?") and a safe fingerprint are
-  // ever read back. The fingerprint is a SHA-256 hash id, NOT part of the key.
-  const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null);
-  const [keyDraft, setKeyDraft] = useState('');
-  const [savingKey, setSavingKey] = useState(false);
 
   // Prediction trigger (Phase 4: provider is stubbed in main; draw is Phase 5).
   const [predicting, setPredicting] = useState(false);
@@ -69,24 +59,24 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
     window.api.temporalAgent.loadConfig(repoPath, repoName).then((c) => {
       if (alive) setConfig(c);
     });
-    window.api.ai.hasKey(ACTIVE_PROVIDER).then((r) => {
-      if (alive) setHasKey(r.success ? Boolean(r.data) : false);
-    });
-    window.api.ai.keyFingerprint(ACTIVE_PROVIDER).then((r) => {
-      if (alive) setKeyFingerprint(r.success ? r.data ?? null : null);
-    });
     return () => {
       alive = false;
     };
   }, [repoPath, repoName]);
 
-  async function refreshHasKey() {
-    const [hasR, fpR] = await Promise.all([
-      window.api.ai.hasKey(ACTIVE_PROVIDER),
-      window.api.ai.keyFingerprint(ACTIVE_PROVIDER),
-    ]);
-    setHasKey(hasR.success ? Boolean(hasR.data) : false);
-    setKeyFingerprint(fpR.success ? fpR.data ?? null : null);
+  // Quitar el modelo propio del repositorio se guarda en el acto y sin arrastrar lo demás
+  // que esté sin guardar en la pantalla: se parte de la configuración guardada.
+  async function removeRepoModel() {
+    setSaveError(null);
+    try {
+      const saved = await window.api.temporalAgent.loadConfig(repoPath, repoName);
+      const next: TemporalAgentConfig = { ...saved, model: undefined };
+      await window.api.temporalAgent.saveConfig(repoPath, next);
+      patch({ model: undefined });
+      onConfigSaved?.(next);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function predict() {
@@ -122,24 +112,6 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
 
   async function cancelPrediction() {
     await window.api.ai.cancelPrediction();
-  }
-
-  async function saveKey() {
-    const k = keyDraft.trim();
-    if (!k) return;
-    setSavingKey(true);
-    try {
-      await window.api.ai.setKey(ACTIVE_PROVIDER, k);
-      setKeyDraft(''); // never keep the key in component state
-      await refreshHasKey();
-    } finally {
-      setSavingKey(false);
-    }
-  }
-
-  async function removeKey() {
-    await window.api.ai.removeKey(ACTIVE_PROVIDER);
-    await refreshHasKey();
   }
 
   // Curated list of funny and thoughtful loading phrases in Spanish and English (50+ items)
@@ -447,82 +419,42 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
         </Row>
       </div>
 
-      {/* AI access — the renderer only ever learns whether a key exists. */}
-      <div style={cardStyle}>
-        <h4 style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, margin: '0 0 var(--space-3)', color: COLOR_PRIMARY }}>
-          {t('temporalAgent.aiAccessHeading')}
-        </h4>
-        {/* El proveedor y el modelo salen de gitcron.json (tarea 4.3). La clave y el
-            modelo de abajo siguen valiendo cuando el uso va a OpenRouter. */}
-        <Row label={t('temporalAgent.apiKeyStatus')}>
-          {hasKey === null ? (
-            <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{t('temporalAgent.keyChecking')}</span>
-          ) : hasKey ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
-              <span style={{ fontSize: 'var(--font-size-xs)', color: COLOR_SUCCESS }}>{t('temporalAgent.keyConfigured')}</span>
-              {keyFingerprint && (
-                <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
-                  {t('temporalAgent.keyFingerprint', { fp: keyFingerprint })}
-                </code>
-              )}
-            </div>
-          ) : (
-            <span style={{ fontSize: 'var(--font-size-xs)', color: COLOR_WARNING }}>{t('temporalAgent.keyNotSet')}</span>
-          )}
-        </Row>
-        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', margin: '0 0 var(--space-2)' }}>
-          {t('temporalAgent.keyDescription')}
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <input
-            type="password"
-            value={keyDraft}
-            onChange={(e) => setKeyDraft(e.target.value)}
-            placeholder={hasKey ? t('temporalAgent.keyPlaceholderReplace') : t('temporalAgent.keyPlaceholderPaste')}
-            autoComplete="off"
-            style={{ ...selectStyle, flex: 1 }}
-          />
-          <button onClick={saveKey} disabled={savingKey || !keyDraft.trim()} style={primaryBtn}>
-            {savingKey ? t('temporalAgent.saving') : t('temporalAgent.saveKey')}
+      {/* El modelo elegido antes para este repositorio (`config.model`): `withRepoModel` lo
+          aplica sólo cuando el uso va a OpenRouter. Se muestra como dato para poder quitarlo;
+          elegir modelo es en «Motores y modelos». */}
+      {config?.model && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-subtle bg-bg-surface p-4">
+          <span className="text-xs text-text-secondary">
+            {t('temporalAgent.repoModelCustom', { model: config.model })}
+          </span>
+          <button
+            type="button"
+            onClick={() => void removeRepoModel()}
+            className="rounded-md border border-border-subtle px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
+            {t('temporalAgent.removeRepoModel')}
           </button>
-          {hasKey && (
-            <button onClick={removeKey} style={ghostBtn}>
-              {t('temporalAgent.removeKey')}
-            </button>
-          )}
         </div>
-
-        {/* Model id — NOT a secret; saved in plain config with the rest of the prefs. */}
-        <div style={{ marginTop: 'var(--space-3)' }}>
-          <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--space-1)' }}>
-            {t('temporalAgent.modelLabel')}
-          </label>
-          <ModelSelect
-            value={config.model ?? ''}
-            onChange={(v) => patch({ model: v })}
-          />
-          {config.model && (
-            <p style={{ fontSize: 'var(--font-size-xs)', color: COLOR_SUCCESS, margin: 'var(--space-1) 0 0' }}>
-              {t('temporalAgent.modelActive')}{' '}
-              <code style={{ fontFamily: 'JetBrains Mono, monospace' }}>{config.model}</code>
-            </p>
-          )}
-          {!config.model && (
-            <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', margin: 'var(--space-1) 0 0' }}>
-              {t('temporalAgent.modelEmptyPrefix')}{' '}
-              <code>anthropic/claude-sonnet-4.5</code>
-              {t('temporalAgent.modelEmptySuffix')}
-            </p>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Prediction trigger — visually distinct from save/config: this is the expensive action. */}
       {/* El borde y el degradé de IA salen de la clase compartida `.ai-panel` (D20); acá
           sólo el aire y el redondeo de las demás tarjetas. */}
       <div className="ai-panel" style={aiCardStyle}>
-        <div style={{ marginBottom: 'var(--space-3)' }}>
-          <AiUseLine use="gitcron-temporal" repoPath={repoPath} />
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-[200px] flex-1">
+            <AiUseLine use="gitcron-temporal" repoPath={repoPath} />
+          </div>
+          {onNavigateToAiModels && (
+            <button
+              type="button"
+              onClick={onNavigateToAiModels}
+              className="inline-flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-text-secondary transition-colors hover:text-text-primary"
+            >
+              <Cpu size={13} />
+              <span>{t('temporalAgent.goToAiModels')}</span>
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', flex: 1, minWidth: 200, lineHeight: 1.4 }}>
@@ -783,52 +715,6 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
         }}
       />
     </button>
-  );
-}
-
-function ModelSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const t = useT();
-  const [customMode, setCustomMode] = useState(false);
-  const knownIds = OPENROUTER_MODELS.map((m) => m.id);
-  const isKnown = knownIds.includes(value);
-  const selectValue = !value ? '' : isKnown ? value : '__custom__';
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-      <select
-        value={customMode ? '__custom__' : selectValue}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === '__custom__') {
-            setCustomMode(true);
-            onChange('');
-          } else {
-            setCustomMode(false);
-            onChange(v);
-          }
-        }}
-        style={{ ...selectStyle, width: '100%' }}
-      >
-        <option value="">{t('temporalAgent.modelDefaultOption')}</option>
-        {OPENROUTER_MODELS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label} — {m.price}/M tokens
-          </option>
-        ))}
-        <option value="__custom__">{t('temporalAgent.modelCustomOption')}</option>
-      </select>
-      {(customMode || (!isKnown && value)) && (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={t('temporalAgent.modelCustomPlaceholder')}
-          autoComplete="off"
-          spellCheck={false}
-          style={{ ...selectStyle, width: '100%' }}
-        />
-      )}
-    </div>
   );
 }
 

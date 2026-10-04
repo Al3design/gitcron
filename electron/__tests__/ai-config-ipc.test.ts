@@ -35,7 +35,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { registerAiConfigHandlers, setAiConfigPathForTesting } from '../ipc/ai-config';
+import { registerAiConfigHandlers, setAiConfigPathForTesting, setMcpPathForTesting } from '../ipc/ai-config';
 import { registerAiHandlers } from '../ipc/ai';
 import { registerCommitMessageAiHandlers, setCommitAiConfigPathForTesting, resetCommitAiConfigWatcherForTesting } from '../ipc/commit-message-ai';
 import { setModelLoadSettingsDirForTesting } from '../ai/config/model-load-settings';
@@ -89,6 +89,7 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
     setToolModelsExecutorsForTesting(null, null);
     resetCommitAiConfigWatcherForTesting();
     setAiConfigPathForTesting(null);
+    setMcpPathForTesting(null);
     setCommitAiConfigPathForTesting(null);
     setModelLoadSettingsDirForTesting(null);
     resetGitCronConfigCacheForTesting();
@@ -96,7 +97,7 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('«Abrir el archivo» y «Mostrar en la carpeta» rechazan cualquier ruta que no sea un gitcron.json en uso', async () => {
+  it('«Abrir el archivo» y «Mostrar en la carpeta» rechazan cualquier ruta que no sea un gitcron.json o un mcp.json en uso', async () => {
     fs.writeFileSync(globalPath, JSON.stringify({ model: 'casa/qwen' }, null, 2));
 
     const openFile = handlers.get('ai-config:open-file')!;
@@ -107,7 +108,7 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
     fs.writeFileSync(badPath, 'hola');
     const resBad = await openFile({ sender }, { filePath: badPath });
     expect(resBad.success).toBe(false);
-    expect(resBad.error).toContain('no es un gitcron.json en uso');
+    expect(resBad.error).toContain('no es un gitcron.json ni un mcp.json en uso');
     expect(mockShellOpenPath).not.toHaveBeenCalled();
 
     // 2. Directorio rechazado
@@ -128,6 +129,14 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
     const resShowGood = await showInFolder({ sender }, { filePath: globalPath });
     expect(resShowGood.success).toBe(true);
     expect(mockShellShowItemInFolder).toHaveBeenCalledWith(globalPath);
+
+    // 5. El mcp.json global en uso también se acepta (sección de servidores MCP)
+    const mcpPath = path.join(dir, 'mcp.json');
+    setMcpPathForTesting(mcpPath);
+    fs.writeFileSync(mcpPath, JSON.stringify({ mcpServers: {} }, null, 2));
+    const resMcp = await openFile({ sender }, { filePath: mcpPath });
+    expect(resMcp.success).toBe(true);
+    expect(mockShellOpenPath).toHaveBeenCalledWith(mcpPath);
   });
 
   it('Contexto y tiempo de carga: se guardan y se releen tras reiniciar; el tiempo NUNCA aparece en gitcron.json', async () => {

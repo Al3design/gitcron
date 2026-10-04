@@ -259,6 +259,19 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-config:open-file', args),
     showInFolder: (args: { filePath: string; repoPath?: string | null }) =>
       ipcRenderer.invoke('ai-config:show-in-folder', args),
+    // Importar desde OpenCode y servidores MCP: las rutas las decide el proceso principal.
+    planOpenCodeImport: () =>
+      ipcRenderer.invoke('ai-config:plan-opencode-import'),
+    applyOpenCodeImport: (args: { entries: Array<{ kind: 'provider' | 'agent'; id: string }> }) =>
+      ipcRenderer.invoke('ai-config:apply-opencode-import', args),
+    getMcpStatus: (args?: { repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:get-mcp-status', args),
+    removeMcpServer: (args: { filePath: string; name: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:remove-mcp-server', args),
+    planMcpImport: (args: { source: 'cursor' | 'lmstudio' | 'opencode' }) =>
+      ipcRenderer.invoke('ai-config:plan-mcp-import', args),
+    applyMcpImport: (args: { source: 'cursor' | 'lmstudio' | 'opencode'; entries: string[] }) =>
+      ipcRenderer.invoke('ai-config:apply-mcp-import', args),
   },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.
