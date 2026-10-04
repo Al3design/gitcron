@@ -240,6 +240,10 @@ Por eso:
   paso (casi todo de OpenCode).
 - **Las credenciales guardadas** están en la carpeta de datos que da `opencode debug paths` (en Windows,
   `~/.local/share/opencode/auth.json`).
+- **La instrucción va por la entrada estándar**, que se cierra al terminar de escribirla: `run` la toma como
+  mensaje (probado con dos renglones y comillas). En la máquina de Ale OpenCode es `opencode.CMD` (instalado con
+  pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
+  modelo y la sesión, que se validan antes.
 
 ### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
