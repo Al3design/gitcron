@@ -118,7 +118,27 @@ export function AiModelControls({
     return () => {
       alive = false;
     };
-  }, [externalModels, repoPath, aiModel, onModelsChange]);
+  }, [externalModels, repoPath, aiModel, onModelsChange, use]);
+
+  useEffect(() => {
+    if (!aiModel) return;
+    let alive = true;
+    if (typeof window !== 'undefined' && window.api?.aiConfig?.getModelLoadSettings) {
+      window.api.aiConfig
+        .getModelLoadSettings({ modelId: aiModel, use, repoPath })
+        .then((res) => {
+          if (!alive || !res?.success || !res.data) return;
+          rememberAiSettings(repoPath, {
+            contextLength: res.data.contextLength,
+            ttlMinutes: res.data.ttlMinutes,
+          });
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      alive = false;
+    };
+  }, [aiModel, use, repoPath]);
 
   const chosenModel = models.find((m) => m.id === aiModel);
   const aiNeedsLoad = Boolean(
@@ -296,6 +316,15 @@ export function AiModelControls({
             onChange={(e) =>
               rememberAiSettings(repoPath, { contextLength: Number(e.target.value) || 0 })
             }
+            // Se guarda al soltar el campo: con cada tecla se escribía gitcron.json.
+            onBlur={(e) => {
+              const val = Number(e.target.value) || 0;
+              if (aiModel && val >= MIN_CONTEXT_LENGTH) {
+                window.api?.aiConfig
+                  ?.setModelLoadSettings({ modelId: aiModel, use, repoPath, contextLength: val })
+                  .catch(() => undefined);
+              }
+            }}
           />
         </label>
 
@@ -313,6 +342,14 @@ export function AiModelControls({
             onChange={(e) =>
               rememberAiSettings(repoPath, { ttlMinutes: Number(e.target.value) || 0 })
             }
+            onBlur={(e) => {
+              const val = Number(e.target.value) || 0;
+              if (aiModel && val >= 1) {
+                window.api?.aiConfig
+                  ?.setModelLoadSettings({ modelId: aiModel, use, repoPath, ttlMinutes: val })
+                  .catch(() => undefined);
+              }
+            }}
           />
         </label>
 

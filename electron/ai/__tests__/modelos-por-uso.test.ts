@@ -398,10 +398,10 @@ describe('4.4 el servidor donde se cargan modelos, por uso', () => {
       });
       process.env.GITCRON_TEST_CASA = 'k-casa';
       expect(loadServerFor('gitcron-commit')).toEqual({
-        server: { serverUrl: 'http://192.168.1.7:8888', headers: { authorization: 'Bearer k-casa' } },
+        server: { providerId: 'casa', serverUrl: 'http://192.168.1.7:8888', headers: { authorization: 'Bearer k-casa' } },
       });
       // El análisis no tiene modelo: el selector va por el «lmstudio» del archivo, no por el de la redacción.
-      expect(loadServerFor('gitcron-openspec-analysis')).toEqual({ server: { serverUrl: 'http://127.0.0.1:1234', headers: {} } });
+      expect(loadServerFor('gitcron-openspec-analysis')).toEqual({ server: { providerId: 'lmstudio', serverUrl: 'http://127.0.0.1:1234', headers: {} } });
       expect(loadServerFor('gitcron-temporal')).toEqual({ error: 'Codex no es un servidor donde se carguen modelos.' });
 
       write({ provider: {} });

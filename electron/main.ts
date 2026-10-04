@@ -21,6 +21,7 @@ import { registerCartoGraphHandlers } from './ipc/carto-graph';
 import { registerCartoAiHandlers } from './ipc/carto-ai';
 import { registerCommitMessageAiHandlers } from './ipc/commit-message-ai';
 import { readLegacySources, registerAiUseHandlers } from './ipc/ai-use';
+import { registerAiConfigHandlers } from './ipc/ai-config';
 import { registerAiUseHistoryHandlers } from './ipc/ai-use-history';
 import { migrateGitCronConfigIfMissing } from './ai/config/gitcron-config-migration';
 import { getDefaultConfigPath } from './ai/config/gitcron-config';
@@ -296,6 +297,7 @@ registerCartoGraphHandlers(getMainWindow); // carto:graph-* (CodeGraph embebido,
 registerCartoAiHandlers();         // carto:ai-* (proveedor de IA local/online; opt-in; secretos sólo en main)
 registerCommitMessageAiHandlers(); // commit-ai:* (redactar el asunto del commit con un modelo local; nunca solo)
 registerAiUseHandlers();           // ai-use:* (qué modelo usa cada uso de texto según gitcron.json; «usar lo que tenías»)
+registerAiConfigHandlers();        // ai-config:* (ajustes de motores y modelos de IA, tarea 6.1)
 registerAiUseHistoryHandlers();    // ai-use-history:* (historial de usos de IA por repositorio, D19)
 const notifyPipelineRepoChanged = registerPipelineHandlers(getMainWindow); // pipeline:* read-only
 const pipelineControlBus = new PipelineControlBus();

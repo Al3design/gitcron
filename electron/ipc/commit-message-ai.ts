@@ -68,6 +68,7 @@ import {
 import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
 import { loadServerFor } from '../ai/use-resolution';
 import { setLastRequestForUse } from '../ai/text-use';
+import { getModelLoadSettings, saveModelLoadSettings } from '../ai/config/model-load-settings';
 
 /**
  * Qué instancia cargó esta aplicación, por servidor.
@@ -341,10 +342,12 @@ function loadTarget(raw: unknown): { use: TextUse; repoPath: string | null } {
   };
 }
 
-function serverForLoad(raw: unknown): { serverUrl?: string; error?: string } {
+function serverForLoad(raw: unknown): { serverUrl?: string; providerId?: string; error?: string } {
   const { use, repoPath } = loadTarget(raw);
   const found = loadServerFor(use, repoPath);
-  return 'server' in found ? { serverUrl: found.server.serverUrl } : { error: found.error };
+  return 'server' in found
+    ? { serverUrl: found.server.serverUrl, providerId: found.server.providerId }
+    : { error: found.error };
 }
 import {
   buildUserPrompt,
@@ -450,8 +453,8 @@ export function registerCommitMessageAiHandlers(): void {
     contextLength?: number,
     ttlSeconds?: number,
   ): Promise<Result<LoadOutcome>> => {
-    const { serverUrl, error } = serverForLoad(target);
-    if (!serverUrl) return fail(new Error(error || 'No se pudo resolver el servidor de LM Studio.'));
+    const { serverUrl, providerId: loadProviderId, error } = serverForLoad(target);
+    if (!serverUrl || !loadProviderId) return fail(new Error(error || 'No se pudo resolver el servidor de LM Studio.'));
     const endpoint = serverUrl;
 
     // Una carga a la vez por servidor. Sin esta guardia, dos pedidos simultáneos
@@ -470,7 +473,41 @@ export function registerCommitMessageAiHandlers(): void {
       const catalog = await fetchModelCatalog(endpoint);
       const chosen = catalog.find((entry) => entry.id === model);
       if (!chosen) return fail(new Error('Ese modelo no está en el catálogo del servidor.'));
-      const wanted = contextLength ?? PREFERRED_CONTEXT_LENGTH;
+
+      // Resolver proveedor para leer/escribir limit.context y TTL
+      const { repoPath } = loadTarget(target);
+      const configPath = configPathOverride ?? getDefaultConfigPath();
+      const repo = repoPath ? authorizedRepoRoot(repoPath) : null;
+      const loaded = loadGitCronConfig({ globalPath: configPath, repoPath: repo });
+
+      // El proveedor es el del servidor donde se carga (el del uso, o el «lmstudio» del
+      // archivo para el selector): siempre declarado, así que `limit.context` cae en su bloque.
+      const providerId = loadProviderId;
+
+      const declaredContext = loaded.config?.provider?.[providerId]?.models?.[model]?.limit?.context;
+      let wanted: number;
+      if (typeof contextLength === 'number' && contextLength > 0) {
+        wanted = contextLength;
+        if (wanted !== declaredContext) {
+          const targetFile = loaded.originOf(['provider', providerId]) ?? configPath;
+          updateGitCronConfigValue({
+            filePath: targetFile,
+            segments: ['provider', providerId, 'models', model, 'limit', 'context'],
+            value: wanted,
+          });
+        }
+      } else {
+        wanted = typeof declaredContext === 'number' && declaredContext > 0 ? declaredContext : PREFERRED_CONTEXT_LENGTH;
+      }
+
+      const savedTtl = getModelLoadSettings(providerId, model);
+      let effectiveTtl: number;
+      if (typeof ttlSeconds === 'number' && ttlSeconds > 0) {
+        effectiveTtl = ttlSeconds;
+        saveModelLoadSettings(providerId, model, { ttlSeconds: effectiveTtl });
+      } else {
+        effectiveTtl = savedTtl?.ttlSeconds ?? DEFAULT_TTL_SECONDS;
+      }
 
       // Ya cargado y con contexto suficiente: no se vuelve a cargar. Pedirlo de
       // nuevo **no reemplaza, apila**: comprobado, la segunda carga devuelve
@@ -503,7 +540,7 @@ export function registerCommitMessageAiHandlers(): void {
       }
 
       const outcome = await loadLocalModel(
-        endpoint, model, wanted, ttlSeconds ?? DEFAULT_TTL_SECONDS, controller.signal,
+        endpoint, model, wanted, effectiveTtl, controller.signal,
       );
 
       // Y se libera lo que esta aplicación había cargado antes. Sólo eso:

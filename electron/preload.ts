@@ -230,6 +230,36 @@ contextBridge.exposeInMainWorld('api', {
     lastRequest: (args: { use: string }) =>
       ipcRenderer.invoke('ai-use:last-request', args),
   },
+  aiConfig: {
+    status: (args?: { repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:status', args),
+    providerModels: (args: { providerId: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:provider-models', args),
+    addProvider: (args: { id: string; name: string; baseURL: string; apiKey?: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:add-provider', args),
+    removeProvider: (args: { id: string; repoPath?: string | null; deleteStoredVar?: boolean }) =>
+      ipcRenderer.invoke('ai-config:remove-provider', args),
+    addModel: (args: { providerId: string; modelId: string; name?: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:add-model', args),
+    removeModel: (args: { providerId: string; modelId: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:remove-model', args),
+    getModelLoadSettings: (args: { providerId?: string; modelId: string; use?: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:get-model-load-settings', args),
+    setModelLoadSettings: (args: { providerId?: string; modelId: string; use?: string; repoPath?: string | null; contextLength?: number; ttlMinutes?: number }) =>
+      ipcRenderer.invoke('ai-config:set-model-load-settings', args),
+    setGeneralModel: (args: { model: string; effort?: string; variant?: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:set-general-model', args),
+    clearUseException: (args: { use: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:clear-use-exception', args),
+    setUseParam: (args: { use: string; param: string; value: unknown; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:set-use-param', args),
+    removeUseParam: (args: { use: string; param: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:remove-use-param', args),
+    openFile: (args: { filePath: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:open-file', args),
+    showInFolder: (args: { filePath: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:show-in-folder', args),
+  },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.
   commitAi: {

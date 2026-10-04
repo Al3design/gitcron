@@ -57,6 +57,18 @@ const AgentDashboard = dynamic(
   },
 );
 
+const AiSettingsSection = dynamic(
+  () => import('@/components/ai/AiSettingsSection').then((mod) => mod.AiSettingsSection),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-48 w-full items-center justify-center text-text-secondary">
+        <Loader2 size={18} className="animate-spin text-secondary" />
+      </div>
+    ),
+  },
+);
+
 const AUTO_FETCH_INTERVALS = [5, 10, 30, 60] as const;
 
 interface AutoFetchSectionProps {
@@ -654,6 +666,12 @@ export function SettingsPanel({
                       Abrí un repositorio para configurar el Temporal Agent.
                     </p>
                   )}
+                </div>
+              )}
+
+              {selectedSettingsSection === 'aiModels' && (
+                <div className="space-y-4">
+                  <AiSettingsSection repoPath={repoPath} />
                 </div>
               )}
 

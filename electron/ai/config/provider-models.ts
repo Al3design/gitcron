@@ -221,3 +221,21 @@ export function addModelToConfig(options: {
     value: options.name ? { name: options.name } : {},
   });
 }
+
+/**
+ * «Quitar del archivo»: elimina un modelo declarado en el mismo archivo que declara
+ * su proveedor (el global o el del repositorio), como escritura puntual.
+ */
+export function removeModelFromConfig(options: {
+  providerId: string;
+  modelId: string;
+  loaded: LoadedGitCronConfig;
+}): ConfigWriteResult | { ok: false; reason: 'no-provider' } {
+  const file = options.loaded.originOf(['provider', options.providerId]);
+  if (!file) return { ok: false, reason: 'no-provider' };
+  return updateGitCronConfigValue({
+    filePath: file,
+    segments: ['provider', options.providerId, 'models', options.modelId],
+    value: undefined,
+  });
+}

@@ -33,6 +33,8 @@ export function resolveForUse(use: TextUse, repoPath?: unknown, screenModel?: st
 
 /** El servidor donde se listan, cargan y expulsan modelos de LM Studio para un uso. */
 export interface LoadServer {
+  /** El proveedor de gitcron.json que lo declara (donde va `limit.context` del modelo). */
+  providerId: string;
   /** Origen del servidor, sin `/v1`. */
   serverUrl: string;
   /** Cabeceras del proveedor y la clave como Bearer, para preguntar si tiene la API nativa. */
@@ -69,6 +71,7 @@ export function loadServerFor(use: TextUse, repoPath?: unknown): { server: LoadS
   }
   return {
     server: {
+      providerId: resolved.providerId,
       serverUrl: serverOrigin(resolved.baseURL),
       headers: {
         ...(resolved.headers ?? {}),

@@ -15,7 +15,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity, AlertCircle, AlertTriangle, Archive, ArrowLeft, Boxes, Check, CheckCircle2,
-  ChevronDown, Cloud, Download, Edit2, ExternalLink, FileInput, FileText,
+  ChevronDown, Cloud, Cpu, Download, Edit2, ExternalLink, FileInput, FileText,
   Folder, FolderOpen, FolderTree, GitBranch, GitMerge, GitPullRequest, Github, Globe, HelpCircle, Layers,
   Link2, Lock, Map, Monitor, Plus, Redo, RefreshCw, RotateCcw, Server, Settings,
   SlidersHorizontal, Sparkles, Tag, Terminal, Trash2, TreePine, Type, Undo, Upload,
@@ -1064,6 +1064,7 @@ export function RepoSidebar({
                   { id: 'cronometric', label: t('settings.timeline'), icon: <Sparkles size={14} /> },
                   { id: 'cartography', label: t('settings.cartography'), icon: <Map size={14} /> },
                   { id: 'temporalAgent', label: t('settings.temporalAgent'), icon: <Layers size={14} /> },
+                  { id: 'aiModels', label: t('settings.aiModels'), icon: <Cpu size={14} /> },
                   { id: 'agentDashboard', label: t('settings.agentDashboard'), icon: <Activity size={14} /> },
                   { id: 'autoFetch', label: t('settings.autoFetch'), icon: <RotateCcw size={14} /> },
                   { id: 'osNotifications', label: t('settings.osNotifications'), icon: <AlertCircle size={14} /> },

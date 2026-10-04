@@ -12,13 +12,14 @@ import type { AiTextUse, AiToolProvider, AiUseChoosePayload } from '@/types/ai-u
 import styles from './AiModelPicker.module.css';
 
 export interface AiModelPickerProps {
-  use: AiTextUse;
+  use?: AiTextUse | 'general';
   repoPath?: string | null;
   onClose: () => void;
   onSaved?: () => void;
+  onChoose?: (payload: { model: string; effort?: string; variant?: string }) => Promise<void>;
 }
 
-export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiModelPickerProps) {
+export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose, onSaved, onChoose }: AiModelPickerProps) {
   const t = useT();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,8 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
       }
 
       try {
-        const res = await aiUse.models({ use, repoPath });
+        const queryUse = use === 'general' ? 'gitcron-commit' : use;
+        const res = await aiUse.models({ use: queryUse, repoPath });
         if (!alive) return;
         setLoading(false);
         if (!res?.success || !res.data) {
@@ -51,8 +53,11 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
         const data = res.data;
         setProviders(data.providers);
 
+        // La elección general no es la de la redacción: no se parte de ésa.
+        const current = use === 'general' ? null : data.current;
+
         // Proveedor inicial
-        let initProvider = data.providers.find((p) => p.id === data.current?.providerId);
+        let initProvider = data.providers.find((p) => p.id === current?.providerId);
         if (!initProvider) {
           initProvider = data.providers.find((p) => p.available && p.models.length > 0) ?? data.providers[0];
         }
@@ -60,7 +65,7 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
         setSelectedProviderId(pId);
 
         // Modelo inicial
-        let initModel = initProvider?.models.find((m) => m.id === data.current?.modelId);
+        let initModel = initProvider?.models.find((m) => m.id === current?.modelId);
         if (!initModel && initProvider && initProvider.models.length > 0) {
           initModel = initProvider.models[0];
         }
@@ -68,8 +73,8 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
         setSelectedModelId(mId);
 
         // Nivel de intensidad inicial
-        if (data.current?.effort && initModel?.supportedLevels?.includes(data.current.effort)) {
-          setSelectedEffort(data.current.effort);
+        if (current?.effort && initModel?.supportedLevels?.includes(current.effort)) {
+          setSelectedEffort(current.effort);
         } else if (initModel?.defaultLevel) {
           setSelectedEffort(initModel.defaultLevel);
         } else {
@@ -77,8 +82,8 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
         }
 
         // Variante inicial
-        if (data.current?.variant && initModel?.variants?.includes(data.current.variant)) {
-          setSelectedVariant(data.current.variant);
+        if (current?.variant && initModel?.variants?.includes(current.variant)) {
+          setSelectedVariant(current.variant);
         } else {
           setSelectedVariant('');
         }
@@ -143,8 +148,11 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
     return items;
   }, [currentModel, t]);
 
-  const hasVariants = Boolean(currentModel?.variants && currentModel.variants.length > 0);
-  const hasEffort = effortOptions.length > 0;
+  // La elección general (`model` del archivo) no tiene lugar para nivel ni variante en el
+  // formato de OpenCode: se eligen por uso. Ofrecerlos acá sería tirarlos sin avisar.
+  const isGeneral = use === 'general';
+  const hasVariants = !isGeneral && Boolean(currentModel?.variants && currentModel.variants.length > 0);
+  const hasEffort = !isGeneral && effortOptions.length > 0;
 
   const handleSave = async () => {
     if (!selectedProviderId || !selectedModelId) return;
@@ -152,17 +160,36 @@ export function AiModelPicker({ use, repoPath = null, onClose, onSaved }: AiMode
     setError(null);
     try {
       const fullModel = `${selectedProviderId}/${selectedModelId}`;
-      const payload: AiUseChoosePayload = {
-        use,
-        repoPath,
-        model: fullModel,
-        effort: selectedEffort ? selectedEffort : undefined,
-        variant: selectedVariant ? selectedVariant : undefined,
-      };
-      const res = await window.api?.aiUse?.choose(payload);
-      if (!res?.success) {
-        setError(t('aiUse.chooseFailed', { detail: res?.error ?? '—' }));
-        return;
+      if (onChoose) {
+        await onChoose({
+          model: fullModel,
+          effort: selectedEffort ? selectedEffort : undefined,
+          variant: selectedVariant ? selectedVariant : undefined,
+        });
+      } else if (use === 'general') {
+        const res = await window.api?.aiConfig?.setGeneralModel?.({
+          model: fullModel,
+          effort: selectedEffort ? selectedEffort : undefined,
+          variant: selectedVariant ? selectedVariant : undefined,
+          repoPath,
+        });
+        if (!res?.success) {
+          setError(t('aiUse.chooseFailed', { detail: res?.error ?? '—' }));
+          return;
+        }
+      } else {
+        const payload: AiUseChoosePayload = {
+          use,
+          repoPath,
+          model: fullModel,
+          effort: selectedEffort ? selectedEffort : undefined,
+          variant: selectedVariant ? selectedVariant : undefined,
+        };
+        const res = await window.api?.aiUse?.choose(payload);
+        if (!res?.success) {
+          setError(t('aiUse.chooseFailed', { detail: res?.error ?? '—' }));
+          return;
+        }
       }
       onSaved?.();
       onClose();

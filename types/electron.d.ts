@@ -445,6 +445,25 @@ interface ElectronAPI {
     lastRequest(args: { use: import('./ai-use').AiTextUse }): Promise<GitResult<import('./commit-message-ai').CommitAiLastRequest | null>>;
   };
   /**
+   * Configuración de motores y modelos de IA (sección de ajustes, tarea 6.1).
+   */
+  aiConfig?: {
+    status(args?: { repoPath?: string | null }): Promise<GitResult<import('./ai-config').AiConfigStatusResult>>;
+    providerModels(args: { providerId: string; repoPath?: string | null }): Promise<GitResult<any>>;
+    addProvider(args: import('./ai-config').AddProviderPayload): Promise<GitResult<{ written: boolean }>>;
+    removeProvider(args: import('./ai-config').RemoveProviderPayload): Promise<GitResult<{ written: boolean }>>;
+    addModel(args: import('./ai-config').AddModelPayload): Promise<GitResult<{ written: boolean }>>;
+    removeModel(args: import('./ai-config').RemoveModelPayload): Promise<GitResult<{ written: boolean }>>;
+    getModelLoadSettings(args: { providerId?: string; modelId: string; use?: string; repoPath?: string | null }): Promise<GitResult<import('./ai-config').ModelLoadSettingsResult>>;
+    setModelLoadSettings(args: import('./ai-config').SetModelLoadSettingsPayload): Promise<GitResult<{ saved: boolean }>>;
+    setGeneralModel(args: { model: string; effort?: string; variant?: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
+    clearUseException(args: { use: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
+    setUseParam(args: { use: string; param: string; value: unknown; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
+    removeUseParam(args: { use: string; param: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
+    openFile(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ opened: boolean }>>;
+    showInFolder(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ shown: boolean }>>;
+  };
+  /**
    * Historial de usos de IA por repositorio (tarea 4.6, D19).
    */
   aiUseHistory?: {
