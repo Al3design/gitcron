@@ -223,6 +223,24 @@ Por eso:
 - **Permisos:** `--auto` aprueba lo que no esté negado explícitamente; se usa con la confirmación del
   lanzador, igual que `acceptEdits`/`workspace-write` en Claude y Codex.
 
+*Medido el 2026-10-04 antes de la 5.3 (OpenCode 2.0.20, capturas saneadas en
+`electron/__tests__/fixtures/modelos-en-casa/opencode-2.0.20-*`):*
+- **La lista de modelos no sale de `opencode models`**: sin terminal sigue sin imprimir nada. Sale de la API de su
+  servicio: `opencode api model.list --param location[directory]=<repo>` devuelve JSON (447 modelos en la máquina
+  de Ale, 18 de sus proveedores propios) con `providerID`, `id`, `name`, `variants` (`[{id: "low"}, …]`),
+  `limit.context`, `enabled` y `status`. **También devuelve `headers` y `settings` con los valores ya resueltos**
+  (la clave de Unsloth y las dos cabeceras de Cloudflare): esa salida se lee sólo en el proceso principal, se
+  descartan esos campos antes de cualquier otro paso y nunca se guarda ni se registra cruda. En Git Bash, las rutas
+  `/api/…` necesitan `MSYS_NO_PATHCONV=1`; desde Node no aplica.
+- **`run --format json`** emite una línea por evento, todas con `sessionID`: `step_start`; `tool_use` con
+  `part.tool` (`read`, …) y `part.state` (`status`, `input`, `output`); `step_finish` con `part.reason`
+  (`tool-calls`, …), `cost` y `tokens` (`input`, `output`, `reasoning`, `cache.read`/`write`); y `text` con
+  `part.text`. El último paso puede terminar sin `step_finish`: el cierre es el fin del proceso. Leer un archivo y
+  contestar tardó 22 s con Qwen 3.8 de `unslothpclocal` en nivel `low`, con 14,3k tokens de entrada en el primer
+  paso (casi todo de OpenCode).
+- **Las credenciales guardadas** están en la carpeta de datos que da `opencode debug paths` (en Windows,
+  `~/.local/share/opencode/auth.json`).
+
 ### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
 accept-edits`, con reanudación por `--conversation`. El formato de eventos se fija con una captura real

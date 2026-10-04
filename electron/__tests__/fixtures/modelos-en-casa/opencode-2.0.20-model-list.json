@@ -1,0 +1,262 @@
+{
+  "_nota": "Recorte saneado de `opencode api model.list --param location[directory]=<repo>` (OpenCode 2.0.20, 2026-10-04): 447 modelos en total, 18 de proveedores propios. La API devuelve headers y settings con los valores ya resueltos (clave y cabeceras); acá están reemplazados.",
+  "location": {
+    "directory": "C:\\repo"
+  },
+  "data": [
+    {
+      "id": "unsloth/Qwen3.8-27B-GGUF",
+      "modelID": "unsloth/Qwen3.8-27B-GGUF",
+      "providerID": "unslothpclocal",
+      "name": "Qwen 3.8 27B · XL · local",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "<valor resuelto por OpenCode>",
+        "baseURL": "<valor resuelto por OpenCode>",
+        "provider": "<valor resuelto por OpenCode>",
+        "reasoning_effort": "<valor resuelto por OpenCode>"
+      },
+      "headers": {
+        "CF-Access-Client-Id": "<valor resuelto por OpenCode>",
+        "CF-Access-Client-Secret": "<valor resuelto por OpenCode>"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [
+        {
+          "id": "low",
+          "settings": {
+            "reasoningEffort": "low"
+          }
+        },
+        {
+          "id": "medium",
+          "settings": {
+            "reasoningEffort": "medium"
+          }
+        },
+        {
+          "id": "high",
+          "settings": {
+            "reasoningEffort": "high"
+          }
+        }
+      ],
+      "time": {
+        "released": 0
+      },
+      "cost": [],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 110000,
+        "output": 16384
+      }
+    },
+    {
+      "id": "unsloth/Qwen3.8-27B-GGUF",
+      "modelID": "unsloth/Qwen3.8-27B-GGUF",
+      "providerID": "unslothpc",
+      "name": "Qwen 3.8 27B · XL",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "<valor resuelto por OpenCode>",
+        "baseURL": "<valor resuelto por OpenCode>",
+        "provider": "<valor resuelto por OpenCode>",
+        "reasoning_effort": "<valor resuelto por OpenCode>"
+      },
+      "headers": {
+        "CF-Access-Client-Id": "<valor resuelto por OpenCode>",
+        "CF-Access-Client-Secret": "<valor resuelto por OpenCode>"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [
+        {
+          "id": "low",
+          "settings": {
+            "reasoningEffort": "low"
+          }
+        },
+        {
+          "id": "medium",
+          "settings": {
+            "reasoningEffort": "medium"
+          }
+        },
+        {
+          "id": "high",
+          "settings": {
+            "reasoningEffort": "high"
+          }
+        }
+      ],
+      "time": {
+        "released": 0
+      },
+      "cost": [],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 110000,
+        "output": 16384
+      }
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-qat",
+      "modelID": "google/gemma-4-26b-a4b-qat",
+      "providerID": "lmstudio",
+      "family": "gemma4",
+      "name": "Gemma 4 26B A4B QAT",
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "apiKey": "<valor resuelto por OpenCode>",
+        "baseURL": "<valor resuelto por OpenCode>",
+        "provider": "<valor resuelto por OpenCode>"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [],
+      "time": {
+        "released": 0
+      },
+      "cost": [],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 262144,
+        "output": 32000
+      },
+      "headers": {}
+    },
+    {
+      "id": "inclusionai/ling-3.1-flash",
+      "modelID": "inclusionai/ling-3.1-flash",
+      "providerID": "openrouter",
+      "family": "ling",
+      "name": "Ling 3.1 Flash",
+      "package": "@opencode/ai/providers/openrouter",
+      "settings": {
+        "baseURL": "<valor resuelto por OpenCode>"
+      },
+      "headers": {
+        "HTTP-Referer": "<valor resuelto por OpenCode>",
+        "X-Title": "<valor resuelto por OpenCode>"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [
+        {
+          "id": "none",
+          "settings": {
+            "reasoning": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "id": "thinking",
+          "settings": {
+            "reasoning": {
+              "enabled": true
+            }
+          }
+        }
+      ],
+      "time": {
+        "released": 1790899200000
+      },
+      "cost": [
+        {
+          "input": 0,
+          "output": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 262144,
+        "output": 32768
+      }
+    },
+    {
+      "id": "unbiased/pareto-26.10-preview",
+      "modelID": "unbiased/pareto-26.10-preview",
+      "providerID": "openrouter",
+      "name": "Pareto 26.10 Preview",
+      "package": "@opencode/ai/providers/openrouter",
+      "settings": {
+        "baseURL": "<valor resuelto por OpenCode>"
+      },
+      "headers": {
+        "HTTP-Referer": "<valor resuelto por OpenCode>",
+        "X-Title": "<valor resuelto por OpenCode>"
+      },
+      "capabilities": {
+        "tools": true,
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "variants": [],
+      "time": {
+        "released": 1790812800000
+      },
+      "cost": [
+        {
+          "input": 0.8,
+          "output": 3.2,
+          "cache": {
+            "read": 0.03,
+            "write": 0
+          }
+        }
+      ],
+      "status": "active",
+      "enabled": true,
+      "limit": {
+        "context": 1048576,
+        "output": 131072
+      }
+    }
+  ]
+}
