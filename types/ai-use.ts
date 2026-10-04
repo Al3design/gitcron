@@ -4,6 +4,8 @@
 // como los ve la pantalla. Sin secretos: nombres, destino y archivo.
 
 export type AiTextUse = 'gitcron-commit' | 'gitcron-cartography' | 'gitcron-openspec-analysis' | 'gitcron-temporal';
+export type AiAgentUse = 'gitcron-sdd';
+export type AiUse = AiTextUse | AiAgentUse;
 
 export type AiUseDestination = 'this-machine' | 'own-server' | 'external-service';
 
@@ -26,13 +28,14 @@ export interface AiUseAlternative {
 }
 
 import type { CommitAiLastRequest } from './commit-message-ai';
+import type { PipelineRuntime } from './pipeline';
 
 export type AiLastRequest = CommitAiLastRequest;
 
 export type AiUseStatus =
   | {
       status: 'resolved';
-      use: AiTextUse;
+      use: AiUse;
       providerId: string;
       providerName: string;
       modelId: string;
@@ -52,10 +55,23 @@ export type AiUseStatus =
       canLoad: boolean;
       /** Dirección del servidor para el catálogo de LM Studio si canLoad es verdadero. */
       serverUrl?: string;
+      /** Motor asignado para este modelo (D1, D13). */
+      runtime?: PipelineRuntime;
+      /** Quién ejecuta las herramientas (D13). */
+      toolsExecutor?: string;
+      /** Referencia `<proveedor>/<modelo>`. */
+      modelRef?: string;
+      /** Intensidad de razonamiento efectiva si la hay (D17). */
+      effort?: string;
+      /**
+       * Sólo del agente de SDD: la clave de lo que se lanzaría. El lanzador la devuelve
+       * como `expectedModel`; si el archivo cambió, el proceso principal no lanza nada.
+       */
+      launchKey?: string;
     }
   | {
       status: 'disabled';
-      use: AiTextUse;
+      use: AiUse;
       sourceFile: string | null;
       sourceDir?: string;
       canLoad?: boolean;
@@ -63,14 +79,14 @@ export type AiUseStatus =
     }
   | {
       status: 'unset';
-      use: AiTextUse;
+      use: AiUse;
       offer: AiUseOffer | null;
       canLoad?: boolean;
       serverUrl?: string;
     }
   | {
       status: 'error';
-      use: AiTextUse;
+      use: AiUse;
       error: string;
       parseError?: { file: string; line: number; column: number; code: string };
       canLoad?: boolean;
@@ -82,7 +98,7 @@ export type AiUseStatus =
  * modelo de LM Studio (4.4). La dirección la resuelve el proceso principal.
  */
 export interface AiLoadTarget {
-  use?: AiTextUse;
+  use?: AiUse;
   repoPath?: string | null;
 }
 
@@ -101,6 +117,8 @@ export interface AiToolProvider {
   available: boolean;
   unavailableReason?: string;
   models: AiToolModel[];
+  agentRuntime?: PipelineRuntime;
+  toolsExecutor?: string;
 }
 
 export interface AiUseCurrentChoice {
@@ -114,13 +132,13 @@ export interface AiUseCurrentChoice {
 }
 
 export interface AiUseModelsResult {
-  use: AiTextUse;
+  use: AiUse;
   providers: AiToolProvider[];
   current: AiUseCurrentChoice | null;
 }
 
 export interface AiUseChoosePayload {
-  use: AiTextUse;
+  use: AiUse;
   repoPath?: string | null;
   model: string;
   effort?: string;

@@ -115,6 +115,7 @@ export interface StartRuntimeSessionInput {
   instruction: string;
   role: PipelineAgentRole;
   requestedModel: string | null;
+  reasoningEffort?: string | null;
   changeId: string | null;
   taskId: string | null;
 }
@@ -237,6 +238,7 @@ export class RuntimeSessionHub {
         orchestratorRuntime: null,
         provider: null,
         requestedModel: input.requestedModel,
+        reasoningEffort: input.reasoningEffort ?? null,
         role: input.role,
         instruction,
         signal: abort.signal,

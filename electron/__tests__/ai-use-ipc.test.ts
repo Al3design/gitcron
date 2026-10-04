@@ -94,7 +94,8 @@ describe('ai-use:status y ai-use:adopt', () => {
   it('un uso desconocido o un repositorio que no es una pestaña abierta se rechazan', async () => {
     fs.writeFileSync(configPath, '{}');
     const status = handlers.get('ai-use:status')!;
-    expect((await status({ sender }, { use: 'gitcron-sdd' })).success).toBe(false);
+    expect((await status({ sender }, { use: 'desconocido' })).success).toBe(false);
+    expect((await handlers.get('ai-use:last-request')!({ sender }, { use: 'gitcron-sdd' })).success).toBe(false);
     const repo = path.join(dir, 'repo');
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     expect(await status({ sender }, { use: 'gitcron-temporal', repoPath: repo }))

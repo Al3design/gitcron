@@ -7,12 +7,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
-import type { AiTextUse, AiUseDestination, AiUseStatus } from '@/types/ai-use';
+import type { AiUse, AiUseDestination, AiUseStatus } from '@/types/ai-use';
+import { runtimeDisplayName } from '../pipeline/pipeline-domain';
 import { AiModelPicker } from './AiModelPicker';
 import styles from './AiUseLine.module.css';
 
 interface Props {
-  use: AiTextUse;
+  use: AiUse;
   repoPath?: string | null;
   /** El modelo elegido en el selector de la pantalla, si tiene (redacción y análisis). */
   screenModel?: string | null;
@@ -29,7 +30,15 @@ interface Props {
   sourceFile?: string;
 }
 
-export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, refreshKey, screenChoice = false, sourceFile }: Props) {
+export function AiUseLine({
+  use,
+  repoPath = null,
+  screenModel = null,
+  onStatus,
+  refreshKey,
+  screenChoice = false,
+  sourceFile,
+}: Props) {
   const t = useT();
   const [status, setStatus] = useState<AiUseStatus | null>(null);
   const [adopting, setAdopting] = useState(false);
@@ -68,6 +77,8 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
   };
 
   const adopt = async () => {
+    // El agente de SDD nunca tuvo modelo: no hay «usar lo que tenías» (su oferta es siempre nula).
+    if (use === 'gitcron-sdd') return;
     setAdopting(true);
     setAdoptError(null);
     try {
@@ -81,7 +92,33 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
 
   if (!status) return null;
 
+  const isAgent = use === 'gitcron-sdd';
+
   if (status.status === 'resolved') {
+    const motorName = runtimeDisplayName(status.runtime ?? null) ?? status.runtime ?? '';
+    let lineText: string;
+    if (isAgent) {
+      const agentKey = status.effort ? 'aiUse.resolvedAgentWithEffort' : 'aiUse.resolvedAgent';
+      lineText = t(agentKey, {
+        model: status.modelId,
+        provider: status.providerName,
+        motor: motorName,
+        destination: destination(status.destination),
+        file: sourceFile || status.sourceFile,
+        effort: status.effort ?? '',
+      });
+    } else {
+      const lineKey = use === 'gitcron-commit'
+        ? 'pipeline.openspec.prepare.aiResolvedLine'
+        : 'aiUse.resolved';
+      lineText = t(lineKey, {
+        model: status.modelId,
+        provider: status.providerName,
+        destination: destination(status.destination),
+        file: sourceFile || status.sourceFile,
+      });
+    }
+
     const hasAlternatives = !status.available && status.alternatives && status.alternatives.length > 0;
     const altProviders = hasAlternatives
       ? status.alternatives.map((a) => `«${a.providerName}»`).join(', ')
@@ -89,22 +126,15 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
     // El plural va en la clave y no armado acá: «declaran» no se arma igual en cada idioma.
     const altKey = (status.alternatives?.length ?? 0) > 1 ? 'aiUse.alternativesMany' : 'aiUse.alternativesOne';
 
-    const lineKey = use === 'gitcron-commit'
-      ? 'pipeline.openspec.prepare.aiResolvedLine'
-      : 'aiUse.resolved';
-
     return (
       <div className={styles.block}>
         <p className={styles.line}>
-          {t(lineKey, {
-            model: status.modelId,
-            provider: status.providerName,
-            destination: destination(status.destination),
-            file: sourceFile || status.sourceFile,
-          })}
+          {lineText}
           {status.modelSource === 'general' ? t('aiUse.general') : status.isException ? t('aiUse.exception') : ''}
           {' · '}
-          {t('aiUse.toolsNone')}
+          {isAgent
+            ? t('aiUse.toolsAgent', { executor: status.toolsExecutor ?? motorName })
+            : t('aiUse.toolsNone')}
         </p>
         {status.destination === 'external-service' && (
           <p className={styles.externalNotice}>{t('aiUse.externalNotice', { provider: status.providerName })}</p>
@@ -197,9 +227,10 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
   }
 
   const withSelector = screenChoice && Boolean(status.canLoad);
+  const unsetText = isAgent ? t('aiUse.unsetAgent') : (withSelector ? t('aiUse.unsetScreen') : t('aiUse.unset'));
   return (
     <div className={styles.block}>
-      <p className={styles.line}>{withSelector ? t('aiUse.unsetScreen') : t('aiUse.unset')}</p>
+      <p className={styles.line}>{unsetText}</p>
       <div className={styles.actionRow}>
         {!withSelector && (
           <button
@@ -234,7 +265,7 @@ export function AiUseLine({ use, repoPath = null, screenModel = null, onStatus, 
           }}
         />
       )}
-      {!status.offer && !withSelector && (
+      {!status.offer && !withSelector && !isAgent && (
         <p className={styles.note}>{t('aiUse.unsetHint', { use })}</p>
       )}
       {adoptError && <p className={styles.problem} role="alert">{adoptError}</p>}

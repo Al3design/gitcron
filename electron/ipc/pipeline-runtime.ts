@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron';
-import type { PipelineAgentRole, PipelineRuntime } from '../../types/pipeline';
+import type { PipelineAgentRole } from '../../types/pipeline';
+import { resolveAgentFor } from '../ai/config/resolve-agent-for';
+import { activeConfigPath } from '../ai/use-resolution';
 import { PipelineService } from '../pipeline/pipeline-service';
 import type { RuntimeSessionHub } from '../pipeline/runtime/runtime-session-hub';
 import { errMsg, validRepoPath } from './shared';
@@ -11,13 +13,13 @@ import { errMsg, validRepoPath } from './shared';
  * y es de sólo lectura; éste abre procesos. Mezclarlos escondería que hay una
  * superficie con capacidad de ejecución detrás de la misma pestaña.
  *
- * Todo lo que llega del renderer se valida acá: ni la ruta, ni el runtime, ni
- * el rol, ni la instrucción se pasan crudos al hub.
+ * Todo lo que llega del renderer se valida acá: la ruta, la instrucción y el
+ * rol se validan acá; el motor y el modelo los resuelve el proceso principal
+ * a partir de la configuración del repositorio (tarea 5.1).
  */
 
 const MAX_INSTRUCTION_BYTES = 16_384;
 
-const RUNTIMES: PipelineRuntime[] = ['hermes', 'claude', 'codex', 'agy', 'opencode', 'unknown'];
 const ROLES: PipelineAgentRole[] = ['scout', 'planner', 'builder', 'auditor', 'fixer', 'orchestrator', 'unknown'];
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -68,11 +70,6 @@ export function registerPipelineRuntimeHandlers(
     const repoPath = input.repoPath;
     if (!validRepoPath(repoPath)) return { success: false, error: 'Ruta de repositorio inválida o no autorizada' };
 
-    const runtime = input.runtime;
-    if (typeof runtime !== 'string' || !RUNTIMES.includes(runtime as PipelineRuntime)) {
-      return { success: false, error: 'Runtime no reconocido' };
-    }
-
     const role = typeof input.role === 'string' && ROLES.includes(input.role as PipelineAgentRole)
       ? input.role as PipelineAgentRole
       // Un rol desconocido no se adivina como `builder`: se declara desconocido.
@@ -86,9 +83,6 @@ export function registerPipelineRuntimeHandlers(
       return { success: false, error: 'La instrucción excede el límite permitido' };
     }
 
-    const requestedModel = typeof input.requestedModel === 'string' && input.requestedModel.trim().length > 0
-      ? input.requestedModel.trim()
-      : null;
     const changeId = typeof input.changeId === 'string' && input.changeId.length > 0
       ? input.changeId
       : null;
@@ -98,13 +92,46 @@ export function registerPipelineRuntimeHandlers(
 
     try {
       const { canonicalPath, repoId } = await service.resolveBinding(repoPath);
+
+      // El mismo gitcron.json global que lee la línea del uso en la pantalla.
+      const agentRes = resolveAgentFor({ configPath: activeConfigPath(), repoPath: canonicalPath });
+      if (agentRes.status === 'unset') {
+        return { success: false, error: 'no_model' };
+      }
+      if (agentRes.status === 'disabled') {
+        return { success: false, error: 'disabled' };
+      }
+
+      // La pantalla devuelve la clave de lo que mostró; sin ella, o si el archivo cambió
+      // desde entonces, no se lanza nada: se lanza sólo lo que la persona confirmó.
+      if (input.expectedModel !== agentRes.launchKey) {
+        return { success: false, error: 'model_mismatch' };
+      }
+
+      if (agentRes.runtime === 'opencode') {
+        return { success: false, error: 'unsupported_runtime_opencode' };
+      }
+      if (agentRes.runtime === 'agy') {
+        return { success: false, error: 'unsupported_runtime_agy' };
+      }
+
+      const discovery = await hub.discover(canonicalPath);
+      const entry = discovery.find((d) => d.runtime === agentRes.runtime);
+      if (!entry || !entry.installed) {
+        return { success: false, error: 'runtime_not_installed' };
+      }
+      if (!entry.launchable) {
+        return { success: false, error: 'runtime_not_launchable' };
+      }
+
       const result = await hub.start({
         canonicalRepoPath: canonicalPath,
         repoId,
-        runtime: runtime as PipelineRuntime,
+        runtime: agentRes.runtime,
         instruction,
         role,
-        requestedModel,
+        requestedModel: agentRes.modelId,
+        reasoningEffort: agentRes.effort ?? null,
         changeId,
         taskId,
       });

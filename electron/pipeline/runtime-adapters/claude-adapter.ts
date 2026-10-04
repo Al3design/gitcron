@@ -1,4 +1,5 @@
 import type { RuntimeDescriptor } from '../../../types/pipeline';
+import { isValidCliEffort } from '../../ai/cli-text-client';
 import { ClaudeStreamNormalizer } from './claude-normalizer';
 import { RuntimeProcessRunner } from './process-runner';
 import type { RuntimeStartRequest } from './runtime-adapter';
@@ -44,6 +45,9 @@ function buildClaudeArgs(request: RuntimeStartRequest): string[] {
     `--tools=${CLAUDE_TOOLS}`,
     `--allowedTools=${CLAUDE_TOOLS}`,
   ];
+  if (request.reasoningEffort && isValidCliEffort('claude-code', request.reasoningEffort)) {
+    args.push('--effort', request.reasoningEffort);
+  }
   if (request.requestedModel) args.push('--model', request.requestedModel);
   return args;
 }

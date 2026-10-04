@@ -438,8 +438,8 @@ interface ElectronAPI {
    * `offer` es «usar lo que tenías»: `adopt` lo escribe en el archivo global.
    */
   aiUse?: {
-    status(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<import('./ai-use').AiUseStatus>>;
-    models(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null }): Promise<GitResult<import('./ai-use').AiUseModelsResult>>;
+    status(args: { use: import('./ai-use').AiUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<import('./ai-use').AiUseStatus>>;
+    models(args: { use: import('./ai-use').AiUse; repoPath?: string | null }): Promise<GitResult<import('./ai-use').AiUseModelsResult>>;
     choose(args: import('./ai-use').AiUseChoosePayload): Promise<GitResult<import('./ai-use').AiUseChooseResult>>;
     adopt(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<{ written: boolean; modelRef: string }>>;
     lastRequest(args: { use: import('./ai-use').AiTextUse }): Promise<GitResult<import('./commit-message-ai').CommitAiLastRequest | null>>;
@@ -649,10 +649,10 @@ interface ElectronAPI {
     history: (repoPath: string, limit?: number) => Promise<GitResult<RuntimeProjection[]>>;
     start: (payload: {
       repoPath: string;
-      runtime: string;
       instruction: string;
       role?: string;
-      requestedModel?: string | null;
+      /** La `launchKey` de la línea del uso `gitcron-sdd` que se mostró. Motor y modelo los decide Main. */
+      expectedModel: string;
       changeId?: string | null;
       taskId?: string | null;
     }) => Promise<GitResult<{ sessionId: string }>>;

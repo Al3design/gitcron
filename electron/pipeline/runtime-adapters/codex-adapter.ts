@@ -1,4 +1,5 @@
 import type { RuntimeDescriptor } from '../../../types/pipeline';
+import { isValidCliEffort } from '../../ai/cli-text-client';
 import { CodexStreamNormalizer } from './codex-normalizer';
 import { RuntimeProcessRunner } from './process-runner';
 import type { RuntimeStartRequest } from './runtime-adapter';
@@ -23,6 +24,9 @@ export const CODEX_DESCRIPTOR: RuntimeDescriptor = {
 
 function buildCodexArgs(request: RuntimeStartRequest): string[] {
   const args = ['exec', '--ephemeral', '--sandbox', 'workspace-write', '--json'];
+  if (request.reasoningEffort && isValidCliEffort('codex', request.reasoningEffort)) {
+    args.push('-c', `model_reasoning_effort=${request.reasoningEffort}`);
+  }
   if (request.requestedModel) args.push('--model', request.requestedModel);
   args.push('-');
   return args;

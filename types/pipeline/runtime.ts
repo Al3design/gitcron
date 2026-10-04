@@ -98,6 +98,7 @@ export interface RuntimeSessionRequest {
   provider: string | null;
   requestedModel: string | null;
   role: PipelineAgentRole;
+  reasoningEffort?: string | null;
 }
 
 export interface RuntimeSession {

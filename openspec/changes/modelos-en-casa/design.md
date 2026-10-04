@@ -342,6 +342,20 @@ Una sola elección para la persona, adaptadores distintos por detrás:
 No son roles: cualquier modelo va a cualquier uso. Es la respuesta a «¿qué programa toca mi repositorio?»,
 y la pantalla la muestra en la confirmación.
 
+*Implementado en 5.1 (2026-10-04), auditado:* el lanzador de SDD no tiene lista de motores: el motor sale del
+modelo del uso `gitcron-sdd` (`claude-code/…` Claude, `codex/…` Codex, `antigravity/…` Antigravity, un proveedor de
+`gitcron.json` OpenCode), que se elige en el mismo lanzador con el selector de todas las pantallas (cualquier
+modelo de cualquier proveedor o CLI; Ale, 2026-10-04: «elegir el modelo que quiera usar, por el servidor que
+elija»). Qué se lanza lo resuelve el proceso principal (`resolveAgentFor`); la pantalla devuelve la `launchKey`
+que mostró y, si el archivo cambió, no se lanza nada; la confirmación de escritura nombra motor, modelo, nivel y
+quién ejecuta, y se desmarca si la elección cambia. El nivel viaja como `--effort` (Claude) o
+`-c model_reasoning_effort` (Codex). Antigravity y OpenCode dicen que todavía no se lanzan (5.2, 5.3), sin otro
+motor en su lugar. La auditoría encontró: un arranque que leía el `gitcron.json` global real de la máquina en las
+pruebas (en la app, el por omisión en lugar del que está en uso), `expectedModel` opcional (sin él no se
+comparaba nada), la confirmación que seguía tildada después de cambiar de modelo, «Volver a comprobar» borrado, y
+que elegir escribía en el global aunque el repositorio declarara la entrada del uso, donde no cambiaba nada (el
+destino de la elección se decide por el origen de `agent.<uso>.model`, no del objeto, para todos los usos).
+
 ### D14. Pedido efectivo con procedencia (sugerencia de Codex, aceptada)
 Cada uso guarda en memoria el último pedido armado (dirección resuelta, modelo, parámetros) con la
 procedencia de cada valor, calculada en la misma mezcla de D4 (archivo y bloque de donde salió). Se muestra

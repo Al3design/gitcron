@@ -365,9 +365,20 @@ describe('Pipeline Runtime IPC — candado de autorización sobre pipeline:runti
     repoDir = path.join(tempRoot, 'repo-runtime');
     fs.mkdirSync(repoDir, { recursive: true });
     await simpleGit(repoDir).init(['--initial-branch=main']);
+    fs.writeFileSync(path.join(repoDir, 'gitcron.json'), JSON.stringify({
+      agent: {
+        'gitcron-sdd': {
+          model: 'claude-code/claude-3-7-sonnet',
+        },
+      },
+    }));
+
+    // Un gitcron.json global de prueba: nunca el de la máquina.
+    const { setUseConfigPathForTesting } = await import('../ai/use-resolution');
+    setUseConfigPathForTesting(path.join(tempRoot, 'gitcron-global.json'));
 
     resolveBindingSpy = vi.fn(async (p: string) => ({ repoId: 'r1', canonicalPath: fs.realpathSync(p) }));
-    hubDiscoverSpy = vi.fn(async () => []);
+    hubDiscoverSpy = vi.fn(async () => [{ runtime: 'claude', installed: true, launchable: true, diagnostics: [] }]);
     hubGetSpy = vi.fn(() => null);
     hubHistorySpy = vi.fn(() => []);
     hubStartSpy = vi.fn(async () => ({ ok: true, sessionId: 's-123' }));
@@ -385,7 +396,9 @@ describe('Pipeline Runtime IPC — candado de autorización sobre pipeline:runti
     registerPipelineRuntimeHandlers(mockHub as never, { resolveBinding: resolveBindingSpy } as never);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const { setUseConfigPathForTesting } = await import('../ai/use-resolution');
+    setUseConfigPathForTesting(null);
     authorizedRepoStore.clear();
     removeTempDir(tempRoot);
   });
@@ -430,7 +443,7 @@ describe('Pipeline Runtime IPC — candado de autorización sobre pipeline:runti
 
     // 1. discover
     const discoverRes = await get('pipeline:runtime:discover')(null, repoDir);
-    expect(discoverRes).toEqual({ success: true, data: [] });
+    expect(discoverRes).toEqual({ success: true, data: [{ runtime: 'claude', installed: true, launchable: true, diagnostics: [] }] });
     expect(hubDiscoverSpy).toHaveBeenCalledWith(canonical);
 
     // 2. get
@@ -443,12 +456,12 @@ describe('Pipeline Runtime IPC — candado de autorización sobre pipeline:runti
     expect(historyRes).toEqual({ success: true, data: [] });
     expect(hubHistorySpy).toHaveBeenCalledWith('r1', 10);
 
-    // 4. start
+    // 4. start: el motor sale del modelo del uso gitcron-sdd, no de lo que mande la pantalla
     const startRes = await get('pipeline:runtime:start')(null, {
       repoPath: repoDir,
-      runtime: 'claude',
       role: 'builder',
       instruction: 'hacer algo seguro',
+      expectedModel: JSON.stringify(['claude-code/claude-3-7-sonnet', null]),
     });
     expect(startRes).toEqual({ success: true, data: { sessionId: 's-123' } });
     expect(hubStartSpy).toHaveBeenCalledWith(expect.objectContaining({

@@ -30,6 +30,21 @@ export function isTextUse(value: unknown): value is TextUse {
   return typeof value === 'string' && (TEXT_USES as readonly string[]).includes(value);
 }
 
+/** Usos de agente de GitCron (D1). */
+export const AGENT_USES = ['gitcron-sdd'] as const;
+export type AgentUse = (typeof AGENT_USES)[number];
+
+export function isAgentUse(value: unknown): value is AgentUse {
+  return typeof value === 'string' && (AGENT_USES as readonly string[]).includes(value);
+}
+
+export const AI_USES = [...TEXT_USES, ...AGENT_USES] as const;
+export type AiUse = TextUse | AgentUse;
+
+export function isAiUse(value: unknown): value is AiUse {
+  return isTextUse(value) || isAgentUse(value);
+}
+
 /** Cómo se nombra cada uso en los mensajes. */
 export const TEXT_USE_LABEL: Record<TextUse, string> = {
   'gitcron-commit': 'La redacción del commit',

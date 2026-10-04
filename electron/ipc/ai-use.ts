@@ -17,8 +17,9 @@ import { GitCronConfigError, loadGitCronConfig } from '../ai/config/gitcron-conf
 import type { MigrationSources } from '../ai/config/gitcron-config-migration';
 import { updateGitCronConfigValue } from '../ai/config/gitcron-config-writer';
 import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../ai/config/legacy-choice';
+import { isAiUse, isTextUse, type AiUse, type TextUse } from '../ai/config/resolve-model-for';
 import { detectCanLoad } from '../ai/config/provider-models';
-import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
+import { resolveAgentFor } from '../ai/config/resolve-agent-for';
 import { getToolModelsForUse } from '../ai/config/tool-models';
 import { getStoredEnvVar, hasKey } from '../ai/key-store';
 import { getLastRequestForUse } from '../ai/text-use';
@@ -50,9 +51,9 @@ export function setLegacySourcesForTesting(fn: (() => MigrationSources) | null):
   sourcesOverride = fn;
 }
 
-function parseArgs(args: unknown): { use: TextUse; repoPath: string | null; screenModel: string | null } {
+function parseArgs(args: unknown): { use: AiUse; repoPath: string | null; screenModel: string | null } {
   const { use, repoPath, screenModel } = (args ?? {}) as { use?: unknown; repoPath?: unknown; screenModel?: unknown };
-  if (!isTextUse(use)) throw new Error('Uso de IA desconocido.');
+  if (!isAiUse(use)) throw new Error('Uso de IA desconocido.');
   if (repoPath !== undefined && repoPath !== null && !authorizedRepoRoot(repoPath)) {
     throw new Error('IPC Security Error: Invalid or unauthorized repository path');
   }
@@ -80,7 +81,49 @@ export function registerAiUseHandlers(): void {
       try {
         const repo = repoPath ? authorizedRepoRoot(repoPath) : null;
         const loaded = loadGitCronConfig({ globalPath: activeConfigPath(), repoPath: repo });
-        const target = resolveForUse(use, repoPath);
+
+        if (use === 'gitcron-sdd') {
+          const target = resolveAgentFor({ configPath: activeConfigPath(), repoPath: repo, loaded });
+          if (target.status === 'disabled') {
+            const sourceFile = target.sourceFile ?? null;
+            const sourceDir = target.sourceDir;
+            return ok({ status: 'disabled', use, sourceFile, ...(sourceDir ? { sourceDir } : {}) });
+          }
+          if (target.status === 'unset') {
+            return ok({
+              status: 'unset',
+              use,
+              offer: null,
+              canLoad: false,
+            });
+          }
+          return ok({
+            status: 'resolved',
+            use,
+            modelRef: target.modelRef,
+            providerId: target.providerId,
+            providerName: target.providerName,
+            modelId: target.modelId,
+            kind: target.providerId === 'claude-code' || target.providerId === 'codex' || target.providerId === 'antigravity'
+              ? 'cli'
+              : 'openai-compatible',
+            destination: target.destination,
+            sourceFile: target.sourceFile,
+            sourceDir: target.sourceDir ?? path.dirname(target.sourceFile),
+            modelSource: target.modelSource,
+            isException: target.isException,
+            available: target.available,
+            unavailableReason: target.unavailableReason ?? null,
+            alternatives: [],
+            canLoad: false,
+            runtime: target.runtime,
+            toolsExecutor: target.toolsExecutor,
+            effort: target.effort,
+            launchKey: target.launchKey,
+          });
+        }
+
+        const target = resolveForUse(use as TextUse, repoPath);
         if (target.status === 'disabled') {
           const sourceFile = target.sourceFile ?? null;
           const sourceDir = sourceFile ? path.dirname(sourceFile) : undefined;
@@ -222,7 +265,10 @@ export function registerAiUseHandlers(): void {
       let targetFile = globalPath;
       const repoFile = loaded.files.find((f) => f.scope === 'repo');
       if (repo && repoFile?.exists && repoFile.path) {
-        if (loaded.originOf(['agent', use]) === repoFile.path) {
+        // Se escribe donde está el modelo que vale. Con la entrada del uso en los dos
+        // archivos, el objeto `agent.<uso>` figura como del global aunque el repositorio
+        // pise su `model`: mirar el objeto escribiría donde no cambia nada.
+        if (loaded.originOf(['agent', use, 'model']) === repoFile.path) {
           targetFile = repoFile.path;
         }
       }
@@ -304,6 +350,9 @@ export function registerAiUseHandlers(): void {
   ipcMain.handle('ai-use:adopt', async (_e, args: unknown): Promise<Result<{ written: boolean; modelRef: string }>> => {
     try {
       const { use, repoPath, screenModel } = parseArgs(args);
+      if (!isTextUse(use)) {
+        return fail(new Error(`El uso «${use}» no admite adopción de configuración heredada.`));
+      }
       const loaded = loadGitCronConfig({ globalPath: activeConfigPath(), repoPath: repoPath ? authorizedRepoRoot(repoPath) : null });
       const sources: LegacyChoiceSources = { ...(sourcesOverride ?? readLegacySources)(), screenModel };
       const offer = legacyOfferFor(use, loaded, sources, activeConfigPath());

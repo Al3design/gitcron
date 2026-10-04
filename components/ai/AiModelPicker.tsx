@@ -8,11 +8,11 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
-import type { AiTextUse, AiToolProvider, AiUseChoosePayload } from '@/types/ai-use';
+import type { AiToolProvider, AiUse, AiUseChoosePayload } from '@/types/ai-use';
 import styles from './AiModelPicker.module.css';
 
 export interface AiModelPickerProps {
-  use?: AiTextUse | 'general';
+  use?: AiUse | 'general';
   repoPath?: string | null;
   onClose: () => void;
   onSaved?: () => void;
@@ -305,6 +305,16 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
           </div>
         )}
       </div>
+
+      {/* Para el agente de SDD, cada proveedor dice quién va a tocar el repositorio:
+          el mismo CLI, u OpenCode para un modelo de un servidor (D13). */}
+      {use === 'gitcron-sdd' && currentProvider?.toolsExecutor && (
+        <p className={styles.pickerNotice}>
+          {currentProvider.agentRuntime === 'opencode' || currentProvider.agentRuntime === 'agy'
+            ? t('aiUse.pickerAgentNotYet', { executor: currentProvider.toolsExecutor })
+            : t('aiUse.pickerAgentExecutor', { executor: currentProvider.toolsExecutor })}
+        </p>
+      )}
 
       {error && (
         <p className={styles.pickerError} role="alert">

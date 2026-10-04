@@ -145,10 +145,38 @@ describe('cableado de la guía con el lanzador', { timeout: 15_000 }, () => {
         diagnostics: [],
       }],
     });
-    const start = vi.fn().mockResolvedValue({ success: true });
+    const start = vi.fn().mockResolvedValue({ success: true, data: { sessionId: 'sess-guided' } });
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { pipelineRuntime: { discover, start, stop: vi.fn() } },
+      value: {
+        pipelineRuntime: { discover, start, stop: vi.fn() },
+        aiUse: {
+          status: vi.fn().mockResolvedValue({
+            success: true,
+            data: {
+              use: 'gitcron-sdd',
+              status: 'resolved',
+              modelRef: 'claude-code/claude-3-7-sonnet',
+              modelId: 'claude-3-7-sonnet',
+              providerName: 'Claude Code',
+              modelSource: 'agent',
+              isException: true,
+              sourceFile: 'C:/repo/.gitcron/gitcron.json',
+              runtime: 'claude',
+              toolsExecutor: 'Claude Code',
+              destination: 'external-service',
+              available: true,
+              // La clave que Main da a la línea del uso; el lanzador la devuelve al arrancar.
+              launchKey: JSON.stringify(['claude-code/claude-3-7-sonnet', null]),
+            },
+          }),
+          models: vi.fn().mockResolvedValue({ success: true, data: [] }),
+          choose: vi.fn(),
+        },
+        commitAi: {
+          onConfigChanged: vi.fn().mockReturnValue(() => {}),
+        },
+      },
     });
 
     renderDashboard();
@@ -166,6 +194,7 @@ describe('cableado de la guía con el lanzador', { timeout: 15_000 }, () => {
     startButton.click();
     expect(start).not.toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(screen.getByRole('checkbox')).toBeTruthy());
     screen.getByRole('checkbox').click();
     await vi.waitFor(() => expect((screen.getByRole('button', { name: /launcher\.startApply/ }) as HTMLButtonElement).disabled).toBe(false));
 
@@ -173,9 +202,9 @@ describe('cableado de la guía con el lanzador', { timeout: 15_000 }, () => {
     await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(1));
     expect(start.mock.calls[0][0]).toMatchObject({
       repoPath: 'C:/repo',
-      runtime: 'claude',
       changeId: 'demo-change',
       taskId: '1.2',
+      expectedModel: JSON.stringify(['claude-code/claude-3-7-sonnet', null]),
     });
     // Lo que se lanza es exactamente lo que la guía compuso: si se recompusiera
     // acá, lo mostrado bajo "Ver instrucción" y lo ejecutado podrían divergir.

@@ -179,4 +179,59 @@ describe('structured CLI runtime adapters', () => {
     expect(startCap?.constraints.some((c) => c.includes('Bash'))).toBe(true);
     expect(startCap?.constraints.some((c) => c.includes('sin acceso a shell'))).toBe(false);
   });
+
+  it('los argumentos de Claude llevan --model y --effort con nivel válido, y omiten un nivel fuera de la lista', async () => {
+    const runner = new FixtureRunner(Buffer.alloc(0));
+    const adapter = createClaudeRuntimeAdapter(baseRequest.canonicalRepoPath, runner);
+    await adapter.start?.({
+      ...baseRequest,
+      instruction: 'test-instruction',
+      requestedModel: 'claude-3-7-sonnet',
+      reasoningEffort: 'high',
+    });
+
+    const args = runner.capturedSpec?.args ?? [];
+    expect(args).toContain('--model');
+    expect(args).toContain('claude-3-7-sonnet');
+    expect(args).toContain('--effort');
+    expect(args).toContain('high');
+
+    // Nivel fuera de la lista no se manda
+    await adapter.start?.({
+      ...baseRequest,
+      instruction: 'test-instruction',
+      requestedModel: 'claude-3-7-sonnet',
+      reasoningEffort: 'ultra-invalid',
+    });
+    const argsInvalid = runner.capturedSpec?.args ?? [];
+    expect(argsInvalid).not.toContain('--effort');
+    expect(argsInvalid).not.toContain('ultra-invalid');
+  });
+
+  it('los argumentos de Codex llevan --model y -c model_reasoning_effort=... con nivel válido, y omiten un nivel fuera de la lista', async () => {
+    const runner = new FixtureRunner(Buffer.alloc(0));
+    const adapter = createCodexRuntimeAdapter(baseRequest.canonicalRepoPath, runner);
+    await adapter.start?.({
+      ...baseRequest,
+      instruction: 'test-instruction',
+      requestedModel: 'gpt-5.6-sol',
+      reasoningEffort: 'medium',
+    });
+
+    const args = runner.capturedSpec?.args ?? [];
+    expect(args).toContain('--model');
+    expect(args).toContain('gpt-5.6-sol');
+    expect(args).toContain('-c');
+    expect(args).toContain('model_reasoning_effort=medium');
+
+    // Nivel fuera de la lista no se manda
+    await adapter.start?.({
+      ...baseRequest,
+      instruction: 'test-instruction',
+      requestedModel: 'gpt-5.6-sol',
+      reasoningEffort: 'ultra-invalid',
+    });
+    const argsInvalid = runner.capturedSpec?.args ?? [];
+    expect(argsInvalid.some((a) => a.includes('model_reasoning_effort'))).toBe(false);
+  });
 });

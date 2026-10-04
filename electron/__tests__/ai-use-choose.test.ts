@@ -317,6 +317,73 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
     expect(res.error).toMatch(/no existe o no está disponible/);
     expect(fs.readFileSync(globalConfigPath, 'utf8')).toBe('{}');
   });
+
+  it('canales con gitcron-sdd: status y models funcionan, choose escribe donde está la elección que vale, y last-request rechaza', async () => {
+    fs.writeFileSync(globalConfigPath, JSON.stringify({
+      agent: {
+        'gitcron-sdd': {
+          model: 'codex/gpt-5.6-sol',
+          options: { reasoning_effort: 'high' },
+        },
+      },
+    }, null, 2));
+    fs.writeFileSync(repoConfigPath, JSON.stringify({
+      model: 'claude-code/sonnet',
+    }, null, 2));
+
+    // 1. ai-use:status con gitcron-sdd devuelve motor, herramientas, modelo y esfuerzo
+    const statusRes = await handlers.get('ai-use:status')!({ sender }, { use: 'gitcron-sdd', repoPath: repoDir });
+    expect(statusRes.success).toBe(true);
+    expect(statusRes.data).toMatchObject({
+      status: 'resolved',
+      use: 'gitcron-sdd',
+      modelId: 'gpt-5.6-sol',
+      providerId: 'codex',
+      runtime: 'codex',
+      toolsExecutor: 'Codex',
+      effort: 'high',
+    });
+
+    // 2. ai-use:models con gitcron-sdd trae modelos anotados con agentRuntime y toolsExecutor
+    const modelsRes = await handlers.get('ai-use:models')!({ sender }, { use: 'gitcron-sdd', repoPath: repoDir });
+    expect(modelsRes.success).toBe(true);
+    const codexProvider = modelsRes.data.providers.find((p: any) => p.id === 'codex');
+    expect(codexProvider).toMatchObject({
+      agentRuntime: 'codex',
+      toolsExecutor: 'Codex',
+    });
+
+    // 3. ai-use:choose con gitcron-sdd, como los otros usos: sin entrada del uso en el repositorio, al global
+    const chooseRes = await handlers.get('ai-use:choose')!({ sender }, {
+      use: 'gitcron-sdd',
+      repoPath: repoDir,
+      model: 'codex/gpt-5.6-sol',
+      effort: 'medium',
+    });
+    expect(chooseRes.success).toBe(true);
+    expect(chooseRes.data.file).toBe(globalConfigPath);
+
+    const globalContent = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
+    expect(globalContent.agent['gitcron-sdd'].options.reasoning_effort).toBe('medium');
+
+    const repoContent = JSON.parse(fs.readFileSync(repoConfigPath, 'utf8'));
+    expect(repoContent).not.toHaveProperty('agent');
+
+    // 3b. Si el repositorio declara la entrada del agente, ésa es la que vale: se escribe ahí,
+    // porque escribir en el global no cambiaría nada.
+    fs.writeFileSync(repoConfigPath, JSON.stringify({ agent: { 'gitcron-sdd': { model: 'claude-code/sonnet' } } }, null, 2));
+    const chooseRepo = await handlers.get('ai-use:choose')!({ sender }, {
+      use: 'gitcron-sdd',
+      repoPath: repoDir,
+      model: 'codex/gpt-5.6-sol',
+    });
+    expect(chooseRepo.success).toBe(true);
+    expect(JSON.parse(fs.readFileSync(repoConfigPath, 'utf8')).agent['gitcron-sdd'].model).toBe('codex/gpt-5.6-sol');
+
+    // 4. ai-use:last-request sigue rechazando gitcron-sdd
+    const lastReqRes = await handlers.get('ai-use:last-request')!({ sender }, { use: 'gitcron-sdd' });
+    expect(lastReqRes.success).toBe(false);
+  });
 });
 
 describe('catálogo de un CLI que no contesta', () => {

@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { AiTextUse, AiToolModel, AiToolProvider, AiUseModelsResult } from '../../../types/ai-use';
+import type { AiToolModel, AiToolProvider, AiUse, AiUseModelsResult } from '../../../types/ai-use';
 import {
   CLI_EFFORT_LEVELS,
   defaultKillTree,
@@ -25,6 +25,7 @@ import {
   type LoadedGitCronConfig,
 } from './gitcron-config';
 import { listProviderModels } from './provider-models';
+import { resolveAgentFor } from './resolve-agent-for';
 import { resolveModelFor } from './resolve-model-for';
 import { resolveRuntimeExecutable } from '../../pipeline/runtime-adapters/process-runner';
 
@@ -263,7 +264,7 @@ export async function fetchAgyModels(
  * más la elección actual.
  */
 export async function getToolModelsForUse(options: {
-  use: AiTextUse;
+  use: AiUse;
   repoPath?: string | null;
   configPath?: string;
   loaded?: LoadedGitCronConfig;
@@ -286,6 +287,8 @@ export async function getToolModelsForUse(options: {
     available: codexRes.ok,
     unavailableReason: codexRes.ok ? undefined : codexRes.error,
     models: codexRes.ok ? codexRes.models : [],
+    agentRuntime: 'codex',
+    toolsExecutor: 'Codex',
   });
 
   // 2. Antigravity
@@ -296,6 +299,8 @@ export async function getToolModelsForUse(options: {
     available: agyRes.ok,
     unavailableReason: agyRes.ok ? undefined : agyRes.error,
     models: agyRes.ok ? agyRes.models : [],
+    agentRuntime: 'agy',
+    toolsExecutor: 'Antigravity',
   });
 
   // 3. Claude Code
@@ -315,6 +320,8 @@ export async function getToolModelsForUse(options: {
     available: claudeAvailable,
     unavailableReason: claudeError,
     models: getClaudeCodeModels(),
+    agentRuntime: 'claude',
+    toolsExecutor: 'Claude Code',
   });
 
   // 4. Proveedores declarados en gitcron.json
@@ -380,32 +387,53 @@ export async function getToolModelsForUse(options: {
       kind,
       available: true,
       models: modelEntries,
+      agentRuntime: 'opencode',
+      toolsExecutor: 'OpenCode',
     });
   }
 
   // 5. Elección actual del uso
   let current: AiUseModelsResult['current'] = null;
   try {
-    const resolvedTarget = resolveModelFor(options.use, {
-      configPath: options.configPath,
-      repoPath: options.repoPath,
-      loaded,
-      stored: options.stored,
-    });
-    if (resolvedTarget.status === 'resolved') {
-      const { resolved } = resolvedTarget;
-      current = {
-        providerId: resolved.providerId,
-        modelId: resolved.modelId,
-        fullModelRef: `${resolved.providerId}/${resolved.modelId}`,
-        effort:
-          typeof resolved.options?.reasoning_effort === 'string'
-            ? resolved.options.reasoning_effort
-            : undefined,
-        variant: resolved.variant,
-        sourceFile: resolved.sourceFile,
-        scope: resolved.provenance.repoFile ? 'repo' : 'global',
-      };
+    if (options.use === 'gitcron-sdd') {
+      const agentRes = resolveAgentFor({
+        configPath: options.configPath,
+        repoPath: options.repoPath,
+        loaded,
+        stored: options.stored,
+      });
+      if (agentRes.status === 'resolved') {
+        current = {
+          providerId: agentRes.providerId,
+          modelId: agentRes.modelId,
+          fullModelRef: agentRes.modelRef,
+          effort: agentRes.effort,
+          sourceFile: agentRes.sourceFile,
+          scope: loaded.files.find((f) => f.scope === 'repo')?.path === agentRes.sourceFile ? 'repo' : 'global',
+        };
+      }
+    } else {
+      const resolvedTarget = resolveModelFor(options.use, {
+        configPath: options.configPath,
+        repoPath: options.repoPath,
+        loaded,
+        stored: options.stored,
+      });
+      if (resolvedTarget.status === 'resolved') {
+        const { resolved } = resolvedTarget;
+        current = {
+          providerId: resolved.providerId,
+          modelId: resolved.modelId,
+          fullModelRef: `${resolved.providerId}/${resolved.modelId}`,
+          effort:
+            typeof resolved.options?.reasoning_effort === 'string'
+              ? resolved.options.reasoning_effort
+              : undefined,
+          variant: resolved.variant,
+          sourceFile: resolved.sourceFile,
+          scope: resolved.provenance.repoFile ? 'repo' : 'global',
+        };
+      }
     }
   } catch {
     // Si no se puede resolver, queda current en null
