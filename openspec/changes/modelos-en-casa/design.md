@@ -303,6 +303,33 @@ puntual y observación que `gitcron.json` (D3). La conversión desde OpenCode: `
 tiene ese campo. *Alternativa descartada:* el bloque `mcp` de OpenCode dentro de `gitcron.json`; lo lee sólo
 OpenCode.
 
+*Medido el 2026-10-04 para «copiar para otra herramienta» (tarea 6.2), en las fuentes de cada uno:*
+- **El estándar de MCP** ([especificación](https://modelcontextprotocol.io/specification/versioning), versión
+  vigente `2026-07-28`, repositorio `modelcontextprotocol/modelcontextprotocol`) define dos transportes: `stdio` (el
+  cliente lanza el servidor como subproceso) y Streamable HTTP (un punto de entrada que recibe POST). El HTTP+SSE de
+  `2024-11-05` está **deprecado** desde `2025-03-26` ([registro de deprecados](https://modelcontextprotocol.io/specification/2026-07-28/deprecated)).
+  La especificación **no define un archivo de configuración del cliente**: `mcpServers` con `command`, `args` y
+  `env` nace en `claude_desktop_config.json`, el ejemplo de la [guía oficial](https://modelcontextprotocol.io/docs/develop/connect-local-servers).
+  Lo que sí publica MCP para describir un servidor es el `server.json` de su
+  [registro](https://github.com/modelcontextprotocol/registry) (esquema `2025-12-11`): `packages` con
+  `transport.type` `stdio`, `remotes` con `type` `streamable-http` o `sse`, y variables y cabeceras con
+  `isSecret`. Sirve para publicar un servidor, no para configurar un cliente; no es un destino de la copia.
+- **Claude Code** (`.mcp.json` y `claude mcp add-json`): `mcpServers`, `type` `stdio` | `http` | `sse` | `ws`
+  (`streamable-http` es otro nombre de `http`), obligatorio con `url`; variables como `${NOMBRE}` o
+  `${NOMBRE:-valor}`; **no entiende `${env:NOMBRE}`**: lo manda tal cual.
+- **VS Code** (`.vscode/mcp.json`): `servers`, `type` obligatorio (`stdio` | `http` | `sse`; `http` cae a SSE si el
+  servidor no lo admite), `command`/`args`/`env`/`envFile`/`cwd` o `url`/`headers`; variables `${env:NOMBRE}` y
+  `${input:id}` (con `inputs` y `password: true` para pedir un secreto).
+- **OpenCode** (`opencode.json`): `mcp`, `type` `local` (con `command` como lista, `environment`, `cwd`) o `remote`
+  (`url`, `headers`, `oauth`), más `enabled` y `timeout`; variables `{env:NOMBRE}`.
+- **Cursor** y **LM Studio**: la misma notación que `mcp.json` de GitCron (`type: "stdio"` opcional, remoto por
+  `url`), variables `${env:NOMBRE}`: se copia tal cual.
+
+Por eso la copia convierte, además de la envoltura, **las referencias** (`${env:X}` → `${X}` en Claude Code,
+`{env:X}` en OpenCode, igual en VS Code) y **el tipo**: un `type` del servidor se respeta; sin él, `command` es
+`stdio` y `url` es Streamable HTTP (`http`), el transporte del estándar, y la vista previa lo dice para que un
+servidor sólo SSE se corrija a mano.
+
 ### D13. Quién conversa y quién ejecuta (sugerencia de Codex, aceptada el 2026-09-29)
 Una sola elección para la persona, adaptadores distintos por detrás:
 

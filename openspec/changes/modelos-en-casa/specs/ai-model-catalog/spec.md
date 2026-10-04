@@ -322,6 +322,14 @@ cambio de herramienta.
 - **WHEN** la persona pide un servidor de `mcp.json` en el formato de VS Code, de Claude Code o de OpenCode
 - **THEN** GitCron muestra el bloque convertido para copiar, y no escribe la configuración de esa herramienta
 
+#### Scenario: Copiar con las referencias de cada herramienta
+- **WHEN** el servidor usa `${env:GITHUB_PAT}` y se copia para Claude Code, para VS Code y para OpenCode
+- **THEN** el bloque dice `${GITHUB_PAT}`, `${env:GITHUB_PAT}` y `{env:GITHUB_PAT}` respectivamente, y un remoto sin `type` sale como Streamable HTTP con el aviso
+
+#### Scenario: Copiar un servidor con un token escrito a mano
+- **WHEN** el servidor tiene un token escrito a mano en `env` o en `headers`
+- **THEN** la copia lleva una referencia a una variable en su lugar, el valor no llega a la pantalla ni al portapapeles, y GitCron ofrece guardarlo en el baúl
+
 #### Scenario: Copiar desde Cursor
 - **WHEN** la persona pega en `mcp.json` un servidor copiado de `~/.cursor/mcp.json`
 - **THEN** GitCron lo muestra tal cual, sin conversión
