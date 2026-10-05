@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import type { PipelineAgentRole } from '../../types/pipeline';
 import { resolveAgentFor } from '../ai/config/resolve-agent-for';
+import { fetchOpenCodeModelList, findOpenCodeModel } from '../ai/config/opencode-models';
 import { activeConfigPath } from '../ai/use-resolution';
 import { PipelineService } from '../pipeline/pipeline-service';
 import type { RuntimeSessionHub } from '../pipeline/runtime/runtime-session-hub';
@@ -102,26 +103,64 @@ export function registerPipelineRuntimeHandlers(
         return { success: false, error: 'disabled' };
       }
 
-      // La pantalla devuelve la clave de lo que mostró; sin ella, o si el archivo cambió
-      // desde entonces, no se lanza nada: se lanza sólo lo que la persona confirmó.
-      if (input.expectedModel !== agentRes.launchKey) {
-        return { success: false, error: 'model_mismatch' };
-      }
-
-      if (agentRes.runtime === 'opencode') {
-        return { success: false, error: 'unsupported_runtime_opencode' };
-      }
       if (agentRes.runtime === 'agy') {
         return { success: false, error: 'unsupported_runtime_agy' };
       }
 
-      const discovery = await hub.discover(canonicalPath);
-      const entry = discovery.find((d) => d.runtime === agentRes.runtime);
-      if (!entry || !entry.installed) {
-        return { success: false, error: 'runtime_not_installed' };
-      }
-      if (!entry.launchable) {
-        return { success: false, error: 'runtime_not_launchable' };
+      let requestedModel = agentRes.modelId;
+      let reasoningEffort: string | null = agentRes.effort ?? null;
+
+      if (agentRes.runtime === 'opencode') {
+        const discovery = await hub.discover(canonicalPath);
+        const entry = discovery.find((d) => d.runtime === 'opencode');
+        if (!entry || !entry.installed) {
+          return { success: false, error: 'opencode_not_installed' };
+        }
+        if (!entry.launchable) {
+          return { success: false, error: 'runtime_not_launchable' };
+        }
+
+        const listRes = await fetchOpenCodeModelList(canonicalPath);
+        if (!listRes.installed) {
+          return { success: false, error: 'opencode_not_installed' };
+        }
+        if (listRes.error) {
+          return { success: false, error: 'opencode_list_failed' };
+        }
+        const knownModel = findOpenCodeModel(listRes.models, agentRes.providerId, agentRes.modelId);
+        if (!knownModel) {
+          return { success: false, error: 'opencode_unknown_model' };
+        }
+
+        const resolvedWithModels = resolveAgentFor({
+          configPath: activeConfigPath(),
+          repoPath: canonicalPath,
+          opencodeModels: listRes.models,
+        });
+        if (resolvedWithModels.status !== 'resolved') {
+          return { success: false, error: 'no_model' };
+        }
+        if (input.expectedModel !== resolvedWithModels.launchKey) {
+          return { success: false, error: 'model_mismatch' };
+        }
+        const variant = resolvedWithModels.variant;
+        requestedModel = variant ? `${agentRes.modelRef}#${variant}` : agentRes.modelRef;
+        reasoningEffort = null;
+      } else {
+        // La pantalla devuelve la clave de lo que mostró; sin ella, o si el archivo cambió
+        // desde entonces, no se lanza nada: se lanza sólo lo que la persona confirmó.
+        if (input.expectedModel !== agentRes.launchKey) {
+          return { success: false, error: 'model_mismatch' };
+        }
+
+        const discovery = await hub.discover(canonicalPath);
+        const entry = discovery.find((d) => d.runtime === agentRes.runtime);
+        if (!entry || !entry.installed) {
+          return { success: false, error: 'runtime_not_installed' };
+        }
+        if (!entry.launchable) {
+          return { success: false, error: 'runtime_not_launchable' };
+        }
       }
 
       const result = await hub.start({
@@ -130,8 +169,8 @@ export function registerPipelineRuntimeHandlers(
         runtime: agentRes.runtime,
         instruction,
         role,
-        requestedModel: agentRes.modelId,
-        reasoningEffort: agentRes.effort ?? null,
+        requestedModel,
+        reasoningEffort,
         changeId,
         taskId,
       });

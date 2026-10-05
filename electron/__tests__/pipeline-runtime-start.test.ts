@@ -10,6 +10,13 @@ import * as path from 'node:path';
 
 const handlers = new Map<string, (_event: any, ...args: any[]) => Promise<any>>();
 
+// La lista de OpenCode se simula (la corrida real la hace la auditoría contra el OpenCode instalado).
+const fetchOpenCodeModelList = vi.hoisted(() => vi.fn());
+vi.mock('../ai/config/opencode-models', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ai/config/opencode-models')>()),
+  fetchOpenCodeModelList,
+}));
+
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => os.tmpdir()) },
   safeStorage: { isEncryptionAvailable: vi.fn(() => false) },
@@ -75,6 +82,7 @@ describe('pipeline:runtime:start (tarea 5.1)', () => {
 
   afterEach(() => {
     setUseConfigPathForTesting(null);
+    fetchOpenCodeModelList.mockReset();
     resetGitCronConfigCacheForTesting();
     authorizedRepoStore.clear();
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -118,14 +126,168 @@ describe('pipeline:runtime:start (tarea 5.1)', () => {
     expect(hubStartSpy).not.toHaveBeenCalled();
   });
 
-  it('con un modelo de servidor se rechaza con unsupported_runtime_opencode y no se lanza nada', async () => {
+  it('con unslothpclocal/unsloth/Qwen3.8-27B-GGUF y nivel high, el hub recibe opencode y unslothpclocal/unsloth/Qwen3.8-27B-GGUF#high', async () => {
     writeRepo({
-      provider: { unslothpc: { npm: '@ai-sdk/openai-compatible', options: { baseURL: 'http://localhost:8888/v1' }, models: { 'qwen-3': {} } } },
-      agent: { 'gitcron-sdd': { model: 'unslothpc/qwen-3' } },
+      provider: {
+        unslothpclocal: {
+          npm: '@ai-sdk/openai-compatible',
+          options: { baseURL: 'http://localhost:8888/v1' },
+          models: { 'unsloth/Qwen3.8-27B-GGUF': {} },
+        },
+      },
+      agent: {
+        'gitcron-sdd': {
+          model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+          options: { reasoning_effort: 'high' },
+        },
+      },
     });
 
-    expect(await start({ expectedModel: key('unslothpc/qwen-3') })).toEqual({ success: false, error: 'unsupported_runtime_opencode' });
+    hubDiscoverSpy.mockResolvedValue([
+      { runtime: 'opencode', installed: true, launchable: true, diagnostics: [] },
+    ]);
+    fetchOpenCodeModelList.mockResolvedValue(({
+      installed: true,
+      models: [
+        {
+          providerId: 'unslothpclocal',
+          id: 'unsloth/Qwen3.8-27B-GGUF',
+          name: 'Qwen 3.8 27B',
+          variantIds: ['low', 'medium', 'high'],
+          contextLimit: 110000,
+          enabled: true,
+          status: 'active',
+        },
+      ],
+    }));
+
+    const res = await start({
+      expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', 'high'),
+    });
+
+    expect(res).toEqual({ success: true, data: { sessionId: 'sess-123' } });
+    expect(hubStartSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtime: 'opencode',
+        requestedModel: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF#high',
+        reasoningEffort: null,
+      }),
+    );
+  });
+
+  it('un modelo que OpenCode no conoce, OpenCode sin instalar y una launchKey vieja se rechazan con su código y no se lanza nada', async () => {
+    writeRepo({
+      provider: {
+        unslothpclocal: {
+          npm: '@ai-sdk/openai-compatible',
+          options: { baseURL: 'http://localhost:8888/v1' },
+          models: { 'unsloth/Qwen3.8-27B-GGUF': {} },
+        },
+      },
+      agent: {
+        'gitcron-sdd': {
+          model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+          options: { reasoning_effort: 'high' },
+        },
+      },
+    });
+
+    // 1. OpenCode no conoce el modelo
+    hubDiscoverSpy.mockResolvedValue([
+      { runtime: 'opencode', installed: true, launchable: true, diagnostics: [] },
+    ]);
+    fetchOpenCodeModelList.mockResolvedValue(({
+      installed: true,
+      models: [], // Lista vacía
+    }));
+    expect(await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', 'high') })).toEqual({
+      success: false,
+      error: 'opencode_unknown_model',
+    });
     expect(hubStartSpy).not.toHaveBeenCalled();
+
+    // 2. OpenCode sin instalar
+    hubDiscoverSpy.mockResolvedValue([
+      { runtime: 'opencode', installed: false, launchable: false, diagnostics: ['no encontrado'] },
+    ]);
+    fetchOpenCodeModelList.mockResolvedValue(({
+      installed: false,
+      models: [],
+    }));
+    expect(await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', 'high') })).toEqual({
+      success: false,
+      error: 'opencode_not_installed',
+    });
+    expect(hubStartSpy).not.toHaveBeenCalled();
+
+    // 3. LaunchKey vieja (mismatch)
+    hubDiscoverSpy.mockResolvedValue([
+      { runtime: 'opencode', installed: true, launchable: true, diagnostics: [] },
+    ]);
+    fetchOpenCodeModelList.mockResolvedValue(({
+      installed: true,
+      models: [
+        {
+          providerId: 'unslothpclocal',
+          id: 'unsloth/Qwen3.8-27B-GGUF',
+          name: 'Qwen 3.8 27B',
+          variantIds: ['low', 'medium', 'high'],
+          contextLimit: 110000,
+          enabled: true,
+          status: 'active',
+        },
+      ],
+    }));
+    expect(await start({ expectedModel: 'launchKey-vieja' })).toEqual({
+      success: false,
+      error: 'model_mismatch',
+    });
+    expect(hubStartSpy).not.toHaveBeenCalled();
+  });
+
+  describe('OpenCode', () => {
+    const provider = { npm: '@ai-sdk/openai-compatible', options: { baseURL: 'http://localhost:8888/v1' }, models: { 'unsloth/Qwen3.8-27B-GGUF': { variants: { low: {}, medium: {}, high: {} } } } };
+    const QWEN = { providerId: 'unslothpclocal', id: 'unsloth/Qwen3.8-27B-GGUF', name: 'Qwen 3.8 27B', variantIds: ['low', 'medium', 'high'], contextLimit: 110000, enabled: true, status: 'active' };
+    beforeEach(() => {
+      hubDiscoverSpy.mockResolvedValue([{ runtime: 'opencode', installed: true, launchable: true, diagnostics: [] }]);
+    });
+
+    it('la variante explícita de agent.gitcron-sdd.variant viaja y le gana al nivel', async () => {
+      writeRepo({ provider: { unslothpclocal: provider }, agent: { 'gitcron-sdd': { model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF', variant: 'medium', options: { reasoning_effort: 'high' } } } });
+      fetchOpenCodeModelList.mockResolvedValue({ installed: true, models: [QWEN] });
+
+      const res = await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', 'medium') });
+
+      expect(res.success).toBe(true);
+      expect(hubStartSpy).toHaveBeenCalledWith(expect.objectContaining({ runtime: 'opencode', requestedModel: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF#medium' }));
+    });
+
+    it('un nivel que OpenCode no declara como variante de ese modelo no se manda', async () => {
+      writeRepo({ provider: { unslothpclocal: provider }, agent: { 'gitcron-sdd': { model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF', options: { reasoning_effort: 'xhigh' } } } });
+      fetchOpenCodeModelList.mockResolvedValue({ installed: true, models: [QWEN] });
+
+      const res = await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', null) });
+
+      expect(res.success).toBe(true);
+      expect(hubStartSpy).toHaveBeenCalledWith(expect.objectContaining({ requestedModel: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF' }));
+    });
+
+    it('si OpenCode no contesta la lista no se dice que no conoce el modelo: se rechaza con opencode_list_failed y no se lanza nada', async () => {
+      writeRepo({ provider: { unslothpclocal: provider }, agent: { 'gitcron-sdd': { model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF' } } });
+      fetchOpenCodeModelList.mockResolvedValue({ installed: true, models: [], error: 'opencode_api_failed' });
+
+      expect(await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', null) })).toEqual({ success: false, error: 'opencode_list_failed' });
+      expect(hubStartSpy).not.toHaveBeenCalled();
+    });
+
+    it('un modelo inactivo o deshabilitado en OpenCode no se lanza', async () => {
+      writeRepo({ provider: { unslothpclocal: provider }, agent: { 'gitcron-sdd': { model: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF' } } });
+      for (const changed of [{ enabled: false }, { status: 'deprecated' }]) {
+        fetchOpenCodeModelList.mockResolvedValue({ installed: true, models: [{ ...QWEN, ...changed }] });
+        expect(await start({ expectedModel: key('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', null) })).toEqual({ success: false, error: 'opencode_unknown_model' });
+      }
+      expect(hubStartSpy).not.toHaveBeenCalled();
+    });
   });
 
   it('con un modelo de Antigravity se rechaza con unsupported_runtime_agy y no se lanza nada', async () => {

@@ -114,9 +114,20 @@ export function PipelineRuntimeLauncher({
   const runtime = resolved?.runtime ?? '';
   const launchKey = resolved?.launchKey ?? null;
   const selectedEntry = discovery?.find((entry) => entry.runtime === runtime) ?? null;
-  // Antigravity y OpenCode todavía no se lanzan desde acá (tareas 5.2 y 5.3).
-  const isUnsupportedEngine = runtime === 'opencode' || runtime === 'agy';
-  const runtimeLaunchable = selectedEntry?.launchable === true && !isUnsupportedEngine;
+  // Antigravity todavía no se lanza desde acá (tarea 5.2).
+  const isUnsupportedEngine = runtime === 'agy';
+  const isOpenCodeNotInstalled = runtime === 'opencode' && (resolved?.opencodeInstalled === false || (selectedEntry !== null && !selectedEntry.installed));
+  // OpenCode no contestó la lista: no se sabe si conoce el modelo, y no se dice que no.
+  const isOpenCodeListFailed = runtime === 'opencode' && !isOpenCodeNotInstalled && resolved?.opencodeListFailed === true;
+  const isOpenCodeUnknown = runtime === 'opencode' && !isOpenCodeNotInstalled && !isOpenCodeListFailed && resolved?.opencodeKnown === false;
+  const isSmallContext = runtime === 'opencode' && !isOpenCodeNotInstalled && !isOpenCodeListFailed && !isOpenCodeUnknown && resolved?.contextLimit != null && resolved.contextLimit < 16000;
+
+  const runtimeLaunchable =
+    selectedEntry?.launchable === true &&
+    !isUnsupportedEngine &&
+    !isOpenCodeNotInstalled &&
+    !isOpenCodeListFailed &&
+    !isOpenCodeUnknown;
   // La confirmación de escritura nombra motor y modelo: vale sólo para lo que nombraba.
   // Si la elección cambia después de tildarla, hay que volver a confirmar.
   const confirmedForThis = writeConfirmed && confirmedKey === launchKey;
@@ -126,6 +137,9 @@ export function PipelineRuntimeLauncher({
   const canStart =
     launchKey !== null &&
     !isUnsupportedEngine &&
+    !isOpenCodeNotInstalled &&
+    !isOpenCodeListFailed &&
+    !isOpenCodeUnknown &&
     intentCapability.canLaunch &&
     canStartRuntimeSession({
       blockedByFixture,
@@ -140,6 +154,15 @@ export function PipelineRuntimeLauncher({
 
   const confirmWriteText = useMemo(() => {
     if (!resolved) return t('pipeline.launcher.confirmWrite');
+    if (resolved.runtime === 'opencode') {
+      const model = resolved.modelId;
+      const provider = resolved.providerName || resolved.providerId;
+      const variant = resolved.variant;
+      const executor = resolved.toolsExecutor || 'OpenCode';
+      return variant
+        ? t('pipeline.launcher.confirmWriteServerAgentWithVariant', { model, provider, variant, executor })
+        : t('pipeline.launcher.confirmWriteServerAgent', { model, provider, executor });
+    }
     const motor = runtimeDisplayName(resolved.runtime ?? null) ?? resolved.runtime ?? '';
     const model = resolved.modelId;
     const executor = resolved.toolsExecutor || motor;
@@ -227,13 +250,38 @@ export function PipelineRuntimeLauncher({
 
         {isUnsupportedEngine && (
           <p className="pipeline-launcher__blocked" role="alert">
-            {runtime === 'opencode'
-              ? t('pipeline.launcher.unsupportedRuntimeOpenCode')
-              : t('pipeline.launcher.unsupportedRuntimeAgy')}
+            {t('pipeline.launcher.unsupportedRuntimeAgy')}
           </p>
         )}
 
-        {resolved && !isUnsupportedEngine && selectedEntry?.launchable && (
+        {(isOpenCodeUnknown || isOpenCodeListFailed) && (
+          <div className="pipeline-launcher__empty">
+            <p className="pipeline-launcher__blocked" role="alert">
+              {isOpenCodeListFailed ? t('pipeline.launcher.opencodeListFailed') : t('pipeline.launcher.opencodeUnknownModel')}
+            </p>
+            {/* Se agrega el modelo a la configuración de OpenCode o se arregla el servicio: volver a preguntar. */}
+            <button
+              type="button"
+              className="pipeline-launcher__button"
+              data-action="recheck-opencode"
+              disabled={locked}
+              onClick={() => {
+                setDiscoveryToken((token) => token + 1);
+                setAiRefreshKey((key) => key + 1);
+              }}
+            >
+              {t('pipeline.launcher.recheck')}
+            </button>
+          </div>
+        )}
+
+        {isSmallContext && (
+          <p className="pipeline-launcher__warning" role="status">
+            {t('pipeline.launcher.smallContextWarning', { context: resolved?.contextLimit ?? 0 })}
+          </p>
+        )}
+
+        {resolved && !isUnsupportedEngine && !isOpenCodeNotInstalled && !isOpenCodeListFailed && !isOpenCodeUnknown && selectedEntry?.launchable && (
           <>
             {/* La disponibilidad del motor se dice antes del CTA, no después de que falle. */}
             <p className="pipeline-launcher__availability" data-launchable={selectedEntry.launchable}>
@@ -310,12 +358,14 @@ export function PipelineRuntimeLauncher({
         {/* Un motor instalado que no se puede lanzar dice por qué, y uno que no está
             instalado lo dice también: ocultarlo haría parecer otra cosa. La salida es
             accionable: volver a comprobar después de instalarlo o iniciar sesión. */}
-        {resolved && !isUnsupportedEngine && !selectedEntry?.launchable && (
+        {resolved && !isUnsupportedEngine && (!selectedEntry?.launchable || isOpenCodeNotInstalled) && (
           <div className="pipeline-launcher__empty">
             <p className="pipeline-launcher__blocked" role="alert">
-              {selectedEntry
-                ? `${runtimeDisplayName(selectedEntry.runtime) ?? selectedEntry.runtime}: ${selectedEntry.diagnostics[0] ?? t('pipeline.launcher.blockedUnknown')}`
-                : t('pipeline.launcher.error.runtime_not_installed')}
+              {isOpenCodeNotInstalled
+                ? t('pipeline.launcher.opencodeNotInstalled')
+                : selectedEntry
+                  ? `${runtimeDisplayName(selectedEntry.runtime) ?? selectedEntry.runtime}: ${selectedEntry.diagnostics[0] ?? t('pipeline.launcher.blockedUnknown')}`
+                  : t('pipeline.launcher.error.runtime_not_installed')}
             </p>
             <button
               type="button"

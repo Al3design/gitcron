@@ -62,6 +62,20 @@ type OwnedProcess = {
   terminate: (reason: 'timeout' | 'abort' | 'output_limit') => void;
 };
 
+const SHELL_SPECIAL = /[\s&|<>^()]/;
+
+/**
+ * Con `shell: true` Node une el comando y los argumentos con espacios sin
+ * entrecomillar nada: una carpeta con espacio parte el argumento en dos y un `&`
+ * en su nombre empieza otro comando. Para un `.cmd`/`.bat` se entrecomilla lo que
+ * lo necesita. `"` y `%` no se pueden proteger dentro de comillas (el shell aún
+ * expande `%VAR%`): un argumento con alguno no se pasa.
+ */
+export function quoteForShell(value: string): string {
+  if (value.includes('"') || value.includes('%')) throw new Error('Runtime arg is not safe for the shell');
+  return value === '' || SHELL_SPECIAL.test(value) ? `"${value}"` : value;
+}
+
 function positiveLimit(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && (value as number) > 0 ? value as number : fallback;
 }
@@ -196,12 +210,16 @@ export class RuntimeProcessRunner {
     });
 
     let child: ChildProcessWithoutNullStreams;
+    let viaShell = false;
     try {
       const env = minimalEnvironment(spec.env);
       const resolution = await resolveRuntimeExecutable(spec.executable, env);
       // `viaShell` solo para batch files: Node no puede CreateProcess un
       // `.cmd`/`.bat` directo (EINVAL), y el shell aplica su quoting estándar.
-      child = spawn(resolution.file, [...spec.args], {
+      const file = resolution.viaShell ? quoteForShell(resolution.file) : resolution.file;
+      const args = resolution.viaShell ? spec.args.map(quoteForShell) : [...spec.args];
+      viaShell = resolution.viaShell;
+      child = spawn(file, args, {
         cwd,
         env,
         shell: resolution.viaShell,
@@ -227,7 +245,14 @@ export class RuntimeProcessRunner {
       const terminate = (reason: 'timeout' | 'abort' | 'output_limit') => {
         if (reason === 'timeout') timedOut = true;
         if (reason === 'abort') aborted = true;
-        if (!child.killed) child.kill('SIGTERM');
+        if (viaShell && process.platform === 'win32' && child.pid !== undefined && child.exitCode === null) {
+          // El proceso de Node es la consola (`cmd`) que lanzó el programa de verdad: matarla
+          // con `kill` deja al programa vivo y trabajando (un agente con `--auto` seguiría
+          // escribiendo en el repositorio después de «Detener»). `taskkill /T` mata el árbol.
+          spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => child.kill('SIGTERM'));
+        } else if (!child.killed) {
+          child.kill('SIGTERM');
+        }
         if (!forceTimer) {
           forceTimer = setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');

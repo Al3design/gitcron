@@ -310,7 +310,7 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
           el mismo CLI, u OpenCode para un modelo de un servidor (D13). */}
       {use === 'gitcron-sdd' && currentProvider?.toolsExecutor && (
         <p className={styles.pickerNotice}>
-          {currentProvider.agentRuntime === 'opencode' || currentProvider.agentRuntime === 'agy'
+          {currentProvider.agentRuntime === 'agy'
             ? t('aiUse.pickerAgentNotYet', { executor: currentProvider.toolsExecutor })
             : t('aiUse.pickerAgentExecutor', { executor: currentProvider.toolsExecutor })}
         </p>

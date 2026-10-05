@@ -2127,6 +2127,12 @@ body, .font-sans {
   margin-bottom: var(--space-3);
 }
 
+.pipeline-launcher__warning {
+  font-size: var(--font-size-xs);
+  color: var(--color-git-mod);
+  margin-top: var(--space-2);
+}
+
 /* Sin runtime lanzable, la salida es accionable: el texto explica y el botón
    permite volver a comprobar sin recargar la app. */
 .pipeline-launcher__empty {

@@ -63,6 +63,16 @@ export type AiUseStatus =
       modelRef?: string;
       /** Intensidad de razonamiento efectiva si la hay (D17). */
       effort?: string;
+      /** Variante resuelta para OpenCode (D8, D17). */
+      variant?: string;
+      /** Si OpenCode conoce el modelo para este repo (D8, tarea 5.3). */
+      opencodeKnown?: boolean;
+      /** Si OpenCode está instalado en el sistema. */
+      opencodeInstalled?: boolean;
+      /** OpenCode no contestó la lista de modelos: no se sabe si conoce el modelo. */
+      opencodeListFailed?: boolean;
+      /** Límite de contexto reportado por OpenCode si se conoce (D8). */
+      contextLimit?: number | null;
       /**
        * Sólo del agente de SDD: la clave de lo que se lanzaría. El lanzador la devuelve
        * como `expectedModel`; si el archivo cambió, el proceso principal no lanza nada.

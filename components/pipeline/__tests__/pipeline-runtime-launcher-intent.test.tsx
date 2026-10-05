@@ -43,9 +43,22 @@ const DISCOVERY_FIXTURE: RuntimeDiscoveryEntry[] = [
     startRunsCommands: true,
     diagnostics: [],
   },
+  {
+    runtime: 'opencode',
+    adapterId: 'adapter-opencode',
+    installed: true,
+    runtimeVersion: '2.0.20',
+    launchable: true,
+    evidenceStatus: 'verified',
+    startAvailability: 'available',
+    startConstraints: ['edita archivos y corre comandos con OpenCode run', 'mode --auto'],
+    startModifiesRepo: true,
+    startRunsCommands: true,
+    diagnostics: [],
+  },
 ];
 
-const launchKeyOf = (modelRef: string, effort?: string) => JSON.stringify([modelRef, effort ?? null]);
+const launchKeyOf = (modelRef: string, effortOrVariant?: string) => JSON.stringify([modelRef, effortOrVariant ?? null]);
 
 function mockResolvedAgentStatus(overrides: Partial<Extract<AiUseStatus, { status: 'resolved' }>> = {}): AiUseStatus {
   const base: Extract<AiUseStatus, { status: 'resolved' }> = {
@@ -70,7 +83,7 @@ function mockResolvedAgentStatus(overrides: Partial<Extract<AiUseStatus, { statu
     effort: 'high',
     ...overrides,
   };
-  return { ...base, launchKey: overrides.launchKey ?? launchKeyOf(base.modelRef ?? '', base.effort) };
+  return { ...base, launchKey: overrides.launchKey ?? launchKeyOf(base.modelRef ?? '', overrides.variant ?? base.effort) };
 }
 
 describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación explícita', { timeout: 15_000 }, () => {
@@ -235,43 +248,6 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
     });
   });
 
-  it('modelo con runtime opencode muestra aviso de no soportado y deshabilita Iniciar', async () => {
-    aiStatusSpy.mockResolvedValue({
-      success: true,
-      data: mockResolvedAgentStatus({
-        providerId: 'my-custom',
-        providerName: 'Custom Provider',
-        modelRef: 'my-custom/my-model',
-        modelId: 'my-model',
-        modelSource: 'general',
-        isException: false,
-        sourceFile: 'gitcron.json',
-        sourceDir: 'C:/repo-test',
-        runtime: 'opencode',
-        toolsExecutor: 'OpenCode',
-        effort: undefined,
-      }),
-    });
-
-    render(
-      <PipelineRuntimeLauncher
-        repoPath="C:/repo-test"
-        projection={null}
-        intent="write-artifact"
-        changeId="change-abc"
-        taskId="task-xyz"
-        initialInstruction="Escribir algo"
-      />,
-    );
-
-    await vi.waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
-
-    expect(screen.getByRole('alert').textContent).toContain('pipeline.launcher.unsupportedRuntimeOpenCode');
-    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
-    expect(startButton.disabled).toBe(true);
-    expect(startSpy).not.toHaveBeenCalled();
-  });
-
   it('modelo con runtime agy (Antigravity) muestra aviso de no soportado y deshabilita Iniciar', async () => {
     aiStatusSpy.mockResolvedValue({
       success: true,
@@ -376,7 +352,6 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
 
   it('diccionarios i18n: las claves de tanda 19 existen en es, en y zh sin variables sin resolver', () => {
     const keysToCheck: { key: string; vars?: Record<string, string | number> }[] = [
-      { key: 'pipeline.launcher.unsupportedRuntimeOpenCode' },
       { key: 'pipeline.launcher.unsupportedRuntimeAgy' },
       { key: 'pipeline.launcher.intent.chooseOtherModel' },
       {
@@ -390,7 +365,6 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
       { key: 'pipeline.launcher.error.model_mismatch' },
       { key: 'pipeline.launcher.error.no_model' },
       { key: 'pipeline.launcher.error.disabled' },
-      { key: 'pipeline.launcher.error.unsupported_runtime_opencode' },
       { key: 'pipeline.launcher.error.unsupported_runtime_agy' },
       { key: 'pipeline.launcher.error.runtime_not_installed' },
       { key: 'pipeline.launcher.error.runtime_not_launchable' },
@@ -479,6 +453,172 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
     const providerSelect = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
     expect([...providerSelect.options].map((o) => o.value)).toEqual(['codex', 'unslothpclocal']);
     fireEvent.change(providerSelect, { target: { value: 'unslothpclocal' } });
-    expect(await screen.findByText('aiUse.pickerAgentNotYet:{"executor":"OpenCode"}')).toBeDefined();
+    expect(await screen.findByText('aiUse.pickerAgentExecutor:{"executor":"OpenCode"}')).toBeDefined();
+  });
+
+  it('con un modelo de servidor conocido se puede lanzar tras confirmar, y la confirmación nombra modelo, proveedor, variante y OpenCode', async () => {
+    aiStatusSpy.mockResolvedValue({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'unslothpclocal',
+        providerName: 'Unsloth CASA Local',
+        modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        modelRef: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+        runtime: 'opencode',
+        toolsExecutor: 'OpenCode',
+        variant: 'high',
+        opencodeKnown: true,
+        opencodeInstalled: true,
+        contextLimit: 110000,
+      }),
+    });
+
+    render(<PipelineRuntimeLauncher repoPath="C:/repo-test" projection={null} intent="write-artifact" initialInstruction="Hacer tarea" />);
+
+    // Espera a que resuelva la carga y aparezca el checkbox de confirmación
+    const checkbox = (await screen.findByRole('checkbox')) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+
+    // La confirmación nombra modelo, proveedor, variante y que las herramientas las ejecuta OpenCode
+    expect(
+      screen.getByText(
+        'pipeline.launcher.confirmWriteServerAgentWithVariant:{"model":"unsloth/Qwen3.8-27B-GGUF","provider":"Unsloth CASA Local","variant":"high","executor":"OpenCode"}',
+      ),
+    ).toBeDefined();
+
+    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+
+    // Confirmar habilita el arranque
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+    expect(startButton.disabled).toBe(false);
+
+    // Arrancar invoca pipelineRuntime.start con la launchKey exacta
+    fireEvent.click(startButton);
+    await vi.waitFor(() => expect(startSpy).toHaveBeenCalledTimes(1));
+    expect(startSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: 'C:/repo-test',
+        instruction: 'Hacer tarea',
+        expectedModel: launchKeyOf('unslothpclocal/unsloth/Qwen3.8-27B-GGUF', 'high'),
+      }),
+    );
+  });
+
+  it('con contexto chico en OpenCode aparece el aviso de contexto sin bloquear el arranque', async () => {
+    aiStatusSpy.mockResolvedValue({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'unslothpclocal',
+        providerName: 'Unsloth CASA Local',
+        modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        modelRef: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+        runtime: 'opencode',
+        toolsExecutor: 'OpenCode',
+        variant: 'low',
+        opencodeKnown: true,
+        opencodeInstalled: true,
+        contextLimit: 8192,
+      }),
+    });
+
+    render(<PipelineRuntimeLauncher repoPath="C:/repo-test" projection={null} intent="explore" initialInstruction="Explorar" />);
+
+    // Aviso de contexto chico presente
+    expect(await screen.findByText('pipeline.launcher.smallContextWarning:{"context":8192}')).toBeDefined();
+
+    // Confirmar y arrancar no está bloqueado
+    const checkbox = (await screen.findByRole('checkbox')) as HTMLInputElement;
+    fireEvent.click(checkbox);
+    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(false);
+  });
+
+  it('con modelo de servidor desconocido por OpenCode muestra el motivo y deshabilita Iniciar', async () => {
+    aiStatusSpy.mockResolvedValue({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'unslothpclocal',
+        providerName: 'Unsloth CASA Local',
+        modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        modelRef: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+        runtime: 'opencode',
+        toolsExecutor: 'OpenCode',
+        opencodeKnown: false,
+        opencodeInstalled: true,
+      }),
+    });
+
+    render(<PipelineRuntimeLauncher repoPath="C:/repo-test" projection={null} intent="explore" initialInstruction="Explorar" />);
+
+    expect(await screen.findByText('pipeline.launcher.opencodeUnknownModel')).toBeDefined();
+    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+  });
+
+  it('con el modelo desconocido o la lista sin contestar hay una salida: volver a preguntar, que repite la consulta', async () => {
+    const opencode = (over: Record<string, unknown>) => ({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'unslothpclocal', providerName: 'Unsloth CASA Local', modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        modelRef: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF', runtime: 'opencode', toolsExecutor: 'OpenCode', opencodeInstalled: true, ...over,
+      }),
+    });
+
+    // OpenCode no contestó: no se dice que no conoce el modelo
+    aiStatusSpy.mockResolvedValue(opencode({ opencodeListFailed: true }));
+    render(<PipelineRuntimeLauncher repoPath="C:/repo-test" projection={null} intent="explore" initialInstruction="Explorar" />);
+    expect(await screen.findByText('pipeline.launcher.opencodeListFailed')).toBeDefined();
+    expect(screen.queryByText('pipeline.launcher.opencodeUnknownModel')).toBeNull();
+    expect((screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement).disabled).toBe(true);
+
+    // Volver a preguntar: el servicio contesta y el modelo se conoce
+    const statusCalls = aiStatusSpy.mock.calls.length;
+    aiStatusSpy.mockResolvedValue(opencode({ opencodeKnown: true }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'pipeline.launcher.recheck' })); });
+    await vi.waitFor(() => expect(aiStatusSpy.mock.calls.length).toBeGreaterThan(statusCalls));
+    await vi.waitFor(() => expect(screen.queryByText('pipeline.launcher.opencodeListFailed')).toBeNull());
+    expect(screen.queryByText('pipeline.launcher.opencodeUnknownModel')).toBeNull();
+  });
+
+  it('con OpenCode sin instalar muestra el motivo y deshabilita Iniciar', async () => {
+    aiStatusSpy.mockResolvedValue({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'unslothpclocal',
+        providerName: 'Unsloth CASA Local',
+        modelId: 'unsloth/Qwen3.8-27B-GGUF',
+        modelRef: 'unslothpclocal/unsloth/Qwen3.8-27B-GGUF',
+        runtime: 'opencode',
+        toolsExecutor: 'OpenCode',
+        opencodeKnown: false,
+        opencodeInstalled: false,
+      }),
+    });
+
+    render(<PipelineRuntimeLauncher repoPath="C:/repo-test" projection={null} intent="explore" initialInstruction="Explorar" />);
+
+    expect(await screen.findByText('pipeline.launcher.opencodeNotInstalled')).toBeDefined();
+    // Un solo aviso (no se repite con el del motor no lanzable) y con salida: volver a comprobar
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'pipeline.launcher.recheck' })).toBeDefined();
+    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+  });
+
+  it('las cadenas de i18n para OpenCode existen en es, en y zh', () => {
+    for (const lang of ['es', 'en', 'zh'] as const) {
+      expect(translate('pipeline.launcher.opencodeUnknownModel', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.opencodeNotInstalled', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.smallContextWarning', lang, { context: 8192 })).toContain('8192');
+      expect(translate('pipeline.launcher.confirmWriteServerAgent', lang, { model: 'M', provider: 'P', executor: 'E' })).toContain('M');
+      expect(translate('pipeline.launcher.confirmWriteServerAgentWithVariant', lang, { model: 'M', provider: 'P', variant: 'V', executor: 'E' })).toContain('V');
+      expect(translate('pipeline.launcher.error.opencode_unknown_model', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.error.opencode_not_installed', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.opencodeListFailed', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.error.opencode_list_failed', lang)).toBeTruthy();
+      expect(translate('pipeline.launcher.error.invalid_model_identifier', lang)).toBeTruthy();
+    }
   });
 });

@@ -19,6 +19,7 @@ import { updateGitCronConfigValue } from '../ai/config/gitcron-config-writer';
 import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../ai/config/legacy-choice';
 import { isAiUse, isTextUse, type AiUse, type TextUse } from '../ai/config/resolve-model-for';
 import { detectCanLoad } from '../ai/config/provider-models';
+import { fetchOpenCodeModelList } from '../ai/config/opencode-models';
 import { resolveAgentFor } from '../ai/config/resolve-agent-for';
 import { getToolModelsForUse } from '../ai/config/tool-models';
 import { getStoredEnvVar, hasKey } from '../ai/key-store';
@@ -97,6 +98,41 @@ export function registerAiUseHandlers(): void {
               canLoad: false,
             });
           }
+          let opencodeInstalled: boolean | undefined;
+          let opencodeListFailed: boolean | undefined;
+          let opencodeKnown: boolean | undefined;
+          let contextLimit: number | null | undefined;
+          let variant: string | undefined = target.variant;
+          let launchKey = target.launchKey;
+
+          if (target.runtime === 'opencode') {
+            if (repo) {
+              const listRes = await fetchOpenCodeModelList(repo);
+              opencodeInstalled = listRes.installed;
+              if (listRes.error === 'opencode_api_failed') {
+                // No contestó o contestó otra cosa: no se sabe si conoce el modelo, y no se dice que no.
+                opencodeListFailed = true;
+              } else if (listRes.installed) {
+                const refreshed = resolveAgentFor({
+                  configPath: activeConfigPath(),
+                  repoPath: repo,
+                  loaded,
+                  opencodeModels: listRes.models,
+                });
+                if (refreshed.status === 'resolved') {
+                  opencodeKnown = refreshed.opencodeKnown;
+                  contextLimit = refreshed.contextLimit;
+                  variant = refreshed.variant;
+                  launchKey = refreshed.launchKey;
+                }
+              } else {
+                opencodeKnown = false;
+              }
+            } else {
+              opencodeKnown = false;
+            }
+          }
+
           return ok({
             status: 'resolved',
             use,
@@ -119,7 +155,12 @@ export function registerAiUseHandlers(): void {
             runtime: target.runtime,
             toolsExecutor: target.toolsExecutor,
             effort: target.effort,
-            launchKey: target.launchKey,
+            variant,
+            opencodeKnown,
+            opencodeInstalled,
+            opencodeListFailed,
+            contextLimit,
+            launchKey,
           });
         }
 

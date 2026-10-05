@@ -11,7 +11,7 @@ import type { PipelineControlBus } from '../control/control-bus';
 import { createClaudeRuntimeAdapter } from '../runtime-adapters/claude-adapter';
 import { createCodexRuntimeAdapter } from '../runtime-adapters/codex-adapter';
 import { createAgyWrapperRuntimeAdapter } from '../runtime-adapters/agy-adapter';
-import { createOpenCodeAcpRuntimeAdapter } from '../runtime-adapters/opencode-acp-adapter';
+import { createOpenCodeRuntimeAdapter } from '../runtime-adapters/opencode-adapter';
 import { asRecord } from '../runtime-adapters/normalization';
 import type { RuntimeAdapter } from '../runtime-adapters/runtime-adapter';
 import { RuntimeProjectionBuilder } from './runtime-projection';
@@ -99,8 +99,7 @@ const ADAPTERS: AdapterEntry[] = [
   { runtime: 'agy', create: (repo) => createAgyWrapperRuntimeAdapter(repo), controlCapabilities: [], launchable: false, modifiesRepo: false, runsCommands: false },
   {
     runtime: 'opencode',
-    executable: 'opencode',
-    create: (repo, executable = 'opencode') => createOpenCodeAcpRuntimeAdapter(repo, executable),
+    create: (repo) => createOpenCodeRuntimeAdapter(repo),
     controlCapabilities: STRUCTURED_CLI_CONTROLS,
     launchable: true,
     modifiesRepo: true,

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RuntimeProcessRunner, resolveRuntimeExecutable } from '../pipeline/runtime-adapters';
+import { quoteForShell } from '../pipeline/runtime-adapters/process-runner';
 
 const temporaryDirectories: string[] = [];
 
@@ -186,5 +187,78 @@ describe.skipIf(process.platform !== 'win32')('batch shim launch', () => {
       timeoutMs: 5_000,
     })).rejects.toThrow(/not found in the application environment PATH/);
     expect(runner.ownedProcessCount()).toBe(0);
+  });
+});
+
+describe('argumentos de un .cmd (pasan por el shell)', () => {
+  // El .cmd devuelve, uno por renglón, los argumentos que recibe: lo que llega es lo que se mandó.
+  async function echoCmd(directory: string): Promise<string> {
+    const script = path.join(directory, 'args.js');
+    await fs.writeFile(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+    const cmd = path.join(directory, 'echo-args.cmd');
+    await fs.writeFile(cmd, `@echo off
+"${process.execPath}" "${script}" %*
+`);
+    return cmd;
+  }
+
+  it.skipIf(process.platform !== 'win32')('un argumento con espacio, `&` o paréntesis llega entero, y el comando con espacio también', async () => {
+    const base = await fixtureDirectory();
+    const directory = path.join(base, 'Mis Proyectos & Co (1)');
+    await fs.mkdir(directory);
+    const cmd = await echoCmd(directory);
+    const runner = new RuntimeProcessRunner();
+    const result = await runner.run({
+      executable: cmd,
+      args: ['api', 'model.list', '--param', `location[directory]=${directory}`, 'plano', ''],
+      cwd: directory,
+      expectedCanonicalCwd: directory,
+      timeoutMs: 15_000,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout.toString())).toEqual(['api', 'model.list', '--param', `location[directory]=${directory}`, 'plano', '']);
+  });
+
+  it.skipIf(process.platform !== 'win32')('un argumento con comillas o % no se pasa al shell y no se lanza nada', async () => {
+    const directory = await fixtureDirectory();
+    const cmd = await echoCmd(directory);
+    const runner = new RuntimeProcessRunner();
+    for (const arg of ['a"b', '%PATH%']) {
+      await expect(runner.run({ executable: cmd, args: [arg], cwd: directory, expectedCanonicalCwd: directory, timeoutMs: 5_000 }))
+        .rejects.toThrow(/not safe for the shell/);
+    }
+    expect(runner.ownedProcessCount()).toBe(0);
+  });
+
+  it.skipIf(process.platform !== 'win32')('al cortar por tiempo, también muere el programa que lanzó el .cmd (no queda un huérfano trabajando)', async () => {
+    const directory = await fixtureDirectory();
+    const pidFile = path.join(directory, 'pid.txt');
+    const script = path.join(directory, 'largo.js');
+    // El programa de verdad escribe su pid y se queda vivo; el .cmd sólo lo lanza.
+    await fs.writeFile(script, `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
+    const cmd = path.join(directory, 'largo.cmd');
+    await fs.writeFile(cmd, `@echo off
+"${process.execPath}" "${script}"
+`);
+    const runner = new RuntimeProcessRunner();
+    const result = await runner.run({ executable: cmd, args: [], cwd: directory, expectedCanonicalCwd: directory, timeoutMs: 1_500, killGraceMs: 500 });
+    expect(result.timedOut).toBe(true);
+
+    const pid = Number(await fs.readFile(pidFile, 'utf8'));
+    const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    for (let i = 0; i < 40 && alive(); i++) await new Promise((resolve) => setTimeout(resolve, 100));
+    const stillAlive = alive();
+    if (stillAlive) process.kill(pid, 'SIGKILL'); // no dejar basura si la prueba falla
+    expect(stillAlive).toBe(false);
+  }, 20_000);
+
+  it('quoteForShell sólo entrecomilla lo que lo necesita', () => {
+    expect(quoteForShell('--format')).toBe('--format');
+    expect(quoteForShell('unslothpclocal/unsloth/Qwen3.8-27B-GGUF#high')).toBe('unslothpclocal/unsloth/Qwen3.8-27B-GGUF#high');
+    expect(quoteForShell(String.raw`C:\Mis Proyectos\repo`)).toBe(String.raw`"C:\Mis Proyectos\repo"`);
+    expect(quoteForShell('a&b')).toBe('"a&b"');
+    expect(quoteForShell('')).toBe('""');
+    expect(() => quoteForShell('50%')).toThrow();
+    expect(() => quoteForShell('di"jo')).toThrow();
   });
 });

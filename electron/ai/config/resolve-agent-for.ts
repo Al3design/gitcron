@@ -21,6 +21,7 @@ import {
   type ProviderDestination,
   type ResolveUseOptions,
 } from './gitcron-config';
+import { findOpenCodeModel, resolveOpenCodeVariant, type OpenCodeKnownModel } from './opencode-models';
 
 export interface ResolveAgentForOptions extends ResolveUseOptions {
   configPath?: string;
@@ -28,6 +29,7 @@ export interface ResolveAgentForOptions extends ResolveUseOptions {
   loaded?: LoadedGitCronConfig;
   stored?: (name: string) => string | undefined;
   env?: NodeJS.ProcessEnv;
+  opencodeModels?: OpenCodeKnownModel[];
 }
 
 export type ResolvedAgentFor =
@@ -39,6 +41,7 @@ export type ResolvedAgentFor =
       providerName: string;
       modelId: string;
       effort?: string;
+      variant?: string;
       runtime: PipelineRuntime;
       toolsExecutor: string;
       destination: ProviderDestination;
@@ -48,8 +51,10 @@ export type ResolvedAgentFor =
       isException: boolean;
       available: boolean;
       unavailableReason?: string;
+      opencodeKnown?: boolean;
+      contextLimit?: number | null;
       /**
-       * Lo que se va a lanzar (modelo y nivel), como una clave opaca. La pantalla la
+       * Lo que se va a lanzar (modelo y nivel/variante), como una clave opaca. La pantalla la
        * devuelve al arrancar: si el archivo cambió entre que se mostró y se apretó
        * «Iniciar», no coincide y no se lanza nada.
        */
@@ -88,7 +93,18 @@ export function resolveAgentFor(options: ResolveAgentForOptions = {}): ResolvedA
     return { status: 'unset', use: 'gitcron-sdd' };
   }
 
-  const { providerId, providerName, modelId, destination, available, unavailableReason } = resolved;
+  const { providerId, providerName, destination, available, unavailableReason } = resolved;
+  const rawModel = resolved.modelId;
+  let cleanModelId = rawModel;
+  let explicitVariant = resolved.variant?.trim() || undefined;
+  if (rawModel.includes('#')) {
+    const [m, v] = rawModel.split('#');
+    cleanModelId = m;
+    if (!explicitVariant && v) {
+      explicitVariant = v.trim();
+    }
+  }
+  const modelId = cleanModelId;
   const modelRef = `${providerId}/${modelId}`;
 
   let runtime: PipelineRuntime;
@@ -129,9 +145,33 @@ export function resolveAgentFor(options: ResolveAgentForOptions = {}): ResolvedA
     effort = rawEffort;
   }
 
+  let variant: string | undefined;
+  let opencodeKnown: boolean | undefined;
+  let contextLimit: number | null | undefined;
+
+  if (runtime === 'opencode') {
+    if (options.opencodeModels) {
+      const known = findOpenCodeModel(options.opencodeModels, providerId, modelId);
+      opencodeKnown = Boolean(known);
+      contextLimit = known?.contextLimit ?? null;
+      const v = resolveOpenCodeVariant({
+        explicitVariant,
+        effort: rawEffort,
+        declaredVariants: known?.variantIds,
+      });
+      variant = v ?? undefined;
+    } else {
+      variant = explicitVariant || rawEffort;
+    }
+  }
+
   const modelSource = resolved.modelSource === 'general' ? 'general' : 'agent';
   const isException = modelSource === 'agent'
     && Boolean(loaded.config?.model && typeof loaded.config.model === 'string' && loaded.config.model.trim());
+
+  const launchKey = runtime === 'opencode'
+    ? JSON.stringify([modelRef, variant ?? null])
+    : JSON.stringify([modelRef, effort ?? null]);
 
   return {
     status: 'resolved',
@@ -141,6 +181,7 @@ export function resolveAgentFor(options: ResolveAgentForOptions = {}): ResolvedA
     providerName,
     modelId,
     effort,
+    variant,
     runtime,
     toolsExecutor,
     destination,
@@ -150,6 +191,8 @@ export function resolveAgentFor(options: ResolveAgentForOptions = {}): ResolvedA
     isException,
     available,
     unavailableReason,
-    launchKey: JSON.stringify([modelRef, effort ?? null]),
+    opencodeKnown,
+    contextLimit,
+    launchKey,
   };
 }

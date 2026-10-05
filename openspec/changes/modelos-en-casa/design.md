@@ -240,6 +240,17 @@ Por eso:
   paso (casi todo de OpenCode).
 - **Las credenciales guardadas** están en la carpeta de datos que da `opencode debug paths` (en Windows,
   `~/.local/share/opencode/auth.json`).
+- **Auditado en la primera parte de 5.3 (2026-10-05):** (1) **la primera consulta de una carpeta que OpenCode no
+  conocía devuelve `{"data":[]}`** (lista vacía válida, estado 0) y a los ~4 s trae los 447: una lista vacía se
+  reintenta y, si sigue vacía, es un fallo de la consulta, nunca «OpenCode no conoce este modelo»; lo mismo con una
+  respuesta vacía, cortada o que no es la lista. (2) **Node une los argumentos de un `.cmd` sin entrecomillar**: una
+  carpeta con espacio rompía la consulta (OpenCode ni recibía el pedido) y un `&` en el nombre empezaba otro
+  comando; el runner entrecomilla lo que lo necesita y no pasa `"` ni `%`. (3) **Al cortar por tiempo o con
+  «Detener», Node mata la consola (`cmd`) y no el programa que lanzó**: `opencode.exe` seguía vivo y trabajando
+  (con `--auto`, escribiendo en el repositorio); el runner mata el árbol con `taskkill /T`. (4) La variante
+  explícita del uso es `agent.<uso>.variant`, no `options.variant`. (5) Una función `…ForTesting` en código de la
+  app; las pruebas simulan el módulo. No se pudo hacer el recorrido real con Qwen ese día: ni el servidor de la
+  casa (`192.168.1.7`) ni el túnel contestaban, y no es un fallo del adaptador (las capturas son del 2026-10-04).
 - **La instrucción va por la entrada estándar**, que se cierra al terminar de escribirla: `run` la toma como
   mensaje (probado con dos renglones y comillas). En la máquina de Ale OpenCode es `opencode.CMD` (instalado con
   pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
