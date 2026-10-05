@@ -176,6 +176,11 @@ Ninguno escribió en la carpeta temporal.
   la respuesta, vale la respuesta.
 - Cancelar o vencer el tiempo termina el árbol del proceso (`taskkill /T` en Windows: detrás de un acceso de
   npm el proceso real es hijo de `cmd.exe`) y espera a que cierre antes de devolver.
+  - *Auditoría 21–23 (2026-10-05).* El golpe final del margen (`SIGKILL` a la consola) **espera a que
+    `taskkill` termine**. Si no, con la máquina cargada `taskkill` tarda en arrancar más que el margen, la
+    consola muere primero, el programa queda sin padre y `taskkill /T` ya no lo encuentra: «Detener» dejaba
+    al agente vivo escribiendo en el repositorio. La prueba del huérfano usa un margen de 1 ms para
+    provocarlo siempre (sin la espera, falla; comprobado).
 
 `resolveModelFor(uso)` devuelve `{provider, model, params, destination, source}`; `destination` es
 `this-machine | own-server | external-service` por la dirección resuelta (localhost; IP privada; resto), y
@@ -260,6 +265,9 @@ Por eso:
   de credenciales es `{ <id>: { type: "api", key } }` (en la máquina de Ale hay uno para `unslothpc`). El runner de
   GitCron lanza procesos con un entorno reducido: si un `opencode run` o `api` arrancara el servicio compartido, ese
   servicio nacería sin las variables de la persona.
+- **Auditado en la segunda parte de 5.3 (2026-10-05):** «el servicio corre» se decidía por cualquier texto en la
+  salida de `opencode service status`; ahora sólo cuenta una dirección (`http://…`), que es lo medido. Falta todavía
+  retomar sesiones (tanda propia) y el recorrido real con Qwen.
 - **La instrucción va por la entrada estándar**, que se cierra al terminar de escribirla: `run` la toma como
   mensaje (probado con dos renglones y comillas). En la máquina de Ale OpenCode es `opencode.CMD` (instalado con
   pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
@@ -292,6 +300,11 @@ con `runsCommands: false`: se ofrece para explorar y escribir, no para implement
 **Decisión de Ale (2026-09-29): opción B.** Antigravity se lanza con `--mode accept-edits` y
 `runsCommands: false` hasta que su modo sin pantalla respete los permisos. Ver el requisito
 «Antigravity se lanza para leer y escribir, sin correr comandos» (delta de pipeline-runtime-adapters).
+
+*Implementado en 5.2 (2026-10-05), auditado con una corrida real:* Antigravity 1.2.17 (las capturas son de la
+1.2.13, así que figura «sin verificar» pero se lanza) leyó un archivo en una carpeta temporal y contestó en 24 s con
+24k tokens de entrada. Es un `.exe`, no pasa por la consola: la instrucción va como argumento de `-p` sin riesgo de
+inyección.
 
 ### D10. Migración sin cambio de comportamiento
 Primer arranque sin `gitcron.json`: se crea con `$schema`, `provider.lmstudio` (`localhost:1234`),
@@ -371,6 +384,10 @@ Por eso la copia convierte, además de la envoltura, **las referencias** (`${env
 `{env:X}` en OpenCode, igual en VS Code) y **el tipo**: un `type` del servidor se respeta; sin él, `command` es
 `stdio` y `url` es Streamable HTTP (`http`), el transporte del estándar, y la vista previa lo dice para que un
 servidor sólo SSE se corrija a mano.
+
+*Auditado en 6.2 (2026-10-05):* el canal que arma la vista previa devolvía a la pantalla todo el plan, incluido el
+texto del portapapeles con la dirección completa (contraseña y tokens de consulta sin tapar). Lo completo existe
+sólo en el proceso principal y va directo al portapapeles; la pantalla recibe la vista previa tapada.
 
 ### D13. Quién conversa y quién ejecuta (sugerencia de Codex, aceptada el 2026-09-29)
 Una sola elección para la persona, adaptadores distintos por detrás:

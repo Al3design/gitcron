@@ -230,19 +230,31 @@ describe('argumentos de un .cmd (pasan por el shell)', () => {
     expect(runner.ownedProcessCount()).toBe(0);
   });
 
-  it.skipIf(process.platform !== 'win32')('al cortar por tiempo, también muere el programa que lanzó el .cmd (no queda un huérfano trabajando)', async () => {
+  it.skipIf(process.platform !== 'win32')('al detener, también muere el programa que lanzó el .cmd (no queda un huérfano trabajando)', async () => {
     const directory = await fixtureDirectory();
     const pidFile = path.join(directory, 'pid.txt');
     const script = path.join(directory, 'largo.js');
     // El programa de verdad escribe su pid y se queda vivo; el .cmd sólo lo lanza.
     await fs.writeFile(script, `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
     const cmd = path.join(directory, 'largo.cmd');
-    await fs.writeFile(cmd, `@echo off
-"${process.execPath}" "${script}"
-`);
+    await fs.writeFile(cmd, `@echo off\r\n"${process.execPath}" "${script}"\r\n`);
     const runner = new RuntimeProcessRunner();
-    const result = await runner.run({ executable: cmd, args: [], cwd: directory, expectedCanonicalCwd: directory, timeoutMs: 1_500, killGraceMs: 500 });
-    expect(result.timedOut).toBe(true);
+    const abort = new AbortController();
+    // Margen de 1 ms: el golpe final vence antes de que `taskkill` arranque, que es lo que pasa
+    // con la máquina cargada. Si no espera a `taskkill`, mata la consola y el programa queda suelto.
+    const running = runner.run({ executable: cmd, args: [], cwd: directory, expectedCanonicalCwd: directory, timeoutMs: 60_000, killGraceMs: 1, signal: abort.signal });
+
+    // Se detiene un programa que ya está trabajando, como «Detener» a mitad de una corrida:
+    // cortar mientras la consola todavía lo está lanzando es otra cosa (ver el margen del runner).
+    let started = false;
+    for (let i = 0; i < 150 && !started; i++) {
+      started = await fs.access(pidFile).then(() => true, () => false);
+      if (!started) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    expect(started).toBe(true);
+    abort.abort();
+    const result = await running;
+    expect(result.aborted).toBe(true);
 
     const pid = Number(await fs.readFile(pidFile, 'utf8'));
     const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -250,7 +262,7 @@ describe('argumentos de un .cmd (pasan por el shell)', () => {
     const stillAlive = alive();
     if (stillAlive) process.kill(pid, 'SIGKILL'); // no dejar basura si la prueba falla
     expect(stillAlive).toBe(false);
-  }, 20_000);
+  }, 30_000);
 
   it('quoteForShell sólo entrecomilla lo que lo necesita', () => {
     expect(quoteForShell('--format')).toBe('--format');

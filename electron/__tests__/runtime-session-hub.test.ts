@@ -439,16 +439,31 @@ describe('RuntimeSessionHub', () => {
     expect(openCode?.startModifiesRepo).toBe(true);
   });
 
-  it('keeps a launchable:false adapter unlaunchable and lists it with its reason', async () => {
-    // `agy` se declara no lanzable en el registro: la corrección de resolución
-    // del ejecutable no puede volverlo lanzable por accidente, y si aparece en
-    // la lista lo hace con su motivo.
+  it('registers agy as launchable with modifiesRepo: true and runsCommands: false', async () => {
+    // Tarea 5.2 (D9, Opción B): Antigravity se lanza para leer y modificar archivos,
+    // pero se declara con runsCommands: false.
     const bus = { registerSession: vi.fn(), unregisterSession: vi.fn() };
-    const hub = new RuntimeSessionHub(bus, vi.fn());
+    const hub = new RuntimeSessionHub(
+      bus,
+      vi.fn(),
+      () => '2026-07-26T00:05:00.000Z',
+      [
+        {
+          runtime: 'agy',
+          create: () => new FakeAdapter(),
+          controlCapabilities: ['cancel-run', 'kill-process'],
+          launchable: true,
+          modifiesRepo: true,
+          runsCommands: false,
+        },
+      ],
+    );
     const discovered = await hub.discover('C:/repo');
     const agy = discovered.find((entry) => entry.runtime === 'agy');
-    expect(agy?.launchable).toBe(false);
-    expect(agy?.diagnostics).toContain('adapter_has_no_event_stream');
+    expect(agy).toBeDefined();
+    expect(agy?.launchable).toBe(true);
+    expect(agy?.startModifiesRepo).toBe(true);
+    expect(agy?.startRunsCommands).toBe(false);
   });
 });
 

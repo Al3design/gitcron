@@ -29,6 +29,10 @@ vi.mock('electron', () => ({
     openPath: vi.fn(async () => ''),
     showItemInFolder: vi.fn(() => {}),
   },
+  clipboard: {
+    writeText: vi.fn(),
+    readText: vi.fn(),
+  },
   safeStorage: {
     isEncryptionAvailable: vi.fn(() => true),
     encryptString: vi.fn((str: string) => Buffer.from(`enc:${str}`)),
@@ -47,6 +51,7 @@ import { resetGitCronConfigCacheForTesting } from '../ai/config/gitcron-config';
 import { resetMcpConfigCacheForTesting } from '../ai/config/mcp-config';
 import * as keyStore from '../ai/key-store';
 import { authorizedRepoStore } from '../ipc/authorized-repos';
+import { clipboard } from 'electron';
 
 const sha256 = (file: string) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const call = (channel: string, args?: unknown) => handlers.get(channel)!({}, args);
@@ -373,5 +378,132 @@ describe('servidores MCP', () => {
   it('un origen desconocido se rechaza', async () => {
     const plan = await call('ai-config:plan-mcp-import', { source: 'vscode' });
     expect(plan.success).toBe(false);
+  });
+});
+
+describe('copiar servidor MCP para otra herramienta (tarea 6.2, D12)', () => {
+  it('prepara la copia a Claude Code, VS Code y OpenCode; la vista previa enmascara la URL y no expone secretos literales', async () => {
+    writeJson(mcpPath, {
+      mcpServers: {
+        github: {
+          command: 'npx',
+          args: ['-y', '@modelcontextprotocol/server-github'],
+          env: { GITHUB_PERSONAL_ACCESS_TOKEN: '${env:GITHUB_PAT}' },
+        },
+        supabase: {
+          url: 'https://mcp.supabase.com/mcp?project_ref=EJEMPLO&token=secret-token-123',
+          headers: { Authorization: 'Bearer literal-jwt-token-999' },
+        },
+      },
+    });
+
+    // 1. Claude Code con github
+    const resClaude = await call('ai-config:prepare-mcp-copy', {
+      filePath: mcpPath,
+      name: 'github',
+      target: 'claude',
+    });
+    expect(resClaude.success).toBe(true);
+    expect(resClaude.data.targetPathHint).toBe('.mcp.json');
+    expect(resClaude.data.previewText).toContain('"${GITHUB_PAT}"');
+
+    // 2. OpenCode con supabase: enmascara URL en preview, detecta Authorization escrita a mano
+    const resOpen = await call('ai-config:prepare-mcp-copy', {
+      filePath: mcpPath,
+      name: 'supabase',
+      target: 'opencode',
+    });
+    expect(resOpen.success).toBe(true);
+    expect(resOpen.data.targetPathHint).toBe('opencode.json');
+    // Secretos y query params ocultos en la vista previa
+    expect(resOpen.data.previewText).toContain('project_ref=***');
+    expect(resOpen.data.previewText).toContain('token=***');
+    expect(resOpen.data.previewText).not.toContain('secret-token-123');
+    expect(resOpen.data.previewText).not.toContain('literal-jwt-token-999');
+    // Lo completo va sólo al portapapeles, desde el proceso principal: ni el texto ni el token llegan a la pantalla
+    expect(resOpen.data).not.toHaveProperty('clipboardText');
+    expect(JSON.stringify(resOpen.data)).not.toContain('secret-token-123');
+    expect(JSON.stringify(resOpen.data)).not.toContain('literal-jwt-token-999');
+    expect(resOpen.data.previewText).toContain('{env:SUPABASE_AUTHORIZATION}');
+    // El listado de literalSecrets para el renderer NO expone el valor crudo
+    expect(resOpen.data.literalSecrets).toEqual([
+      { key: 'Authorization', location: 'headers', proposedVar: 'SUPABASE_AUTHORIZATION' },
+    ]);
+    expect((resOpen.data.literalSecrets[0] as any).value).toBeUndefined();
+    // Advertencia de Streamable HTTP sin tipo declarado
+    expect(resOpen.data.warnings).toContain('type_default_streamable_http');
+  });
+
+  it('copiar al portapapeles llama a clipboard.writeText con la URL completa y secretos sustituidos por referencias', async () => {
+    writeJson(mcpPath, {
+      mcpServers: {
+        remoto: {
+          url: 'https://mcp.remote.example.com/sse?token=abc-query-secret',
+          headers: { Authorization: 'Bearer header-secret-123' },
+        },
+      },
+    });
+
+    const res = await call('ai-config:copy-mcp-to-clipboard', {
+      filePath: mcpPath,
+      name: 'remoto',
+      target: 'claude',
+    });
+    expect(res).toEqual({ success: true, data: { copied: true } });
+    expect(clipboard.writeText).toHaveBeenCalledTimes(1);
+    const copiedText = vi.mocked(clipboard.writeText).mock.calls[0][0];
+
+    // URL completa en el portapapeles
+    expect(copiedText).toContain('https://mcp.remote.example.com/sse?token=abc-query-secret');
+    // Secreto literal NO entra en el portapapeles
+    expect(copiedText).not.toContain('header-secret-123');
+    expect(copiedText).toContain('${REMOTO_AUTHORIZATION}');
+  });
+
+  it('guardar secretos literales los guarda en el baúl y actualiza mcp.json puntual con la referencia (D5)', async () => {
+    writeJson(mcpPath, {
+      mcpServers: {
+        postgres: {
+          command: 'npx',
+          args: ['-y', 'postgres'],
+          env: {
+            DB_PASSWORD: 'literal-db-secret-password-456',
+          },
+        },
+      },
+    });
+
+    const resSave = await call('ai-config:save-mcp-literal-secrets', {
+      filePath: mcpPath,
+      name: 'postgres',
+    });
+    expect(resSave.success).toBe(true);
+    expect(resSave.data.savedCount).toBe(1);
+
+    // Guardado en el baúl
+    expect(keyStore.getStoredEnvVar('DB_PASSWORD')).toBe('literal-db-secret-password-456');
+
+    // mcp.json actualizado con la referencia
+    const updatedMcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+    expect(updatedMcp.mcpServers.postgres.env.DB_PASSWORD).toBe('${env:DB_PASSWORD}');
+
+    // Preparar copia nuevamente ya no tiene secretos literales
+    const resAgain = await call('ai-config:prepare-mcp-copy', {
+      filePath: mcpPath,
+      name: 'postgres',
+      target: 'vscode',
+    });
+    expect(resAgain.data.literalSecrets).toEqual([]);
+  });
+
+  it('un archivo que no es un mcp.json en uso se rechaza por seguridad IPC', async () => {
+    const fakePath = path.join(dir, 'fake', 'mcp.json');
+    const res = await call('ai-config:prepare-mcp-copy', {
+      filePath: fakePath,
+      name: 'srv',
+      target: 'claude',
+    });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('IPC Security Error');
   });
 });

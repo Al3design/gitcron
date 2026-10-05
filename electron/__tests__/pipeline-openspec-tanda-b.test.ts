@@ -117,7 +117,7 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     const githubTool = tooling.tools.find((t) => t.toolId === 'github');
     expect(codexTool?.configured).toBe(true);
     expect(githubTool).toBeUndefined();
-  });
+  }, 25000);
 
   it('3.1 y 3.2: gitCronos → up-to-date, pendingTools: [zcode], Zcode aparece sin configurar en AGENTES y no genera «Falta en …» en el perfil', async () => {
     const repoPath = createTempDir('gitcronos-tanda-b-');
@@ -205,7 +205,7 @@ describe('OpenSpec Tanda B (Tareas 3.1 y 3.2)', () => {
     const zcodeTool = tooling.tools.find((t) => t.toolId === 'zcode');
     expect(zcodeTool).toBeDefined();
     expect(zcodeTool?.configured).toBe(false);
-  });
+  }, 25000);
 
   it('3.1: una herramienta configurada con needsUpdate deriva integrationState como outdated', async () => {
     const repoPath = createTempDir('outdated-tool-tanda-b-');

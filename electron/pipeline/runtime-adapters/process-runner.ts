@@ -241,6 +241,24 @@ export class RuntimeProcessRunner {
       let outputLimit: 'stdout' | 'stderr' | null = null;
       let settled = false;
       let forceTimer: ReturnType<typeof setTimeout> | null = null;
+      let treeKillPending = false;
+      let forceWaitingTreeKill = false;
+
+      const force = () => {
+        // Matar la consola antes de que `taskkill` recorra el árbol deja al programa sin padre:
+        // `taskkill` ya no lo encuentra y sigue vivo. Con la máquina cargada, `taskkill` tarda en
+        // arrancar más que el margen, así que el golpe final espera a que termine.
+        if (treeKillPending) {
+          forceWaitingTreeKill = true;
+          return;
+        }
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        // Un nieto que se escapó del árbol (lanzado justo mientras se mataba la consola)
+        // hereda las salidas y las mantiene abiertas: sin cerrarlas, 'close' no llega nunca
+        // y la corrida queda colgada. Pasado el margen, se cierran desde este lado.
+        child.stdout.destroy();
+        child.stderr.destroy();
+      };
 
       const terminate = (reason: 'timeout' | 'abort' | 'output_limit') => {
         if (reason === 'timeout') timedOut = true;
@@ -249,14 +267,23 @@ export class RuntimeProcessRunner {
           // El proceso de Node es la consola (`cmd`) que lanzó el programa de verdad: matarla
           // con `kill` deja al programa vivo y trabajando (un agente con `--auto` seguiría
           // escribiendo en el repositorio después de «Detener»). `taskkill /T` mata el árbol.
-          spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => child.kill('SIGTERM'));
+          if (!treeKillPending) {
+            treeKillPending = true;
+            const treeKill = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+            const done = (failed: boolean) => {
+              if (!treeKillPending) return;
+              treeKillPending = false;
+              if (failed) child.kill('SIGTERM');
+              if (forceWaitingTreeKill) force();
+            };
+            treeKill.once('error', () => done(true));
+            treeKill.once('close', () => done(false));
+          }
         } else if (!child.killed) {
           child.kill('SIGTERM');
         }
         if (!forceTimer) {
-          forceTimer = setTimeout(() => {
-            if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-          }, killGraceMs);
+          forceTimer = setTimeout(force, killGraceMs);
           forceTimer.unref?.();
         }
       };

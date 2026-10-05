@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest';
+// electron/__tests__/runtime-agy.test.ts
+//
+// Pruebas del adaptador estructurado de Antigravity (`agy`).
+// Tarea 5.2 (Decisión D9, Opción B).
+
+import { describe, expect, it, vi } from 'vitest';
 import {
   RuntimeProcessRunner,
-  createAgyWrapperRuntimeAdapter,
+  createAgyRuntimeAdapter,
   validateRuntimeAdapterContract,
   type RuntimeProcessResult,
   type RuntimeProcessSpec,
 } from '../pipeline/runtime-adapters';
+import {
+  buildAgyArgs,
+  isValidAgyModelArg,
+  isValidAgySessionId,
+  type AgyStartRequest,
+} from '../pipeline/runtime-adapters/agy-adapter';
 
 class AgyTestRunner extends RuntimeProcessRunner {
   constructor(private readonly versionOutput: string, private readonly exitCode = 0) {
@@ -27,81 +38,159 @@ class AgyTestRunner extends RuntimeProcessRunner {
   }
 }
 
-describe('Antigravity (agy) wrapper adapter', () => {
-  // Both surfaces were audited for the wrapper contract: neither exposes a
-  // structured output flag. Tras retirar el gate de versión, la evidencia es
-  // informativa (`pending_fixture`) aunque la versión caiga en el baseline.
-  it.each(['1.1.5', '1.1.6'])('probes version and returns installed status for known %s', async (version) => {
-    const runner = new AgyTestRunner(`${version}\n`);
-    const adapter = createAgyWrapperRuntimeAdapter('C:\\fixture\\repo', 'agy', runner, () => '2026-07-24T00:00:00.000Z');
+function makeStartRequest(overrides: Partial<AgyStartRequest> = {}): AgyStartRequest {
+  return {
+    repoId: 'repo-1',
+    canonicalRepoPath: 'C:\\fixture\\repo',
+    changeId: null,
+    taskId: null,
+    runId: 'run-1',
+    attemptId: 'att-1',
+    parentSessionId: null,
+    parentAgentId: null,
+    orchestrationMode: 'direct',
+    orchestratorRuntime: null,
+    provider: null,
+    requestedModel: 'gemini-3.8-flash-low',
+    reasoningEffort: null,
+    role: 'builder',
+    instruction: 'leer y modificar archivos',
+    ...overrides,
+  };
+}
+
+describe('Antigravity (agy) structured adapter', () => {
+  it('cumple con el contrato de adaptador de runtime', () => {
+    const adapter = createAgyRuntimeAdapter('C:\\fixture\\repo');
+    expect(validateRuntimeAdapterContract(adapter)).toEqual([]);
+  });
+
+  it('descubre la versión de referencia 1.2.13 como verificada', async () => {
+    const runner = new AgyTestRunner('1.2.13\n');
+    const adapter = createAgyRuntimeAdapter('C:\\fixture\\repo', runner, () => '2026-10-05T00:00:00.000Z');
 
     const discovery = await adapter.discover();
     expect(discovery).toMatchObject({
       installed: true,
-      runtimeVersion: version,
-      evidenceStatus: 'pending_fixture',
+      runtimeVersion: '1.2.13',
+      evidenceStatus: 'verified',
     });
-
-    expect(validateRuntimeAdapterContract(adapter)).toEqual([]);
   });
 
-  it('reports the real version it observed even when it is outside the baseline', async () => {
-    const runner = new AgyTestRunner('1.2.0\n');
-    const adapter = createAgyWrapperRuntimeAdapter('C:\\fixture\\repo', 'agy', runner);
+  it('reporta la versión real observada fuera de la referencia como pending_fixture', async () => {
+    const runner = new AgyTestRunner('1.2.17\n');
+    const adapter = createAgyRuntimeAdapter('C:\\fixture\\repo', runner);
 
     const discovery = await adapter.discover();
-    expect(discovery.runtimeVersion).toBe('1.2.0');
+    expect(discovery.runtimeVersion).toBe('1.2.17');
     expect(discovery.evidenceStatus).toBe('pending_fixture');
-    expect(discovery.diagnostics).toContain('agy version outside the reference baseline set');
+    expect(discovery.diagnostics).toContain('Runtime version not verified against a reference');
   });
 
-  it('returns unknown telemetry without assuming dummy zeros or free billing', async () => {
-    const runner = new AgyTestRunner('1.1.5\n');
-    const adapter = createAgyWrapperRuntimeAdapter('C:\\fixture\\repo', 'agy', runner);
+  it('construye argumentos exactos: -p, instrucción, stream-json, accept-edits; sin --dangerously-skip-permissions', () => {
+    const req = makeStartRequest();
+    const args = buildAgyArgs(req);
+    expect(args).toEqual([
+      '-p',
+      'leer y modificar archivos',
+      '--output-format',
+      'stream-json',
+      '--mode',
+      'accept-edits',
+      '--model',
+      'gemini-3.8-flash-low',
+    ]);
+    expect(args).not.toContain('--dangerously-skip-permissions');
+  });
 
-    const session = {
-      identity: {
-        repoId: 'repo-1',
-        repoPath: 'C:\\fixture\\repo',
-        changeId: null,
-        taskId: null,
-        runId: 'run-1',
-        attemptId: 'attempt-1',
-        sessionId: 'session-1',
-        parentSessionId: null,
-        agentId: 'agent-1',
-        parentAgentId: null,
-        orchestrationMode: 'direct' as const,
-        orchestratorRuntime: null,
-        runtime: 'agy' as const,
-        provider: null,
-        requestedModel: null,
-        effectiveModel: null,
-        reportedModel: null,
-        role: 'builder' as const,
-      },
-      descriptor: adapter.descriptor,
-      ownedProcess: false,
-      startedAt: '2026-07-24T00:00:00.000Z',
+  it('agrega --effort y --print-timeout cuando están definidos', () => {
+    const req = makeStartRequest({
+      reasoningEffort: 'low',
+      timeoutMs: 30_000,
+    });
+    const args = buildAgyArgs(req);
+    expect(args).toEqual([
+      '-p',
+      'leer y modificar archivos',
+      '--output-format',
+      'stream-json',
+      '--mode',
+      'accept-edits',
+      '--effort',
+      'low',
+      '--model',
+      'gemini-3.8-flash-low',
+      '--print-timeout',
+      '30s',
+    ]);
+  });
+
+  it('soporta reanudación con --conversation', () => {
+    const req = makeStartRequest({
+      resumeSessionId: 'conv-abc-123',
+    });
+    const args = buildAgyArgs(req);
+    expect(args).toEqual([
+      '-p',
+      'leer y modificar archivos',
+      '--output-format',
+      'stream-json',
+      '--mode',
+      'accept-edits',
+      '--model',
+      'gemini-3.8-flash-low',
+      '--conversation',
+      'conv-abc-123',
+    ]);
+  });
+
+  it('valida identificadores de modelo y sesión', () => {
+    expect(isValidAgyModelArg('gemini-3.8-flash-low')).toBe(true);
+    expect(isValidAgyModelArg('custom/gemini-pro@v1')).toBe(true);
+    expect(isValidAgyModelArg('model; bad')).toBe(false);
+    expect(isValidAgyModelArg('')).toBe(false);
+    expect(isValidAgyModelArg(null)).toBe(false);
+
+    expect(isValidAgySessionId('conv-123.45_abc')).toBe(true);
+    expect(isValidAgySessionId('session:1')).toBe(true);
+    expect(isValidAgySessionId('bad; session')).toBe(false);
+    expect(isValidAgySessionId('')).toBe(false);
+    expect(isValidAgySessionId(null)).toBe(false);
+  });
+
+  it('rechaza modelo o sesión inválidos al construir argumentos', () => {
+    expect(() => buildAgyArgs(makeStartRequest({ requestedModel: 'invalido; cmd' }))).toThrow('invalid_model_identifier');
+    expect(() => buildAgyArgs(makeStartRequest({ resumeSessionId: 'invalida; conv' }))).toThrow('invalid_session_identifier');
+  });
+
+  it('al iniciar sesión: arranca el runner con agy y los argumentos construidos', async () => {
+    let capturedSpec: any = null;
+    const mockRunner = {
+      run: vi.fn(async () => ({ exitCode: 0, stdout: Buffer.from('1.2.13\n'), stderr: Buffer.alloc(0), timedOut: false, durationMs: 5 })),
+      start: vi.fn(async (spec: any) => {
+        capturedSpec = spec;
+        return {
+          processId: 'p-agy',
+          result: Promise.resolve({ exitCode: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }),
+          terminate: vi.fn(),
+        };
+      }),
     };
 
-    const telemetry = await adapter.telemetry(session);
-    expect(telemetry.usage.inputTokens.value).toBeNull();
-    expect(telemetry.usage.inputTokens.classification).toBe('unknown');
-    expect(telemetry.cost.usd.value).toBeNull();
-    expect(telemetry.cost.usd.classification).toBe('unknown');
-    expect(telemetry.cost.billingStatus).toBe('unknown');
-    expect(telemetry.reasoningVisibility).toBe('unavailable');
-  });
-
-  it('degrades when the installed agy version is far outside the baseline', async () => {
-    const runner = new AgyTestRunner('2.0.0\n');
-    const adapter = createAgyWrapperRuntimeAdapter('C:\\fixture\\repo', 'agy', runner);
-
-    const health = await adapter.health();
-    expect(health).toMatchObject({
-      status: 'degraded',
-      evidenceStatus: 'pending_fixture',
-    });
+    const adapter = createAgyRuntimeAdapter('C:\\fixture\\repo', mockRunner as any);
+    const session = await adapter.start(makeStartRequest());
+    expect(session.identity.runtime).toBe('agy');
+    expect(mockRunner.start).toHaveBeenCalledTimes(1);
+    expect(capturedSpec.executable).toBe('agy');
+    expect(capturedSpec.args).toEqual([
+      '-p',
+      'leer y modificar archivos',
+      '--output-format',
+      'stream-json',
+      '--mode',
+      'accept-edits',
+      '--model',
+      'gemini-3.8-flash-low',
+    ]);
   });
 });

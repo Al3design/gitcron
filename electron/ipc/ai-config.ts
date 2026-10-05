@@ -11,7 +11,7 @@
 
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
-import { ipcMain, shell } from 'electron';
+import { clipboard, ipcMain, shell } from 'electron';
 import { findNodeAtLocation, parseTree } from 'jsonc-parser';
 import {
   getDefaultConfigPath,
@@ -56,6 +56,8 @@ import {
 } from '../ai/config/opencode-import';
 import {
   applyMcpImport,
+  commentAboveServer,
+  DISABLED_COMMENT,
   getDefaultMcpPath,
   getDefaultMcpSourcePath,
   isMcpServerMarkedDisabled,
@@ -66,7 +68,13 @@ import {
   type McpImportSource,
   type McpServer,
 } from '../ai/config/mcp-config';
-import { referenceName } from '../ai/config/literal-secrets';
+import {
+  buildMcpExport,
+  detectLiteralSecrets,
+  type McpExportPlan,
+  type McpExportTarget,
+} from '../ai/config/mcp-export';
+import { referenceName, type SecretNaming } from '../ai/config/literal-secrets';
 import { activeConfigPath, loadServerFor, setUseConfigPathForTesting } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
 import { errMsg } from './shared';
@@ -1119,6 +1127,170 @@ export function registerAiConfigHandlers(): void {
       });
       throwIfNotWritten(results);
       return ok({ count: results.length });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // ─── «Copiar para otra herramienta» de servidores MCP (tarea 6.2, D12) ───
+
+  ipcMain.handle('ai-config:prepare-mcp-copy', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { filePath?: unknown; name?: unknown; target?: unknown; repoPath?: unknown };
+      const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      const target = typeof args.target === 'string' ? (args.target as McpExportTarget) : 'claude';
+      if (!filePath || !name) throw new Error('Parámetros inválidos para preparar la copia MCP.');
+      if (target !== 'claude' && target !== 'vscode' && target !== 'opencode') {
+        throw new Error('Herramienta de destino inválida.');
+      }
+
+      const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
+      const loaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      if (!matched) {
+        throw new Error('IPC Security Error: el archivo no es un mcp.json en uso');
+      }
+
+      const server = loaded.servers[name];
+      if (!server) {
+        throw new Error(`Servidor MCP «${name}» no encontrado.`);
+      }
+
+      let text = '';
+      try {
+        text = nodeFs.readFileSync(matched.path, 'utf8');
+      } catch {
+        text = '';
+      }
+      const disabled = server.disabled === true || isMcpServerMarkedDisabled(text, name);
+
+      const naming: SecretNaming = {
+        stored: getStoredEnvVar,
+        env: process.env,
+        taken: new Map(),
+      };
+
+      const { exportPlan } = buildMcpExport({
+        serverName: name,
+        server,
+        disabled,
+        target,
+        naming,
+      });
+
+      // El texto del portapapeles lleva la dirección completa (con su contraseña o tokens de
+      // consulta): no sale del proceso principal. La pantalla ve sólo la vista previa tapada.
+      const { clipboardText: _clipboardText, ...forScreen } = exportPlan;
+      return ok(forScreen);
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-config:copy-mcp-to-clipboard', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { filePath?: unknown; name?: unknown; target?: unknown; repoPath?: unknown };
+      const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      const target = typeof args.target === 'string' ? (args.target as McpExportTarget) : 'claude';
+      if (!filePath || !name) throw new Error('Parámetros inválidos para copiar servidor MCP.');
+      if (target !== 'claude' && target !== 'vscode' && target !== 'opencode') {
+        throw new Error('Herramienta de destino inválida.');
+      }
+
+      const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
+      const loaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      if (!matched) {
+        throw new Error('IPC Security Error: el archivo no es un mcp.json en uso');
+      }
+
+      const server = loaded.servers[name];
+      if (!server) {
+        throw new Error(`Servidor MCP «${name}» no encontrado.`);
+      }
+
+      let text = '';
+      try {
+        text = nodeFs.readFileSync(matched.path, 'utf8');
+      } catch {
+        text = '';
+      }
+      const disabled = server.disabled === true || isMcpServerMarkedDisabled(text, name);
+
+      const naming: SecretNaming = {
+        stored: getStoredEnvVar,
+        env: process.env,
+        taken: new Map(),
+      };
+
+      const { exportPlan } = buildMcpExport({
+        serverName: name,
+        server,
+        disabled,
+        target,
+        naming,
+      });
+
+      clipboard.writeText(exportPlan.clipboardText);
+      return ok({ copied: true });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-config:save-mcp-literal-secrets', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { filePath?: unknown; name?: unknown; repoPath?: unknown };
+      const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
+      const name = typeof args.name === 'string' ? args.name.trim() : '';
+      if (!filePath || !name) throw new Error('Parámetros inválidos para guardar secretos de servidor MCP.');
+
+      const repoPath = typeof args.repoPath === 'string' && args.repoPath.trim() ? authorizedRepoRoot(args.repoPath) : null;
+      const loaded = loadMcpConfig({ globalPath: resolveGlobalMcpPath(), repoPath });
+      const matched = loaded.files.find((f) => f.exists && sameFile(f.path, filePath));
+      if (!matched) {
+        throw new Error('IPC Security Error: el archivo no es un mcp.json en uso');
+      }
+
+      const server = loaded.servers[name];
+      if (!server) {
+        throw new Error(`Servidor MCP «${name}» no encontrado.`);
+      }
+
+      let text = '';
+      try {
+        text = nodeFs.readFileSync(matched.path, 'utf8');
+      } catch {
+        text = '';
+      }
+      const disabled = server.disabled === true || isMcpServerMarkedDisabled(text, name);
+
+      const naming: SecretNaming = {
+        stored: getStoredEnvVar,
+        env: process.env,
+        taken: new Map(),
+      };
+
+      const { sanitizedServer, literalSecrets } = detectLiteralSecrets(name, server, naming);
+      if (literalSecrets.length === 0) {
+        return ok({ savedCount: 0, updatedFilePath: matched.path });
+      }
+
+      // Guardar en el baúl
+      for (const secret of literalSecrets) {
+        setEnvVar(secret.proposedVar, secret.value);
+      }
+
+      // Actualizar mcp.json con el servidor sanitizado puntual
+      const writeRes = updateMcpServer(matched.path, name, sanitizedServer);
+      throwIfNotWritten([{ result: writeRes }]);
+      if (disabled) {
+        commentAboveServer(matched.path, name, DISABLED_COMMENT);
+      }
+
+      return ok({ savedCount: literalSecrets.length, updatedFilePath: matched.path });
     } catch (error) {
       return fail(error);
     }

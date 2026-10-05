@@ -272,6 +272,12 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-config:plan-mcp-import', args),
     applyMcpImport: (args: { source: 'cursor' | 'lmstudio' | 'opencode'; entries: string[] }) =>
       ipcRenderer.invoke('ai-config:apply-mcp-import', args),
+    prepareMcpCopy: (args: { filePath: string; name: string; target: 'claude' | 'vscode' | 'opencode'; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:prepare-mcp-copy', args),
+    copyMcpToClipboard: (args: { filePath: string; name: string; target: 'claude' | 'vscode' | 'opencode'; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:copy-mcp-to-clipboard', args),
+    saveMcpLiteralSecrets: (args: { filePath: string; name: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:save-mcp-literal-secrets', args),
   },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.
@@ -500,6 +506,9 @@ contextBridge.exposeInMainWorld('api', {
     history: (repoPath: string, limit?: number) => ipcRenderer.invoke('pipeline:runtime:history', repoPath, limit),
     start: (payload: unknown) => ipcRenderer.invoke('pipeline:runtime:start', payload),
     stop: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:stop', repoPath),
+    planOpenCodeCopy: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:plan-opencode-copy', repoPath),
+    applyOpenCodeCopy: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:apply-opencode-copy', repoPath),
+    checkOpenCodeAuth: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:check-opencode-auth', repoPath),
   },
   onPipelineRuntimeUpdated: (cb: (repoPath: string, projection: unknown) => void) => {
     const handler = (_e: unknown, payload: { repoPath: string; projection: unknown }) => cb(payload.repoPath, payload.projection);

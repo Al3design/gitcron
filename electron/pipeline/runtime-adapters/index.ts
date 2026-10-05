@@ -1,4 +1,5 @@
 export * from './agy-adapter';
+export * from './agy-normalizer';
 export * from './claude-adapter';
 export * from './claude-normalizer';
 export * from './codex-adapter';

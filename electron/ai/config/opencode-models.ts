@@ -13,6 +13,7 @@
 // ni incluida en mensajes de error.
 
 import { RuntimeProcessRunner } from '../../pipeline/runtime-adapters/process-runner';
+import { ensureOpenCodeService } from './opencode-service';
 
 export interface OpenCodeKnownModel {
   providerId: string;
@@ -196,5 +197,75 @@ async function queryOpenCodeModelList(repoPath: string, runner: RuntimeProcessRu
       models: [],
       error: notFound ? 'opencode_not_installed' : 'opencode_api_failed',
     };
+  }
+}
+
+export interface OpenCodeResolvedCredentials {
+  apiKey?: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * Extrae las credenciales resueltas por OpenCode para un modelo específico (proceso principal únicamente).
+ * NUNCA se envía al renderer, no se guarda y no se registra.
+ */
+export function extractOpenCodeModelCredentials(
+  rawJson: string,
+  providerId: string,
+  modelId: string,
+): OpenCodeResolvedCredentials | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { data?: unknown }).data)) return null;
+  const data = (parsed as { data: unknown[] }).data;
+  for (const item of data) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = item as Record<string, unknown>;
+    if (rec.providerID === providerId && rec.id === modelId) {
+      let apiKey: string | undefined;
+      if (rec.settings && typeof rec.settings === 'object') {
+        const settings = rec.settings as Record<string, unknown>;
+        if (typeof settings.apiKey === 'string') apiKey = settings.apiKey;
+      }
+      let headers: Record<string, string> | undefined;
+      if (rec.headers && typeof rec.headers === 'object' && !Array.isArray(rec.headers)) {
+        headers = {};
+        for (const [hk, hv] of Object.entries(rec.headers as Record<string, unknown>)) {
+          if (typeof hv === 'string') headers[hk] = hv;
+        }
+      }
+      return { apiKey, headers };
+    }
+  }
+  return null;
+}
+
+/**
+ * Consulta las credenciales que OpenCode va a mandar para un modelo específico (sólo proceso principal).
+ */
+export async function queryOpenCodeModelCredentials(
+  repoPath: string,
+  providerId: string,
+  modelId: string,
+  runner: RuntimeProcessRunner = new RuntimeProcessRunner(),
+): Promise<OpenCodeResolvedCredentials | null> {
+  await ensureOpenCodeService({ runner, cwd: repoPath });
+  try {
+    const result = await runner.run({
+      executable: 'opencode',
+      args: ['api', 'model.list', '--param', `location[directory]=${repoPath}`],
+      cwd: repoPath,
+      expectedCanonicalCwd: repoPath,
+      timeoutMs: 15_000,
+      maxStdoutBytes: 5 * 1024 * 1024,
+    });
+    if (result.exitCode !== 0 || result.timedOut) return null;
+    return extractOpenCodeModelCredentials(result.stdout.toString('utf8'), providerId, modelId);
+  } catch {
+    return null;
   }
 }

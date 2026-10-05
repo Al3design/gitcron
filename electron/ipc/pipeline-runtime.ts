@@ -2,6 +2,9 @@ import { ipcMain } from 'electron';
 import type { PipelineAgentRole } from '../../types/pipeline';
 import { resolveAgentFor } from '../ai/config/resolve-agent-for';
 import { fetchOpenCodeModelList, findOpenCodeModel } from '../ai/config/opencode-models';
+import { planOpenCodeExport, applyOpenCodeExport } from '../ai/config/opencode-export';
+import { checkOpenCodeAuth } from '../ai/config/opencode-auth-check';
+import { ensureOpenCodeService } from '../ai/config/opencode-service';
 import { activeConfigPath } from '../ai/use-resolution';
 import { PipelineService } from '../pipeline/pipeline-service';
 import type { RuntimeSessionHub } from '../pipeline/runtime/runtime-session-hub';
@@ -103,14 +106,11 @@ export function registerPipelineRuntimeHandlers(
         return { success: false, error: 'disabled' };
       }
 
-      if (agentRes.runtime === 'agy') {
-        return { success: false, error: 'unsupported_runtime_agy' };
-      }
-
       let requestedModel = agentRes.modelId;
       let reasoningEffort: string | null = agentRes.effort ?? null;
 
       if (agentRes.runtime === 'opencode') {
+        await ensureOpenCodeService({ cwd: canonicalPath });
         const discovery = await hub.discover(canonicalPath);
         const entry = discovery.find((d) => d.runtime === 'opencode');
         if (!entry || !entry.installed) {
@@ -187,6 +187,86 @@ export function registerPipelineRuntimeHandlers(
     try {
       const { canonicalPath } = await service.resolveBinding(repoPath);
       return { success: true, data: await hub.stop(canonicalPath) };
+    } catch (error) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  ipcMain.handle('pipeline:runtime:plan-opencode-copy', async (_event, repoPath: unknown) => {
+    if (!validRepoPath(repoPath)) return { success: false, error: 'Ruta de repositorio inválida o no autorizada' };
+    try {
+      const { canonicalPath } = await service.resolveBinding(repoPath);
+      const agentRes = resolveAgentFor({ configPath: activeConfigPath(), repoPath: canonicalPath });
+      if (agentRes.status !== 'resolved' || agentRes.runtime !== 'opencode') {
+        return { success: false, error: 'no_opencode_model' };
+      }
+      await ensureOpenCodeService({ cwd: canonicalPath });
+      const plan = planOpenCodeExport({
+        gitcronPath: activeConfigPath(),
+        repoPath: canonicalPath,
+        providerId: agentRes.providerId,
+        modelId: agentRes.modelId,
+      });
+      return {
+        success: true,
+        data: {
+          canCopy: plan.canCopy,
+          reason: plan.reason,
+          providerId: plan.providerId,
+          modelId: plan.modelId,
+          targetPath: plan.targetPath,
+          mode: plan.mode,
+          previewText: plan.previewText,
+          hasLiteralSecrets: plan.hasLiteralSecrets,
+          omittedSecrets: plan.omittedSecrets,
+        },
+      };
+    } catch (error) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  ipcMain.handle('pipeline:runtime:apply-opencode-copy', async (_event, repoPath: unknown) => {
+    if (!validRepoPath(repoPath)) return { success: false, error: 'Ruta de repositorio inválida o no autorizada' };
+    try {
+      const { canonicalPath } = await service.resolveBinding(repoPath);
+      const agentRes = resolveAgentFor({ configPath: activeConfigPath(), repoPath: canonicalPath });
+      if (agentRes.status !== 'resolved' || agentRes.runtime !== 'opencode') {
+        return { success: false, error: 'no_opencode_model' };
+      }
+      await ensureOpenCodeService({ cwd: canonicalPath });
+      const plan = planOpenCodeExport({
+        gitcronPath: activeConfigPath(),
+        repoPath: canonicalPath,
+        providerId: agentRes.providerId,
+        modelId: agentRes.modelId,
+      });
+      const res = await applyOpenCodeExport(plan, { cwd: canonicalPath });
+      if (!res.ok) {
+        return { success: false, error: res.error };
+      }
+      return { success: true, data: { written: true, created: res.created } };
+    } catch (error) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+
+  ipcMain.handle('pipeline:runtime:check-opencode-auth', async (_event, repoPath: unknown) => {
+    if (!validRepoPath(repoPath)) return { success: false, error: 'Ruta de repositorio inválida o no autorizada' };
+    try {
+      const { canonicalPath } = await service.resolveBinding(repoPath);
+      const agentRes = resolveAgentFor({ configPath: activeConfigPath(), repoPath: canonicalPath });
+      if (agentRes.status !== 'resolved' || agentRes.runtime !== 'opencode') {
+        return { success: false, error: 'no_opencode_model' };
+      }
+      await ensureOpenCodeService({ cwd: canonicalPath });
+      const authRes = await checkOpenCodeAuth({
+        configPath: activeConfigPath(),
+        repoPath: canonicalPath,
+        providerId: agentRes.providerId,
+        modelId: agentRes.modelId,
+      });
+      return { success: true, data: { status: authRes.status, notice: authRes.notice } };
     } catch (error) {
       return { success: false, error: errMsg(error) };
     }

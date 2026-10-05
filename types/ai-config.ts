@@ -207,3 +207,41 @@ export interface ApplyMcpImportPayload {
   source: AiMcpImportSource;
   entries: string[];
 }
+
+export type AiMcpExportTarget = 'claude' | 'vscode' | 'opencode';
+
+export interface AiMcpLiteralSecretItem {
+  key: string;
+  location: 'env' | 'headers';
+  proposedVar: string;
+}
+
+export interface AiMcpExportPlanResult {
+  target: AiMcpExportTarget;
+  serverName: string;
+  /** Con la contraseña y los valores de consulta de las direcciones tapados. El texto completo va al portapapeles desde el proceso principal y no llega a la pantalla. */
+  previewText: string;
+  warnings: string[];
+  literalSecrets: AiMcpLiteralSecretItem[];
+  targetPathHint: string;
+}
+
+export interface PrepareMcpCopyPayload {
+  filePath: string;
+  name: string;
+  target: AiMcpExportTarget;
+  repoPath?: string | null;
+}
+
+export interface CopyMcpToClipboardPayload {
+  filePath: string;
+  name: string;
+  target: AiMcpExportTarget;
+  repoPath?: string | null;
+}
+
+export interface SaveMcpLiteralSecretsPayload {
+  filePath: string;
+  name: string;
+  repoPath?: string | null;
+}

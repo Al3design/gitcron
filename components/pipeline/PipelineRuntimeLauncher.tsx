@@ -6,6 +6,7 @@ import type { AiUseStatus } from '@/types/ai-use';
 import type { RuntimeDiscoveryEntry, RuntimeProjection } from '@/types/pipeline';
 import { AiModelPicker } from '../ai/AiModelPicker';
 import { AiUseLine } from '../ai/AiUseLine';
+import { CopyButton } from '../CopyButton';
 import { runtimeDisplayName } from './pipeline-domain';
 import { canStartRuntimeSession } from './pipeline-guided-forms';
 import { resolveIntentCapability, type PipelineIntent } from './pipeline-intent-capabilities';
@@ -78,6 +79,13 @@ export function PipelineRuntimeLauncher({
   const [editingInstruction, setEditingInstruction] = useState(false);
   const [writeConfirmed, setWriteConfirmed] = useState(false);
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
+  const [copyPlan, setCopyPlan] = useState<{
+    targetPath: string;
+    previewText: string;
+    hasLiteralSecrets: boolean;
+  } | null>(null);
+  const [copying, setCopying] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const active = projection?.active === true;
   // Un solo booleano para todos los controles: si hay fixture en pantalla, nada
@@ -114,8 +122,6 @@ export function PipelineRuntimeLauncher({
   const runtime = resolved?.runtime ?? '';
   const launchKey = resolved?.launchKey ?? null;
   const selectedEntry = discovery?.find((entry) => entry.runtime === runtime) ?? null;
-  // Antigravity todavía no se lanza desde acá (tarea 5.2).
-  const isUnsupportedEngine = runtime === 'agy';
   const isOpenCodeNotInstalled = runtime === 'opencode' && (resolved?.opencodeInstalled === false || (selectedEntry !== null && !selectedEntry.installed));
   // OpenCode no contestó la lista: no se sabe si conoce el modelo, y no se dice que no.
   const isOpenCodeListFailed = runtime === 'opencode' && !isOpenCodeNotInstalled && resolved?.opencodeListFailed === true;
@@ -124,7 +130,6 @@ export function PipelineRuntimeLauncher({
 
   const runtimeLaunchable =
     selectedEntry?.launchable === true &&
-    !isUnsupportedEngine &&
     !isOpenCodeNotInstalled &&
     !isOpenCodeListFailed &&
     !isOpenCodeUnknown;
@@ -136,7 +141,6 @@ export function PipelineRuntimeLauncher({
   const modifiesRepo = selectedEntry?.startModifiesRepo === true;
   const canStart =
     launchKey !== null &&
-    !isUnsupportedEngine &&
     !isOpenCodeNotInstalled &&
     !isOpenCodeListFailed &&
     !isOpenCodeUnknown &&
@@ -167,10 +171,16 @@ export function PipelineRuntimeLauncher({
     const model = resolved.modelId;
     const executor = resolved.toolsExecutor || motor;
     const effort = resolved.effort;
+    const runsCommands = selectedEntry?.startRunsCommands !== false;
+    if (!runsCommands) {
+      return effort
+        ? t('pipeline.launcher.confirmWriteAgentWithEffortNoCommands', { motor, model, effort, executor })
+        : t('pipeline.launcher.confirmWriteAgentNoCommands', { motor, model, executor });
+    }
     return effort
       ? t('pipeline.launcher.confirmWriteAgentWithEffort', { motor, model, effort, executor })
       : t('pipeline.launcher.confirmWriteAgent', { motor, model, executor });
-  }, [resolved, t]);
+  }, [resolved, selectedEntry, t]);
 
   const handleStart = useCallback(async () => {
     const api = typeof window !== 'undefined' ? window.api : undefined;
@@ -198,6 +208,40 @@ export function PipelineRuntimeLauncher({
     await api.pipelineRuntime.stop(repoPath);
     setBusy(false);
   }, [repoPath, blockedByFixture]);
+
+  const handlePlanCopy = useCallback(async () => {
+    const api = typeof window !== 'undefined' ? window.api : undefined;
+    if (!api?.pipelineRuntime) return;
+    setCopying(true);
+    setCopyError(null);
+    const res = await api.pipelineRuntime.planOpenCodeCopy(repoPath);
+    setCopying(false);
+    if (res?.success && res.data?.canCopy) {
+      setCopyPlan({
+        targetPath: res.data.targetPath,
+        previewText: res.data.previewText,
+        hasLiteralSecrets: res.data.hasLiteralSecrets,
+      });
+    } else {
+      setCopyError(res?.error ?? res?.data?.reason ?? 'copy_failed');
+    }
+  }, [repoPath]);
+
+  const handleApplyCopy = useCallback(async () => {
+    const api = typeof window !== 'undefined' ? window.api : undefined;
+    if (!api?.pipelineRuntime) return;
+    setCopying(true);
+    setCopyError(null);
+    const res = await api.pipelineRuntime.applyOpenCodeCopy(repoPath);
+    setCopying(false);
+    if (res?.success && res.data?.written) {
+      setCopyPlan(null);
+      setDiscoveryToken((token) => token + 1);
+      setAiRefreshKey((key) => key + 1);
+    } else {
+      setCopyError(res?.error ?? 'copy_failed');
+    }
+  }, [repoPath]);
 
   if (!discovery) {
     // No se devuelve null: un null dentro de un panel con marco deja un recuadro
@@ -248,12 +292,6 @@ export function PipelineRuntimeLauncher({
           refreshKey={String(aiRefreshKey)}
         />
 
-        {isUnsupportedEngine && (
-          <p className="pipeline-launcher__blocked" role="alert">
-            {t('pipeline.launcher.unsupportedRuntimeAgy')}
-          </p>
-        )}
-
         {(isOpenCodeUnknown || isOpenCodeListFailed) && (
           <div className="pipeline-launcher__empty">
             <p className="pipeline-launcher__blocked" role="alert">
@@ -272,6 +310,60 @@ export function PipelineRuntimeLauncher({
             >
               {t('pipeline.launcher.recheck')}
             </button>
+            {isOpenCodeUnknown && (
+              <button
+                type="button"
+                className="pipeline-launcher__button"
+                data-action="copy-to-opencode"
+                disabled={locked || copying}
+                onClick={handlePlanCopy}
+              >
+                {t('pipeline.launcher.copyToOpenCode')}
+              </button>
+            )}
+          </div>
+        )}
+
+        {copyPlan && (
+          <div
+            className="pipeline-launcher__field"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="copy-opencode-title"
+          >
+            <h4 id="copy-opencode-title" className="pipeline-section__title">
+              {t('pipeline.launcher.copyModalTitle')}
+            </h4>
+            <p className="pipeline-launcher__scope">
+              {t('pipeline.launcher.copyModalDescription', { path: copyPlan.targetPath })}
+            </p>
+            {copyPlan.hasLiteralSecrets && (
+              <p className="pipeline-launcher__warning" role="status">
+                {t('pipeline.launcher.copyModalLiteralSecretNote')}
+              </p>
+            )}
+            <pre className="pipeline-launcher__instruction-preview">{copyPlan.previewText}</pre>
+            <div className="pipeline-launcher__actions">
+              <button
+                type="button"
+                className="pipeline-launcher__button"
+                data-action="cancel-copy-opencode"
+                disabled={copying}
+                onClick={() => setCopyPlan(null)}
+              >
+                {t('pipeline.launcher.copyCancel')}
+              </button>
+              <button
+                type="button"
+                className="pipeline-launcher__button"
+                data-action="confirm-copy-opencode"
+                disabled={copying}
+                onClick={handleApplyCopy}
+              >
+                {copying ? t('pipeline.launcher.copying') : t('pipeline.launcher.copyConfirm')}
+              </button>
+            </div>
+            {copyError && <p className="pipeline-launcher__error" role="alert">{copyError}</p>}
           </div>
         )}
 
@@ -281,7 +373,40 @@ export function PipelineRuntimeLauncher({
           </p>
         )}
 
-        {resolved && !isUnsupportedEngine && !isOpenCodeNotInstalled && !isOpenCodeListFailed && !isOpenCodeUnknown && selectedEntry?.launchable && (
+        {resolved && !isOpenCodeNotInstalled && !isOpenCodeListFailed && !isOpenCodeUnknown && resolved.opencodeAuthNotice && (
+          <div className="pipeline-launcher__empty" role="status">
+            <p className="pipeline-launcher__warning">
+              {resolved.opencodeAuthNotice.kind === 'missing_env' &&
+                t('pipeline.launcher.authWarningMissingEnv', {
+                  variableName: resolved.opencodeAuthNotice.variableName,
+                })}
+              {resolved.opencodeAuthNotice.kind === 'auth_json_override' &&
+                t('pipeline.launcher.authWarningAuthJson')}
+              {resolved.opencodeAuthNotice.kind === 'mismatch_other' &&
+                t('pipeline.launcher.authWarningMismatchOther')}
+            </p>
+            {resolved.opencodeAuthNotice.kind === 'auth_json_override' && (
+              <div className="pipeline-launcher__actions">
+                <code>{resolved.opencodeAuthNotice.logoutCommand}</code>
+                <CopyButton text={resolved.opencodeAuthNotice.logoutCommand} />
+              </div>
+            )}
+            <button
+              type="button"
+              className="pipeline-launcher__button"
+              data-action="recheck-auth"
+              disabled={locked}
+              onClick={() => {
+                setDiscoveryToken((token) => token + 1);
+                setAiRefreshKey((key) => key + 1);
+              }}
+            >
+              {t('pipeline.launcher.recheck')}
+            </button>
+          </div>
+        )}
+
+        {resolved && !isOpenCodeNotInstalled && !isOpenCodeListFailed && !isOpenCodeUnknown && selectedEntry?.launchable && (
           <>
             {/* La disponibilidad del motor se dice antes del CTA, no después de que falle. */}
             <p className="pipeline-launcher__availability" data-launchable={selectedEntry.launchable}>
@@ -358,7 +483,7 @@ export function PipelineRuntimeLauncher({
         {/* Un motor instalado que no se puede lanzar dice por qué, y uno que no está
             instalado lo dice también: ocultarlo haría parecer otra cosa. La salida es
             accionable: volver a comprobar después de instalarlo o iniciar sesión. */}
-        {resolved && !isUnsupportedEngine && (!selectedEntry?.launchable || isOpenCodeNotInstalled) && (
+        {resolved && (!selectedEntry?.launchable || isOpenCodeNotInstalled) && (
           <div className="pipeline-launcher__empty">
             <p className="pipeline-launcher__blocked" role="alert">
               {isOpenCodeNotInstalled

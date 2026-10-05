@@ -579,4 +579,114 @@ describe('AiSettingsSection (tarea 6.1)', () => {
       expect(mockApplyMcp).toHaveBeenCalledWith({ source: 'cursor', entries: ['cursor-server'] });
     });
   });
+
+  it('copiar para otra herramienta: abre el modal, muestra la vista previa con URL tapada, permite cambiar de destino y copia al portapapeles', async () => {
+    const mockPrepareMcpCopy = vi.fn(async ({ target }: { target: string }) => ({
+      success: true,
+      data: {
+        target,
+        serverName: 'remote-server',
+        previewText: target === 'claude'
+          ? '{\n  "mcpServers": {\n    "remote-server": {\n      "type": "http",\n      "url": "https://mcp.remote.example.com/sse?token=***"\n    }\n  }\n}'
+          : '{\n  "servers": {\n    "remote-server": {\n      "type": "http",\n      "url": "https://mcp.remote.example.com/sse?token=***"\n    }\n  }\n}',
+        clipboardText: '{\n  "mcpServers": {\n    "remote-server": {\n      "type": "http",\n      "url": "https://mcp.remote.example.com/sse?token=real-secret"\n    }\n  }\n}',
+        warnings: ['type_default_streamable_http'],
+        literalSecrets: [{ key: 'token', location: 'headers', proposedVar: 'REMOTE_TOKEN' }],
+        targetPathHint: target === 'claude' ? '.mcp.json' : '.vscode/mcp.json',
+      },
+    }));
+    const mockCopyMcpToClipboard = vi.fn(async () => ({ success: true, data: { copied: true } }));
+    const mockSaveMcpSecrets = vi.fn(async () => ({ success: true, data: { savedCount: 1, updatedFilePath: 'mcp.json' } }));
+
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({
+          success: true,
+          data: {
+            files: [{ path: 'C:/repos/demo/.gitcron/mcp.json', scope: 'repo', exists: true }],
+            servers: [
+              {
+                name: 'remote-server',
+                kind: 'remote',
+                host: 'mcp.remote.example.com',
+                headerNames: ['Authorization'],
+                envVarNames: [],
+                origin: 'C:/repos/demo/.gitcron/mcp.json',
+                scope: 'repo',
+                disabled: false,
+              },
+            ],
+          },
+        })),
+        prepareMcpCopy: mockPrepareMcpCopy,
+        copyMcpToClipboard: mockCopyMcpToClipboard,
+        saveMcpLiteralSecrets: mockSaveMcpSecrets,
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    useGitStore.setState({ language: 'es' });
+    render(<AiSettingsSection repoPath="C:/repos/demo" />);
+
+    expect(await screen.findByText('remote-server')).toBeDefined();
+
+    // 1. Abrir modal con botón "Copiar para otra herramienta"
+    fireEvent.click(screen.getByRole('button', { name: /Copiar para otra herramienta/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined();
+    });
+    expect(screen.getByText(/Copiar servidor «remote-server» para otra herramienta/i)).toBeDefined();
+    expect(mockPrepareMcpCopy).toHaveBeenCalledWith({
+      filePath: 'C:/repos/demo/.gitcron/mcp.json',
+      name: 'remote-server',
+      target: 'claude',
+      repoPath: 'C:/repos/demo',
+    });
+
+    // 2. Muestra la vista previa con token tapado y el aviso de Streamable HTTP
+    expect(screen.getByText(/token=\*\*\*/i)).toBeDefined();
+    expect(screen.getByText(/sin tipo declarado, se asume Streamable HTTP/i)).toBeDefined();
+    expect(screen.getByText(/La vista previa oculta contraseñas/i)).toBeDefined();
+
+    // 3. Ofrece guardar secretos en el baúl
+    expect(screen.getByText(/Este servidor contiene valores escritos a mano/i)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /Guardar secretos en el baúl y actualizar mcp.json/i }));
+    await waitFor(() => {
+      expect(mockSaveMcpSecrets).toHaveBeenCalledWith({
+        filePath: 'C:/repos/demo/.gitcron/mcp.json',
+        name: 'remote-server',
+        repoPath: 'C:/repos/demo',
+      });
+    });
+
+    // 4. Cambiar de destino a VS Code
+    fireEvent.click(screen.getByRole('button', { name: /VS Code/i }));
+    await waitFor(() => {
+      expect(mockPrepareMcpCopy).toHaveBeenCalledWith({
+        filePath: 'C:/repos/demo/.gitcron/mcp.json',
+        name: 'remote-server',
+        target: 'vscode',
+        repoPath: 'C:/repos/demo',
+      });
+    });
+
+    // 5. Copiar al portapapeles
+    fireEvent.click(screen.getByRole('button', { name: /Copiar al portapapeles/i }));
+    await waitFor(() => {
+      expect(mockCopyMcpToClipboard).toHaveBeenCalledWith({
+        filePath: 'C:/repos/demo/.gitcron/mcp.json',
+        name: 'remote-server',
+        target: 'vscode',
+        repoPath: 'C:/repos/demo',
+      });
+    });
+    // El modal se cierra tras copiar
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
 });

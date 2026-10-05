@@ -32,6 +32,11 @@ import type { PipelineRuntime } from './pipeline';
 
 export type AiLastRequest = CommitAiLastRequest;
 
+export type OpenCodeAuthNotice =
+  | { kind: 'missing_env'; variableName: string }
+  | { kind: 'auth_json_override'; providerId: string; logoutCommand: string }
+  | { kind: 'mismatch_other'; providerId: string };
+
 export type AiUseStatus =
   | {
       status: 'resolved';
@@ -73,6 +78,8 @@ export type AiUseStatus =
       opencodeListFailed?: boolean;
       /** Límite de contexto reportado por OpenCode si se conoce (D8). */
       contextLimit?: number | null;
+      /** Aviso de desalineación de claves entre OpenCode y GitCron si lo hay (D8, tarea 5.3). */
+      opencodeAuthNotice?: OpenCodeAuthNotice | null;
       /**
        * Sólo del agente de SDD: la clave de lo que se lanzaría. El lanzador la devuelve
        * como `expectedModel`; si el archivo cambió, el proceso principal no lanza nada.

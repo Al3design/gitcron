@@ -468,6 +468,9 @@ interface ElectronAPI {
     removeMcpServer(args: import('./ai-config').RemoveMcpServerPayload): Promise<GitResult<{ removed: boolean }>>;
     planMcpImport(args: import('./ai-config').PlanMcpImportPayload): Promise<GitResult<import('./ai-config').AiMcpImportPlanResult>>;
     applyMcpImport(args: import('./ai-config').ApplyMcpImportPayload): Promise<GitResult<{ count: number }>>;
+    prepareMcpCopy(args: import('./ai-config').PrepareMcpCopyPayload): Promise<GitResult<import('./ai-config').AiMcpExportPlanResult>>;
+    copyMcpToClipboard(args: import('./ai-config').CopyMcpToClipboardPayload): Promise<GitResult<{ copied: boolean }>>;
+    saveMcpLiteralSecrets(args: import('./ai-config').SaveMcpLiteralSecretsPayload): Promise<GitResult<{ savedCount: number; updatedFilePath: string }>>;
   };
   /**
    * Historial de usos de IA por repositorio (tarea 4.6, D19).
@@ -657,6 +660,22 @@ interface ElectronAPI {
       taskId?: string | null;
     }) => Promise<GitResult<{ sessionId: string }>>;
     stop: (repoPath: string) => Promise<GitResult<boolean>>;
+    planOpenCodeCopy: (repoPath: string) => Promise<GitResult<{
+      canCopy: boolean;
+      reason?: string;
+      providerId: string;
+      modelId: string;
+      targetPath: string;
+      mode: 'add_provider' | 'add_model';
+      previewText: string;
+      hasLiteralSecrets: boolean;
+      omittedSecrets: string[];
+    }>>;
+    applyOpenCodeCopy: (repoPath: string) => Promise<GitResult<{ written: boolean; created?: boolean }>>;
+    checkOpenCodeAuth: (repoPath: string) => Promise<GitResult<{
+      status: 'match' | 'mismatch';
+      notice: import('./ai-use').OpenCodeAuthNotice | null;
+    }>>;
   };
   onPipelineRuntimeUpdated: (
     cb: (repoPath: string, projection: RuntimeProjection | null) => void,

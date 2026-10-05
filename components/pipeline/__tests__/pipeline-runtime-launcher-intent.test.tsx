@@ -56,6 +56,19 @@ const DISCOVERY_FIXTURE: RuntimeDiscoveryEntry[] = [
     startRunsCommands: true,
     diagnostics: [],
   },
+  {
+    runtime: 'agy',
+    adapterId: 'adapter-agy',
+    installed: true,
+    runtimeVersion: '1.2.13',
+    launchable: true,
+    evidenceStatus: 'verified',
+    startAvailability: 'available',
+    startConstraints: ['edita archivos en el repositorio con --mode accept-edits', 'runsCommands: false'],
+    startModifiesRepo: true,
+    startRunsCommands: false,
+    diagnostics: [],
+  },
 ];
 
 const launchKeyOf = (modelRef: string, effortOrVariant?: string) => JSON.stringify([modelRef, effortOrVariant ?? null]);
@@ -248,7 +261,7 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
     });
   });
 
-  it('modelo con runtime agy (Antigravity) muestra aviso de no soportado y deshabilita Iniciar', async () => {
+  it('modelo con runtime agy (Antigravity) se lanza para escribir artefactos con confirmación de no correr comandos', async () => {
     aiStatusSpy.mockResolvedValue({
       success: true,
       data: mockResolvedAgentStatus({
@@ -277,9 +290,63 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
       />,
     );
 
-    await vi.waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+    await vi.waitFor(() => expect(screen.getByRole('checkbox')).toBeDefined());
 
-    expect(screen.getByRole('alert').textContent).toContain('pipeline.launcher.unsupportedRuntimeAgy');
+    const confirmLabel = screen.getByText(/confirmWriteAgentNoCommands/);
+    expect(confirmLabel).toBeDefined();
+
+    const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
+    expect(startButton.disabled).toBe(true);
+
+    const confirmCheckbox = screen.getByRole('checkbox');
+    fireEvent.click(confirmCheckbox);
+    expect(startButton.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(startButton);
+    });
+
+    expect(startSpy).toHaveBeenCalledWith({
+      repoPath: 'C:/repo-test',
+      instruction: 'Escribir algo',
+      changeId: 'change-abc',
+      taskId: 'task-xyz',
+      expectedModel: launchKeyOf('antigravity/gemini-2.5-pro'),
+    });
+  });
+
+  it('modelo con runtime agy (Antigravity) no está disponible para implementar tareas que requieren pruebas', async () => {
+    aiStatusSpy.mockResolvedValue({
+      success: true,
+      data: mockResolvedAgentStatus({
+        providerId: 'antigravity',
+        providerName: 'Antigravity',
+        modelRef: 'antigravity/gemini-2.5-pro',
+        modelId: 'gemini-2.5-pro',
+        modelSource: 'agent',
+        isException: false,
+        sourceFile: 'gitcron.json',
+        sourceDir: 'C:/repo-test',
+        runtime: 'agy',
+        toolsExecutor: 'Antigravity',
+        effort: undefined,
+      }),
+    });
+
+    render(
+      <PipelineRuntimeLauncher
+        repoPath="C:/repo-test"
+        projection={null}
+        intent="implement-task"
+        changeId="change-abc"
+        taskId="task-xyz"
+        initialInstruction="Implementar con pruebas"
+      />,
+    );
+
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toBeDefined());
+    expect(screen.getByRole('alert').textContent).toContain('pipeline.launcher.intent.unavailableCommands');
+
     const startButton = screen.getByRole('button', { name: 'pipeline.launcher.start' }) as HTMLButtonElement;
     expect(startButton.disabled).toBe(true);
     expect(startSpy).not.toHaveBeenCalled();
@@ -354,13 +421,22 @@ describe('PipelineRuntimeLauncher — capacidades unificadas y confirmación exp
     const keysToCheck: { key: string; vars?: Record<string, string | number> }[] = [
       { key: 'pipeline.launcher.unsupportedRuntimeAgy' },
       { key: 'pipeline.launcher.intent.chooseOtherModel' },
+      { key: 'pipeline.launcher.intent.unavailableCommands' },
       {
         key: 'pipeline.launcher.confirmWriteAgent',
         vars: { motor: 'Codex', model: 'gpt-5', executor: 'Codex' },
       },
       {
+        key: 'pipeline.launcher.confirmWriteAgentNoCommands',
+        vars: { motor: 'Antigravity', model: 'gemini-3.8-flash', executor: 'Antigravity' },
+      },
+      {
         key: 'pipeline.launcher.confirmWriteAgentWithEffort',
         vars: { motor: 'Codex', model: 'gpt-5', effort: 'high', executor: 'Codex' },
+      },
+      {
+        key: 'pipeline.launcher.confirmWriteAgentWithEffortNoCommands',
+        vars: { motor: 'Antigravity', model: 'gemini-3.8-flash', effort: 'low', executor: 'Antigravity' },
       },
       { key: 'pipeline.launcher.error.model_mismatch' },
       { key: 'pipeline.launcher.error.no_model' },

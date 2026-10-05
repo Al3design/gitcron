@@ -64,6 +64,7 @@ describe('pipeline:runtime:start (tarea 5.1)', () => {
     hubDiscoverSpy = vi.fn(async () => [
       { runtime: 'codex', installed: true, launchable: true, diagnostics: [] },
       { runtime: 'claude', installed: true, launchable: true, diagnostics: [] },
+      { runtime: 'agy', installed: true, launchable: true, diagnostics: [] },
     ]);
     hubStartSpy = vi.fn(async () => ({ ok: true, sessionId: 'sess-123' }));
 
@@ -290,11 +291,15 @@ describe('pipeline:runtime:start (tarea 5.1)', () => {
     });
   });
 
-  it('con un modelo de Antigravity se rechaza con unsupported_runtime_agy y no se lanza nada', async () => {
+  it('con un modelo de Antigravity se lanza como runtime agy con su modelo', async () => {
     writeRepo({ agent: { 'gitcron-sdd': { model: 'antigravity/gemini-3.8-flash' } } });
 
-    expect(await start({ expectedModel: key('antigravity/gemini-3.8-flash') })).toEqual({ success: false, error: 'unsupported_runtime_agy' });
-    expect(hubStartSpy).not.toHaveBeenCalled();
+    const res = await start({ expectedModel: key('antigravity/gemini-3.8-flash') });
+    expect(res.success).toBe(true);
+    expect(hubStartSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtime: 'agy',
+      requestedModel: 'gemini-3.8-flash',
+    }));
   });
 
   it('sin modelo se rechaza con no_model, y apagado con disabled; no se lanza nada', async () => {

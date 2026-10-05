@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Cpu, Server, Key, Plus, Trash2, ExternalLink, FolderOpen,
   AlertCircle, CheckCircle2, RefreshCw, X, ShieldAlert, Sliders,
-  ChevronDown, ChevronRight, Terminal, Lock, Download
+  ChevronDown, ChevronRight, Terminal, Lock, Download, Copy
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,8 @@ import type {
   AiImportSourceInfo,
   AiImportTargetInfo,
   AiImportVariable,
+  AiMcpExportPlanResult,
+  AiMcpExportTarget,
   AiMcpImportPlanResult,
   AiMcpImportSource,
   AiMcpServerInfo,
@@ -127,6 +129,14 @@ export function AiSettingsSection({ repoPath = null }: Props) {
   const [loadingMcpPlan, setLoadingMcpPlan] = useState(false);
   const [mcpSelected, setMcpSelected] = useState<Record<string, boolean>>({});
   const [applyingMcp, setApplyingMcp] = useState(false);
+
+  // «Copiar para otra herramienta» de servidores MCP (tarea 6.2, D12)
+  const [mcpServerToCopy, setMcpServerToCopy] = useState<AiMcpServerInfo | null>(null);
+  const [mcpCopyTarget, setMcpCopyTarget] = useState<AiMcpExportTarget>('claude');
+  const [mcpCopyPlan, setMcpCopyPlan] = useState<AiMcpExportPlanResult | null>(null);
+  const [loadingMcpCopy, setLoadingMcpCopy] = useState(false);
+  const [copyingMcpToClipboard, setCopyingMcpToClipboard] = useState(false);
+  const [savingMcpSecrets, setSavingMcpSecrets] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -650,6 +660,116 @@ export function AiSettingsSection({ repoPath = null }: Props) {
     }
   };
 
+  const handleOpenMcpCopy = async (server: AiMcpServerInfo) => {
+    setMcpServerToCopy(server);
+    setMcpCopyTarget('claude');
+    setLoadingMcpCopy(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.prepareMcpCopy({
+        filePath: server.origin,
+        name: server.name,
+        target: 'claude',
+        repoPath,
+      });
+      if (res?.success && res.data) {
+        setMcpCopyPlan(res.data);
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setLoadingMcpCopy(false);
+    }
+  };
+
+  const handleSelectMcpCopyTarget = async (target: AiMcpExportTarget) => {
+    if (!mcpServerToCopy) return;
+    setMcpCopyTarget(target);
+    setLoadingMcpCopy(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.prepareMcpCopy({
+        filePath: mcpServerToCopy.origin,
+        name: mcpServerToCopy.name,
+        target,
+        repoPath,
+      });
+      if (res?.success && res.data) {
+        setMcpCopyPlan(res.data);
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setLoadingMcpCopy(false);
+    }
+  };
+
+  const handleCopyMcpToClipboard = async () => {
+    if (!mcpServerToCopy) return;
+    setCopyingMcpToClipboard(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.copyMcpToClipboard({
+        filePath: mcpServerToCopy.origin,
+        name: mcpServerToCopy.name,
+        target: mcpCopyTarget,
+        repoPath,
+      });
+      if (res?.success) {
+        const targetLabel = mcpCopyTarget === 'claude'
+          ? 'Claude Code'
+          : mcpCopyTarget === 'vscode'
+          ? 'VS Code'
+          : 'OpenCode';
+        setSuccessNotice(t('aiConfig.mcpCopiedSuccess', { target: targetLabel }));
+        setMcpServerToCopy(null);
+        setMcpCopyPlan(null);
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setCopyingMcpToClipboard(false);
+    }
+  };
+
+  const handleSaveMcpLiteralSecrets = async () => {
+    if (!mcpServerToCopy) return;
+    setSavingMcpSecrets(true);
+    setActionError(null);
+    try {
+      const res = await window.api?.aiConfig?.saveMcpLiteralSecrets({
+        filePath: mcpServerToCopy.origin,
+        name: mcpServerToCopy.name,
+        repoPath,
+      });
+      if (res?.success) {
+        setSuccessNotice(t('aiConfig.mcpCopySecretsSaved'));
+        await reload();
+        const planRes = await window.api?.aiConfig?.prepareMcpCopy({
+          filePath: mcpServerToCopy.origin,
+          name: mcpServerToCopy.name,
+          target: mcpCopyTarget,
+          repoPath,
+        });
+        if (planRes?.success && planRes.data) {
+          setMcpCopyPlan(planRes.data);
+        }
+      } else {
+        setActionError(res?.error ?? t('aiConfig.unexpectedError'));
+      }
+    } catch (e: any) {
+      setActionError(e?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      setSavingMcpSecrets(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-text-secondary">
@@ -1069,16 +1189,29 @@ export function AiSettingsSection({ repoPath = null }: Props) {
                   {renderMcpServerDetails(server)}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setMcpServerToRemove(server)}
-                  disabled={mcpStatus.files.some((f) => f.path === server.origin && Boolean(f.error))}
-                  className="shrink-0 self-end sm:self-center px-2 py-1 rounded border border-border-subtle/20 bg-bg-base/70 text-text-secondary hover:text-error hover:border-error/40 transition-colors flex items-center gap-1.5 text-xs disabled:opacity-40"
-                  title={t('aiConfig.mcpRemove')}
-                >
-                  <Trash2 size={12} />
-                  <span>{t('aiConfig.mcpRemove')}</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenMcpCopy(server)}
+                    disabled={mcpStatus.files.some((f) => f.path === server.origin && Boolean(f.error))}
+                    className="px-2 py-1 rounded border border-border-subtle/20 bg-bg-base/70 text-text-secondary hover:text-text-primary hover:border-secondary/40 transition-colors flex items-center gap-1.5 text-xs disabled:opacity-40"
+                    title={t('aiConfig.mcpCopy')}
+                  >
+                    <Copy size={12} />
+                    <span>{t('aiConfig.mcpCopy')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMcpServerToRemove(server)}
+                    disabled={mcpStatus.files.some((f) => f.path === server.origin && Boolean(f.error))}
+                    className="px-2 py-1 rounded border border-border-subtle/20 bg-bg-base/70 text-text-secondary hover:text-error hover:border-error/40 transition-colors flex items-center gap-1.5 text-xs disabled:opacity-40"
+                    title={t('aiConfig.mcpRemove')}
+                  >
+                    <Trash2 size={12} />
+                    <span>{t('aiConfig.mcpRemove')}</span>
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -1449,6 +1582,155 @@ export function AiSettingsSection({ repoPath = null }: Props) {
           onCancel={() => setMcpServerToRemove(null)}
           onConfirm={handleRemoveMcpServer}
         />
+      )}
+
+      {/* Modal: Copiar Servidor MCP para otra herramienta (tarea 6.2, D12) */}
+      {mcpServerToCopy && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        >
+          <div className="bg-bg-surface border border-border-subtle/30 rounded-xl shadow-2xl max-w-xl w-full p-5 space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle/20">
+              <div className="flex items-center gap-2">
+                <Copy size={16} className="text-secondary shrink-0" />
+                <h3 className="font-bold text-sm text-text-primary">
+                  {t('aiConfig.mcpCopyTitle', { name: mcpServerToCopy.name })}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMcpServerToCopy(null);
+                  setMcpCopyPlan(null);
+                }}
+                className="text-text-secondary hover:text-text-primary transition-colors p-1 rounded hover:bg-bg-base"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Selector de herramienta de destino */}
+            <div className="space-y-1.5">
+              <label className="text-text-secondary font-medium">{t('aiConfig.mcpCopyTarget')}</label>
+              <div className="flex flex-wrap gap-2">
+                {(['claude', 'vscode', 'opencode'] as const).map((tgt) => (
+                  <button
+                    key={tgt}
+                    type="button"
+                    onClick={() => handleSelectMcpCopyTarget(tgt)}
+                    disabled={loadingMcpCopy}
+                    className={cn(
+                      'px-3 py-1.5 rounded border text-xs font-medium transition-colors',
+                      mcpCopyTarget === tgt
+                        ? 'border-secondary/50 bg-secondary/15 text-secondary font-bold'
+                        : 'border-border-subtle/30 bg-bg-base/60 text-text-secondary hover:text-text-primary hover:border-border-subtle/50',
+                    )}
+                  >
+                    {tgt === 'claude'
+                      ? t('aiConfig.mcpCopyTargetClaude')
+                      : tgt === 'vscode'
+                      ? t('aiConfig.mcpCopyTargetVsCode')
+                      : t('aiConfig.mcpCopyTargetOpenCode')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Contenido / Vista previa */}
+            {loadingMcpCopy ? (
+              <div className="flex items-center justify-center py-8 text-text-secondary">
+                <RefreshCw size={16} className="animate-spin text-secondary mr-2" />
+                <span>{t('common.loading')}</span>
+              </div>
+            ) : mcpCopyPlan ? (
+              <div className="space-y-3">
+                <div className="text-text-secondary font-mono text-[length:var(--font-size-2xs)]">
+                  {t('aiConfig.mcpCopyDestinationHint', { hint: mcpCopyPlan.targetPathHint })}
+                </div>
+
+                {/* Avisos */}
+                {mcpCopyPlan.warnings.length > 0 && (
+                  <div className="space-y-1.5">
+                    {mcpCopyPlan.warnings.map((warnKey) => (
+                      <div
+                        key={warnKey}
+                        className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[length:var(--font-size-2xs)] flex items-start gap-1.5"
+                      >
+                        <AlertCircle size={13} className="shrink-0 mt-0.5 text-amber-400" />
+                        <span>
+                          {warnKey === 'type_sse_deprecated'
+                            ? t('aiConfig.mcpWarnTypeSse')
+                            : warnKey === 'type_default_streamable_http'
+                            ? t('aiConfig.mcpWarnTypeDefaultHttp')
+                            : warnKey === 'opencode_no_envfile'
+                            ? t('aiConfig.mcpWarnOpenCodeNoEnvFile')
+                            : warnKey}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Bloque de código */}
+                <pre className="p-3 rounded bg-bg-base border border-border-subtle/20 font-mono text-xs overflow-x-auto max-h-56 select-all text-text-primary whitespace-pre">
+                  <code>{mcpCopyPlan.previewText}</code>
+                </pre>
+
+                <p className="text-[length:var(--font-size-2xs)] text-text-secondary/80 leading-relaxed italic">
+                  {t('aiConfig.mcpCopyMaskNotice')}
+                </p>
+
+                {/* Secreto literal detectado */}
+                {mcpCopyPlan.literalSecrets.length > 0 && (
+                  <div className="p-2.5 rounded border border-secondary/30 bg-secondary/5 text-xs space-y-2">
+                    <div className="flex items-start gap-2 text-text-primary">
+                      <ShieldAlert size={14} className="text-secondary shrink-0 mt-0.5" />
+                      <p>{t('aiConfig.mcpCopyLiteralNotice')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveMcpLiteralSecrets}
+                      disabled={savingMcpSecrets}
+                      className="px-2.5 py-1 rounded bg-secondary text-bg-surface font-semibold text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {savingMcpSecrets && <RefreshCw size={12} className="animate-spin" />}
+                      <span>{savingMcpSecrets ? t('aiConfig.saving') : t('aiConfig.mcpCopySaveSecrets')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {/* Acciones */}
+            <div className="flex justify-end items-center gap-2 pt-3 border-t border-border-subtle/20">
+              <button
+                type="button"
+                onClick={() => {
+                  setMcpServerToCopy(null);
+                  setMcpCopyPlan(null);
+                }}
+                className="px-3 py-1.5 rounded border border-border-subtle/20 text-text-secondary hover:text-text-primary transition-colors text-xs"
+              >
+                {t('aiConfig.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyMcpToClipboard}
+                disabled={copyingMcpToClipboard || !mcpCopyPlan || loadingMcpCopy}
+                className="px-3.5 py-1.5 rounded bg-secondary text-bg-surface font-bold text-xs hover:bg-secondary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {copyingMcpToClipboard ? (
+                  <RefreshCw size={12} className="animate-spin" />
+                ) : (
+                  <Copy size={12} />
+                )}
+                <span>{t('aiConfig.mcpCopyToClipboard')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Picker de modelo compartido (AiModelPicker) */}

@@ -89,14 +89,14 @@ describe('resolveIntentCapability (mismas capacidades para toda IA lanzable)', (
       expect(res.alternativeRuntime).toBeNull();
     });
 
-    it('un runtime que modifica archivos pero no corre comandos avisa verificación manual', () => {
+    it('un runtime que modifica archivos pero no corre comandos no está disponible para implementar tareas', () => {
       const res = resolveIntentCapability(
         'implement-task',
         entry({ startModifiesRepo: true, startRunsCommands: false }),
       );
-      expect(res.status).toBe('partial');
-      expect(res.canLaunch).toBe(true);
-      expect(res.reason).toContain('pnpm verificar');
+      expect(res.status).toBe('unavailable');
+      expect(res.canLaunch).toBe(false);
+      expect(res.reasonKey).toBe('pipeline.launcher.intent.unavailableCommands');
     });
 
     it('un runtime que no modifica archivos no puede implementar tareas', () => {
@@ -159,6 +159,37 @@ describe('resolveIntentCapability (mismas capacidades para toda IA lanzable)', (
       const res = resolveIntentCapability('write-artifact', null);
       expect(res.status).toBe('unavailable');
       expect(res.canLaunch).toBe(false);
+    });
+  });
+
+  describe('caso 7: Antigravity (explorar y escribir sí, implementar con pruebas no)', () => {
+    const agyEntry = entry({
+      runtime: 'agy',
+      launchable: true,
+      startModifiesRepo: true,
+      startRunsCommands: false,
+      evidenceStatus: 'verified',
+    });
+
+    it('está disponible para explorar', () => {
+      const res = resolveIntentCapability('explore', agyEntry);
+      expect(res.status).toBe('available');
+      expect(res.canLaunch).toBe(true);
+      expect(res.alternativeRuntime).toBeNull();
+    });
+
+    it('está disponible para escribir propuestas y artefactos', () => {
+      const res = resolveIntentCapability('write-artifact', agyEntry);
+      expect(res.status).toBe('available');
+      expect(res.canLaunch).toBe(true);
+      expect(res.alternativeRuntime).toBeNull();
+    });
+
+    it('no está disponible para implementar tareas porque no puede correr pruebas', () => {
+      const res = resolveIntentCapability('implement-task', agyEntry);
+      expect(res.status).toBe('unavailable');
+      expect(res.canLaunch).toBe(false);
+      expect(res.reasonKey).toBe('pipeline.launcher.intent.unavailableCommands');
     });
   });
 });

@@ -272,7 +272,7 @@ export function planMcpImport(options: PlanMcpImportOptions): McpImportPlan {
   return plan;
 }
 
-const DISABLED_COMMENT = 'enabled: false en OpenCode: mcpServers no tiene ese campo';
+export const DISABLED_COMMENT = 'enabled: false en OpenCode: mcpServers no tiene ese campo';
 
 /** Dónde empieza la línea en que se declara un servidor, y la de arriba. */
 function serverLineStarts(text: string, name: string): { offset: number; lineStart: number; previousLineStart: number } | null {
@@ -293,7 +293,7 @@ export function isMcpServerMarkedDisabled(text: string, name: string): boolean {
  * Deja un comentario de línea encima de un servidor, una sola vez. Es como D12
  * conserva el `enabled: false` de OpenCode.
  */
-function commentAboveServer(filePath: string, name: string, comment: string): void {
+export function commentAboveServer(filePath: string, name: string, comment: string): void {
   const text = fs.readFileSync(filePath, 'utf8');
   const lines = serverLineStarts(text, name);
   if (!lines) return;

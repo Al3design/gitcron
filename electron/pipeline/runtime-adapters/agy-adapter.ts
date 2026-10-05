@@ -1,158 +1,143 @@
-import type {
-  PipelineEventEnvelope,
-  RuntimeDescriptor,
-  RuntimeDiscovery,
-  RuntimeHealth,
-  RuntimeSession,
-  RuntimeTelemetrySnapshot,
-} from '../../../types/pipeline';
-import { unknownTelemetry } from './normalization';
+// electron/pipeline/runtime-adapters/agy-adapter.ts
+//
+// Adaptador estructurado de Antigravity (`agy`) para SDD (tarea 5.2, Decisión D9, Opción B).
+//
+// Reemplaza al anterior wrapper de ciclo de vida (`agy-wrapper`).
+// Ejecuta:
+// `agy -p <instruccion> --output-format stream-json --mode accept-edits [--model <m>] [--effort <e>] [--conversation <id>]`
+//
+// Características:
+// - `runsCommands: false`: Antigravity lee y modifica archivos del repositorio, pero no ejecuta
+//   comandos en modo sin pantalla (-p).
+// - Sin `--dangerously-skip-permissions`.
+// - Soporta reanudación mediante `--conversation`.
+// - Detecta acciones denegadas (`denied_actions`): un comando rechazado termina la corrida con
+//   `success: false` y motivo visible aunque el estado final de Antigravity sea `SUCCESS`.
+
+import type { RuntimeDescriptor } from '../../../types/pipeline';
+import { isValidCliEffort } from '../../ai/cli-text-client';
+import { AgyStreamNormalizer } from './agy-normalizer';
 import { RuntimeProcessRunner } from './process-runner';
-import type { RuntimeAdapter } from './runtime-adapter';
+import type { RuntimeStartRequest } from './runtime-adapter';
+import { StructuredCliRuntimeAdapter } from './structured-cli-adapter';
 
-/**
- * Versions whose CLI surface was audited for the wrapper contract: neither
- * exposes a --json / --output-format / --stream flag, so there is no structured
- * stream to normalize.
- */
-const SUPPORTED_RUNTIME_VERSIONS = ['1.1.5', '1.1.6'] as const;
-const BASELINE_RUNTIME_VERSION = '1.1.6';
+const STREAM_FIXTURE_REF = 'electron/__tests__/fixtures/f03/fixtures/agy-1.2.13-stream.sanitized.jsonl';
+const RESUME_FIXTURE_REF = 'electron/__tests__/fixtures/f03/fixtures/agy-1.2.13-resume.sanitized.jsonl';
 
-export const AGY_WRAPPER_DESCRIPTOR: RuntimeDescriptor = {
-  adapterId: 'agy-wrapper',
+export const AGY_DESCRIPTOR: RuntimeDescriptor = {
+  adapterId: 'agy-cli',
   runtime: 'agy',
-  adapterKind: 'wrapper',
-  transport: 'process-lifecycle',
-  runtimeVersion: BASELINE_RUNTIME_VERSION,
+  adapterKind: 'structured-cli',
+  transport: 'stream-json',
+  runtimeVersion: '1.2.13',
   protocolVersion: null,
   capabilities: [
     {
-      capabilityId: 'health',
-      capabilityVersion: '1',
+      capabilityId: 'session.start',
+      capabilityVersion: null,
       availability: 'available',
       evidenceStatus: 'pending_fixture',
-      targetScopes: ['repo'],
-      constraints: ['process probe only; no structured event stream'],
-      evidenceRefs: [],
-    },
-    {
-      capabilityId: 'session.start',
-      capabilityVersion: '1',
-      availability: 'unknown',
-      evidenceStatus: 'pending_fixture',
       targetScopes: ['repo', 'run'],
-      constraints: ['wrapper lifecycle only; structured stream unavailable'],
-      evidenceRefs: [],
+      constraints: ['edita archivos en el repositorio con --mode accept-edits', 'runsCommands: false'],
+      evidenceRefs: [STREAM_FIXTURE_REF],
     },
     {
       capabilityId: 'events.stream',
-      capabilityVersion: '1',
-      availability: 'unknown',
+      capabilityVersion: null,
+      availability: 'available',
       evidenceStatus: 'pending_fixture',
       targetScopes: ['session'],
-      constraints: ['no --json/--output-format/--stream flag; no regex on raw terminal text'],
-      evidenceRefs: [],
+      constraints: ['bounded stream-json JSONL'],
+      evidenceRefs: [STREAM_FIXTURE_REF],
     },
     {
       capabilityId: 'telemetry.snapshot',
       capabilityVersion: null,
-      availability: 'unknown',
+      availability: 'available',
       evidenceStatus: 'pending_fixture',
       targetScopes: ['run', 'session'],
-      constraints: ['usage and cost metrics unavailable without structured telemetry stream'],
-      evidenceRefs: [],
+      constraints: ['result usage tokens', 'thinking tokens', 'cost unavailable'],
+      evidenceRefs: [STREAM_FIXTURE_REF],
+    },
+    {
+      capabilityId: 'session.resume',
+      capabilityVersion: null,
+      availability: 'unknown',
+      evidenceStatus: 'pending_fixture',
+      targetScopes: ['session'],
+      constraints: ['--conversation'],
+      evidenceRefs: [RESUME_FIXTURE_REF],
     },
   ],
 };
 
-export class AgyWrapperRuntimeAdapter implements RuntimeAdapter {
-  readonly descriptor = AGY_WRAPPER_DESCRIPTOR;
+const SAFE_IDENTIFIER_PATTERN = /^[a-zA-Z0-9._\-/:@]+$/;
 
-  constructor(
-    private readonly canonicalRepoPath: string,
-    private readonly executable: string = 'agy',
-    private readonly runner = new RuntimeProcessRunner(),
-    private readonly now: () => string = () => new Date().toISOString(),
-  ) {}
-
-  async discover(): Promise<RuntimeDiscovery> {
-    try {
-      const result = await this.runner.run({
-        executable: this.executable,
-        args: ['--version'],
-        cwd: this.canonicalRepoPath,
-        expectedCanonicalCwd: this.canonicalRepoPath,
-        timeoutMs: 10_000,
-        maxStdoutBytes: 16_384,
-        maxStderrBytes: 16_384,
-      });
-      const output = result.stdout.toString('utf8').trim();
-      const installed = result.exitCode === 0 && !result.timedOut && !result.outputLimit;
-      const detectedVersion = installed && output ? output : null;
-      const withinBaseline = detectedVersion !== null
-        && (SUPPORTED_RUNTIME_VERSIONS as readonly string[]).includes(detectedVersion);
-      return {
-        installed,
-        executable: installed ? this.executable : null,
-        runtimeVersion: detectedVersion,
-        // `evidenceStatus` es informativo: `pending_fixture` porque el fixture
-        // de referencia se retiró. No bloquea el listado del runtime.
-        evidenceStatus: installed ? 'pending_fixture' : 'unknown',
-        evidenceRefs: [],
-        diagnostics: withinBaseline
-          ? []
-          : installed
-            ? ['agy version outside the reference baseline set']
-            : ['agy version probe failed'],
-      };
-    } catch (error) {
-      // El motivo medido, no un genérico: si el binario existe pero la app no
-      // lo resuelve, el diagnóstico debe decir por qué (camino encontrado,
-      // forma no lanzable, PATH usado), no "no disponible".
-      return {
-        installed: false,
-        executable: null,
-        runtimeVersion: null,
-        evidenceStatus: 'unknown',
-        evidenceRefs: [],
-        diagnostics: [error instanceof Error ? error.message : String(error)],
-      };
-    }
-  }
-
-  async health(): Promise<RuntimeHealth> {
-    const startedAt = Date.now();
-    const discovery = await this.discover();
-    return {
-      status: discovery.evidenceStatus === 'verified' ? 'healthy' : discovery.installed ? 'degraded' : 'unavailable',
-      checkedAt: this.now(),
-      latencyMs: Date.now() - startedAt,
-      evidenceStatus: discovery.evidenceStatus,
-      evidenceRefs: discovery.evidenceRefs,
-      diagnostics: discovery.diagnostics,
-    };
-  }
-
-  async *events(_session: RuntimeSession): AsyncIterable<PipelineEventEnvelope> {
-    // Wrapper mode: no structured event stream emitted
-    return;
-  }
-
-  async telemetry(session: RuntimeSession): Promise<RuntimeTelemetrySnapshot> {
-    return unknownTelemetry(session.identity, 'agy-wrapper');
-  }
-
-  async shutdown(_session: RuntimeSession): Promise<void> {
-    // No-op for lifecycle wrapper session without child handle
-    return;
-  }
+export function isValidAgyModelArg(modelArg: string | undefined | null): boolean {
+  return typeof modelArg === 'string' && modelArg.length > 0 && SAFE_IDENTIFIER_PATTERN.test(modelArg);
 }
 
-export function createAgyWrapperRuntimeAdapter(
+export function isValidAgySessionId(sessionId: string | undefined | null): boolean {
+  return typeof sessionId === 'string' && sessionId.length > 0 && SAFE_IDENTIFIER_PATTERN.test(sessionId);
+}
+
+export interface AgyStartRequest extends RuntimeStartRequest {
+  resumeSessionId?: string | null;
+}
+
+export function buildAgyArgs(request: AgyStartRequest): string[] {
+  if (request.requestedModel && !isValidAgyModelArg(request.requestedModel)) {
+    throw new Error('invalid_model_identifier');
+  }
+
+  const args: string[] = [
+    '-p',
+    request.instruction,
+    '--output-format',
+    'stream-json',
+    '--mode',
+    'accept-edits',
+  ];
+
+  if (request.reasoningEffort && isValidCliEffort('antigravity', request.reasoningEffort)) {
+    args.push('--effort', request.reasoningEffort);
+  }
+
+  if (request.requestedModel) {
+    args.push('--model', request.requestedModel);
+  }
+
+  if (request.resumeSessionId) {
+    if (!isValidAgySessionId(request.resumeSessionId)) {
+      throw new Error('invalid_session_identifier');
+    }
+    args.push('--conversation', request.resumeSessionId);
+  }
+
+  if (request.timeoutMs && request.timeoutMs > 0) {
+    args.push('--print-timeout', `${Math.max(1, Math.ceil(request.timeoutMs / 1000))}s`);
+  }
+
+  return args;
+}
+
+export function createAgyRuntimeAdapter(
   canonicalRepoPath: string,
-  executable = 'agy',
   runner = new RuntimeProcessRunner(),
   now?: () => string,
-): AgyWrapperRuntimeAdapter {
-  return new AgyWrapperRuntimeAdapter(canonicalRepoPath, executable, runner, now);
+): StructuredCliRuntimeAdapter {
+  return new StructuredCliRuntimeAdapter(
+    canonicalRepoPath,
+    {
+      descriptor: AGY_DESCRIPTOR,
+      executable: 'agy',
+      versionArgs: ['--version'],
+      matchesFixtureVersion: (output) => output.trim() === '1.2.13',
+      buildArgs: buildAgyArgs,
+      createNormalizer: () => new AgyStreamNormalizer(),
+      evidenceRef: STREAM_FIXTURE_REF,
+    },
+    runner,
+    now,
+  );
 }

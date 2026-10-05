@@ -121,9 +121,10 @@ export function resolveIntentCapability(
     }
     if (entry.startRunsCommands === false) {
       return {
-        status: 'partial',
-        canLaunch: true,
-        reason: 'Escribe el código pero no puede correr pruebas: la verificación queda para vos (pnpm verificar).',
+        status: 'unavailable',
+        canLaunch: false,
+        reasonKey: 'pipeline.launcher.intent.unavailableCommands',
+        reason: 'Este runtime no puede correr comandos o pruebas en el repositorio.',
         alternativeRuntime: null,
       };
     }

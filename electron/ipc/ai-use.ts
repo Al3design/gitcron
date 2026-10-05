@@ -20,6 +20,8 @@ import { adoptLegacyOffer, legacyOfferFor, type LegacyChoiceSources } from '../a
 import { isAiUse, isTextUse, type AiUse, type TextUse } from '../ai/config/resolve-model-for';
 import { detectCanLoad } from '../ai/config/provider-models';
 import { fetchOpenCodeModelList } from '../ai/config/opencode-models';
+import { checkOpenCodeAuth } from '../ai/config/opencode-auth-check';
+import { ensureOpenCodeService } from '../ai/config/opencode-service';
 import { resolveAgentFor } from '../ai/config/resolve-agent-for';
 import { getToolModelsForUse } from '../ai/config/tool-models';
 import { getStoredEnvVar, hasKey } from '../ai/key-store';
@@ -104,9 +106,11 @@ export function registerAiUseHandlers(): void {
           let contextLimit: number | null | undefined;
           let variant: string | undefined = target.variant;
           let launchKey = target.launchKey;
+          let opencodeAuthNotice: import('../../types/ai-use').OpenCodeAuthNotice | null | undefined;
 
           if (target.runtime === 'opencode') {
             if (repo) {
+              await ensureOpenCodeService({ cwd: repo });
               const listRes = await fetchOpenCodeModelList(repo);
               opencodeInstalled = listRes.installed;
               if (listRes.error === 'opencode_api_failed') {
@@ -124,6 +128,15 @@ export function registerAiUseHandlers(): void {
                   contextLimit = refreshed.contextLimit;
                   variant = refreshed.variant;
                   launchKey = refreshed.launchKey;
+
+                  if (opencodeKnown) {
+                    const authRes = await checkOpenCodeAuth({
+                      repoPath: repo,
+                      providerId: target.providerId,
+                      modelId: target.modelId,
+                    });
+                    opencodeAuthNotice = authRes.notice;
+                  }
                 }
               } else {
                 opencodeKnown = false;
@@ -160,6 +173,7 @@ export function registerAiUseHandlers(): void {
             opencodeInstalled,
             opencodeListFailed,
             contextLimit,
+            opencodeAuthNotice,
             launchKey,
           });
         }
