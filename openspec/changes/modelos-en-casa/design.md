@@ -251,6 +251,15 @@ Por eso:
   explícita del uso es `agent.<uso>.variant`, no `options.variant`. (5) Una función `…ForTesting` en código de la
   app; las pruebas simulan el módulo. No se pudo hacer el recorrido real con Qwen ese día: ni el servidor de la
   casa (`192.168.1.7`) ni el túnel contestaban, y no es un fallo del adaptador (las capturas son del 2026-10-04).
+- **Medido el 2026-10-05 antes de la segunda parte de 5.3** (en una carpeta temporal con un proveedor de prueba,
+  sin tocar la configuración de Ale): (1) **el servicio de OpenCode resuelve `{env:NOMBRE}` con sus propias
+  variables**: una variable que existe sólo en el proceso que consulta (o sólo en el baúl de GitCron) le llega vacía;
+  (2) **un `opencode.json` nuevo o cambiado no se ve hasta `opencode reload`**; (3) `api … --standalone` no
+  contestó la lista; (4) `opencode auth logout <id>` sin la credencial abre un selector interactivo, así que GitCron
+  no puede correrlo solo; (5) `opencode service status` imprime la dirección del servicio cuando corre. El almacén
+  de credenciales es `{ <id>: { type: "api", key } }` (en la máquina de Ale hay uno para `unslothpc`). El runner de
+  GitCron lanza procesos con un entorno reducido: si un `opencode run` o `api` arrancara el servicio compartido, ese
+  servicio nacería sin las variables de la persona.
 - **La instrucción va por la entrada estándar**, que se cierra al terminar de escribirla: `run` la toma como
   mensaje (probado con dos renglones y comillas). En la máquina de Ale OpenCode es `opencode.CMD` (instalado con
   pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
