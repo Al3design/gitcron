@@ -341,7 +341,7 @@ export function AiSettingsGroupUses({
                 <div id={`use-content-${use}`} className="p-3 border-t border-[var(--color-border-subtle)] space-y-4 bg-[var(--color-bg-surface)]">
                   {/* Línea del uso en vivo */}
                   <div>
-                    <AiUseLine use={use} repoPath={repoPath} />
+                    <AiUseLine use={use} repoPath={repoPath} showChooseModel={false} />
                   </div>
 
                   {/* Acciones de modelo para el uso */}

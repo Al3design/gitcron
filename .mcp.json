@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "e2e": {
+      "command": "node",
+      "args": ["scripts/e2e.mjs", "mcp"]
+    }
+  }
+}

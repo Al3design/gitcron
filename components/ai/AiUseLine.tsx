@@ -28,6 +28,8 @@ interface Props {
   screenChoice?: boolean;
   /** Nombre o lista de archivos de donde proviene la configuración (si la pantalla ya los resolvió). */
   sourceFile?: string;
+  /** Muestra u oculta el botón propio de «Elegir modelo» (en Motores y modelos la fila ya tiene el suyo). */
+  showChooseModel?: boolean;
 }
 
 export function AiUseLine({
@@ -38,6 +40,7 @@ export function AiUseLine({
   refreshKey,
   screenChoice = false,
   sourceFile,
+  showChooseModel = true,
 }: Props) {
   const t = useT();
   const [status, setStatus] = useState<AiUseStatus | null>(null);
@@ -140,13 +143,15 @@ export function AiUseLine({
           <p className={styles.externalNotice}>{t('aiUse.externalNotice', { provider: status.providerName })}</p>
         )}
         <div className={styles.actionRow}>
-          <button
-            type="button"
-            className={styles.chooseModel}
-            onClick={() => setShowPicker((v) => !v)}
-          >
-            {t('aiUse.chooseModel')}
-          </button>
+          {showChooseModel && (
+            <button
+              type="button"
+              className={styles.chooseModel}
+              onClick={() => setShowPicker((v) => !v)}
+            >
+              {t('aiUse.chooseModel')}
+            </button>
+          )}
           {status.sourceDir && (
             <button
               type="button"
@@ -188,13 +193,15 @@ export function AiUseLine({
       <div className={styles.block}>
         <p className={styles.line}>{t('aiUse.disabled')}</p>
         <div className={styles.actionRow}>
-          <button
-            type="button"
-            className={styles.chooseModel}
-            onClick={() => setShowPicker((v) => !v)}
-          >
-            {t('aiUse.chooseModel')}
-          </button>
+          {showChooseModel && (
+            <button
+              type="button"
+              className={styles.chooseModel}
+              onClick={() => setShowPicker((v) => !v)}
+            >
+              {t('aiUse.chooseModel')}
+            </button>
+          )}
           {dir && (
             <button
               type="button"
@@ -232,7 +239,7 @@ export function AiUseLine({
     <div className={styles.block}>
       <p className={styles.line}>{unsetText}</p>
       <div className={styles.actionRow}>
-        {!withSelector && (
+        {!withSelector && showChooseModel && (
           <button
             type="button"
             className={styles.chooseModel}

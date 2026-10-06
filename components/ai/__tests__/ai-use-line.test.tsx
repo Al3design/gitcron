@@ -175,4 +175,11 @@ describe('AiUseLine', () => {
     expect(container.textContent).toBe('');
     expect((window as any).api.commitAi.onConfigChanged).not.toHaveBeenCalled();
   });
+
+  it('prop showChooseModel=false oculta el botón Elegir modelo propio de la línea', async () => {
+    mountApi([resolved]);
+    render(<AiUseLine use="gitcron-cartography" showChooseModel={false} />);
+    expect(await screen.findByText(/Usa deepseek\/deepseek-v4-pro de OpenRouter/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Elegir modelo' })).toBeNull();
+  });
 });

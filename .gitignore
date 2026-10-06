@@ -64,3 +64,6 @@ scripts/*.json
 
 # Salida de scripts/verificar.mjs y reportes del ejecutor
 tmp/
+
+# Carpeta de salida y logs de e2e
+.e2e/

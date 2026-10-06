@@ -840,9 +840,10 @@ describe('AiSettingsSection (tarea 6.1)', () => {
       expect(commitRow.querySelector('input[type="number"]')).not.toBeNull();
     });
 
-    // Botón "Elegir modelo" dentro de la fila del uso
+    // Exactamente un botón "Elegir modelo" dentro de la fila del uso
     const chooseModelBtns = within(commitRow).getAllByRole('button', { name: /Elegir modelo/i });
-    fireEvent.click(chooseModelBtns[chooseModelBtns.length - 1]);
+    expect(chooseModelBtns).toHaveLength(1);
+    fireEvent.click(chooseModelBtns[0]);
 
     // El selector aparece y es descendiente de la fila del uso en el DOM (no al final de la página)
     await waitFor(() => {

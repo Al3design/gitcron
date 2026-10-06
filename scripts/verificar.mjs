@@ -15,8 +15,10 @@
 //   pnpm verificar --rapido        cierre de la IA ejecutora y arreglos que tocan piezas
 //                                  centrales: toda la suite una vez, sin build (~2 min).
 //   pnpm verificar                 auditoría antes del commit y antes de fusionar: build,
-//                                  test ×2 y todo lo demás (~5 min). Ale, 2026-10-02: el
-//                                  ejecutor y la auditoría corrían los dos la completa.
+//                                  test ×2, e2e y todo lo demás (~5 min). Abre ventanas
+//                                  reales de GitCron unos segundos para las pruebas e2e.
+//                                  Ale, 2026-10-02: el ejecutor y la auditoría corrían los dos
+//                                  la completa.
 //
 //   --desde <ref>                  compara contra <ref> en vez de HEAD (p. ej. `--desde main`
 //                                  para todo el change, o `--desde HEAD~2` después de commitear)
@@ -24,7 +26,8 @@
 //
 // El orden no es arbitrario: `pnpm build` va antes que `pnpm test` porque una prueba
 // (font-size-as-color) lee de out/; y test corre dos veces porque los intermitentes
-// bajo carga sólo se ven repitiendo la suite entera.
+// bajo carga sólo se ven repitiendo la suite entera. `e2e` corre después de build y test
+// porque `next dev` y el build usan la misma carpeta `.next`.
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -115,6 +118,10 @@ function extraerResumen(nombre, salida) {
   if (nombre === 'eslint') {
     const problemas = salida.match(/✖ (\d+) problems? \((\d+) errors?, (\d+) warnings?\)/);
     return problemas ? `${problemas[2]} errores, ${problemas[3]} avisos` : 'sin problemas';
+  }
+  if (nombre === 'e2e') {
+    const pruebas = salida.match(/Tests\s+(\d+)\s+passed/);
+    return pruebas ? `${pruebas[1]} pruebas pasaron` : 'pruebas pasaron';
   }
   if (nombre === 'openspec validate') {
     return salida.match(/is valid/) ? 'is valid' : '';
@@ -216,6 +223,12 @@ function main() {
         }
       : { nombre: 'test (1)', comando: 'pnpm test', cuando: true },
     { nombre: 'test (2)', comando: 'pnpm test', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
+    {
+      nombre: 'e2e',
+      comando: 'pnpm e2e',
+      cuando: !rapido,
+      motivoSalto: tocadosSolo ? '--tocados' : '--rapido',
+    },
     { nombre: 'tsc', comando: 'pnpm exec tsc --noEmit', cuando: true },
     {
       nombre: 'eslint',
@@ -259,7 +272,18 @@ function main() {
     } else {
       fallidos.push(chequeo.nombre);
       renglones.push(`XX ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  exit ${status}`);
-      renglones.push(ultimasLineas(salida, 25).replace(/^/gm, '    '));
+      if (chequeo.nombre === 'e2e') {
+        const testFallido = salida.match(/FAIL\s+\S+\s+([^\r\n]+)/)?.[1];
+        const screenTxt = salida.match(/(?:❯\s+screen\s+|\b)([\S]+screen\.txt)/)?.[1];
+        if (testFallido || screenTxt) {
+          if (testFallido) renglones.push(`    prueba: ${testFallido.trim()}`);
+          if (screenTxt) renglones.push(`    screen: ${screenTxt.trim()}`);
+        } else {
+          renglones.push(ultimasLineas(salida, 25).replace(/^/gm, '    '));
+        }
+      } else {
+        renglones.push(ultimasLineas(salida, 25).replace(/^/gm, '    '));
+      }
     }
   }
 
