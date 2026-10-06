@@ -378,4 +378,138 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
     expect(res.success).toBe(false);
     expect(fs.readFileSync(globalPath, 'utf-8')).toBe(before);
   });
+
+  describe('Editor IPC: read-file-content y save-file-content (tarea 24b)', () => {
+    it('archivo roto con apiKey literal nunca devuelve el secreto ni el contenido', async () => {
+      const brokenWithSecret = '{\n  "provider": {\n    "test": {\n      "apiKey": "sk-prueba-123",\n';
+      fs.writeFileSync(globalPath, brokenWithSecret, 'utf-8');
+
+      const readFileContent = handlers.get('ai-config:read-file-content')!;
+      const res = await readFileContent({ sender }, { scope: 'global' });
+      expect(res.success).toBe(true);
+      expect(res.data.hasLiteralSecrets).toBe(true);
+      expect(res.data.content).toBeUndefined();
+      expect(JSON.stringify(res)).not.toContain('sk-prueba-123');
+    });
+
+    it('guardar escribe el texto exacto en disco y limpia archivos temporales atómicos', async () => {
+      const initialText = '{\n  "provider": {}\n}';
+      fs.writeFileSync(globalPath, initialText, 'utf-8');
+      const baseHash = require('node:crypto').createHash('sha256').update(initialText, 'utf8').digest('hex');
+
+      const saveFileContent = handlers.get('ai-config:save-file-content')!;
+      const newText = '{\n  "provider": {},\n  "model": "codex/gpt-5.6-sol"\n}';
+      const res = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: newText,
+        baseHash,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data.conflict).toBeUndefined();
+      expect(res.data.hash).toBeDefined();
+      expect(fs.readFileSync(globalPath, 'utf-8')).toBe(newText);
+
+      // Comprobar que no quedó ningún archivo .tmp en el directorio
+      const tmpFiles = fs.readdirSync(dir).filter((f) => f.includes('.tmp'));
+      expect(tmpFiles).toHaveLength(0);
+    });
+
+    it('pre-save: error de sintaxis no toca el archivo y devuelve datos estructurados con la línea', async () => {
+      const initialText = '{\n  "model": "codex/gpt-5.6-sol"\n}';
+      fs.writeFileSync(globalPath, initialText, 'utf-8');
+      const baseHash = require('node:crypto').createHash('sha256').update(initialText, 'utf8').digest('hex');
+
+      const brokenText = '{\n  "model": "codex/gpt-5.6-sol",,\n}';
+      const saveFileContent = handlers.get('ai-config:save-file-content')!;
+      const res = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: brokenText,
+        baseHash,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data.parseError).toBeDefined();
+      expect(res.data.parseError.line).toBe(2);
+      expect(fs.readFileSync(globalPath, 'utf-8')).toBe(initialText);
+    });
+
+    it('pre-save: rechaza guardar una clave escrita a mano con la línea y no toca el archivo', async () => {
+      const initialText = '{\n  "provider": {}\n}';
+      fs.writeFileSync(globalPath, initialText, 'utf-8');
+      const baseHash = require('node:crypto').createHash('sha256').update(initialText, 'utf8').digest('hex');
+
+      const secretText = '{\n  "provider": {\n    "casa": {\n      "apiKey": "sk-secreto-en-editor"\n    }\n  }\n}';
+      const saveFileContent = handlers.get('ai-config:save-file-content')!;
+      const res = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: secretText,
+        baseHash,
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data.secretRejected).toBe(true);
+      expect(res.data.secretLine).toBe(4);
+      expect(fs.readFileSync(globalPath, 'utf-8')).toBe(initialText);
+    });
+
+    it('conflicto: si el archivo cambió afuera, o no hay baseHash, o el archivo no existe, devuelve conflict y no pisa', async () => {
+      const initialText = '{\n  "provider": {}\n}';
+      fs.writeFileSync(globalPath, initialText, 'utf-8');
+      const saveFileContent = handlers.get('ai-config:save-file-content')!;
+
+      // 1. Sin baseHash
+      const noHash = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: '{\n  "model": "test"\n}',
+      });
+      expect(noHash.success).toBe(true);
+      expect(noHash.data.conflict).toBe(true);
+      expect(fs.readFileSync(globalPath, 'utf-8')).toBe(initialText);
+
+      // 2. Hash desactualizado (cambio externo)
+      const conflict = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: '{\n  "model": "test"\n}',
+        baseHash: 'hash-viejo-que-no-coincide',
+      });
+      expect(conflict.success).toBe(true);
+      expect(conflict.data.conflict).toBe(true);
+      expect(fs.readFileSync(globalPath, 'utf-8')).toBe(initialText);
+
+      // 3. Archivo borrado afuera
+      fs.unlinkSync(globalPath);
+      const deleted = await saveFileContent({ sender }, {
+        scope: 'global',
+        content: '{\n  "model": "test"\n}',
+        baseHash: 'hash-cualquiera',
+      });
+      expect(deleted.success).toBe(true);
+      expect(deleted.data.conflict).toBe(true);
+      expect(fs.existsSync(globalPath)).toBe(false);
+    });
+
+    it('scope repo con repositorio no autorizado falla de forma segura', async () => {
+      const unauthorizedRepo = path.join(dir, 'unauthorized-repo');
+      fs.mkdirSync(unauthorizedRepo, { recursive: true });
+
+      const readFileContent = handlers.get('ai-config:read-file-content')!;
+      const readRes = await readFileContent({ sender }, {
+        scope: 'repo',
+        repoPath: unauthorizedRepo,
+      });
+      expect(readRes.success).toBe(false);
+      expect(readRes.error).toMatch(/Repositorio no autorizado/);
+
+      const saveFileContent = handlers.get('ai-config:save-file-content')!;
+      const saveRes = await saveFileContent({ sender }, {
+        scope: 'repo',
+        repoPath: unauthorizedRepo,
+        content: '{}',
+        baseHash: 'hash',
+      });
+      expect(saveRes.success).toBe(false);
+      expect(saveRes.error).toMatch(/Repositorio no autorizado/);
+    });
+  });
 });

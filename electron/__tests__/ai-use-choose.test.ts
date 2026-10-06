@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
 }));
 
 import { registerAiUseHandlers } from '../ipc/ai-use';
-import { setCommitAiConfigPathForTesting } from '../ipc/commit-message-ai';
+import { resetCommitAiConfigWatcherForTesting, setCommitAiConfigPathForTesting } from '../ipc/commit-message-ai';
 import { authorizedRepoStore } from '../ipc/authorized-repos';
 import { resetGitCronConfigCacheForTesting } from '../ai/config/gitcron-config';
 import { clearToolModelsCacheForTesting, setToolModelsExecutorsForTesting } from '../ai/config/tool-models';
@@ -73,7 +73,10 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
   });
 
   afterEach(() => {
+    resetCommitAiConfigWatcherForTesting();
     setToolModelsExecutorsForTesting(null, null);
+    clearToolModelsCacheForTesting();
+    resetGitCronConfigCacheForTesting();
     setCommitAiConfigPathForTesting(null);
     authorizedRepoStore.clear();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -416,5 +419,5 @@ describe('catálogo de un CLI que no contesta', () => {
         expect(alive(grandchild)).toBe(false);
       }
     }, { timeout: 5000 });
-  });
+  }, 15_000);
 });

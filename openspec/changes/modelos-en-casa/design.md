@@ -543,6 +543,25 @@ y el proceso principal resuelve el servidor con `loadServerFor`: el del proveedo
 análisis de versión le habría pedido la lista de LM Studio al servidor de la redacción (en la máquina de Ale,
 Unsloth). El renderer ya no manda direcciones.
 
+*Rediseño a pedido de Ale (2026-10-05, tandas 24 y 24b):* la sección son cinco grupos que se abren y cierran
+(qué modelo usa cada cosa, proveedores y modelos, el archivo, importar desde OpenCode, MCP), cada uno con su
+resumen visible cerrado; las filas de usos y proveedores se despliegan; el selector de modelo se abre dentro de
+la fila que lo pidió; agregar proveedor o modelo se despliega en el lugar; `gitcron.json` se edita desde la
+sección (el proceso principal decide la ruta, no guarda con error de sintaxis, con un cambio hecho afuera ni
+con una clave escrita a mano, y no manda el texto si encuentra una clave, aunque el archivo esté roto). Los
+modelos salen de un **catálogo en el proceso principal** (`electron/ai/config/model-catalog.ts`): se llena al
+arrancar, cuando cambia el archivo y cada 10 minutos, con consultas en paralelo; contesta al instante y un
+servidor que no responde conserva su lista «sin confirmar». La lista de proveedores sale siempre del archivo de
+ese pedido (el catálogo sólo aporta lo último que se supo); la clave de un servidor es id + dirección.
+- *Auditoría 24 y 24b.* (1) El aviso de catálogo nuevo **no lleva datos** y el selector vuelve a pedir; la
+  primera versión mandaba la lista con otra forma y el selector se caía, sin que las pruebas lo vieran porque
+  los mocks copiaban los tipos mal declarados: los mocks de un canal tienen la forma de lo que el proceso
+  principal manda. (2) Ese aviso **sólo refresca las listas**, no reelige: abrir el selector dispara una
+  actualización de fondo, así que reelegir borraba lo que la persona estaba eligiendo a los pocos segundos.
+  (3) Un proveedor al que todavía no se le preguntó no tiene fecha de consulta y dice «sin confirmar», no «no
+  respondió». (4) El catálogo arma su contexto con el baúl en el momento (`setModelCatalogContextProvider`):
+  sin eso, al arrancar consultaba sin clave y los servidores quedaban caídos.
+
 ## Risks / Trade-offs
 
 - [OpenCode cambia su esquema] → la copia empaquetada se actualiza con cada versión; mientras tanto lo

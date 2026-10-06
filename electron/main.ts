@@ -25,6 +25,9 @@ import { registerAiConfigHandlers } from './ipc/ai-config';
 import { registerAiUseHistoryHandlers } from './ipc/ai-use-history';
 import { migrateGitCronConfigIfMissing } from './ai/config/gitcron-config-migration';
 import { getDefaultConfigPath } from './ai/config/gitcron-config';
+import { initModelCatalogLifecycle } from './ai/config/model-catalog';
+import { activeConfigPath } from './ai/use-resolution';
+import { getStoredEnvVar } from './ai/key-store';
 import { closeAllGraphs } from './carto/graph-engine';
 import { registerWatcherHandlers, closeAllRepoWatchers } from './ipc/watchers';
 import { authorizedRepoStore } from './ipc/authorized-repos';
@@ -400,6 +403,10 @@ if (!gotLock) {
     }
     bootstrapTemporalAgentHistoryDatabase();
     migrateGitCronConfigOnStartup();
+    initModelCatalogLifecycle(() => ({
+      configPath: activeConfigPath(),
+      stored: getStoredEnvVar,
+    }));
     createWindow();
     if (!isDev) setupAutoUpdater(getMainWindow);
   });

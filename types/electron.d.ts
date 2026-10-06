@@ -443,6 +443,8 @@ interface ElectronAPI {
     choose(args: import('./ai-use').AiUseChoosePayload): Promise<GitResult<import('./ai-use').AiUseChooseResult>>;
     adopt(args: { use: import('./ai-use').AiTextUse; repoPath?: string | null; screenModel?: string | null }): Promise<GitResult<{ written: boolean; modelRef: string }>>;
     lastRequest(args: { use: import('./ai-use').AiTextUse }): Promise<GitResult<import('./commit-message-ai').CommitAiLastRequest | null>>;
+    refreshModels(args: { use: import('./ai-use').AiUse; repoPath?: string | null }): Promise<GitResult<import('./ai-use').AiUseModelsResult>>;
+    onModelsUpdated?(cb: () => void): () => void;
   };
   /**
    * Configuración de motores y modelos de IA (sección de ajustes, tarea 6.1).
@@ -460,8 +462,10 @@ interface ElectronAPI {
     clearUseException(args: { use: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
     setUseParam(args: { use: string; param: string; value: unknown; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
     removeUseParam(args: { use: string; param: string; repoPath?: string | null }): Promise<GitResult<{ written: boolean }>>;
-    openFile(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ opened: boolean }>>;
-    showInFolder(args: { filePath: string; repoPath?: string | null }): Promise<GitResult<{ shown: boolean }>>;
+    openFile(args: { filePath?: string; scope?: 'global' | 'repo'; repoPath?: string | null }): Promise<GitResult<{ opened: boolean }>>;
+    showInFolder(args: { filePath?: string; scope?: 'global' | 'repo'; repoPath?: string | null }): Promise<GitResult<{ shown: boolean }>>;
+    readFileContent(args: { scope?: 'global' | 'repo'; repoPath?: string | null }): Promise<GitResult<import('./ai-config').AiConfigFileContentResult>>;
+    saveFileContent(args: import('./ai-config').AiConfigFileSavePayload): Promise<GitResult<import('./ai-config').AiConfigFileSaveResult>>;
     planOpenCodeImport(): Promise<GitResult<import('./ai-config').AiOpenCodeImportPlanResult>>;
     applyOpenCodeImport(args: import('./ai-config').ApplyOpenCodeImportPayload): Promise<GitResult<{ count: number }>>;
     getMcpStatus(args?: { repoPath?: string | null }): Promise<GitResult<import('./ai-config').AiMcpStatusResult>>;

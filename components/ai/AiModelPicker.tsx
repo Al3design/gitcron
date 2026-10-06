@@ -19,6 +19,11 @@ export interface AiModelPickerProps {
   onChoose?: (payload: { model: string; effort?: string; variant?: string }) => Promise<void>;
 }
 
+/** Un proveedor del archivo al que el catálogo todavía no le preguntó (no tiene fecha de consulta). */
+function isPending(provider: AiToolProvider): boolean {
+  return !provider.available && provider.lastChecked === undefined;
+}
+
 export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose, onSaved, onChoose }: AiModelPickerProps) {
   const t = useT();
   const [loading, setLoading] = useState(true);
@@ -30,10 +35,24 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
   const [selectedEffort, setSelectedEffort] = useState<string>('');
   const [selectedVariant, setSelectedVariant] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 30_000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
-    const load = async () => {
+    // `initial` elige proveedor, modelo y nivel de partida. Un aviso de catálogo nuevo sólo
+    // refresca las listas: si reeligiera, borraría lo que la persona está eligiendo (abrir el
+    // selector ya pide una actualización de fondo, que llega a los pocos segundos).
+    const load = async (initial: boolean) => {
       const aiUse = window.api?.aiUse;
       if (!aiUse?.models) {
         if (alive) setLoading(false);
@@ -52,6 +71,7 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
 
         const data = res.data;
         setProviders(data.providers);
+        if (!initial) return;
 
         // La elección general no es la de la redacción: no se parte de ésa.
         const current = use === 'general' ? null : data.current;
@@ -94,17 +114,57 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
       }
     };
 
-    void load();
+    void load(true);
+
+    // Actualización reactiva cuando el proceso principal refresca el catálogo
+    const unsub = window.api?.aiUse?.onModelsUpdated?.(() => {
+      if (!alive) return;
+      void load(false);
+    });
 
     return () => {
       alive = false;
+      unsub?.();
     };
   }, [use, repoPath, t]);
+
+  const handleRefresh = async () => {
+    if (!window.api?.aiUse?.refreshModels) return;
+    setRefreshing(true);
+    try {
+      const queryUse: AiUse = use === 'general' ? 'gitcron-commit' : use;
+      const res = await window.api.aiUse.refreshModels({ use: queryUse, repoPath });
+      if (res?.success && res.data?.providers) {
+        setProviders(res.data.providers);
+      }
+    } catch {
+      // Ignorar fallos de refresco manual
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const currentProvider = useMemo(
     () => providers.find((p) => p.id === selectedProviderId),
     [providers, selectedProviderId],
   );
+
+  const providerStatusText = useMemo(() => {
+    if (!currentProvider) return null;
+    // Todavía no se le preguntó (el catálogo lo está pidiendo): no es «no respondió».
+    if (isPending(currentProvider)) return t('aiUse.unconfirmed');
+    if (!currentProvider.available || currentProvider.unavailableReason) {
+      return currentProvider.unavailableReason ?? t('aiUse.notResponded');
+    }
+    if (typeof currentProvider.lastChecked === 'number') {
+      const diffMinutes = Math.floor((now - currentProvider.lastChecked) / 60_000);
+      if (diffMinutes <= 0) {
+        return t('aiUse.updatedJustNow');
+      }
+      return t('aiUse.updatedAgoMinutes', { count: diffMinutes });
+    }
+    return null;
+  }, [currentProvider, now, t]);
 
   const currentModel = useMemo(
     () => currentProvider?.models.find((m) => m.id === selectedModelId),
@@ -230,10 +290,22 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
             {providers.map((p) => (
               <option key={p.id} value={p.id} disabled={!p.available && p.models.length === 0}>
                 {p.name}
-                {!p.available ? ` (${p.unavailableReason ?? '—'})` : ''}
+                {p.unconfirmed ? ` (${t('aiUse.unconfirmed')})` : ''}
+                {!p.available && !isPending(p) ? ` (${p.unavailableReason ?? t('aiUse.notResponded')})` : ''}
               </option>
             ))}
           </select>
+          <div className={styles.catalogStatus}>
+            {providerStatusText && <span>{providerStatusText}</span>}
+            <button
+              type="button"
+              className={styles.refreshButton}
+              onClick={handleRefresh}
+              disabled={refreshing || saving}
+            >
+              {refreshing ? t('aiUse.refreshing') : t('aiUse.refresh')}
+            </button>
+          </div>
         </div>
 
         {/* Modelo */}
@@ -252,6 +324,7 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
               currentProvider.models.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name || m.id}
+                  {m.unconfirmed ? ` (${t('aiUse.unconfirmed')})` : ''}
                 </option>
               ))
             ) : (

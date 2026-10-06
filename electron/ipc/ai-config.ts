@@ -9,14 +9,17 @@
 // - Importar desde OpenCode y servidores MCP: las rutas las decide este proceso, nunca
 //   la pantalla; un valor escrito a mano en el archivo de origen va al baúl y no viaja.
 
+import * as crypto from 'node:crypto';
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
 import { clipboard, ipcMain, shell } from 'electron';
-import { findNodeAtLocation, parseTree } from 'jsonc-parser';
+import { findNodeAtLocation, parse, parseTree, type Node, type ParseError } from 'jsonc-parser';
 import {
+  determineDestination,
   getDefaultConfigPath,
   GitCronConfigError,
   loadGitCronConfig,
+  parseGitCronConfigText,
   RESERVED_CLI_IDS,
   substituteReferences,
   type GitCronConfigFileStatus,
@@ -33,7 +36,7 @@ import {
   removeModelFromConfig,
   serverOrigin,
 } from '../ai/config/provider-models';
-import { getToolModelsForUse } from '../ai/config/tool-models';
+import { getToolModelsForUse } from '../ai/config/model-catalog';
 import { isTextUse, type TextUse } from '../ai/config/resolve-model-for';
 import {
   getModelLoadSettings,
@@ -74,7 +77,7 @@ import {
   type McpExportPlan,
   type McpExportTarget,
 } from '../ai/config/mcp-export';
-import { referenceName, type SecretNaming } from '../ai/config/literal-secrets';
+import { isLiteralSecret, referenceName, type SecretNaming } from '../ai/config/literal-secrets';
 import { activeConfigPath, loadServerFor, setUseConfigPathForTesting } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
 import { errMsg } from './shared';
@@ -113,6 +116,115 @@ function resolveActiveConfigPath(): string {
 /** El mcp.json global: el destino de toda importación (como gitcron.json para OpenCode). */
 function resolveGlobalMcpPath(): string {
   return mcpPathOverride ?? getDefaultMcpPath();
+}
+
+/**
+ * Detecta si el archivo gitcron.json tiene valores literales escritos a mano en apiKey o headers (D5).
+ * Devuelve si tiene secretos y la línea aproximada donde se detectó el primer secreto.
+ * Tolerante a errores de sintaxis (jsonc-parser parse con errores + regex crudo sobre el texto).
+ */
+export function findConfigFileLiteralSecret(
+  rawText: string,
+  filePath?: string,
+): { hasSecret: boolean; line?: number } {
+  if (!rawText || typeof rawText !== 'string') return { hasSecret: false };
+
+  // 1. Árbol AST para determinar líneas exactas si el parser puede estructurar nodos
+  const root = parseTree(rawText);
+  if (root) {
+    let foundLine: number | undefined;
+    const inspect = (node: Node): boolean => {
+      if (node.type === 'property' && node.children && node.children.length >= 2) {
+        const keyNode = node.children[0];
+        const valNode = node.children[1];
+        if (keyNode.value === 'apiKey') {
+          if (valNode.type === 'string' && isLiteralSecret(valNode.value)) {
+            foundLine = rawText.slice(0, valNode.offset).split('\n').length;
+            return true;
+          }
+        } else if (keyNode.value === 'headers' && valNode.type === 'object' && valNode.children) {
+          for (const headerProp of valNode.children) {
+            const hValNode = headerProp.children?.[1];
+            if (hValNode?.type === 'string' && isLiteralSecret(hValNode.value)) {
+              foundLine = rawText.slice(0, hValNode.offset).split('\n').length;
+              return true;
+            }
+          }
+        }
+      }
+      if (node.children) {
+        for (const child of node.children) {
+          if (inspect(child)) return true;
+        }
+      }
+      return false;
+    };
+    if (inspect(root)) {
+      return { hasSecret: true, line: foundLine };
+    }
+  }
+
+  // 2. Lectura tolerante de jsonc-parser para objetos recuperados aunque haya errores de sintaxis
+  const errors: ParseError[] = [];
+  try {
+    const parsed = parse(rawText, errors, { allowTrailingComma: true });
+    const searchObj = (obj: unknown): boolean => {
+      if (!obj || typeof obj !== 'object') return false;
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          if (searchObj(item)) return true;
+        }
+        return false;
+      }
+      const rec = obj as Record<string, unknown>;
+      for (const [k, v] of Object.entries(rec)) {
+        if (k === 'apiKey') {
+          if (typeof v === 'string' && isLiteralSecret(v)) return true;
+        } else if (k === 'headers' && v && typeof v === 'object' && !Array.isArray(v)) {
+          for (const hVal of Object.values(v as Record<string, unknown>)) {
+            if (typeof hVal === 'string' && isLiteralSecret(hVal)) return true;
+          }
+        }
+        if (typeof v === 'object' && searchObj(v)) return true;
+      }
+      return false;
+    };
+    if (searchObj(parsed)) {
+      const line = rawText.slice(0, rawText.indexOf('apiKey')).split('\n').length;
+      return { hasSecret: true, line: line > 0 ? line : 1 };
+    }
+  } catch {
+    // Continuar a regex ante error catastrófico de parse
+  }
+
+  // 3. Expresión sobre el texto crudo para "apiKey" o cabeceras que no sean referencias {env:...} ni {file:...}
+  const apiKeyRegex = /"apiKey"\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']?/g;
+  let match: RegExpExecArray | null;
+  while ((match = apiKeyRegex.exec(rawText)) !== null) {
+    if (isLiteralSecret(match[1])) {
+      const line = rawText.slice(0, match.index).split('\n').length;
+      return { hasSecret: true, line };
+    }
+  }
+
+  const headersRegex = /"headers"\s*:\s*\{([^}]+)\}/g;
+  while ((match = headersRegex.exec(rawText)) !== null) {
+    const headersBlock = match[1];
+    const headerItemRegex = /["'][^"']+["']\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']/g;
+    let itemMatch: RegExpExecArray | null;
+    while ((itemMatch = headerItemRegex.exec(headersBlock)) !== null) {
+      if (isLiteralSecret(itemMatch[1])) {
+        const line = rawText.slice(0, match.index + itemMatch.index).split('\n').length;
+        return { hasSecret: true, line };
+      }
+    }
+  }
+
+  return { hasSecret: false };
+}
+
+export function detectConfigFileLiteralSecrets(rawText: string, filePath?: string): boolean {
+  return findConfigFileLiteralSecret(rawText, filePath).hasSecret;
 }
 
 const MCP_IMPORT_SOURCES: readonly McpImportSource[] = ['cursor', 'lmstudio', 'opencode'];
@@ -325,22 +437,7 @@ export function registerAiConfigHandlers(): void {
       const smallModel = typeof loaded.config?.small_model === 'string' ? loaded.config.small_model : null;
 
       // Proveedores declarados en gitcron.json
-      const providers: Array<{
-        id: string;
-        name: string;
-        family: 'openai-compatible' | 'anthropic' | 'cli';
-        baseURL?: string;
-        available: boolean;
-        unavailableReason?: string | null;
-        canLoad: boolean;
-        isCli: boolean;
-        envVars: Array<{
-          name: string;
-          isApiKey: boolean;
-          status: 'system' | 'stored' | 'missing';
-        }>;
-        declaredModels: string[];
-      }> = [];
+      const providers: import('../../types/ai-config').AiConfigProviderInfo[] = [];
 
       const declaredProviders = (loaded.config?.provider ?? {}) as Record<string, GitCronProviderConfig>;
       for (const [pId, p] of Object.entries(declaredProviders)) {
@@ -385,6 +482,7 @@ export function registerAiConfigHandlers(): void {
           name: typeof p.name === 'string' && p.name.trim() ? p.name.trim() : pId,
           family,
           baseURL: rawBaseURL,
+          destination: determineDestination(rawBaseURL, family),
           available,
           unavailableReason,
           canLoad,
@@ -416,6 +514,7 @@ export function registerAiConfigHandlers(): void {
           id: cliId,
           name: found?.name ?? name,
           family: 'cli',
+          destination: determineDestination(undefined, 'cli'),
           available: Boolean(found?.available),
           unavailableReason: found?.unavailableReason ?? null,
           canLoad: false,
@@ -425,14 +524,15 @@ export function registerAiConfigHandlers(): void {
         });
       }
 
-      // Usos de texto
-      const textUses: TextUse[] = [
+      // Usos de IA (incluido el agente de SDD, pedido de Ale, tarea 24)
+      const allAiUses: import('../ai/config/resolve-model-for').AiUse[] = [
         'gitcron-commit',
         'gitcron-cartography',
         'gitcron-openspec-analysis',
         'gitcron-temporal',
+        'gitcron-sdd',
       ];
-      const uses = textUses.map((use) => {
+      const uses = allAiUses.map((use) => {
         const agentEntry = loaded.config?.agent?.[use];
         const agentModel = typeof agentEntry?.model === 'string' && agentEntry.model.trim() ? agentEntry.model.trim() : null;
         const model = agentModel ?? generalModel;
@@ -458,11 +558,18 @@ export function registerAiConfigHandlers(): void {
           }
         }
 
+        const variant = typeof agentEntry?.variant === 'string' && agentEntry.variant.trim() ? agentEntry.variant.trim() : undefined;
+        const effort = typeof agentEntry?.options?.reasoning_effort === 'string' && agentEntry.options.reasoning_effort.trim()
+          ? agentEntry.options.reasoning_effort.trim()
+          : undefined;
+
         return {
           use,
           model,
           modelSource,
           isException,
+          variant,
+          effort,
           temperature,
           maxTokens,
           advancedOptions,
@@ -1291,6 +1398,135 @@ export function registerAiConfigHandlers(): void {
       }
 
       return ok({ savedCount: literalSecrets.length, updatedFilePath: matched.path });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // ─── Leer archivo gitcron.json para el editor en pantalla (tarea 24) ───
+  // Si tiene secretos literales en apiKey o headers, NO devuelve el contenido ni valores,
+  // sólo indica hasLiteralSecrets: true. La ruta la decide este proceso, nunca la pantalla.
+  ipcMain.handle('ai-config:read-file-content', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as { scope?: 'global' | 'repo'; repoPath?: string | null };
+      const scope = args.scope === 'repo' ? 'repo' : 'global';
+      let resolvedPath: string;
+      if (scope === 'repo') {
+        const repo = args.repoPath ? authorizedRepoRoot(args.repoPath) : null;
+        if (!repo) throw new Error('Repositorio no autorizado o no especificado.');
+        resolvedPath = path.join(repo, 'gitcron.json');
+      } else {
+        resolvedPath = resolveActiveConfigPath();
+      }
+
+      if (!nodeFs.existsSync(resolvedPath)) {
+        return fail('El archivo no existe aún.');
+      }
+
+      const rawText = nodeFs.readFileSync(resolvedPath, 'utf8');
+
+      if (detectConfigFileLiteralSecrets(rawText, resolvedPath)) {
+        return ok({
+          path: resolvedPath,
+          scope,
+          hasLiteralSecrets: true,
+        });
+      }
+
+      const hash = crypto.createHash('sha256').update(rawText, 'utf8').digest('hex');
+      return ok({
+        path: resolvedPath,
+        scope,
+        content: rawText,
+        hash,
+        hasLiteralSecrets: false,
+      });
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  // ─── Guardar archivo gitcron.json desde el editor (tarea 24) ───
+  // Verifica colisión con el disco mediante hash base, sintaxis con parseGitCronConfigText,
+  // advertencias con validateGitCronConfig y escritura atómica con temporal + renombrar.
+  ipcMain.handle('ai-config:save-file-content', async (_e, rawArgs: unknown) => {
+    try {
+      const args = (rawArgs ?? {}) as {
+        scope?: 'global' | 'repo';
+        repoPath?: string | null;
+        content?: string;
+        baseHash?: string;
+      };
+      const scope = args.scope === 'repo' ? 'repo' : 'global';
+      let resolvedPath: string;
+      if (scope === 'repo') {
+        const repo = args.repoPath ? authorizedRepoRoot(args.repoPath) : null;
+        if (!repo) throw new Error('Repositorio no autorizado o no especificado.');
+        resolvedPath = path.join(repo, 'gitcron.json');
+      } else {
+        resolvedPath = resolveActiveConfigPath();
+      }
+
+      const content = typeof args.content === 'string' ? args.content : '';
+
+      // 1. baseHash es obligatorio; si el archivo no existe o su hash no coincide -> conflicto
+      if (!args.baseHash || typeof args.baseHash !== 'string' || !args.baseHash.trim()) {
+        return ok({ conflict: true });
+      }
+
+      if (!nodeFs.existsSync(resolvedPath)) {
+        return ok({ conflict: true });
+      }
+
+      const currentDisk = nodeFs.readFileSync(resolvedPath, 'utf8');
+      const diskHash = crypto.createHash('sha256').update(currentDisk, 'utf8').digest('hex');
+      if (diskHash !== args.baseHash.trim()) {
+        return ok({ conflict: true });
+      }
+
+      // 2. Secretos literales en el texto a guardar: NO se guarda y se indica la línea
+      const secretCheck = findConfigFileLiteralSecret(content, resolvedPath);
+      if (secretCheck.hasSecret) {
+        return ok({
+          secretRejected: true,
+          secretLine: secretCheck.line,
+        });
+      }
+
+      // 3. Error de sintaxis: NO se guarda y se envía parseError estructurado
+      const parsed = parseGitCronConfigText(content, resolvedPath);
+      if (parsed.kind === 'error') {
+        return ok({
+          parseError: parsed.error,
+        });
+      }
+
+      // 3. Advertencias del esquema: SE GUARDA y se muestran
+      const warnings = validateGitCronConfig(parsed.config, () => resolvedPath);
+
+      // 4. Escritura atómica (temporal en la misma carpeta y renombrar encima)
+      const dir = path.dirname(resolvedPath);
+      if (!nodeFs.existsSync(dir)) {
+        nodeFs.mkdirSync(dir, { recursive: true });
+      }
+      const tmp = path.join(dir, `.${path.basename(resolvedPath)}.${process.pid}.${Date.now()}.tmp`);
+      try {
+        nodeFs.writeFileSync(tmp, content, 'utf8');
+        nodeFs.renameSync(tmp, resolvedPath);
+      } catch (writeErr) {
+        try {
+          if (nodeFs.existsSync(tmp)) nodeFs.unlinkSync(tmp);
+        } catch {
+          // ignore
+        }
+        throw writeErr;
+      }
+
+      const newHash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+      return ok({
+        hash: newHash,
+        warnings,
+      });
     } catch (error) {
       return fail(error);
     }

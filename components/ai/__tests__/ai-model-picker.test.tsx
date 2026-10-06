@@ -269,4 +269,160 @@ describe('AiModelPicker (tarea 4.5)', () => {
     expect(screen.getByRole('button', { name: '取消' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'low (默认)' })).toBeTruthy();
   });
+
+  it('evento onModelsUpdated: vuelve a pedir models y muestra el modelo nuevo (A.1)', async () => {
+    let savedCallback: (() => void) | null = null;
+    const onModelsUpdatedMock = vi.fn((cb: () => void) => {
+      savedCallback = cb;
+      return () => {
+        savedCallback = null;
+      };
+    });
+
+    let currentModelsResult = mockModelsResult;
+    const modelsMock = vi.fn().mockImplementation(async () => ({
+      success: true,
+      data: currentModelsResult,
+    }));
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiUse: {
+          models: modelsMock,
+          onModelsUpdated: onModelsUpdatedMock,
+        },
+      },
+    });
+
+    render(<AiModelPicker use="gitcron-commit" onClose={vi.fn()} />);
+    expect(await screen.findByTestId('ai-model-picker')).toBeTruthy();
+    expect(modelsMock).toHaveBeenCalledTimes(1);
+    expect(onModelsUpdatedMock).toHaveBeenCalledTimes(1);
+
+    // Actualizamos los datos para que cuando vuelva a pedir models traiga el nuevo proveedor
+    currentModelsResult = {
+      ...mockModelsResult,
+      providers: [
+        ...mockProviders,
+        {
+          id: 'nuevo-prov',
+          name: 'Proveedor Nuevo',
+          kind: 'openai-compatible',
+          available: true,
+          models: [{ id: 'modelo-nuevo', name: 'Modelo Nuevo' }],
+        },
+      ],
+    };
+
+    // Disparamos el aviso sin datos
+    expect(savedCallback).toBeTruthy();
+    savedCallback!();
+
+    await waitFor(() => {
+      expect(modelsMock).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('option', { name: 'Proveedor Nuevo' })).toBeTruthy();
+    });
+  });
+
+  it('un aviso de catálogo nuevo no borra lo que la persona está eligiendo', async () => {
+    // Abrir el selector ya pide una actualización de fondo: su aviso llega mientras se elige.
+    let savedCallback: (() => void) | null = null;
+    const modelsMock = vi.fn().mockResolvedValue({ success: true, data: mockModelsResult });
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiUse: {
+          models: modelsMock,
+          onModelsUpdated: vi.fn((cb: () => void) => {
+            savedCallback = cb;
+            return () => undefined;
+          }),
+        },
+      },
+    });
+
+    render(<AiModelPicker use="gitcron-commit" onClose={vi.fn()} />);
+    expect(await screen.findByTestId('ai-model-picker')).toBeTruthy();
+    const modelSelect = screen.getByLabelText('Modelo') as HTMLSelectElement;
+    fireEvent.change(modelSelect, { target: { value: 'gpt-5.5' } });
+    const effortSelect = screen.getByLabelText('Intensidad de razonamiento') as HTMLSelectElement;
+    fireEvent.change(effortSelect, { target: { value: 'high' } });
+
+    savedCallback!();
+    await waitFor(() => expect(modelsMock).toHaveBeenCalledTimes(2));
+
+    expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('gpt-5.5');
+    expect((screen.getByLabelText('Intensidad de razonamiento') as HTMLSelectElement).value).toBe('high');
+  });
+
+  it('un proveedor al que todavía no se le preguntó dice «sin confirmar», no «no respondió»', async () => {
+    const pending: AiToolProvider = {
+      id: 'nuevo',
+      name: 'Servidor Nuevo',
+      kind: 'openai-compatible',
+      available: false,
+      unconfirmed: true,
+      models: [{ id: 'm1', name: 'M1', unconfirmed: true }],
+    };
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiUse: {
+          models: vi.fn().mockResolvedValue({
+            success: true,
+            data: { use: 'gitcron-commit', providers: [pending], current: null },
+          }),
+          onModelsUpdated: vi.fn(() => () => undefined),
+        },
+      },
+    });
+
+    render(<AiModelPicker use="gitcron-commit" onClose={vi.fn()} />);
+    expect(await screen.findByTestId('ai-model-picker')).toBeTruthy();
+    expect(screen.queryByText(/no respondió/)).toBeNull();
+    expect(screen.getAllByText(/sin confirmar/).length).toBeGreaterThan(0);
+  });
+
+  it('botón Actualizar llama a refreshModels con use y repoPath y usa res.data.providers (A.1)', async () => {
+    const refreshMock = vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        use: 'gitcron-commit',
+        providers: [
+          ...mockProviders,
+          {
+            id: 'refrescado',
+            name: 'Servidor Refrescado',
+            kind: 'openai-compatible',
+            available: true,
+            models: [{ id: 'ref-1', name: 'Ref Model 1' }],
+          },
+        ],
+        current: mockModelsResult.current,
+      },
+    });
+
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        aiUse: {
+          models: vi.fn().mockResolvedValue({ success: true, data: mockModelsResult }),
+          refreshModels: refreshMock,
+          onModelsUpdated: vi.fn(() => () => {}),
+        },
+      },
+    });
+
+    render(<AiModelPicker use="gitcron-commit" repoPath="c:/repo/test" onClose={vi.fn()} />);
+    expect(await screen.findByTestId('ai-model-picker')).toBeTruthy();
+
+    const refreshBtn = screen.getByRole('button', { name: /Actualizar/i });
+    fireEvent.click(refreshBtn);
+
+    await waitFor(() => {
+      expect(refreshMock).toHaveBeenCalledWith({ use: 'gitcron-commit', repoPath: 'c:/repo/test' });
+      expect(screen.getByRole('option', { name: 'Servidor Refrescado' })).toBeTruthy();
+    });
+  });
 });

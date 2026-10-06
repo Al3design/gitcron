@@ -223,6 +223,13 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-use:status', args),
     models: (args: { use: string; repoPath?: string | null }) =>
       ipcRenderer.invoke('ai-use:models', args),
+    refreshModels: (args: { use: string; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-use:refresh-models', args),
+    onModelsUpdated: (cb: () => void) => {
+      const listener = () => cb();
+      ipcRenderer.on('ai-use:models-updated', listener);
+      return () => ipcRenderer.off('ai-use:models-updated', listener);
+    },
     choose: (args: { use: string; repoPath?: string | null; model: string; effort?: string; variant?: string }) =>
       ipcRenderer.invoke('ai-use:choose', args),
     adopt: (args: { use: string; repoPath?: string | null; screenModel?: string | null }) =>
@@ -259,6 +266,10 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-config:open-file', args),
     showInFolder: (args: { filePath: string; repoPath?: string | null }) =>
       ipcRenderer.invoke('ai-config:show-in-folder', args),
+    readFileContent: (args: { scope?: 'global' | 'repo'; repoPath?: string | null }) =>
+      ipcRenderer.invoke('ai-config:read-file-content', args),
+    saveFileContent: (args: { scope?: 'global' | 'repo'; repoPath?: string | null; content?: string; baseHash?: string }) =>
+      ipcRenderer.invoke('ai-config:save-file-content', args),
     // Importar desde OpenCode y servidores MCP: las rutas las decide el proceso principal.
     planOpenCodeImport: () =>
       ipcRenderer.invoke('ai-config:plan-opencode-import'),

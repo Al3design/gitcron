@@ -125,6 +125,7 @@ export interface AiToolModel {
   supportedLevels?: string[];
   defaultLevel?: string;
   variants?: string[];
+  unconfirmed?: boolean;
 }
 
 export interface AiToolProvider {
@@ -136,6 +137,9 @@ export interface AiToolProvider {
   models: AiToolModel[];
   agentRuntime?: PipelineRuntime;
   toolsExecutor?: string;
+  unconfirmed?: boolean;
+  lastChecked?: number;
+  lastSuccess?: number;
 }
 
 export interface AiUseCurrentChoice {

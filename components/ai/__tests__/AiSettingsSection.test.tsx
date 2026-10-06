@@ -2,7 +2,7 @@
 // components/ai/__tests__/AiSettingsSection.test.tsx
 // Pruebas de renderizado, interacción y seguridad para AiSettingsSection (tarea 6.1).
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
 import { AiSettingsSection } from '../AiSettingsSection';
@@ -129,11 +129,13 @@ const mcpStatusEmpty: AiMcpStatusResult = { files: [], servers: [] };
 
 describe('AiSettingsSection (tarea 6.1)', () => {
   beforeEach(() => {
+    localStorage.clear();
     useGitStore.setState({ language: 'es' });
   });
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     if (ORIGINAL_API === undefined) delete (window as { api?: unknown }).api;
     else Object.defineProperty(window, 'api', { configurable: true, value: ORIGINAL_API });
   });
@@ -157,8 +159,9 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     const { unmount: u1 } = render(<AiSettingsSection />);
     await waitFor(() => {
       expect(screen.getByText('Motores y modelos')).toBeDefined();
-      expect(screen.getByText('Archivos de configuración en uso')).toBeDefined();
-      expect(screen.getByText('Servidores compatibles con OpenAI')).toBeDefined();
+      expect(screen.getByText('Qué modelo usa cada cosa')).toBeDefined();
+      expect(screen.getByText('Proveedores y modelos')).toBeDefined();
+      expect(screen.getByText('El archivo')).toBeDefined();
       expect(screen.getByText('Importar desde OpenCode')).toBeDefined();
       expect(screen.getByText('Servidores MCP')).toBeDefined();
     });
@@ -169,10 +172,11 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     const { unmount: u2 } = render(<AiSettingsSection />);
     await waitFor(() => {
       expect(screen.getByText('Engines & Models')).toBeDefined();
-      expect(screen.getByText('Configuration files in use')).toBeDefined();
-      expect(screen.getByText('OpenAI-compatible servers')).toBeDefined();
+      expect(screen.getByText('What model each feature uses')).toBeDefined();
+      expect(screen.getByText('Providers and models')).toBeDefined();
+      expect(screen.getByText('The file')).toBeDefined();
       expect(screen.getByText('Import from OpenCode')).toBeDefined();
-      expect(screen.getByText('MCP Servers')).toBeDefined();
+      expect(screen.getByText('MCP servers')).toBeDefined();
     });
     u2();
 
@@ -181,8 +185,9 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     const { unmount: u3 } = render(<AiSettingsSection />);
     await waitFor(() => {
       expect(screen.getByText('引擎与模型')).toBeDefined();
-      expect(screen.getByText('正在使用的配置文件')).toBeDefined();
-      expect(screen.getByText('OpenAI 兼容服务器')).toBeDefined();
+      expect(screen.getByText('各功能使用的模型')).toBeDefined();
+      expect(screen.getByText('提供方与模型')).toBeDefined();
+      expect(screen.getByText('配置文件')).toBeDefined();
       expect(screen.getByText('从 OpenCode 导入')).toBeDefined();
       expect(screen.getByText('MCP 服务器')).toBeDefined();
     });
@@ -205,9 +210,13 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     render(<AiSettingsSection />);
 
     await waitFor(() => {
-      // Muestra la línea del error y el motivo
-      expect(screen.getByText(/ColonExpected/i)).toBeDefined();
-      // El botón de agregar proveedor está deshabilitado
+      // Muestra la línea del error y el motivo (en el grupo 3 que se abre solo)
+      expect(screen.getAllByText(/ColonExpected/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Abrir grupo 2 para verificar botón deshabilitado
+    fireEvent.click(screen.getByRole('button', { name: /Proveedores y modelos/i }));
+    await waitFor(() => {
       const addBtn = screen.getByRole('button', { name: /Agregar proveedor/i });
       expect(addBtn.hasAttribute('disabled')).toBe(true);
     });
@@ -252,21 +261,20 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection />);
 
-    await waitFor(() => {
-      expect(screen.getByText('{env:UNSLOTH_API_KEY}')).toBeDefined();
-    });
+    // Abrir grupo 2
+    fireEvent.click(await screen.findByRole('button', { name: /Proveedores y modelos/i }));
+
+    // Desplegar Unsloth PC
+    fireEvent.click(await screen.findByText('Unsloth PC'));
 
     // Encontrar input de clave
-    const passwordInputs = screen.getAllByPlaceholderText(/Pegar clave/i);
-    expect(passwordInputs.length).toBeGreaterThan(0);
-    const keyInput = passwordInputs[0] as HTMLInputElement;
+    const keyInput = (await screen.findByPlaceholderText(/Pegar clave/i)) as HTMLInputElement;
 
     // Escribir el secreto en el input
     fireEvent.change(keyInput, { target: { value: SUPER_SECRET } });
 
     // Guardar
-    const saveKeyBtns = screen.getAllByRole('button', { name: /Guardar/i });
-    const saveKeyBtn = saveKeyBtns[0];
+    const saveKeyBtn = screen.getByRole('button', { name: /^Guardar$/i });
     fireEvent.click(saveKeyBtn);
 
     await waitFor(() => {
@@ -295,20 +303,20 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Unsloth PC')).toBeDefined();
-    });
+    // Abrir grupo 2
+    fireEvent.click(await screen.findByRole('button', { name: /Proveedores y modelos/i }));
+
+    // Desplegar Unsloth PC
+    fireEvent.click(await screen.findByText('Unsloth PC'));
 
     // Botón de eliminar Unsloth PC
-    const removeBtns = screen.getAllByTitle(/Quitar proveedor/i);
-    expect(removeBtns.length).toBe(2);
-    fireEvent.click(removeBtns[1]);
-    expect(document.body.innerHTML.includes('¿Quitar')).toBe(true);
+    const removeBtn = await screen.findByRole('button', { name: /Quitar proveedor/i });
+    fireEvent.click(removeBtn);
 
     // Debe abrir DangerConfirmDialog y listar el uso afectado (Cartografía usa unslothpc)
     await waitFor(() => {
       expect(screen.getByText(/¿Quitar el proveedor «Unsloth PC»\?/i)).toBeDefined();
-      expect(screen.getAllByText(/Cartografía/i).length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText(/Cartografía/i).length).toBeGreaterThanOrEqual(1);
     });
 
     // Confirmar eliminación
@@ -382,6 +390,9 @@ describe('AiSettingsSection (tarea 6.1)', () => {
 
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection />);
+
+    // Abrir grupo 4
+    fireEvent.click(await screen.findByRole('button', { name: /Importar desde OpenCode/i }));
 
     fireEvent.click(await screen.findByRole('button', { name: /Comprobar opencode\.json/i }));
 
@@ -457,6 +468,10 @@ describe('AiSettingsSection (tarea 6.1)', () => {
 
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection />);
+
+    // Abrir grupo 4
+    fireEvent.click(await screen.findByRole('button', { name: /Importar desde OpenCode/i }));
+
     fireEvent.click(await screen.findByRole('button', { name: /Comprobar opencode\.json/i }));
 
     expect(await screen.findByText('No se encontró opencode.json en C:/Users/test/.config/opencode/opencode.json.')).toBeDefined();
@@ -538,6 +553,9 @@ describe('AiSettingsSection (tarea 6.1)', () => {
 
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection repoPath="C:/repos/demo" />);
+
+    // Abrir grupo 5
+    fireEvent.click(await screen.findByRole('button', { name: /Servidores MCP/i }));
 
     // 1. Servidores con su tipo, su ámbito traducido y «deshabilitado» sólo donde corresponde
     expect(await screen.findByText('filesystem-server')).toBeDefined();
@@ -632,6 +650,9 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     useGitStore.setState({ language: 'es' });
     render(<AiSettingsSection repoPath="C:/repos/demo" />);
 
+    // Abrir grupo 5
+    fireEvent.click(await screen.findByRole('button', { name: /Servidores MCP/i }));
+
     expect(await screen.findByText('remote-server')).toBeDefined();
 
     // 1. Abrir modal con botón "Copiar para otra herramienta"
@@ -688,5 +709,511 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('los cinco grupos con su título y su resumen cerrados; abrir y cerrar con mouse y con teclado; aria-expanded; persistencia en localStorage; archivo roto abre grupo 3', async () => {
+    localStorage.clear();
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    const { unmount } = render(<AiSettingsSection />);
+    await waitFor(() => {
+      expect(screen.getByText('Qué modelo usa cada cosa')).toBeDefined();
+    });
+
+    const headerUses = screen.getByTestId('accordion-group-uses').querySelector('button')!;
+    const headerProviders = screen.getByTestId('accordion-group-providers').querySelector('button')!;
+    const headerFile = screen.getByTestId('accordion-group-file').querySelector('button')!;
+    const headerOpenCode = screen.getByTestId('accordion-group-opencode').querySelector('button')!;
+    const headerMcp = screen.getByTestId('accordion-group-mcp').querySelector('button')!;
+
+    // Por omisión, el grupo 1 está abierto (aria-expanded="true") y los demás cerrados
+    expect(headerUses.getAttribute('aria-expanded')).toBe('true');
+    expect(headerProviders.getAttribute('aria-expanded')).toBe('false');
+    expect(headerFile.getAttribute('aria-expanded')).toBe('false');
+    expect(headerOpenCode.getAttribute('aria-expanded')).toBe('false');
+    expect(headerMcp.getAttribute('aria-expanded')).toBe('false');
+
+    // Resúmenes visibles de los grupos cerrados
+    expect(screen.getByTestId('accordion-summary-providers').textContent).toMatch(/servidor/i);
+    expect(screen.getByTestId('accordion-summary-file').textContent).toMatch(/válido/i);
+    expect(screen.getByTestId('accordion-summary-opencode')).toBeDefined();
+    expect(screen.getByTestId('accordion-summary-mcp')).toBeDefined();
+
+    // Abrir grupo 2 con click de mouse
+    fireEvent.click(headerProviders);
+    expect(headerProviders.getAttribute('aria-expanded')).toBe('true');
+    // Se guarda en localStorage
+    const saved = JSON.parse(localStorage.getItem('gitcron:ai-settings:open-groups') || '{}');
+    expect(saved['providers']).toBe(true);
+
+    // Cerrar grupo 2
+    fireEvent.click(headerProviders);
+    expect(headerProviders.getAttribute('aria-expanded')).toBe('false');
+
+    // Abrir grupo 4
+    fireEvent.click(headerOpenCode);
+    expect(headerOpenCode.getAttribute('aria-expanded')).toBe('true');
+
+    unmount();
+
+    // Ahora con archivo roto: la píldora muestra error y el grupo 3 se abre solo
+    const mockBrokenApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusBroken })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockBrokenApi });
+
+    render(<AiSettingsSection />);
+    await waitFor(() => {
+      const pill = screen.getByTestId('section-file-status-pill');
+      expect(pill.className).toMatch(/color-error/);
+      expect(pill.textContent).toMatch(/Con error/);
+      const brokenFileHeader = screen.getByTestId('accordion-group-file').querySelector('button')!;
+      expect(brokenFileHeader.getAttribute('aria-expanded')).toBe('true');
+    });
+  });
+
+  it('un uso desplegado muestra sus opciones y el selector de modelo queda dentro de la fila del uso en el DOM', async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        models: vi.fn(async () => ({
+          success: true,
+          data: {
+            use: 'gitcron-commit',
+            providers: [
+              {
+                id: 'lmstudio',
+                name: 'LM Studio',
+                kind: 'openai-compatible',
+                available: true,
+                models: [{ id: 'qwen', name: 'Qwen 3.8' }],
+              },
+            ],
+            current: { providerId: 'lmstudio', modelId: 'qwen', fullModelRef: 'lmstudio/qwen' },
+          },
+        })),
+        onModelsUpdated: vi.fn(() => () => {}),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    render(<AiSettingsSection repoPath="C:/repos/demo" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('use-row-gitcron-commit')).toBeDefined();
+    });
+
+    const commitRow = screen.getByTestId('use-row-gitcron-commit');
+
+    // Inicialmente cerrado: no muestra los inputs de temperatura ni botones de modelo
+    expect(commitRow.querySelector('input[type="number"]')).toBeNull();
+
+    // Click en la cabecera de la fila para desplegarla
+    const rowHeader = commitRow.querySelector('button')!;
+    fireEvent.click(rowHeader);
+
+    // Ahora muestra los parámetros
+    await waitFor(() => {
+      expect(commitRow.querySelector('input[type="number"]')).not.toBeNull();
+    });
+
+    // Botón "Elegir modelo" dentro de la fila del uso
+    const chooseModelBtns = within(commitRow).getAllByRole('button', { name: /Elegir modelo/i });
+    fireEvent.click(chooseModelBtns[chooseModelBtns.length - 1]);
+
+    // El selector aparece y es descendiente de la fila del uso en el DOM (no al final de la página)
+    await waitFor(() => {
+      const picker = screen.getByTestId('ai-model-picker');
+      expect(commitRow.contains(picker)).toBe(true);
+    });
+
+    expect(scrollIntoViewMock).toHaveBeenCalled();
+  });
+
+  it('agregar proveedor y agregar modelo se despliegan en el lugar, Esc cancela, sin modales, el foco vuelve al botón disparador', async () => {
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        providerModels: vi.fn(async () => ({
+          success: true,
+          data: { declared: ['deepseek'], reported: [], canLoad: false },
+        })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    render(<AiSettingsSection repoPath="C:/repos/demo" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('accordion-group-providers')).toBeDefined();
+    });
+
+    // Abrir Grupo 2
+    const headerProviders = screen.getByTestId('accordion-group-providers').querySelector('button')!;
+    fireEvent.click(headerProviders);
+
+    const addProviderBtn = await screen.findByRole('button', { name: /Agregar proveedor/i });
+    addProviderBtn.focus();
+    expect(document.activeElement).toBe(addProviderBtn);
+
+    // Click en "+ Agregar proveedor"
+    fireEvent.click(addProviderBtn);
+
+    // Se despliega la tarjeta inline (no un <dialog> modal)
+    const card = await screen.findByTestId('add-provider-inline-card');
+    expect(card).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // El primer campo está dentro de la tarjeta
+    const firstInput = card.querySelector('input')!;
+    expect(firstInput).toBeDefined();
+
+    // Presionar Esc para cancelar
+    fireEvent.keyDown(card, { key: 'Escape', code: 'Escape' });
+
+    // La tarjeta desaparece y no hay modal
+    await waitFor(() => {
+      expect(screen.queryByTestId('add-provider-inline-card')).toBeNull();
+    });
+    // El foco vuelve al botón que lo abrió
+    await waitFor(() => {
+      expect(document.activeElement).toBe(addProviderBtn);
+    });
+
+    // Probar "Agregar modelo" dentro de un proveedor (unslothpc)
+    const unslothRow = screen.getByTestId('provider-row-unslothpc');
+    const toggleUnsloth = unslothRow.querySelector('button')!;
+    fireEvent.click(toggleUnsloth);
+
+    const addModelBtn = await within(unslothRow).findByRole('button', { name: /Agregar modelo/i });
+    addModelBtn.focus();
+    fireEvent.click(addModelBtn);
+
+    const modelCard = await screen.findByTestId('add-model-inline-card');
+    expect(modelCard).toBeDefined();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // Esc cancela y cierra tarjeta
+    fireEvent.keyDown(modelCard, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('add-model-inline-card')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(addModelBtn);
+    });
+  });
+
+  it('editor de gitcron.json: guarda cambios, pre-save rechaza sintaxis con línea, detecta conflicto externo, y con secretos literales no abre ni filtra secretos', async () => {
+    const LITERAL_SECRET = 'clave-super-secreta-en-archivo-12345';
+    let fileContent = '{\n  "provider": {}\n}';
+    let fileHash = 'hash-v1';
+
+    const mockReadFileContent = vi.fn(async () => ({
+      success: true,
+      data: {
+        content: fileContent,
+        hash: fileHash,
+        path: 'C:/Users/demo/.gitcron/gitcron.json',
+        hasLiteralSecrets: false,
+      },
+    }));
+
+    const mockSaveFileContent = vi.fn(async ({ content, baseHash }: { content: string; baseHash: string }): Promise<any> => {
+      if (baseHash !== fileHash) {
+        return { success: true, data: { conflict: true } };
+      }
+      fileContent = content;
+      fileHash = 'hash-v2';
+      return { success: true, data: { written: true, hash: 'hash-v2' } };
+    });
+
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        readFileContent: mockReadFileContent,
+        saveFileContent: mockSaveFileContent,
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    const { unmount } = render(<AiSettingsSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId('accordion-group-file')).toBeDefined();
+    });
+
+    // Abrir Grupo 3
+    const headerFile = screen.getByTestId('accordion-group-file').querySelector('button')!;
+    fireEvent.click(headerFile);
+
+    const globalRow = await screen.findByTestId('file-row-global');
+    const editBtn = within(globalRow).getByRole('button', { name: /Editar/i });
+
+    // 1. Abrir editor
+    fireEvent.click(editBtn);
+    const textarea = (await screen.findByTestId('gitcron-json-textarea')) as HTMLTextAreaElement;
+    expect(textarea.value).toBe(fileContent);
+
+    // 2. Modificar contenido y guardar con Ctrl+S
+    fireEvent.change(textarea, { target: { value: '{\n  "provider": {\n    "test": {}\n  }\n}' } });
+    expect(screen.getByTestId('editor-dirty-badge')).toBeDefined();
+
+    fireEvent.keyDown(textarea, { key: 's', code: 'KeyS', ctrlKey: true });
+    await waitFor(() => {
+      expect(mockSaveFileContent).toHaveBeenCalledWith({
+        scope: 'global',
+        repoPath: null,
+        content: '{\n  "provider": {\n    "test": {}\n  }\n}',
+        baseHash: 'hash-v1',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Archivo guardado correctamente/i)).toBeDefined();
+    });
+
+    // 3. Error de sintaxis en pre-save: rechaza y muestra la línea
+    mockSaveFileContent.mockResolvedValueOnce({
+      success: true,
+      data: {
+        parseError: { code: 'InvalidJson', line: 4, column: 1, message: 'Unexpected token' },
+        error: 'Error de sintaxis en la línea 4: Unexpected token',
+      },
+    });
+    fireEvent.change(textarea, { target: { value: '{\n  "broken": \n}' } });
+    fireEvent.click(screen.getByTestId('editor-save-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('editor-syntax-error')).toBeDefined();
+      expect(screen.getByText(/línea 4/i)).toBeDefined();
+    });
+
+    // 4. Conflicto por cambio externo: no pisa y muestra aviso
+    mockSaveFileContent.mockResolvedValueOnce({
+      success: true,
+      data: { conflict: true },
+    });
+    fireEvent.change(textarea, { target: { value: '{\n  "provider": { "conflict": true } }' } });
+    fireEvent.click(screen.getByTestId('editor-save-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('editor-conflict-notice')).toBeDefined();
+      expect(screen.getByText(/El archivo cambió afuera/i)).toBeDefined();
+    });
+
+    unmount();
+
+    // 5. Secretos literales: el editor NO se abre y el valor secreto NUNCA viaja al DOM ni a la respuesta
+    const mockStatusWithSecret: AiConfigStatusResult = {
+      ...mockStatusValid,
+      providers: [
+        {
+          ...mockStatusValid.providers[0],
+          // @ts-expect-error simular carga con secreto que jamás debe mostrarse
+          rawSecretInjected: LITERAL_SECRET,
+        },
+        ...mockStatusValid.providers.slice(1),
+      ],
+    };
+
+    const mockSecretApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusWithSecret })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        readFileContent: vi.fn(async () => ({
+          success: true,
+          data: {
+            content: '', // El proceso principal no devuelve el contenido
+            hash: 'hash-secret',
+            path: 'C:/Users/demo/.gitcron/gitcron.json',
+            hasLiteralSecrets: true,
+          },
+        })),
+        saveFileContent: vi.fn(),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockSecretApi });
+
+    render(<AiSettingsSection />);
+    const secretGroup = await screen.findByTestId('accordion-group-file');
+    const secretFileHeader = secretGroup.querySelector('button')!;
+    fireEvent.click(secretFileHeader);
+    const rowSecret = await screen.findByTestId('file-row-global');
+    fireEvent.click(within(rowSecret).getByRole('button', { name: /Editar/i }));
+
+    // Aparece el aviso de secreto y no se monta el textarea
+    await waitFor(() => {
+      expect(screen.getByTestId('editor-secret-notice')).toBeDefined();
+      expect(screen.queryByTestId('gitcron-json-textarea')).toBeNull();
+    });
+    // El secreto literal jamás aparece en el DOM
+    expect(document.body.innerHTML.includes(LITERAL_SECRET)).toBe(false);
+  });
+
+  it('accesibilidad: grupos cerrados tienen inert y sus elementos internos no reciben foco (C.14)', async () => {
+    const api = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        readFileContent: vi.fn(),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: api });
+
+    render(<AiSettingsSection />);
+    const groupFile = await screen.findByTestId('accordion-group-file');
+    // Inicialmente el grupo 3 está cerrado
+    const contentWrapper = groupFile.querySelector('.grid');
+    expect(contentWrapper).not.toBeNull();
+    expect(contentWrapper?.hasAttribute('inert')).toBe(true);
+
+    // Los botones de adentro están dentro del contenedor inert
+    const innerButtons = contentWrapper?.querySelectorAll('button');
+    innerButtons?.forEach((btn) => {
+      expect(contentWrapper?.contains(btn)).toBe(true);
+    });
+
+    // Abrimos el grupo
+    const fileHeaderBtn = groupFile.querySelector('button')!;
+    fireEvent.click(fileHeaderBtn);
+
+    // Al abrirse, inert ya no está presente
+    expect(contentWrapper?.hasAttribute('inert')).toBe(false);
+  });
+
+  it('auto-apertura de grupo 3 con archivo roto: abre una sola vez y el usuario puede cerrarlo (C.16)', async () => {
+    const mockStatusFileBroken: AiConfigStatusResult = {
+      files: [
+        {
+          path: 'C:/Users/test/.config/gitcron/gitcron.json',
+          scope: 'global',
+          exists: true,
+          error: {
+            file: 'C:/Users/test/.config/gitcron/gitcron.json',
+            line: 4,
+            column: 12,
+            code: 'InvalidSymbol',
+          },
+        },
+      ],
+      warnings: [],
+      generalModel: null,
+      smallModel: null,
+      providers: [],
+      uses: [],
+    };
+
+    const api = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusFileBroken })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        readFileContent: vi.fn(async () => ({
+          success: true,
+          data: { content: '{\n  invalid', hash: 'h1', path: 'C:/Users/test/.config/gitcron/gitcron.json' },
+        })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: api });
+
+    render(<AiSettingsSection />);
+    const groupFile = await screen.findByTestId('accordion-group-file');
+    const fileHeaderBtn = groupFile.querySelector('button')!;
+
+    // Al montar con archivo roto, el grupo 3 se abre automáticamente una vez
+    await waitFor(() => {
+      expect(fileHeaderBtn.getAttribute('aria-expanded')).toBe('true');
+      expect(screen.getByTestId('file-status-badge-global')).toBeDefined();
+    });
+
+    // El usuario puede cerrarlo haciendo clic en la cabecera
+    fireEvent.click(fileHeaderBtn);
+    expect(fileHeaderBtn.getAttribute('aria-expanded')).toBe('false');
+
+    // Y puede volver a abrirlo
+    fireEvent.click(fileHeaderBtn);
+    expect(fileHeaderBtn.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('montaje en es, en y zh con uso desplegado y editor abierto', async () => {
+    const api = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusValid })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        readFileContent: vi.fn(async () => ({
+          success: true,
+          data: { content: '{\n  "provider": {}\n}', hash: 'h1', path: 'C:/Users/test/.config/gitcron/gitcron.json' },
+        })),
+        saveFileContent: vi.fn(),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: api });
+
+    for (const lang of ['es', 'en', 'zh'] as const) {
+      useGitStore.setState({ language: lang });
+      const { unmount } = render(<AiSettingsSection />);
+
+      // Verificar que montó y se muestran las cabeceras de grupos
+      const groupUses = await screen.findByTestId('accordion-group-uses');
+      expect(groupUses).toBeDefined();
+
+      // Desplegar el uso general
+      const generalRow = await screen.findByTestId('use-row-general');
+      const generalBtn = generalRow.querySelector('button')!;
+      fireEvent.click(generalBtn);
+      expect(generalBtn.getAttribute('aria-expanded')).toBe('true');
+
+      // Abrir grupo 3 y abrir editor
+      const groupFile = await screen.findByTestId('accordion-group-file');
+      const fileHeaderBtn = groupFile.querySelector('button')!;
+      fireEvent.click(fileHeaderBtn);
+      const rowGlobal = await screen.findByTestId('file-row-global');
+      const editBtn = within(rowGlobal).getByRole('button', {
+        name: lang === 'es' ? /Editar/i : lang === 'en' ? /Edit/i : /编辑/i,
+      });
+      fireEvent.click(editBtn);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('gitcron-json-editor')).toBeDefined();
+        expect(screen.getByTestId('editor-save-btn')).toBeDefined();
+      });
+
+      unmount();
+    }
   });
 });

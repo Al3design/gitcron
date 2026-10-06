@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { AiToolModel, AiToolProvider, AiUse, AiUseModelsResult } from '../../../types/ai-use';
+import type { AiToolModel } from '../../../types/ai-use';
 import {
   CLI_EFFORT_LEVELS,
   defaultKillTree,
@@ -18,15 +18,6 @@ import {
   type ResolveExecutableFunction,
   type SpawnFunction,
 } from '../cli-text-client';
-import {
-  loadGitCronConfig,
-  RESERVED_CLI_IDS,
-  type GitCronProviderConfig,
-  type LoadedGitCronConfig,
-} from './gitcron-config';
-import { listProviderModels } from './provider-models';
-import { resolveAgentFor } from './resolve-agent-for';
-import { resolveModelFor } from './resolve-model-for';
 import { resolveRuntimeExecutable } from '../../pipeline/runtime-adapters/process-runner';
 
 /** Niveles de razonamiento estándar de OpenAI (minimal, low, medium, high). */
@@ -130,9 +121,16 @@ const CLI_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 let defaultResolveExecutable: ResolveExecutableFunction | null = null;
 let defaultSpawnFn: SpawnFunction | null = null;
 
+let onClearToolModelsCache: (() => void) | null = null;
+
+export function setOnClearToolModelsCache(cb: (() => void) | null): void {
+  onClearToolModelsCache = cb;
+}
+
 /** Para pruebas: olvidar los catálogos ya pedidos. */
 export function clearToolModelsCacheForTesting(): void {
   cliCache.clear();
+  onClearToolModelsCache?.();
 }
 
 export function setToolModelsExecutorsForTesting(
@@ -141,6 +139,16 @@ export function setToolModelsExecutorsForTesting(
 ): void {
   defaultResolveExecutable = resolve ?? null;
   defaultSpawnFn = spawn ?? null;
+}
+
+export function getDefaultToolModelsExecutors(): {
+  resolveExecutable: ResolveExecutableFunction | null;
+  spawnFn: SpawnFunction | null;
+} {
+  return {
+    resolveExecutable: defaultResolveExecutable,
+    spawnFn: defaultSpawnFn,
+  };
 }
 
 /** Ejecuta un CLI en directorio temporal y devuelve su salida limpia. */
@@ -257,191 +265,4 @@ export async function fetchAgyModels(
   const models = parseAgyModels(res.stdout);
   cliCache.set('antigravity', { models, timestamp: Date.now() });
   return { ok: true, models };
-}
-
-/**
- * Arma la lista completa de proveedores y modelos disponibles para un uso dado,
- * más la elección actual.
- */
-export async function getToolModelsForUse(options: {
-  use: AiUse;
-  repoPath?: string | null;
-  configPath?: string;
-  loaded?: LoadedGitCronConfig;
-  /** Variables guardadas en GitCron (D5), para `{env:}` en claves y direcciones. */
-  stored?: (name: string) => string | undefined;
-  resolveExecutable?: ResolveExecutableFunction;
-  spawnFn?: SpawnFunction;
-}): Promise<AiUseModelsResult> {
-  const loaded = options.loaded ?? loadGitCronConfig({ globalPath: options.configPath, repoPath: options.repoPath });
-  const providers: AiToolProvider[] = [];
-
-  // Codex y Antigravity se consultan a la vez: cada catálogo tarda segundos.
-  const [codexRes, agyRes] = await Promise.all([fetchCodexModels(options), fetchAgyModels(options)]);
-
-  // 1. Codex
-  providers.push({
-    id: 'codex',
-    name: 'Codex',
-    kind: 'cli',
-    available: codexRes.ok,
-    unavailableReason: codexRes.ok ? undefined : codexRes.error,
-    models: codexRes.ok ? codexRes.models : [],
-    agentRuntime: 'codex',
-    toolsExecutor: 'Codex',
-  });
-
-  // 2. Antigravity
-  providers.push({
-    id: 'antigravity',
-    name: 'Antigravity',
-    kind: 'cli',
-    available: agyRes.ok,
-    unavailableReason: agyRes.ok ? undefined : agyRes.error,
-    models: agyRes.ok ? agyRes.models : [],
-    agentRuntime: 'agy',
-    toolsExecutor: 'Antigravity',
-  });
-
-  // 3. Claude Code
-  let claudeAvailable = true;
-  let claudeError: string | undefined;
-  const resolve = options.resolveExecutable ?? defaultResolveExecutable ?? resolveRuntimeExecutable;
-  try {
-    await resolve('claude', process.env);
-  } catch (err: any) {
-    claudeAvailable = false;
-    claudeError = err?.message ?? String(err);
-  }
-  providers.push({
-    id: 'claude-code',
-    name: 'Claude Code',
-    kind: 'cli',
-    available: claudeAvailable,
-    unavailableReason: claudeError,
-    models: getClaudeCodeModels(),
-    agentRuntime: 'claude',
-    toolsExecutor: 'Claude Code',
-  });
-
-  // 4. Proveedores declarados en gitcron.json
-  const configProviders = loaded.config?.provider ?? {};
-  for (const [providerId, rawProvider] of Object.entries(configProviders)) {
-    if (!rawProvider || typeof rawProvider !== 'object') continue;
-    if (RESERVED_CLI_IDS.includes(providerId as any)) continue;
-    const providerConfig = rawProvider as GitCronProviderConfig;
-    const kind = providerConfig.npm === '@ai-sdk/anthropic' ? 'anthropic' : 'openai-compatible';
-    const providerName = providerConfig.name || providerId;
-
-    // Obtener modelos declarados y reportados
-    const declaredModels = providerConfig.models ?? {};
-    const modelEntries: AiToolModel[] = [];
-
-    for (const [modelId, modelDef] of Object.entries(declaredModels)) {
-      const activeVariants: string[] = [];
-      if (modelDef?.variants && typeof modelDef.variants === 'object') {
-        for (const [vName, vVal] of Object.entries(modelDef.variants)) {
-          if ((vVal as any)?.disabled !== true) {
-            activeVariants.push(vName);
-          }
-        }
-      }
-
-      modelEntries.push({
-        id: modelId,
-        name: typeof modelDef?.name === 'string' ? modelDef.name : modelId,
-        variants: activeVariants.length > 0 ? activeVariants : undefined,
-        supportedLevels:
-          kind === 'openai-compatible' && activeVariants.length === 0
-            ? [...STANDARD_OPENAI_EFFORT_LEVELS]
-            : undefined,
-      });
-    }
-
-    // Además listamos los reportados si es posible
-    try {
-      const listed = await listProviderModels(providerId, {
-        configPath: options.configPath,
-        repoPath: options.repoPath,
-        loaded,
-        stored: options.stored,
-      });
-      if (listed.status === 'ok') {
-        for (const m of listed.models) {
-          if (!modelEntries.some((existing) => existing.id === m.id)) {
-            modelEntries.push({
-              id: m.id,
-              name: m.name ?? m.id,
-              supportedLevels: kind === 'openai-compatible' ? [...STANDARD_OPENAI_EFFORT_LEVELS] : undefined,
-            });
-          }
-        }
-      }
-    } catch {
-      // Ignorar fallos de red al listar modelos
-    }
-
-    providers.push({
-      id: providerId,
-      name: providerName,
-      kind,
-      available: true,
-      models: modelEntries,
-      agentRuntime: 'opencode',
-      toolsExecutor: 'OpenCode',
-    });
-  }
-
-  // 5. Elección actual del uso
-  let current: AiUseModelsResult['current'] = null;
-  try {
-    if (options.use === 'gitcron-sdd') {
-      const agentRes = resolveAgentFor({
-        configPath: options.configPath,
-        repoPath: options.repoPath,
-        loaded,
-        stored: options.stored,
-      });
-      if (agentRes.status === 'resolved') {
-        current = {
-          providerId: agentRes.providerId,
-          modelId: agentRes.modelId,
-          fullModelRef: agentRes.modelRef,
-          effort: agentRes.effort,
-          sourceFile: agentRes.sourceFile,
-          scope: loaded.files.find((f) => f.scope === 'repo')?.path === agentRes.sourceFile ? 'repo' : 'global',
-        };
-      }
-    } else {
-      const resolvedTarget = resolveModelFor(options.use, {
-        configPath: options.configPath,
-        repoPath: options.repoPath,
-        loaded,
-        stored: options.stored,
-      });
-      if (resolvedTarget.status === 'resolved') {
-        const { resolved } = resolvedTarget;
-        current = {
-          providerId: resolved.providerId,
-          modelId: resolved.modelId,
-          fullModelRef: `${resolved.providerId}/${resolved.modelId}`,
-          effort:
-            typeof resolved.options?.reasoning_effort === 'string'
-              ? resolved.options.reasoning_effort
-              : undefined,
-          variant: resolved.variant,
-          sourceFile: resolved.sourceFile,
-          scope: resolved.provenance.repoFile ? 'repo' : 'global',
-        };
-      }
-    }
-  } catch {
-    // Si no se puede resolver, queda current en null
-  }
-
-  return {
-    use: options.use,
-    providers,
-    current,
-  };
 }

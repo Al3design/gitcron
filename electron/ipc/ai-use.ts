@@ -9,7 +9,7 @@
 
 import * as nodeFs from 'node:fs';
 import path from 'node:path';
-import { ipcMain } from 'electron';
+import { ipcMain, webContents } from 'electron';
 import { findNodeAtLocation, parseTree } from 'jsonc-parser';
 import type { AiUseChooseResult, AiUseModelsResult, AiUseOffer, AiUseStatus } from '../../types/ai-use';
 import { getCartoAISettings } from '../ai/carto';
@@ -23,7 +23,7 @@ import { fetchOpenCodeModelList } from '../ai/config/opencode-models';
 import { checkOpenCodeAuth } from '../ai/config/opencode-auth-check';
 import { ensureOpenCodeService } from '../ai/config/opencode-service';
 import { resolveAgentFor } from '../ai/config/resolve-agent-for';
-import { getToolModelsForUse } from '../ai/config/tool-models';
+import { getToolModelsForUse, refreshModelCatalog, subscribeToModelCatalog } from '../ai/config/model-catalog';
 import { getStoredEnvVar, hasKey } from '../ai/key-store';
 import { getLastRequestForUse } from '../ai/text-use';
 import { activeConfigPath, loadServerFor, resolveForUse } from '../ai/use-resolution';
@@ -248,9 +248,36 @@ export function registerAiUseHandlers(): void {
     }
   });
 
+  // Suscripción al catálogo para notificar al renderer cuando lleguen actualizaciones de fondo
+  subscribeToModelCatalog(() => {
+    for (const wc of webContents.getAllWebContents()) {
+      if (!wc.isDestroyed()) wc.send('ai-use:models-updated');
+    }
+  });
+
   ipcMain.handle('ai-use:models', async (_e, args: unknown): Promise<Result<AiUseModelsResult>> => {
     try {
       const { use, repoPath } = parseArgs(args);
+      const res = await getToolModelsForUse({
+        use,
+        repoPath: repoPath ? authorizedRepoRoot(repoPath) : null,
+        configPath: activeConfigPath(),
+        stored: getStoredEnvVar,
+      });
+      return ok(res);
+    } catch (error) {
+      return fail(error);
+    }
+  });
+
+  ipcMain.handle('ai-use:refresh-models', async (_e, args: unknown): Promise<Result<AiUseModelsResult>> => {
+    try {
+      const { use, repoPath } = parseArgs(args);
+      await refreshModelCatalog({
+        configPath: activeConfigPath(),
+        repoPath: repoPath ? authorizedRepoRoot(repoPath) : null,
+        stored: getStoredEnvVar,
+      });
       const res = await getToolModelsForUse({
         use,
         repoPath: repoPath ? authorizedRepoRoot(repoPath) : null,

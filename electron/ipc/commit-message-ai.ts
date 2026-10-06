@@ -42,6 +42,7 @@ import {
   type GitCronConfigFileStatus,
   type ResolvedUse,
 } from '../ai/config/gitcron-config';
+import { refreshModelCatalog } from '../ai/config/model-catalog';
 import { authorizedRepoRoot, authorizedRepoStore } from './authorized-repos';
 import { getStoredEnvVar } from '../ai/key-store';
 import { createGitCronConfigWatcher, type GitCronConfigWatcher } from '../ai/config/gitcron-config-watcher';
@@ -210,6 +211,9 @@ function notifyConfigChanged(repoPath: string | null): void {
   } catch {
     // La relectura sólo actualiza la última versión válida; el error lo pide la pantalla.
   }
+  // El archivo cambió: los selectores de modelo se ponen al día de fondo. Un servidor que no
+  // contesta queda «sin confirmar» en el catálogo; el refresco no tiene que hacer caer nada.
+  refreshModelCatalog({ configPath: configWatcherGlobalPath ?? undefined, repoPath }).catch(() => undefined);
   for (const sender of configSubscribers) {
     if (sender.isDestroyed()) {
       configSubscribers.delete(sender);

@@ -1,7 +1,7 @@
 // types/ai-config.ts
 // Tipos para la sección de ajustes «Motores y modelos» (tarea 6.1).
 
-import type { AiTextUse } from './ai-use';
+import type { AiTextUse, AiUse } from './ai-use';
 import type { CommitAiConfigFileStatus, CommitAiConfigParseError, CommitAiConfigWarning } from './commit-message-ai';
 
 export interface AiConfigFileInfo {
@@ -23,6 +23,7 @@ export interface AiConfigProviderInfo {
   name: string;
   family: 'openai-compatible' | 'anthropic' | 'cli';
   baseURL?: string;
+  destination?: 'this-machine' | 'own-server' | 'external-service';
   available: boolean;
   unavailableReason?: string | null;
   canLoad: boolean;
@@ -38,10 +39,12 @@ export interface AiConfigAdvancedOption {
 }
 
 export interface AiConfigUseInfo {
-  use: AiTextUse;
+  use: AiUse;
   model: string | null;
   modelSource: 'general' | 'agent';
   isException: boolean;
+  variant?: string;
+  effort?: string;
   temperature?: number;
   maxTokens?: number;
   advancedOptions: AiConfigAdvancedOption[];
@@ -54,6 +57,31 @@ export interface AiConfigStatusResult {
   smallModel: string | null;
   providers: AiConfigProviderInfo[];
   uses: AiConfigUseInfo[];
+}
+
+export interface AiConfigFileContentResult {
+  path: string;
+  scope: 'global' | 'repo';
+  content?: string;
+  hash?: string;
+  hasLiteralSecrets: boolean;
+}
+
+export interface AiConfigFileSavePayload {
+  scope: 'global' | 'repo';
+  repoPath?: string | null;
+  content: string;
+  baseHash?: string;
+}
+
+export interface AiConfigFileSaveResult {
+  conflict?: boolean;
+  parseError?: { line?: number; column?: number; code: string };
+  secretRejected?: boolean;
+  secretLine?: number;
+  error?: string;
+  hash?: string;
+  warnings?: CommitAiConfigWarning[];
 }
 
 export interface AddProviderPayload {
