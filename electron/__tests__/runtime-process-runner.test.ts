@@ -14,7 +14,10 @@ async function fixtureDirectory(): Promise<string> {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
+  // Reintentos sólo en la limpieza: en Windows la carpeta queda tomada unos milisegundos
+  // después de que muere el proceso que la usaba (EBUSY, visto el 2026-10-06 en la prueba del
+  // huérfano, con lo que la prueba comprueba ya cumplido).
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })));
 });
 
 describe('RuntimeProcessRunner', () => {
