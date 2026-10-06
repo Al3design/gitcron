@@ -525,6 +525,21 @@ Todo lo que hace o escribió una IA se distingue de un vistazo, sin colores nuev
   El ámbar queda para lo que sí la pide.
 - Se aplica primero en la preparación del commit; 4.4 lo lleva a las demás pantallas de uso.
 
+*Ampliado a pedido de Ale (2026-10-06):* el violeta se queda como el color de la IA, pero la IA pasa a tener un
+**degradé de varios colores suaves**, como el marco de la pantalla de perfiles de Chrome. Reemplaza al degradé
+violeta → `--color-primary` de arriba.
+- **Colores propios de la IA:** violeta, azul, verde agua y rosa, como tokens `--color-ai-*` con `light-dark()`.
+  No se usan los colores que ya significan algo (rojo de error, ámbar de atención, verde de agregado, naranja de
+  modificado): mezclados en la IA confundirían lo que avisan.
+- **Contenedores de IA:** borde con el degradé y, adentro, un velo muy suave de esos colores que nace de las
+  esquinas (≤ 10 % de opacidad), sobre el fondo de siempre. Una sola clase compartida (sucesora de `.ai-panel`).
+- **Letras:** el degradé va sólo en títulos y marcas (seminegrita o más, tamaño `sm` o mayor), nunca en el texto
+  corrido ni en metadatos chicos. **Cada color del degradé cumple 4,5:1** contra `--color-bg-base`,
+  `--color-bg-surface` y `--color-bg-overlay` en los dos temas, y lo comprueba una prueba que lee los valores de
+  `app/globals.css`. Con `forced-colors` vuelve al color del sistema; sin soporte de texto recortado, al violeta.
+- **El brillo de «pensando»** recorre el mismo degradé de varios colores; con `prefers-reduced-motion` queda
+  quieto.
+
 ### D11. Dónde se ve
 *Ampliado a pedido de Ale (2026-10-03):* la sección se piensa como la del Agente Temporal, para que nada
 obligue a abrir `gitcron.json`: la clave de cada proveedor se carga desde la pantalla (al baúl, D5) y, donde
