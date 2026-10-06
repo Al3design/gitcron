@@ -1,0 +1,78 @@
+# Pruebas que usan la app de verdad: `e2e` (tester-army) sobre GitCron
+
+Investigación pedida por Ale el 2026-10-06: «¿esto sirve para mejorar las revisiones o auditorías?» y, después,
+«quiero ver de implementar e2e». Leído en el repositorio [`tester-army/e2e`](https://github.com/tester-army/e2e)
+(último cambio el 2026-10-06, licencia Apache-2.0, antes de la 1.0, unas 5.400 estrellas), en su documentación
+(`docs/` del repositorio) y en el código del motor web (`packages/web/src`). No es una propuesta: es la base para
+decidir una medición y, con ella, si se abre un cambio.
+
+## Por qué interesa
+
+En la tanda 24 de modelos-en-casa se escaparon dos errores de pantalla que sólo encontró la lectura del código: el
+selector de modelo se caía al llegar un aviso del proceso principal, y otro aviso borraba lo que la persona estaba
+eligiendo. Las pruebas no los vieron porque simulan el proceso principal y la simulación tenía la misma
+equivocación que el código. Una prueba que usa la app real, como una persona, los habría encontrado sola.
+
+## Qué es
+
+Un marco de pruebas de punta a punta escrito en TypeScript. Una prueba mezcla pasos de código (localizadores y
+`expect`, como Playwright) con pasos en lenguaje común que hace un agente: `agent.act('abrí Motores y modelos y
+elegí un modelo')`, `agent.assert('el uso muestra el modelo elegido')`. Un paso del agente que una verificación
+posterior confirma **se graba**; las corridas siguientes lo repiten sin llamar al modelo hasta que la pantalla
+cambia. Deja un reporte con pasos, fallas, capturas y video que una persona o un agente de código puede leer.
+Trae un servidor MCP (`e2e mcp`) para que un agente de código abra la app y la maneje.
+
+Motores: web (Playwright: Chromium, Firefox, WebKit) y celular (simuladores de iOS y Android). **No tiene motor
+para escritorio ni menciona Electron.** El contrato de motores es público (`observe`, `locate`, `perform`,
+`session`) por si alguien quiere escribir uno.
+
+## Cómo podría manejar GitCron
+
+El motor web tiene un modo que **se engancha por CDP** (el protocolo de depuración de Chrome) a un navegador ya
+abierto en vez de lanzar uno (`web({ connect: { cdpEndpoint, reconnectEndpoint } })` en `surface.ts`). Electron se
+puede abrir con `--remote-debugging-port`, que expone ese mismo protocolo. Lo leído en el código:
+
+- Sin `reconnectEndpoint`, cada intento crea un contexto nuevo (`browser.newContext`): Electron no lo admite por
+  CDP. **Hay que usar el modo persistente** (con `reconnectEndpoint`).
+- En el modo persistente (`attachPersistent` en `cdp-recovery.ts`) el navegador tiene que tener sólo su contexto
+  por omisión (Electron lo cumple) y la primera pestaña pasa a ser la página del intento: la lleva a
+  `about:blank` y después a la dirección de la app (`app.url`). En GitCron, la ventana principal iría a la
+  dirección de la pantalla (en desarrollo, el servidor de Next); la precarga de Electron (`window.api`) se vuelve
+  a poner en cada navegación, así que la pantalla tendría su puente al proceso principal.
+- **Rechaza reusar el mismo navegador en dos intentos** («provision a fresh browser»). El `cdpEndpoint` tiene que
+  lanzar **un GitCron nuevo por intento** y devolver su dirección: unos segundos de arranque por prueba.
+
+Nada de esto está probado: es lo que dice el código. Por eso lo primero es medir.
+
+## Lo que pide y lo que choca
+
+- **Windows: la documentación pide correrlo dentro de WSL.** GitCron corre en Windows. Habría que medir si el
+  corredor anda igual en Windows nativo y, si no, correrlo en WSL enganchado a un GitCron de Windows (con la red de
+  WSL en modo espejo, `localhost` es compartido).
+- **Modelo:** tiene que aceptar herramientas e imágenes (mira capturas). Admite claves de API (Anthropic, OpenAI y
+  otras), servidores locales compatibles con OpenAI (LM Studio, Ollama, vLLM, llama-server) y suscripciones:
+  **ChatGPT Plus o Pro** (`npx e2e login openai`), GitHub Copilot, OpenCode Console y SuperGrok. **La suscripción
+  de Claude no sirve.** Ale tiene ChatGPT por Codex: no habría costo nuevo. Un modelo local sirve sólo si acepta
+  imágenes (Qwen 3.8 de Unsloth: a confirmar).
+- **Aislamiento:** el GitCron que se prueba no puede usar la configuración, el baúl ni los repositorios de Ale.
+  Hace falta arrancarlo con datos propios (`userData`, `gitcron.json` global, baúl y repositorios de prueba).
+  Hoy GitCron no tiene una forma documentada de arrancar así: es la primera pieza a resolver.
+- **Telemetría:** el CLI manda estadísticas anónimas por omisión (no el contenido de las pruebas ni de la app). Se
+  apaga con `e2e telemetry disable` o una variable de entorno; en GitCron, apagada siempre.
+- **Mantenimiento:** es una capa nueva de pruebas. Lo grabado vive en el repositorio y se vuelve a grabar cuando
+  la pantalla cambia; el proyecto todavía no es 1.0.
+
+## Recomendación
+
+Medir antes de decidir, con una tanda de prueba de concepto fuera de las dependencias de GitCron:
+
+1. Una forma de arrancar GitCron aislado (datos, configuración y baúl de prueba) con `--remote-debugging-port`.
+2. `e2e` instalado en una carpeta aparte, con la telemetría apagada y el modelo de la suscripción de ChatGPT.
+3. Una sola prueba: abrir Configuración → «Motores y modelos», desplegar un uso, elegir un modelo, guardar y ver
+   que quedó; y la misma prueba sobre el error del selector de la tanda 24, para comprobar que lo habría visto.
+4. Anotar: si anda en Windows nativo o pide WSL, si el enganche por CDP y la navegación funcionan con Electron,
+   cuánto tarda por prueba (con y sin lo grabado) y cuánto consume del plan.
+
+Con eso se decide si se suma a `pnpm verificar` (o como paso aparte de las auditorías) o si se queda Playwright
+solo, que maneja Electron sin agregados (`_electron.launch`) y no necesita modelo. Mientras tanto, `e2e mcp` sirve
+para que el auditor maneje la app real durante una auditoría.
