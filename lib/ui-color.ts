@@ -61,6 +61,8 @@ export function getDeclaredTokens(globalsCssContent?: string): Set<string> {
     '--color-error', '--color-warning',
     '--color-git-add', '--color-git-delete', '--color-git-mod',
     '--color-accent-purple',
+    '--color-ai', '--color-ai-violet', '--color-ai-blue', '--color-ai-teal', '--color-ai-rose',
+    '--ai-gradient',
     '--font-size-xs', '--font-size-sm', '--font-size-base', '--font-size-md',
     '--font-size-lg', '--font-size-xl', '--font-size-2xl', '--font-size-3xl',
     '--font-sans', '--font-mono',

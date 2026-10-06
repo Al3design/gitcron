@@ -57,7 +57,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
     } catch {
       // Ignorar fallos al acceder a localStorage
     }
-    return { uses: true };
+    return { providers: true };
   });
 
   const hasAutoOpenedBrokenRef = useRef(false);
@@ -156,16 +156,17 @@ export function AiSettingsSection({ repoPath = null }: Props) {
       ? t('aiConfig.groupUsesExceptionsCount', { count: 1 })
       : t('aiConfig.groupUsesExceptionsCountPlural', { count: exceptionsCount });
     const generalModel = status?.generalModel;
+    if (!generalModel) {
+      return t('aiConfig.groupUsesSummaryNoModel', {
+        exceptions: exceptionsStr,
+      });
+    }
     let providerName = '—';
-    let modelName = t('aiConfig.noModelConfigured');
-    if (generalModel) {
-      if (generalModel.includes('/')) {
-        const [pId, mId] = generalModel.split('/');
-        providerName = status?.providers?.find((p) => p.id === pId)?.name || pId;
-        modelName = mId;
-      } else {
-        modelName = generalModel;
-      }
+    let modelName = generalModel;
+    if (generalModel.includes('/')) {
+      const [pId, mId] = generalModel.split('/');
+      providerName = status?.providers?.find((p) => p.id === pId)?.name || pId;
+      modelName = mId;
     }
     return t('aiConfig.groupUsesSummary', {
       model: modelName,
@@ -240,7 +241,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
         <div>
           <h3 className="text-base font-bold flex items-center gap-2">
             <Cpu size={18} className="text-[var(--color-ai)]" />
-            <span>{t('settings.aiModels')}</span>
+            <span className="ai-gradient-text">{t('settings.aiModels')}</span>
           </h3>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 leading-relaxed">
             {t('settings.aiModelsDesc')}
@@ -311,25 +312,7 @@ export function AiSettingsSection({ repoPath = null }: Props) {
 
       {/* ─── Los 5 Grupos Acordeón ─── */}
       <div className="space-y-4">
-        {/* Grupo 1: Qué modelo usa cada cosa */}
-        <AiSettingsAccordionGroup
-          id="uses"
-          isOpen={Boolean(openGroups.uses)}
-          onToggle={() => toggleGroup('uses')}
-          icon={<Sliders size={16} />}
-          title={t('aiConfig.groupUsesTitle')}
-          summary={groupUsesSummary}
-        >
-          <AiSettingsGroupUses
-            status={status}
-            repoPath={repoPath}
-            isFileBroken={isFileBroken}
-            onReload={reload}
-            onError={setActionError}
-          />
-        </AiSettingsAccordionGroup>
-
-        {/* Grupo 2: Proveedores y modelos */}
+        {/* Grupo 1: Proveedores y modelos */}
         <AiSettingsAccordionGroup
           id="providers"
           isOpen={Boolean(openGroups.providers)}
@@ -345,6 +328,24 @@ export function AiSettingsSection({ repoPath = null }: Props) {
             onReload={reload}
             onError={setActionError}
             onSuccess={setSuccessNotice}
+          />
+        </AiSettingsAccordionGroup>
+
+        {/* Grupo 2: Qué modelo usa cada cosa */}
+        <AiSettingsAccordionGroup
+          id="uses"
+          isOpen={Boolean(openGroups.uses)}
+          onToggle={() => toggleGroup('uses')}
+          icon={<Sliders size={16} />}
+          title={t('aiConfig.groupUsesTitle')}
+          summary={groupUsesSummary}
+        >
+          <AiSettingsGroupUses
+            status={status}
+            repoPath={repoPath}
+            isFileBroken={isFileBroken}
+            onReload={reload}
+            onError={setActionError}
           />
         </AiSettingsAccordionGroup>
 

@@ -214,14 +214,14 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
         );
       case 'no-answer':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-text-muted/15 text-text-muted">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-text-secondary/15 text-text-secondary">
             <Ban size={12} />
             {t('aiHistory.status.no-answer')}
           </span>
         );
       case 'cancelled':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-text-muted/15 text-text-muted">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-text-secondary/15 text-text-secondary">
             <Ban size={12} />
             {t('aiHistory.status.cancelled')}
           </span>
@@ -244,17 +244,17 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden" data-testid="ai-history-view">
+    <div className="flex-1 flex flex-col h-full bg-bg-base overflow-hidden" data-testid="ai-history-view">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-bg-secondary/40 shrink-0">
+      <div className="ai-surface-header flex items-center justify-between px-6 py-4 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-accent-purple/15 text-[var(--color-ai)]">
             <Sparkles size={18} />
           </div>
           <div>
-            <h1 className="text-base font-semibold text-text-primary flex items-center gap-2">
-              {t('aiHistory.title')}
-              <span className="text-xs font-normal text-text-muted">({total})</span>
+            <h1 className="text-base font-semibold flex items-center gap-2">
+              <span className="ai-gradient-text">{t('aiHistory.title')}</span>
+              <span className="text-xs font-normal text-text-secondary">({total})</span>
             </h1>
           </div>
         </div>
@@ -262,12 +262,12 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
         <div className="flex items-center gap-3">
           {/* Filter Use */}
           <div className="flex items-center gap-1.5">
-            <Filter size={14} className="text-text-muted" />
+            <Filter size={14} className="text-text-secondary" />
             <select
               aria-label={t('aiHistory.filterUseAll')}
               value={selectedUse}
               onChange={(e) => setSelectedUse(e.target.value)}
-              className="text-xs bg-bg-secondary border border-border rounded px-2 py-1 text-text-primary focus:outline-none focus:border-[var(--color-ai)]"
+              className="text-xs bg-bg-surface border border-border-subtle rounded px-2 py-1 text-text-primary focus:outline-none focus:border-[var(--color-ai)]"
               data-testid="ai-history-filter-use"
             >
               <option value="">{t('aiHistory.filterUseAll')}</option>
@@ -284,7 +284,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
               aria-label={t('aiHistory.filterStatusAll')}
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="text-xs bg-bg-secondary border border-border rounded px-2 py-1 text-text-primary focus:outline-none focus:border-[var(--color-ai)]"
+              className="text-xs bg-bg-surface border border-border-subtle rounded px-2 py-1 text-text-primary focus:outline-none focus:border-[var(--color-ai)]"
               data-testid="ai-history-filter-status"
             >
               <option value="">{t('aiHistory.filterStatusAll')}</option>
@@ -301,7 +301,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
             type="button"
             onClick={() => setShowClearConfirm(true)}
             disabled={items.length === 0 || clearing}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs rounded border border-border bg-bg-secondary text-text-secondary hover:text-error hover:border-error/40 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs rounded border border-border-subtle bg-bg-surface text-text-secondary hover:text-error hover:border-error/40 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             data-testid="ai-history-clear-btn"
           >
             <Trash2 size={13} />
@@ -313,13 +313,13 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
       {/* Main Content List */}
       <div className="flex-1 overflow-y-auto p-6 space-y-3" data-testid="ai-history-list">
         {loading ? (
-          <div className="flex items-center justify-center h-48 text-text-muted gap-2 text-sm">
+          <div className="flex items-center justify-center h-48 text-text-secondary gap-2 text-sm">
             <Loader2 size={18} className="animate-spin text-[var(--color-ai)]" />
             {t('aiHistory.loading')}
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-text-muted text-sm gap-2">
-            <Sparkles size={28} className="text-text-muted/40 mb-1" />
+          <div className="flex flex-col items-center justify-center h-64 text-text-secondary text-sm gap-2">
+            <Sparkles size={28} className="text-text-secondary/40 mb-1" />
             <p>{t('aiHistory.empty')}</p>
           </div>
         ) : (
@@ -332,25 +332,25 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
             return (
               <div
                 key={item.id}
-                className="rounded-lg border border-border bg-bg-secondary/30 hover:border-border/80 transition-colors overflow-hidden"
+                className="rounded-lg border border-border-subtle bg-bg-surface/30 hover:border-border-subtle/80 transition-colors overflow-hidden"
                 data-testid="ai-history-item"
               >
                 {/* Item header row */}
                 <button
                   type="button"
                   onClick={() => handleToggleExpand(item)}
-                  className="w-full text-left p-4 flex flex-col gap-2 hover:bg-bg-secondary/50 transition-colors cursor-pointer"
+                  className="w-full text-left p-4 flex flex-col gap-2 hover:bg-bg-surface/50 transition-colors cursor-pointer"
                   aria-expanded={isExpanded}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-text-muted">
+                      <span className="text-text-secondary">
                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </span>
                       <span className="font-semibold text-text-primary text-sm truncate">
                         {translateUse(item.use)}
                       </span>
-                      <span className="text-xs text-text-muted truncate">
+                      <span className="text-xs text-text-secondary truncate">
                         ({item.providerName || item.providerId} · {item.modelId}
                         {item.reasoningEffort ? ` · ${item.reasoningEffort}` : ''}
                         {item.variant ? ` #${item.variant}` : ''})
@@ -359,23 +359,23 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
 
                     <div className="flex items-center gap-3 shrink-0">
                       {renderStatusBadge(item.resultStatus)}
-                      <span className="text-xs text-text-muted">{formatDate(item.startedAt)}</span>
+                      <span className="text-xs text-text-secondary">{formatDate(item.startedAt)}</span>
                     </div>
                   </div>
 
                   {/* Metadata line */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary pl-6">
-                    <span className="flex items-center gap-1 text-text-muted">
+                    <span className="flex items-center gap-1 text-text-secondary">
                       <Clock size={12} />
                       {formatDuration(item.durationMs)}
                     </span>
-                    <span className="flex items-center gap-1 text-text-muted">
+                    <span className="flex items-center gap-1 text-text-secondary">
                       <Cpu size={12} />
                       {item.deviceLabel ?? item.deviceId.slice(0, 8)}
                     </span>
-                    <span className="text-text-muted">{formatTokens(item)}</span>
+                    <span className="text-text-secondary">{formatTokens(item)}</span>
                     {item.branch && (
-                      <span className="text-text-muted">
+                      <span className="text-text-secondary">
                         rama: <code className="font-mono text-text-secondary">{item.branch}</code>
                       </span>
                     )}
@@ -384,7 +384,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
                         <GitCommit size={12} />
                         {item.commitHash.slice(0, 7)}
                         {item.commitEdited && (
-                          <span className="text-text-muted font-sans">({t('aiHistory.commitEdited')})</span>
+                          <span className="text-text-secondary font-sans">({t('aiHistory.commitEdited')})</span>
                         )}
                       </span>
                     )}
@@ -393,9 +393,9 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="border-t border-border/60 bg-bg-secondary/20 p-4 pl-10 space-y-4 text-xs">
+                  <div className="border-t border-border-subtle/60 bg-bg-surface/20 p-4 pl-10 space-y-4 text-xs">
                     {isDetailLoading ? (
-                      <div className="flex items-center gap-2 text-text-muted py-2">
+                      <div className="flex items-center gap-2 text-text-secondary py-2">
                         <Loader2 size={14} className="animate-spin text-[var(--color-ai)]" />
                         {t('aiHistory.loading')}
                       </div>
@@ -404,16 +404,16 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
                         {/* Output text */}
                         {item.resultText && (
                           <div>
-                            <div className="text-text-muted text-xs font-medium mb-1.5">
+                            <div className="text-text-secondary text-xs font-medium mb-1.5">
                               {item.resultStatus === 'failed' || item.resultStatus === 'cancelled'
                                 ? t('aiHistory.errorDetail')
                                 : t('aiHistory.resultText')}
                             </div>
                             <div
-                              className={`p-3 rounded-lg border border-border/40 select-text whitespace-pre-wrap font-mono text-xs max-h-72 overflow-y-auto ${
+                              className={`p-3 rounded-lg border border-border-subtle/40 select-text whitespace-pre-wrap font-mono text-xs max-h-72 overflow-y-auto ${
                                 item.resultStatus === 'failed' || item.resultStatus === 'cancelled'
                                   ? 'bg-error/5 text-text-secondary'
-                                  : 'bg-bg-secondary/40 text-[var(--color-ai)]'
+                                  : 'bg-bg-surface/40 text-[var(--color-ai)]'
                               }`}
                             >
                               {item.resultText}
@@ -449,7 +449,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
 
                             {isPromptOpen && (
                               <div className="mt-2">
-                                <pre className="font-mono text-xs whitespace-pre-wrap select-text p-3 rounded-lg bg-bg-secondary/60 border border-border/40 max-h-96 overflow-y-auto text-text-primary">
+                                <pre className="font-mono text-xs whitespace-pre-wrap select-text p-3 rounded-lg bg-bg-surface/60 border border-border-subtle/40 max-h-96 overflow-y-auto text-text-primary">
                                   {detail.promptSent}
                                 </pre>
                               </div>
@@ -472,7 +472,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
               type="button"
               onClick={() => void fetchHistory(items.length, true)}
               disabled={loadingMore}
-              className="px-4 py-1.5 text-xs rounded border border-border bg-bg-secondary text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="px-4 py-1.5 text-xs rounded border border-border-subtle bg-bg-surface text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 flex items-center gap-1.5"
               data-testid="ai-history-load-more"
             >
               {loadingMore && <Loader2 size={12} className="animate-spin text-[var(--color-ai)]" />}

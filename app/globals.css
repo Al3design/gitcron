@@ -67,9 +67,14 @@
   --color-git-delete: light-dark(#a81c1c, #ff716c); /* Untracked deletions / Deleted files (Red) */
   --color-git-mod: light-dark(#8f3c00, #fd9d1a); /* Staged modifications / Orange tag labels | Chronometric Canvas Tag orbits */
 
-  /* Shared Auxiliary Accent */
-  --color-accent-purple: light-dark(#5929a5, #b58bf8); /* Deep purple helper tag colors */
-  --color-ai: var(--color-accent-purple); /* violeta = IA (D20) */
+  /* Shared Auxiliary Accent & AI Multicolored Palette (Affects: AI panels, badges, thinking states, D20) */
+  --color-accent-purple: light-dark(#5929a5, #c4a7ff); /* Deep purple helper tag colors (claro: #5929a5 5.67:1, oscuro: #c4a7ff 4.94:1 sobre overlay) */
+  --color-ai-violet: light-dark(#5929a5, #c4a7ff); /* Violeta de IA (claro: #5929a5 5.67:1, oscuro: #c4a7ff 4.94:1) */
+  --color-ai-blue: light-dark(#163ea8, #7cb4ff); /* Azul de IA (claro: #163ea8 5.66:1, oscuro: #7cb4ff 4.71:1) */
+  --color-ai-teal: light-dark(#0a5c56, #6fdcc0); /* Verde agua de IA (claro: #0a5c56 4.84:1, oscuro: #6fdcc0 6.07:1) */
+  --color-ai-rose: light-dark(#8b1373, #f49ac8); /* Rosa de IA (claro: #8b1373 5.31:1, oscuro: #f49ac8 4.94:1) */
+  --color-ai: var(--color-ai-violet); /* violeta = IA (D20) */
+  --ai-gradient: linear-gradient(120deg, var(--color-ai-violet), var(--color-ai-blue), var(--color-ai-teal), var(--color-ai-rose)); /* Degradé multicolor de IA (D20 ampliado) */
 
   /* Shared Spacing Scale (Affects: padding, margin, gap across all views) */
   --space-0: 0;
@@ -256,6 +261,13 @@ textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Red de seguridad para listas desplegables (<select>): fondo y texto legibles */
+option,
+optgroup {
+  background-color: var(--color-bg-overlay);
+  color: var(--color-text-primary);
 }
 
 /* ──────────── Light theme (genuine tokens) ──────────── */
@@ -797,20 +809,22 @@ body, .font-sans {
   background: linear-gradient(
     90deg,
     var(--color-text-secondary),
-    var(--color-ai),
-    var(--color-primary),
+    var(--color-ai-violet),
+    var(--color-ai-blue),
+    var(--color-ai-teal),
+    var(--color-ai-rose),
     var(--color-text-secondary)
   );
-  background-size: 200% 100%;
+  background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: ai-thinking-shimmer 2s linear infinite;
+  animation: ai-thinking-shimmer 2.5s linear infinite;
 }
 
 @keyframes ai-thinking-shimmer {
   from {
-    background-position: 200% 0;
+    background-position: 250% 0;
   }
   to {
     background-position: 0% 0;
@@ -837,13 +851,58 @@ body, .font-sans {
   }
 }
 
-/* Bloque con degradé suave de IA (D20), usado en las superficies de IA. */
+/* Superficie con marco en degradé multicolor de IA y velo suave interior (D20 ampliado).
+   Sucesora de .ai-panel (.ai-panel queda como alias compatible). */
+.ai-surface,
 .ai-panel {
-  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent)),
-    var(--color-bg-overlay);
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 60%) padding-box,
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--color-ai-rose) 7%, transparent) 0%, transparent 60%) padding-box,
+    linear-gradient(var(--color-bg-overlay), var(--color-bg-overlay)) padding-box,
+    var(--ai-gradient) border-box;
+}
+
+/* Con colores forzados (alto contraste de Windows) el navegador saca los fondos: el marco
+   en degradé, que es un fondo, desaparecería y el contenedor quedaría sin borde. */
+@media (forced-colors: active) {
+  .ai-surface,
+  .ai-panel {
+    border-color: CanvasText;
+  }
+}
+
+/* Variante de encabezado con borde inferior en degradé multicolor */
+.ai-surface-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ai-violet) 35%, var(--color-border-subtle));
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-ai-rose) 7%, transparent) 0%, transparent 55%),
+    var(--color-bg-surface);
+}
+
+/* Degradé multicolor recortado en las letras (D20 ampliado).
+   Sólo en títulos y marcas (seminegrita o más, font-size sm o mayor). */
+.ai-gradient-text {
+  background: var(--ai-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@supports not (background-clip: text) {
+  .ai-gradient-text {
+    background: none;
+    color: var(--color-ai);
+  }
+}
+
+@media (forced-colors: active) {
+  .ai-gradient-text {
+    background: none;
+    color: CanvasText;
+  }
 }
 
 .pipeline-icon {
@@ -2027,15 +2086,17 @@ body, .font-sans {
 
 /* ─── Sesión de runtime (lanzador) ─── */
 
-/* Única superficie de Pipeline que abre procesos: se separa del resto con un
-   borde de acento para que no se confunda con los paneles de sólo lectura. */
+/* Única superficie de Pipeline que abre procesos: lleva la superficie de IA
+   con borde en degradé multicolor y velo suave interior (D20 ampliado). */
 .pipeline-launcher {
   padding: var(--space-4);
-  border: 1px solid var(--color-border-subtle);
-  border-left-width: 3px;
-  border-left-color: var(--color-primary);
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  background-color: var(--color-bg-surface);
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 60%) padding-box,
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--color-ai-rose) 7%, transparent) 0%, transparent 60%) padding-box,
+    linear-gradient(var(--color-bg-surface), var(--color-bg-surface)) padding-box,
+    var(--ai-gradient) border-box;
   margin-bottom: var(--space-4);
 }
 

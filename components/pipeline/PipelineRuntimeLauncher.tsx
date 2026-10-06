@@ -249,7 +249,7 @@ export function PipelineRuntimeLauncher({
     // reintentar, igual que cuando el descubrimiento no encuentra nada lanzable.
     return (
       <section className="pipeline-launcher" aria-busy="true" aria-live="polite">
-        <h3 className="pipeline-section__title">{t('pipeline.launcher.title')}</h3>
+        <h3 className="pipeline-section__title ai-gradient-text">{t('pipeline.launcher.title')}</h3>
         <div className="pipeline-launcher__empty">
           <p>{t('pipeline.launcher.discovering')}</p>
         </div>
@@ -271,7 +271,7 @@ export function PipelineRuntimeLauncher({
       aria-labelledby="pipeline-launcher-title"
       data-blocked={blockedByFixture || undefined}
     >
-      <h3 id="pipeline-launcher-title" className="pipeline-section__title">
+      <h3 id="pipeline-launcher-title" className="pipeline-section__title ai-gradient-text">
         {t('pipeline.launcher.title')}
       </h3>
 

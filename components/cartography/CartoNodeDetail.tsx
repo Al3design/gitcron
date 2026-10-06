@@ -205,7 +205,7 @@ function ExplanationBlock({
   }
   if (explanation) {
     return (
-      <div className="ai-panel px-3 py-2.5">
+      <div className="ai-surface ai-panel px-3 py-2.5">
         <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-carto-text">
           {explanation.text}
         </p>

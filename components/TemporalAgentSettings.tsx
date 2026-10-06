@@ -344,7 +344,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
   return (
     <section style={{ color: 'var(--color-text-primary)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-        <h3 style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, margin: 0 }}>Temporal Agent</h3>
+        <h3 className="ai-gradient-text" style={{ fontSize: 'var(--font-size-md)', fontWeight: 600, margin: 0 }}>Temporal Agent</h3>
         <span style={{ fontSize: 'var(--font-size-xs)', color: COLOR_PRIMARY, border: `1px solid ${COLOR_PRIMARY}`, borderRadius: 'var(--radius-full)', padding: 'var(--space-1) var(--space-2)' }}>
           {t('temporalAgent.experimental')}
         </span>
@@ -440,7 +440,7 @@ export function TemporalAgentSettings({ repoPath, repoName, onPrediction, onConf
       {/* Prediction trigger — visually distinct from save/config: this is the expensive action. */}
       {/* El borde y el degradé de IA salen de la clase compartida `.ai-panel` (D20); acá
           sólo el aire y el redondeo de las demás tarjetas. */}
-      <div className="ai-panel" style={aiCardStyle}>
+      <div className="ai-surface ai-panel" style={aiCardStyle}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-[200px] flex-1">
             <AiUseLine use="gitcron-temporal" repoPath={repoPath} />

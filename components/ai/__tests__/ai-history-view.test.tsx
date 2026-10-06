@@ -229,4 +229,27 @@ describe('AiHistoryView Component', () => {
     expect(within(itemZh).getByText('提交信息起草')).toBeTruthy();
     expect(within(itemZh).getByText('已生成')).toBeTruthy();
   });
+  it('aplica clases de tokens válidas y estilo ai-surface-header / ai-gradient-text', async () => {
+    render(<AiHistoryView repoPath="C:/repo-test" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-history-view')).toBeTruthy();
+    });
+
+    const view = screen.getByTestId('ai-history-view');
+    const header = view.firstElementChild as HTMLElement;
+    expect(header.className).toContain('ai-surface-header');
+    expect(header.className).toContain('border-border-subtle');
+    expect(header.className.split(/\s+/)).not.toContain('border-border');
+    expect(header.className.split(/\s+/)).not.toContain('bg-bg-secondary');
+
+    const title = screen.getByText(/Historial de IA/);
+    expect(title.className).toContain('ai-gradient-text');
+
+    const selectUse = screen.getByTestId('ai-history-filter-use');
+    expect(selectUse.className).toContain('bg-bg-surface');
+    expect(selectUse.className).toContain('border-border-subtle');
+    expect(selectUse.className.split(/\s+/)).not.toContain('bg-bg-secondary');
+    expect(selectUse.className.split(/\s+/)).not.toContain('border-border');
+  });
 });

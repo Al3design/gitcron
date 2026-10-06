@@ -735,29 +735,31 @@ describe('AiSettingsSection (tarea 6.1)', () => {
     const headerOpenCode = screen.getByTestId('accordion-group-opencode').querySelector('button')!;
     const headerMcp = screen.getByTestId('accordion-group-mcp').querySelector('button')!;
 
-    // Por omisión, el grupo 1 está abierto (aria-expanded="true") y los demás cerrados
-    expect(headerUses.getAttribute('aria-expanded')).toBe('true');
-    expect(headerProviders.getAttribute('aria-expanded')).toBe('false');
+    // Por omisión, el grupo "providers" está abierto (aria-expanded="true") y los demás cerrados
+    expect(headerProviders.getAttribute('aria-expanded')).toBe('true');
+    expect(headerUses.getAttribute('aria-expanded')).toBe('false');
     expect(headerFile.getAttribute('aria-expanded')).toBe('false');
     expect(headerOpenCode.getAttribute('aria-expanded')).toBe('false');
     expect(headerMcp.getAttribute('aria-expanded')).toBe('false');
 
     // Resúmenes visibles de los grupos cerrados
-    expect(screen.getByTestId('accordion-summary-providers').textContent).toMatch(/servidor/i);
+    expect(screen.getByTestId('accordion-summary-uses').textContent).toMatch(/general/i);
     expect(screen.getByTestId('accordion-summary-file').textContent).toMatch(/válido/i);
     expect(screen.getByTestId('accordion-summary-opencode')).toBeDefined();
     expect(screen.getByTestId('accordion-summary-mcp')).toBeDefined();
 
-    // Abrir grupo 2 con click de mouse
-    fireEvent.click(headerProviders);
-    expect(headerProviders.getAttribute('aria-expanded')).toBe('true');
-    // Se guarda en localStorage
-    const saved = JSON.parse(localStorage.getItem('gitcron:ai-settings:open-groups') || '{}');
-    expect(saved['providers']).toBe(true);
-
-    // Cerrar grupo 2
+    // Cerrar grupo providers con click de mouse
     fireEvent.click(headerProviders);
     expect(headerProviders.getAttribute('aria-expanded')).toBe('false');
+    // Se guarda en localStorage
+    const saved = JSON.parse(localStorage.getItem('gitcron:ai-settings:open-groups') || '{}');
+    expect(saved['providers']).toBe(false);
+
+    // Abrir grupo uses con click de mouse
+    fireEvent.click(headerUses);
+    expect(headerUses.getAttribute('aria-expanded')).toBe('true');
+    const savedUses = JSON.parse(localStorage.getItem('gitcron:ai-settings:open-groups') || '{}');
+    expect(savedUses['uses']).toBe(true);
 
     // Abrir grupo 4
     fireEvent.click(headerOpenCode);
@@ -1215,5 +1217,33 @@ describe('AiSettingsSection (tarea 6.1)', () => {
 
       unmount();
     }
+  });
+
+  it('resumen de Usos y parámetros sin modelo general muestra "General: sin modelo — sin excepciones"', async () => {
+    const mockStatusNoGeneral: AiConfigStatusResult = {
+      files: [{ path: 'C:/Users/test/.config/gitcron/gitcron.json', scope: 'global', exists: true }],
+      warnings: [],
+      generalModel: null,
+      smallModel: null,
+      providers: [],
+      uses: [],
+    };
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: mockStatusNoGeneral })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    render(<AiSettingsSection />);
+    await waitFor(() => {
+      const summary = screen.getByTestId('accordion-summary-uses');
+      expect(summary.textContent).toBe('General: sin modelo — sin excepciones');
+      expect(summary.textContent).not.toContain('· — —');
+    });
   });
 });

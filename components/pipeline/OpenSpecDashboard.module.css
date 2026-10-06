@@ -993,11 +993,13 @@
 .aiPanel {
   margin: 0 0 var(--sp-5);
   padding: var(--sp-4) var(--sp-4) var(--sp-2);
-  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
   border-radius: var(--radius-md);
+  border: 1px solid transparent;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--color-ai) 8%, transparent), color-mix(in srgb, var(--color-primary) 6%, transparent)),
-    var(--color-bg-overlay);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 45%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--color-ai-rose) 8%, transparent) 0%, transparent 45%),
+    padding-box var(--color-bg-overlay),
+    border-box var(--ai-gradient);
 }
 /* El primer y el último bloque de adentro no repiten el aire del contenedor:
    con sus propios márgenes, el recuadro quedaba con el doble de aire arriba y
@@ -1284,8 +1286,13 @@
   gap: var(--sp-2);
   margin: 0 var(--sp-3) var(--sp-2);
   padding: var(--sp-3);
-  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, var(--color-border-subtle));
-  background: color-mix(in srgb, var(--color-bg-overlay) 46%, transparent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 60%) padding-box,
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--color-ai-rose) 7%, transparent) 0%, transparent 60%) padding-box,
+    linear-gradient(var(--color-bg-overlay), var(--color-bg-overlay)) padding-box,
+    var(--ai-gradient) border-box;
 }
 /* El estado («en vivo», «terminó») en el encabezado de la sección, sin
    cursiva: es una etiqueta, no énfasis. Violeta (D20); «terminó» queda

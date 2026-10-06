@@ -221,7 +221,7 @@ function Bubble({
   // Respuesta de la IA: prosa + nodos citados (clickeables) + procedencia.
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] ai-panel px-2.5 py-1.5 text-xs leading-relaxed text-carto-text">
+      <div className="max-w-[90%] ai-surface ai-panel px-2.5 py-1.5 text-xs leading-relaxed text-carto-text">
         <p className="whitespace-pre-wrap break-words">{turn.text}</p>
 
         {turn.usedNodes.length > 0 ? (

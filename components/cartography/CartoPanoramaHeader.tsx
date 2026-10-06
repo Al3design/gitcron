@@ -89,7 +89,7 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: p
           </span>
         ) : null}
       </summary>
-      <section className={`mx-4 mb-3 p-4 ${aiEnabled ? 'ai-panel' : 'rounded-lg border border-carto-accent/25 bg-carto-node/[0.035]'}`}>
+      <section className={`mx-4 mb-3 p-4 ${aiEnabled ? 'ai-surface ai-panel' : 'rounded-lg border border-carto-accent/25 bg-carto-node/[0.035]'}`}>
         {aiEnabled && (
           <div className="mb-3 flex flex-col gap-1.5 border-b border-carto-grid pb-2">
             <AiUseLine use="gitcron-cartography" repoPath={repoPath} />

@@ -1,11 +1,15 @@
 /* Selector compartido para elegir modelo e intensidad de un uso de IA (tarea 4.5).
-   Sigue D20: violeta de la IA (--color-ai), degradé suave y bordes sutiles. */
+   Sigue D20 ampliado: borde con degradé multicolor de IA y velo suave interior. */
 .pickerCard {
   margin-top: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-ai) 35%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-ai) 5%, var(--color-bg-base));
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-ai-violet) 8%, transparent) 0%, transparent 60%) padding-box,
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--color-ai-rose) 7%, transparent) 0%, transparent 60%) padding-box,
+    linear-gradient(var(--color-bg-base), var(--color-bg-base)) padding-box,
+    var(--ai-gradient) border-box;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

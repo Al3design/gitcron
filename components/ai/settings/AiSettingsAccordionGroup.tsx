@@ -37,7 +37,7 @@ export function AiSettingsAccordionGroup({
   return (
     <div
       data-testid={`accordion-group-${id}`}
-      className="border border-[var(--color-border-subtle)] rounded-lg overflow-hidden bg-[var(--color-bg-surface)] transition-colors"
+      className="ai-surface rounded-lg overflow-hidden transition-colors"
     >
       <button
         type="button"
@@ -51,7 +51,7 @@ export function AiSettingsAccordionGroup({
           {icon && <span className="text-[var(--color-text-secondary)] shrink-0">{icon}</span>}
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm text-[var(--color-text-primary)]">{title}</span>
+              <span className="font-semibold text-sm ai-gradient-text">{title}</span>
               {badge}
             </div>
             {summary && (
