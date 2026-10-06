@@ -62,16 +62,26 @@ Nada de esto está probado: es lo que dice el código. Por eso lo primero es med
 - **Mantenimiento:** es una capa nueva de pruebas. Lo grabado vive en el repositorio y se vuelve a grabar cuando
   la pantalla cambia; el proyecto todavía no es 1.0.
 
+## Sin modelo: el auditor como agente (corregido el 2026-10-06, a pregunta de Ale)
+
+El modelo sólo hace falta para los pasos en lenguaje común (`agent.act`, `agent.assert`). El servidor MCP
+(`e2e mcp`, `docs/reference/mcp.mdx`) **no necesita modelo**: un agente de código (el auditor, en Claude Code) abre
+una sesión, maneja la app con herramientas fijas y su herramienta `locate` devuelve el código de prueba del
+elemento que encontró. Las pruebas que salen de ahí usan `screen` y `expect` (localizadores y verificaciones, como
+Playwright) y corren sin modelo, sin cuenta y sin costo. Se pierde que el paso se arregle solo cuando la pantalla
+cambia: se actualiza a mano, cosa que la auditoría de cada tanda ya hace. Los pasos con modelo quedan para después,
+si hacen falta (con un modelo local que acepte imágenes, o una suscripción).
+
 ## Recomendación
 
 Medir antes de decidir, con una tanda de prueba de concepto fuera de las dependencias de GitCron:
 
 1. Una forma de arrancar GitCron aislado (datos, configuración y baúl de prueba) con `--remote-debugging-port`.
-2. `e2e` instalado en una carpeta aparte, con la telemetría apagada y el modelo de la suscripción de ChatGPT.
+2. `e2e` instalado en una carpeta aparte, con la telemetría apagada y sin modelo (el auditor maneja la app por `e2e mcp`).
 3. Una sola prueba: abrir Configuración → «Motores y modelos», desplegar un uso, elegir un modelo, guardar y ver
    que quedó; y la misma prueba sobre el error del selector de la tanda 24, para comprobar que lo habría visto.
-4. Anotar: si anda en Windows nativo o pide WSL, si el enganche por CDP y la navegación funcionan con Electron,
-   cuánto tarda por prueba (con y sin lo grabado) y cuánto consume del plan.
+4. Anotar: si anda en Windows nativo o pide WSL, si el enganche por CDP y la navegación funcionan con Electron
+   y cuánto tarda cada prueba.
 
 Con eso se decide si se suma a `pnpm verificar` (o como paso aparte de las auditorías) o si se queda Playwright
 solo, que maneja Electron sin agregados (`_electron.launch`) y no necesita modelo. Mientras tanto, `e2e mcp` sirve
