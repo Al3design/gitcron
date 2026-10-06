@@ -268,6 +268,14 @@ Por eso:
 - **Auditado en la segunda parte de 5.3 (2026-10-05):** «el servicio corre» se decidía por cualquier texto en la
   salida de `opencode service status`; ahora sólo cuenta una dirección (`http://…`), que es lo medido. Falta todavía
   retomar sesiones (tanda propia) y el recorrido real con Qwen.
+- **Medido el 2026-10-06 antes de retomar sesiones** (OpenCode 2.0.20, modelo gratis de su servicio
+  `opencode/ling-3.1-flash-free` en una carpeta temporal, sin `--auto`; capturas
+  `opencode-2.0.20-resume-*`): `run --session <id>` con el mismo `-m` **retoma**: devuelve el mismo `sessionID`
+  y recuerda lo de la corrida anterior (le pedí recordar 7341 y contestó 7341; 5 s la primera, 2 s la segunda). El
+  `sessionID` tiene la forma `ses_…`. **Una sesión que no existe no se avisa como tal**: sale 1 con un único evento
+  `{"type":"error","sessionID":<el pedido>,"error":{"type","message",…}}` que habla de otra cosa (ese día, el
+  límite del plan gratis); GitCron muestra el mensaje y no lo traduce a «sesión inexistente». El servidor de la
+  casa siguió sin contestar: el recorrido con Qwen sigue pendiente.
 - **La instrucción va por la entrada estándar**, que se cierra al terminar de escribirla: `run` la toma como
   mensaje (probado con dos renglones y comillas). En la máquina de Ale OpenCode es `opencode.CMD` (instalado con
   pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
