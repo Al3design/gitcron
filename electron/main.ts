@@ -2,6 +2,9 @@
 // Proceso main de Electron: ciclo de vida de la app, splash, ventana principal,
 // protocolo app:// y registro de los handlers IPC (ver electron/ipc/*).
 
+// Primero de todo: con GITCRON_PROFILE_DIR, las rutas de la persona salen del perfil de prueba
+// (ver electron/profile.ts). Tiene que cargarse antes que cualquier módulo que pida una ruta.
+import './profile';
 import { app, BrowserWindow, Menu, protocol, net, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
