@@ -305,14 +305,19 @@ export function AiSettingsGroupUses({
                     <span
                       className={cn(
                         'px-2 py-0.5 rounded text-[length:var(--font-size-2xs)] font-bold border',
-                        useInfo.isException
+                        useInfo.modelSource === 'agent'
                           ? 'bg-[var(--color-ai)]/15 text-[var(--color-ai)] border-[var(--color-ai)]/30'
                           : 'bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)]',
                       )}
                     >
+                      {/* «Excepción» se aparta de una general que existe; con modelo propio y sin
+                          general no hay de qué apartarse, pero tampoco «sigue la general»
+                          (lo encontró la prueba e2e del 2026-10-06 con un perfil nuevo). */}
                       {useInfo.isException
                         ? t('aiConfig.useExceptionBadge')
-                        : t('aiConfig.useGeneralModelBadge')}
+                        : useInfo.modelSource === 'agent'
+                          ? t('aiConfig.useOwnModelBadge')
+                          : t('aiConfig.useGeneralModelBadge')}
                     </span>
                   </div>
 

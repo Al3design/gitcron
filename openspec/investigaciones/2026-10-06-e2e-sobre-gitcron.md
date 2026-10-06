@@ -72,6 +72,32 @@ Playwright) y corren sin modelo, sin cuenta y sin costo. Se pierde que el paso s
 cambia: se actualiza a mano, cosa que la auditoría de cada tanda ya hace. Los pasos con modelo quedan para después,
 si hacen falta (con un modelo local que acepte imágenes, o una suscripción).
 
+## Prueba de concepto (2026-10-06): anda en Windows, sin WSL
+
+Medido con e2e 0.17.0 y `@e2e-dev/web` 0.12.0 sobre Node 24.21.0 (pide 22.22.3 o más), en Windows nativo:
+
+- **GitCron aislado:** `GITCRON_PROFILE_DIR` (`electron/profile.ts`, `3dc69bb`) saca de una carpeta de prueba
+  `userData` y la carpeta de usuario; convive con el GitCron de todos los días.
+- **Enganche:** un proveedor de navegadores con `scope: 'attempt'` abre un GitCron nuevo por intento con
+  `--remote-debugging-port` libre, espera a que la única página sea la pantalla, y al soltar mata el árbol
+  (`taskkill /T`) y borra el perfil. El modo persistente y la navegación funcionan con Electron 42.
+- **La pantalla:** `app.command` levanta `next dev -p 3001` (con `reuseExisting`, usa el de quien esté
+  trabajando). El entorno del comando es mínimo: en Windows hay que pasarle `PATH` y `SystemRoot`, y la ruta de
+  Node completa.
+- **Trampa:** el indicador de Next.js en modo desarrollo («N») tapa el botón de Configuración y se lleva los
+  clics. Se oculta con un `initScripts` que adopta una hoja de estilos (un `<style>` agregado se pierde al hidratar).
+- **Tiempos:** ~8 s el arranque del servidor si ya compiló (30 s la primera vez) y ~7 s por prueba con GitCron
+  incluido. No queda nada abierto ni carpetas sueltas.
+- **Lo que encontró en la primera corrida**, que ninguna prueba veía: la pantalla de inicio sin repositorios con
+  claves de traducción en crudo (desde `887dfecc`); al buscar el resto con una prueba nueva
+  (`lib/__tests__/i18n-claves-usadas.test.ts`), el diálogo de descartar cambios sin textos desde que existe
+  (`c26c8485`) y tres claves más; en «Motores y modelos», un uso con modelo propio sin elección general decía
+  «Sigue la general»; y la fila desplegada de un uso muestra dos botones «Elegir modelo».
+
+Lo guardado de la prueba de concepto está en `C:/www/gitcron-e2e-poc`, fuera del repositorio (dentro, `tsc` y el build
+revisan sus pruebas y no tienen el paquete `e2e`): configuración, proveedor y dos
+pruebas. Para correrlo: `npm install` ahí y `npx e2e run` con `E2E_TELEMETRY_DISABLED=1`.
+
 ## Recomendación
 
 Medir antes de decidir, con una tanda de prueba de concepto fuera de las dependencias de GitCron:

@@ -185,8 +185,8 @@ export function RepoTabs({
                     e.stopPropagation();
                     if (!isDraggingRef.current) onClose(idx);
                   }}
-                  aria-label={t('repoTabs.closeTab', { repo: repo.name })}
-                  title={t('repoTabs.closeTab', { repo: repo.name })}
+                  aria-label={t('repoTabs.close', { repo: repo.name })}
+                  title={t('repoTabs.close', { repo: repo.name })}
                   className="h-full px-1.5 text-text-secondary/50 hover:text-text-primary transition-colors flex items-center"
                 >
                   <X size={11} />
