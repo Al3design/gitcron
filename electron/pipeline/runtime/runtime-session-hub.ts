@@ -117,6 +117,8 @@ export interface StartRuntimeSessionInput {
   reasoningEffort?: string | null;
   changeId: string | null;
   taskId: string | null;
+  resumeSessionId?: string | null;
+  continuesSessionId?: string | null;
 }
 
 export type StartRuntimeSessionResult =
@@ -142,6 +144,7 @@ export interface RuntimeSessionHistoryStore {
 
 export class RuntimeSessionHub {
   private readonly live = new Map<string, LiveSession>();
+  private readonly starting = new Set<string>();
   private readonly notifyTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -201,86 +204,99 @@ export class RuntimeSessionHub {
   }
 
   async start(input: StartRuntimeSessionInput): Promise<StartRuntimeSessionResult> {
-    const instruction = input.instruction.trim();
-    if (!instruction) return { ok: false, error: 'instruction_required' };
-
-    const existing = this.live.get(input.canonicalRepoPath);
-    // Una sesión por repo: dos corridas simultáneas sobre el mismo working tree
-    // se pisarían los archivos y la vista no podría atribuir qué hizo cuál.
-    if (existing?.builder.snapshot().active) return { ok: false, error: 'session_already_active' };
-
-    const entry = this.adapters.find((candidate) => candidate.runtime === input.runtime);
-    if (!entry) return { ok: false, error: 'unknown_runtime' };
-    if (!entry.launchable) return { ok: false, error: 'runtime_not_launchable' };
-
-    const adapter = entry.create(input.canonicalRepoPath, entry.executable);
-    if (!adapter.start) return { ok: false, error: 'runtime_not_launchable' };
-
-    const abort = new AbortController();
-    const workingTreeBefore = this.evidenceCollector
-      ? await this.evidenceCollector.captureWorkingTree(input.canonicalRepoPath).catch(() => null)
-      : null;
-    let session: RuntimeSession;
+    // Reservar antes de capturar evidencia o esperar al adaptador: dos pedidos
+    // de continuación pueden llegar mientras el primero todavía no es una sesión viva.
+    if (this.starting.has(input.canonicalRepoPath)) return { ok: false, error: 'session_already_active' };
+    this.starting.add(input.canonicalRepoPath);
     try {
-      session = await adapter.start({
+      const instruction = input.instruction.trim();
+      if (!instruction) return { ok: false, error: 'instruction_required' };
+
+      const existing = this.live.get(input.canonicalRepoPath);
+      // Una sesión por repo: dos corridas simultáneas sobre el mismo working tree
+      // se pisarían los archivos y la vista no podría atribuir qué hizo cuál.
+      if (existing?.builder.snapshot().active) return { ok: false, error: 'session_already_active' };
+
+      const entry = this.adapters.find((candidate) => candidate.runtime === input.runtime);
+      if (!entry) return { ok: false, error: 'unknown_runtime' };
+      if (!entry.launchable) return { ok: false, error: 'runtime_not_launchable' };
+
+      const adapter = entry.create(input.canonicalRepoPath, entry.executable);
+      if (!adapter.start) return { ok: false, error: 'runtime_not_launchable' };
+
+      const abort = new AbortController();
+      const workingTreeBefore = this.evidenceCollector
+        ? await this.evidenceCollector.captureWorkingTree(input.canonicalRepoPath).catch(() => null)
+        : null;
+      let session: RuntimeSession;
+      try {
+        session = await adapter.start({
+          repoId: input.repoId,
+          canonicalRepoPath: input.canonicalRepoPath,
+          changeId: input.changeId,
+          taskId: input.taskId,
+          runId: randomUUID(),
+          attemptId: randomUUID(),
+          parentSessionId: null,
+          parentAgentId: null,
+          orchestrationMode: 'direct',
+          // GitCron coordina, pero no es un runtime: nombrarlo acá inventaría un
+          // ejecutor que no existe.
+          orchestratorRuntime: null,
+          provider: null,
+          requestedModel: input.requestedModel,
+          reasoningEffort: input.reasoningEffort ?? null,
+          resumeSessionId: input.resumeSessionId ?? null,
+          role: input.role,
+          instruction,
+          signal: abort.signal,
+        });
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'start_failed' };
+      }
+
+      const builder = new RuntimeProjectionBuilder({
         repoId: input.repoId,
-        canonicalRepoPath: input.canonicalRepoPath,
-        changeId: input.changeId,
-        taskId: input.taskId,
-        runId: randomUUID(),
-        attemptId: randomUUID(),
-        parentSessionId: null,
-        parentAgentId: null,
-        orchestrationMode: 'direct',
-        // GitCron coordina, pero no es un runtime: nombrarlo acá inventaría un
-        // ejecutor que no existe.
-        orchestratorRuntime: null,
-        provider: null,
+        sessionId: session.identity.sessionId,
+        runtime: session.identity.runtime,
+        changeId: session.identity.changeId,
+        taskId: session.identity.taskId,
+        role: session.identity.role,
+        startedAt: session.startedAt,
+        controlCapabilities: entry.controlCapabilities,
         requestedModel: input.requestedModel,
         reasoningEffort: input.reasoningEffort ?? null,
-        role: input.role,
-        instruction,
-        signal: abort.signal,
+        continuesSessionId: input.continuesSessionId ?? null,
+        runtimeSessionId: input.resumeSessionId ?? null,
       });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'start_failed' };
+
+      this.controlBus.registerSession({
+        sessionId: session.identity.sessionId,
+        repoPath: input.canonicalRepoPath,
+        runtime: session.identity.runtime,
+        capabilities: entry.controlCapabilities,
+      });
+
+      const record: LiveSession = {
+        sessionId: session.identity.sessionId,
+        repoPath: input.canonicalRepoPath,
+        adapter,
+        session,
+        builder,
+        abort,
+        drained: Promise.resolve(),
+        stopRequested: false,
+        workingTreeBefore,
+      };
+      record.drained = this.drain(record);
+      this.live.set(input.canonicalRepoPath, record);
+      this.persist(record);
+      this.notify(input.canonicalRepoPath);
+
+      return { ok: true, sessionId: session.identity.sessionId };
+    } finally {
+      this.starting.delete(input.canonicalRepoPath);
     }
-
-    const builder = new RuntimeProjectionBuilder({
-      repoId: input.repoId,
-      sessionId: session.identity.sessionId,
-      runtime: session.identity.runtime,
-      changeId: session.identity.changeId,
-      taskId: session.identity.taskId,
-      role: session.identity.role,
-      startedAt: session.startedAt,
-      controlCapabilities: entry.controlCapabilities,
-    });
-
-    this.controlBus.registerSession({
-      sessionId: session.identity.sessionId,
-      repoPath: input.canonicalRepoPath,
-      runtime: session.identity.runtime,
-      capabilities: entry.controlCapabilities,
-    });
-
-    const record: LiveSession = {
-      sessionId: session.identity.sessionId,
-      repoPath: input.canonicalRepoPath,
-      adapter,
-      session,
-      builder,
-      abort,
-      drained: Promise.resolve(),
-      stopRequested: false,
-      workingTreeBefore,
-    };
-    record.drained = this.drain(record);
-    this.live.set(input.canonicalRepoPath, record);
-    this.persist(record);
-    this.notify(input.canonicalRepoPath);
-
-    return { ok: true, sessionId: session.identity.sessionId };
   }
 
   /** Termina la sesión del repo. Devuelve `false` si no había ninguna viva. */

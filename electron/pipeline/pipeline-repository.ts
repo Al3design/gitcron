@@ -124,7 +124,15 @@ export class PipelineRepository {
         const projection = JSON.parse(row.projection_json) as RuntimeProjection;
         // Las sesiones guardadas antes de que existiera la acumulación traen los
         // mensajes partidos en fragmentos. Se reparan acá, al entrar.
-        return [{ ...projection, activity: coalescePersistedActivity(projection.activity) }];
+        // Proyecciones viejas sin los campos de reanudación se leen con null.
+        return [{
+          ...projection,
+          runtimeSessionId: projection.runtimeSessionId ?? null,
+          requestedModel: projection.requestedModel ?? null,
+          reasoningEffort: projection.reasoningEffort ?? null,
+          continuesSessionId: projection.continuesSessionId ?? null,
+          activity: coalescePersistedActivity(projection.activity ?? []),
+        }];
       } catch {
         return [];
       }

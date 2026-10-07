@@ -1,5 +1,5 @@
 const SENSITIVE_KEY = /(authorization|cookie|token|secret|api[_-]?key|password|prompt|reasoning)/i;
-const SAFE_REASONING_METADATA_KEYS = new Set(['reasoningVisibility', 'reasoningTokens']);
+const SAFE_REASONING_METADATA_KEYS = new Set(['reasoningVisibility', 'reasoningTokens', 'reasoningEffort']);
 const MAX_STRING_LENGTH = 16_384;
 const MAX_ARRAY_LENGTH = 1_000;
 const MAX_DEPTH = 12;

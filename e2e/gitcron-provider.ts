@@ -128,7 +128,7 @@ function seedDefaultTestConfig(homeDir: string, mockPort: number): void {
   fs.writeFileSync(configFile, JSON.stringify(config, null, 2), 'utf8');
 }
 
-export function gitcronProvider(options: { fixture?: (homeDir: string) => void } = {}) {
+export function gitcronProvider(options: { fixture?: (homeDir: string) => void; afterSeed?: (homeDir: string) => Record<string, string> } = {}) {
   return {
     name: 'gitcron',
     scope: 'attempt' as const,
@@ -165,10 +165,18 @@ export function gitcronProvider(options: { fixture?: (homeDir: string) => void }
         seedDefaultTestConfig(homeDir, mockPort);
       }
 
+      let fixtureEnv: Record<string, string>;
+      try {
+        fixtureEnv = options.afterSeed?.(homeDir) ?? {};
+      } catch (error) {
+        mockServer?.close();
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        throw error;
+      }
       const port = await freePort();
       const child = spawn(ELECTRON, ['.', `--remote-debugging-port=${port}`, `--gitcron-e2e-run=${tag}`], {
         cwd: GITCRON_DIR,
-        env: { ...process.env, GITCRON_PROFILE_DIR: profile },
+        env: { ...process.env, ...fixtureEnv, GITCRON_PROFILE_DIR: profile },
         stdio: 'ignore',
         detached: process.platform !== 'win32',
         windowsHide: false,

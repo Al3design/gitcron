@@ -1,6 +1,6 @@
 import type { RuntimeDiscoveryEntry } from '@/types/pipeline';
 
-export type PipelineIntent = 'explore' | 'write-artifact' | 'implement-task' | 'resume';
+export type PipelineIntent = 'explore' | 'write-artifact' | 'implement-task';
 
 export type IntentAvailabilityStatus = 'available' | 'partial' | 'unavailable' | 'unverified';
 
@@ -22,6 +22,12 @@ export interface IntentCapabilityResolution {
  * correr comandos/pruebas en el repositorio, con confirmación previa humana).
  * La resolución se basa en lo que declara la entrada (launchable, modifiesRepo,
  * startRunsCommands, canResume, evidenceStatus) sin ramificar por nombre de runtime.
+ *
+ * NOTA DE DEPRECACIÓN (5.3, tanda 27):
+ * La intención `'resume'` del lanzador fue retirada porque nunca se usó y queda
+ * conceptualmente superada: continuar una sesión no es elegir motor y modelo
+ * desde el lanzador (se retoma con el mismo motor, modelo y nivel de la sesión original
+ * directamente desde el detalle de la sesión finalizada mediante `pipeline:runtime:resume`).
  */
 export function resolveIntentCapability(
   intent: PipelineIntent,
@@ -56,25 +62,6 @@ export function resolveIntentCapability(
       canLaunch: true,
       reasonKey: 'pipeline.launcher.intent.unverified',
       reason: 'Capacidad sin comprobar: el protocolo no se contrastó contra una referencia viva.',
-      alternativeRuntime: null,
-    };
-  }
-
-  // Reanudar: sin comprobar con ningún adaptador hoy; no se ofrece hasta tener prueba comprobada.
-  if (intent === 'resume') {
-    if (entry.canResume === true) {
-      return {
-        status: 'available',
-        canLaunch: true,
-        reason: '',
-        alternativeRuntime: null,
-      };
-    }
-    return {
-      status: 'unverified',
-      canLaunch: false,
-      reasonKey: 'pipeline.launcher.intent.resumeUnavailable',
-      reason: 'Reanudar sesión está sin comprobar hasta contar con pruebas del adaptador.',
       alternativeRuntime: null,
     };
   }

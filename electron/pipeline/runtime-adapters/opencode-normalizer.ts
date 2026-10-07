@@ -115,6 +115,22 @@ export class OpencodeStreamNormalizer implements RuntimeStreamNormalizer {
       return [];
     }
 
+    if (type === 'error') {
+      const errObj = asRecord(record.error);
+      const message = stringValue(errObj?.message) ?? stringValue(record.message) ?? 'unknown error';
+      return [
+        envelope(
+          scopedContext,
+          'runtime.error',
+          { message, error: record.error },
+          'verified',
+        ),
+        // El error de la corrida es fallo del agente aun si el CLI sale cero.
+        // `runtime.error` conserva el mensaje; `run.completed` fija el desenlace.
+        envelope(scopedContext, 'run.completed', { success: false, reason: message }, 'verified'),
+      ];
+    }
+
     // Tipo de evento desconocido: se cuenta y no corta la corrida (D8, Tanda 20 Decision 7)
     this.unknownEventCount++;
     return [

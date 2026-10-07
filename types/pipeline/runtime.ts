@@ -99,6 +99,7 @@ export interface RuntimeSessionRequest {
   requestedModel: string | null;
   role: PipelineAgentRole;
   reasoningEffort?: string | null;
+  resumeSessionId?: string | null;
 }
 
 export interface RuntimeSession {

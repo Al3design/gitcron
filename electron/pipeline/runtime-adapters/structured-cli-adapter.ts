@@ -11,7 +11,7 @@ import { AsyncEventQueue } from './async-event-queue';
 import { BoundedJsonlDecoder, type JsonlDecodeBatch } from './jsonl-decoder';
 import { createPipelineIdentity, envelope, type EventNormalizationContext } from './normalization';
 import { RuntimeProcessRunner, type RuntimeProcessHandle, type RuntimeProcessResult } from './process-runner';
-import type { RuntimeAdapter, RuntimeStartRequest } from './runtime-adapter';
+import type { RuntimeAdapter, RuntimeResumeRequest, RuntimeStartRequest } from './runtime-adapter';
 import type { RuntimeStreamNormalizer } from './stream-normalizer';
 import { validateRuntimeSessionRequest } from './conformance';
 
@@ -162,6 +162,10 @@ export class StructuredCliRuntimeAdapter implements RuntimeAdapter {
 
     this.sessions.set(session, { queue, handle, completion, normalizer });
     return session;
+  }
+
+  async resume(request: RuntimeResumeRequest): Promise<RuntimeSession> {
+    return this.start({ ...request, resumeSessionId: request.resumeSessionId ?? request.sessionId });
   }
 
   async *events(session: RuntimeSession): AsyncIterable<PipelineEventEnvelope> {

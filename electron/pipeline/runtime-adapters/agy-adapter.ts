@@ -62,8 +62,8 @@ export const AGY_DESCRIPTOR: RuntimeDescriptor = {
     {
       capabilityId: 'session.resume',
       capabilityVersion: null,
-      availability: 'unknown',
-      evidenceStatus: 'pending_fixture',
+      availability: 'available',
+      evidenceStatus: 'verified',
       targetScopes: ['session'],
       constraints: ['--conversation'],
       evidenceRefs: [RESUME_FIXTURE_REF],

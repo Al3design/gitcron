@@ -281,6 +281,35 @@ Por eso:
   pnpm) y corre por la consola, así que la instrucción no va como argumento; los argumentos son fijos salvo el
   modelo y la sesión, que se validan antes.
 
+*Auditoría de la continuación de sesiones (2026-10-07, tanda 27):*
+- El descubrimiento productivo devuelve `{ success, data }`, no una lista directa. El mock de la tanda
+  devolvía una lista y escondía que «Continuar esta sesión» nunca aparecía en la app. La prueba del formulario
+  consume ahora la misma respuesta que el IPC; el recorrido e2e usa preload, IPC e historial SQLite reales.
+- `reasoningEffort` era redactado por el sanitizador de persistencia por contener «reasoning»: una sesión
+  guardada volvía con `[REDACTED]` en vez de su nivel. Es metadato de configuración y se conserva, igual que
+  `reasoningVisibility`; el razonamiento privado y las claves siguen redactados. Se comprobó con una fila
+  antigua sin campos nuevos y una fila con modelo, nivel e identificadores, leídas por `PipelineRepository`.
+- Dos pedidos durante el arranque asíncrono podían abrir dos procesos antes de registrar la sesión viva.
+  El hub reserva la carpeta antes de esperar evidencia o al adaptador y libera la reserva aun si falla.
+  La prueba concurrente falla sin esa reserva. El canal tampoco continúa si falla el arranque del servicio
+  de OpenCode; su mock apuntaba a un módulo distinto del import productivo y fue corregido.
+- El método `resume` del adaptador exige una instrucción en su contrato tipado. La continuación por el hub
+  conserva modelo, nivel, id de herramienta y vínculo con la corrida anterior. Capturas de OpenCode y
+  Antigravity pasan por normalizadores, adaptadores y proyección; un evento `error` de OpenCode conserva
+  el mensaje del proveedor y fija desenlace fallido aunque el proceso termine con cero.
+- Cambiar de conversación descarta el formulario anterior; un rechazo del IPC deja reintentar; Escape no
+  simula cancelar un pedido ya enviado. Los errores se muestran traducidos en es/en/zh. El aviso distingue
+  editar archivos de correr comandos según las capacidades declaradas: Antigravity no promete comandos.
+- `e2e/tests/continuar-sesion.e2e.ts` continúa una conversación sembrada en un repositorio temporal con
+  un CLI simulado y comprueba foco, argumentos recibidos, modelo/nivel originales, actividad y vínculo.
+  Los motores simulados viven sólo en el PATH del perfil de prueba; no se usan cuentas, configuración
+  personal ni el servicio real de OpenCode. Las capturas mostraron que la leyenda nueva comprimía el nombre
+  del motor en el panel lateral: fecha y procedencia deben ocupar renglones propios.
+- Se retiraron temporalmente los arreglos para comprobar los fallos de regresión; evidencia en
+  `tmp/auditoria-27-ui-*-rojo.log`, `tmp/auditoria-27-backend-*-rojo.log` y
+  `tmp/auditoria-27-permisos-rojo.log`. El recorrido con Qwen de `unslothpclocal` sigue pendiente:
+  la prueba e2e del CLI simulado no lo reemplaza y la 5.3 permanece abierta.
+
 ### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
 accept-edits`, con reanudación por `--conversation`. El formato de eventos se fija con una captura real

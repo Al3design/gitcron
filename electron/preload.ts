@@ -516,6 +516,7 @@ contextBridge.exposeInMainWorld('api', {
     get: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:get', repoPath),
     history: (repoPath: string, limit?: number) => ipcRenderer.invoke('pipeline:runtime:history', repoPath, limit),
     start: (payload: unknown) => ipcRenderer.invoke('pipeline:runtime:start', payload),
+    resume: (payload: unknown) => ipcRenderer.invoke('pipeline:runtime:resume', payload),
     stop: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:stop', repoPath),
     planOpenCodeCopy: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:plan-opencode-copy', repoPath),
     applyOpenCodeCopy: (repoPath: string) => ipcRenderer.invoke('pipeline:runtime:apply-opencode-copy', repoPath),

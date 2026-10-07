@@ -118,6 +118,14 @@ export interface RuntimeProjection {
   droppedActivity: number;
   /** Diagnósticos de degradación del stream (esquema desconocido, cortes). */
   diagnostics: string[];
+  /** Id de la sesión interna de la herramienta (OpenCode, Antigravity, Claude, Codex). */
+  runtimeSessionId?: string | null;
+  /** Modelo solicitado al lanzar la sesión. */
+  requestedModel?: string | null;
+  /** Nivel de esfuerzo de razonamiento solicitado al lanzar. */
+  reasoningEffort?: string | null;
+  /** Id de la corrida de GitCron que esta sesión continúa, o null. */
+  continuesSessionId?: string | null;
 }
 
 export interface RuntimeDiscoveryEntry {
@@ -162,3 +170,5 @@ export interface RuntimeDiscoveryEntry {
   canResume?: boolean;
   diagnostics: string[];
 }
+
+export type PipelineDiscoveryEntry = RuntimeDiscoveryEntry;

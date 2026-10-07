@@ -318,3 +318,56 @@ describe('coalescePersistedActivity', () => {
     expect(coalescePersistedActivity(entries)).toEqual(entries);
   });
 });
+
+describe('RuntimeProjectionBuilder — campos de reanudación y modelo (tanda 27)', () => {
+  it('captura runtimeSessionId del primer evento cuya identidad difiera del id de GitCron', () => {
+    const b = new RuntimeProjectionBuilder({
+      repoId: 'repo-1',
+      sessionId: 'gitcron-session-uuid',
+      runtime: 'opencode',
+      changeId: null,
+      taskId: null,
+      role: 'builder',
+      startedAt: '2026-10-07T00:00:00.000Z',
+      controlCapabilities: [],
+    });
+
+    // Inicialmente es null
+    expect(b.snapshot().runtimeSessionId).toBeNull();
+
+    // Evento con el id propio de GitCron: no lo captura como runtimeSessionId
+    b.ingest(event('agent.message', { text: 'hola' }, {
+      identity: identity({ sessionId: 'gitcron-session-uuid', runtime: 'opencode' }),
+    }));
+    expect(b.snapshot().runtimeSessionId).toBeNull();
+
+    // Evento con el id del runtime de la herramienta (ej. OpenCode ses_...)
+    b.ingest(event('agent.message', { text: 'hola' }, {
+      identity: identity({ sessionId: 'ses_tool_12345', runtime: 'opencode' }),
+    }));
+    expect(b.snapshot().runtimeSessionId).toBe('ses_tool_12345');
+  });
+
+  it('guarda requestedModel, reasoningEffort, continuesSessionId y preconfigura runtimeSessionId', () => {
+    const b = new RuntimeProjectionBuilder({
+      repoId: 'repo-1',
+      sessionId: 'gitcron-new-session',
+      runtime: 'agy',
+      changeId: 'ch-1',
+      taskId: '1.2',
+      role: 'builder',
+      startedAt: '2026-10-07T00:00:00.000Z',
+      controlCapabilities: [],
+      requestedModel: 'gemini-3.8-flash-low',
+      reasoningEffort: 'low',
+      continuesSessionId: 'gitcron-prev-session',
+      runtimeSessionId: 'conv-agy-prev',
+    });
+
+    const snap = b.snapshot();
+    expect(snap.requestedModel).toBe('gemini-3.8-flash-low');
+    expect(snap.reasoningEffort).toBe('low');
+    expect(snap.continuesSessionId).toBe('gitcron-prev-session');
+    expect(snap.runtimeSessionId).toBe('conv-agy-prev');
+  });
+});

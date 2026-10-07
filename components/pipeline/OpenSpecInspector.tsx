@@ -19,6 +19,7 @@ import {
 } from './pipeline-domain';
 import type { PipelineSnapshot } from './pipeline-view-state';
 import { readEngineStatus } from '@/lib/engine-status-reader';
+import { PipelineSessionResume } from './PipelineSessionResume';
 import styles from './OpenSpecDashboard.module.css';
 
 const ACTIVITY_ICONS: Record<ActivityChannel, React.ComponentType<{ size?: number }>> = {
@@ -44,14 +45,26 @@ function formatSessionMoment(startedAt: string): string {
   }).format(date);
 }
 
-function formatSessionOption(session: RuntimeProjection): string {
+export function formatSessionOption(
+  session: RuntimeProjection,
+  allSessions: RuntimeProjection[],
+  t: ReturnType<typeof useT>,
+): string {
   const runtime = runtimeDisplayName(session.runtime) ?? session.runtime;
   const context = [session.changeId, session.taskId].filter(Boolean).join(' · ');
   const date = new Date(session.startedAt);
   const started = Number.isNaN(date.getTime())
     ? session.startedAt
     : new Intl.DateTimeFormat(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(date);
-  return [runtime, context, started].filter(Boolean).join(' · ');
+
+  let continuesText: string | null = null;
+  if (session.continuesSessionId) {
+    const continued = allSessions?.find((s) => s.sessionId === session.continuesSessionId);
+    const time = continued ? formatTime(continued.startedAt) : '…';
+    continuesText = t('pipeline.openspec.session.continues', { time });
+  }
+
+  return [runtime, context, started, continuesText].filter(Boolean).join(' · ');
 }
 
 export type OpenSpecInspectorProps = {
@@ -271,6 +284,16 @@ export function OpenSpecInspector({
                     {t('pipeline.openspec.activity.ranAt', { at: formatSessionMoment(selectedSession.startedAt) })}
                   </em>
                 )}
+                {selectedSession?.continuesSessionId && (
+                  <em className={styles.sessionContinues}>
+                    {t('pipeline.openspec.session.continues', {
+                      time: (() => {
+                        const continued = runtimeSessions.find((s) => s.sessionId === selectedSession.continuesSessionId);
+                        return continued ? formatTime(continued.startedAt) : '…';
+                      })(),
+                    })}
+                  </em>
+                )}
               </span>
               {filteredSessions.length > 1 && (
                 <select
@@ -280,7 +303,9 @@ export function OpenSpecInspector({
                   onChange={(event) => setSelectedSessionId(event.target.value)}
                 >
                   {filteredSessions.map((session) => (
-                    <option key={session.sessionId} value={session.sessionId}>{formatSessionOption(session)}</option>
+                    <option key={session.sessionId} value={session.sessionId}>
+                      {formatSessionOption(session, runtimeSessions, t)}
+                    </option>
                   ))}
                 </select>
               )}
@@ -289,6 +314,16 @@ export function OpenSpecInspector({
               <p className={styles.sessionContext}>
                 {[selectedSession.changeId, selectedSession.taskId].filter(Boolean).join(' · ') || t('pipeline.openspec.activity.noChange')}
               </p>
+            )}
+            {selectedSession && (
+              <PipelineSessionResume
+                key={`${repoPath}:${selectedSession.sessionId}`}
+                repoPath={repoPath}
+                session={selectedSession}
+                onStarted={(newSessionId) => {
+                  setSelectedSessionId(newSessionId);
+                }}
+              />
             )}
             {activityGroups.length === 0 ? (
               <p className={styles.railEmpty}>

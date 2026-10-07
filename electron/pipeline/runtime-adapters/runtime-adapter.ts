@@ -12,7 +12,7 @@ export interface RuntimeAttachRequest extends RuntimeSessionRequest {
   sessionId: string;
 }
 
-export interface RuntimeResumeRequest extends RuntimeSessionRequest {
+export interface RuntimeResumeRequest extends RuntimeStartRequest {
   sessionId: string;
   resumeToken: string | null;
 }

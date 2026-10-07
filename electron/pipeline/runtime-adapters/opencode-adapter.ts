@@ -61,11 +61,15 @@ export const OPENCODE_DESCRIPTOR: RuntimeDescriptor = {
     {
       capabilityId: 'session.resume',
       capabilityVersion: null,
-      availability: 'unknown',
-      evidenceStatus: 'pending_fixture',
+      availability: 'available',
+      evidenceStatus: 'verified',
       targetScopes: ['session'],
-      constraints: ['--session effect not yet exposed in UI'],
-      evidenceRefs: [],
+      constraints: ['--session'],
+      evidenceRefs: [
+        'electron/__tests__/fixtures/modelos-en-casa/opencode-2.0.20-resume-inicial.jsonl',
+        'electron/__tests__/fixtures/modelos-en-casa/opencode-2.0.20-resume-continuacion.jsonl',
+        'electron/__tests__/fixtures/modelos-en-casa/opencode-2.0.20-resume-sesion-inexistente.jsonl',
+      ],
     },
   ],
 };

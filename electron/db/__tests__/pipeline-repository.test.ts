@@ -26,6 +26,23 @@ function event(repoId: string, eventId = 'event-1'): PipelineSemanticEvent {
 }
 
 describe('PipelineRepository', () => {
+  it('lee JSON antiguo sin campos de continuación y preserva los nuevos al volver a abrir la sesión', () => {
+    const db = openTemporalAgentDatabase(':memory:');
+    try {
+      const repository = new PipelineRepository(db);
+      const binding = repository.getOrCreateBinding('C:/old-repo', 'digest');
+      repository.persistRuntimeProjection(runtimeProjection(binding.repoId));
+      expect(repository.loadRuntimeProjections(binding.repoId)[0]).toMatchObject({
+        runtimeSessionId: null, requestedModel: null, reasoningEffort: null, continuesSessionId: null,
+      });
+      repository.persistRuntimeProjection(runtimeProjection(binding.repoId, {
+        runtimeSessionId: 'tool-id', requestedModel: 'provider/model', reasoningEffort: 'high', continuesSessionId: 'parent-id',
+      }));
+      expect(new PipelineRepository(db).loadRuntimeProjections(binding.repoId)[0]).toMatchObject({
+        runtimeSessionId: 'tool-id', requestedModel: 'provider/model', reasoningEffort: 'high', continuesSessionId: 'parent-id',
+      });
+    } finally { db.close(); }
+  });
   it('keeps stable bindings and isolates the same event id across repos', () => {
     const db = openTemporalAgentDatabase(':memory:');
     try {

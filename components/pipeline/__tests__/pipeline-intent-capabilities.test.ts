@@ -110,21 +110,7 @@ describe('resolveIntentCapability (mismas capacidades para toda IA lanzable)', (
     });
   });
 
-  describe('caso 4: reanudar sesión (resume)', () => {
-    it('está sin comprobar con cualquier runtime hasta contar con pruebas', () => {
-      const resClaude = resolveIntentCapability('resume', entry({ runtime: 'claude' }));
-      expect(resClaude.status).toBe('unverified');
-      expect(resClaude.canLaunch).toBe(false);
-      expect(resClaude.reasonKey).toBe('pipeline.launcher.intent.resumeUnavailable');
-
-      const resCodex = resolveIntentCapability('resume', entry({ runtime: 'codex' }));
-      expect(resCodex.status).toBe('unverified');
-      expect(resCodex.canLaunch).toBe(false);
-      expect(resCodex.reasonKey).toBe('pipeline.launcher.intent.resumeUnavailable');
-    });
-  });
-
-  describe('caso 5: OpenCode (sin comprobar, no bloquear por falta de fixture)', () => {
+  describe('caso 4: OpenCode (sin comprobar, no bloquear por falta de fixture)', () => {
     it('devuelve «sin comprobar» y permite arrancar sin bloquear por pertenecer a pending_fixture', () => {
       const openCodeEntry = entry({
         runtime: 'opencode',

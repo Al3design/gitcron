@@ -3,6 +3,7 @@ import { web } from '@e2e-dev/web';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { gitcronProvider } from './gitcron-provider';
+import { seedResumeFixture } from './resume-fixture';
 
 const CONFIG_DIR = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
 const GITCRON_DIR = path.resolve(CONFIG_DIR, '..');
@@ -13,7 +14,7 @@ export default {
     {
       name: 'gitcron',
       engine: web({
-        browser: gitcronProvider(),
+        browser: gitcronProvider({ afterSeed: seedResumeFixture }),
         viewport: null,
         // El indicador de Next.js en modo desarrollo («N», abajo a la izquierda) tapa el botón
         // de Configuración y se lleva los clics: en las pruebas no se muestra.

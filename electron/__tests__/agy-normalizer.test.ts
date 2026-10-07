@@ -6,6 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { RuntimeProjectionBuilder } from '../pipeline/runtime/runtime-projection';
 import { AgyStreamNormalizer } from '../pipeline/runtime-adapters/agy-normalizer';
 import {
   createPipelineIdentity,
@@ -219,5 +220,22 @@ describe('AgyStreamNormalizer', () => {
     expect(events[0].kind).toBe('runtime.schema.degraded');
     expect((events[0].payload as any).sourceType).toBe('future_event_type');
     expect(normalizer.getUnknownEventCount()).toBe(1);
+  });
+
+  it('normaliza la captura real agy-1.2.13-resume: captura conversation_id y la identidad queda actualizada', () => {
+    const filePath = path.join(FIXTURES_DIR, 'agy-1.2.13-resume.sanitized.jsonl');
+    const lines = fs.readFileSync(filePath, 'utf8').split('\n').filter((l) => l.trim().length > 0);
+    const normalizer = new AgyStreamNormalizer();
+    const context = makeContext('initial-id');
+    const projection = new RuntimeProjectionBuilder({ repoId: context.identity.repoId, sessionId: context.identity.sessionId, runtime: 'agy', changeId: null, taskId: null, role: 'builder', startedAt: '2026-10-07T00:00:00.000Z', controlCapabilities: [] });
+
+    for (const line of lines) {
+      context.sequence++;
+      const record = JSON.parse(line);
+      for (const event of normalizer.normalize(record, context)) projection.ingest(event);
+    }
+
+    expect(context.identity.sessionId).toBe('<redacted-id-1>');
+    expect(projection.snapshot().runtimeSessionId).toBe('<redacted-id-1>');
   });
 });

@@ -663,6 +663,11 @@ interface ElectronAPI {
       changeId?: string | null;
       taskId?: string | null;
     }) => Promise<GitResult<{ sessionId: string }>>;
+    resume: (payload: {
+      repoPath: string;
+      fromSessionId: string;
+      instruction: string;
+    }) => Promise<GitResult<{ sessionId: string }>>;
     stop: (repoPath: string) => Promise<GitResult<boolean>>;
     planOpenCodeCopy: (repoPath: string) => Promise<GitResult<{
       canCopy: boolean;

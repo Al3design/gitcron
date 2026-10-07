@@ -212,6 +212,10 @@ export interface RuntimeProjectionInit {
   role: string;
   startedAt: string;
   controlCapabilities: PipelineControlAction[];
+  runtimeSessionId?: string | null;
+  requestedModel?: string | null;
+  reasoningEffort?: string | null;
+  continuesSessionId?: string | null;
 }
 
 export class RuntimeProjectionBuilder {
@@ -228,10 +232,23 @@ export class RuntimeProjectionBuilder {
   private active = true;
   private outcome: RuntimeProjection['outcome'] = 'running';
   private endedAt: string | null = null;
+  private runtimeSessionId: string | null;
+  private readonly requestedModel: string | null;
+  private readonly reasoningEffort: string | null;
+  private readonly continuesSessionId: string | null;
 
-  constructor(private readonly init: RuntimeProjectionInit) {}
+  constructor(private readonly init: RuntimeProjectionInit) {
+    this.runtimeSessionId = init.runtimeSessionId ?? null;
+    this.requestedModel = init.requestedModel ?? null;
+    this.reasoningEffort = init.reasoningEffort ?? null;
+    this.continuesSessionId = init.continuesSessionId ?? null;
+  }
 
   ingest(event: PipelineEventEnvelope): void {
+    if (this.runtimeSessionId === null && event.identity.sessionId && event.identity.sessionId !== this.init.sessionId) {
+      this.runtimeSessionId = event.identity.sessionId;
+    }
+
     this.trackAgent(event);
     this.trackReasoning(event);
 
@@ -321,6 +338,10 @@ export class RuntimeProjectionBuilder {
       controlCapabilities: [...this.init.controlCapabilities],
       droppedActivity: this.droppedActivity,
       diagnostics: [...this.diagnostics],
+      runtimeSessionId: this.runtimeSessionId,
+      requestedModel: this.requestedModel,
+      reasoningEffort: this.reasoningEffort,
+      continuesSessionId: this.continuesSessionId,
     };
   }
 

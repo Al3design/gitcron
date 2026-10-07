@@ -4,6 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { RuntimeProjectionBuilder } from '../pipeline/runtime/runtime-projection';
 import type { PipelineIdentity } from '../../types/pipeline';
 import { OPENCODE_DESCRIPTOR } from '../pipeline/runtime-adapters/opencode-adapter';
 import { OpencodeStreamNormalizer } from '../pipeline/runtime-adapters/opencode-normalizer';
@@ -136,5 +137,67 @@ describe('OpencodeStreamNormalizer', () => {
     expect(textRes).toHaveLength(1);
     expect(textRes[0].kind).toBe('agent.message');
     expect(textRes[0].payload).toEqual({ text: 'sigue funcionando' });
+  });
+
+  it('procesa captura de sesión inicial: captura el sessionID y la proyección guarda runtimeSessionId', () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'modelos-en-casa', 'opencode-2.0.20-resume-inicial.jsonl');
+    const lines = fs.readFileSync(fixturePath, 'utf8').trim().split('\n').filter(Boolean);
+
+    const normalizer = new OpencodeStreamNormalizer();
+    const identity = makeIdentity();
+    const projection = new RuntimeProjectionBuilder({ repoId: identity.repoId, sessionId: identity.sessionId, runtime: 'opencode', changeId: null, taskId: null, role: 'builder', startedAt: '2026-10-07T00:00:00.000Z', controlCapabilities: [] });
+    const envelopes = [];
+
+    let seq = 0;
+    for (const line of lines) {
+      const record = JSON.parse(line);
+      const res = normalizer.normalize(record, makeContext(identity, ++seq));
+      envelopes.push(...res);
+      for (const event of res) projection.ingest(event);
+    }
+
+    expect(identity.sessionId).toBe('ses_eee02d47effe6J6Faf58inqdZl');
+    expect(projection.snapshot().runtimeSessionId).toBe('ses_eee02d47effe6J6Faf58inqdZl');
+  });
+
+  it('procesa captura de continuación: mantiene sessionID y emite mensajes', () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'modelos-en-casa', 'opencode-2.0.20-resume-continuacion.jsonl');
+    const lines = fs.readFileSync(fixturePath, 'utf8').trim().split('\n').filter(Boolean);
+
+    const normalizer = new OpencodeStreamNormalizer();
+    const identity = makeIdentity();
+    const envelopes = [];
+
+    let seq = 0;
+    for (const line of lines) {
+      const record = JSON.parse(line);
+      const res = normalizer.normalize(record, makeContext(identity, ++seq));
+      envelopes.push(...res);
+    }
+
+    expect(identity.sessionId).toBe('ses_eee02d47effe6J6Faf58inqdZl');
+    const msg = envelopes.find((e) => e.kind === 'agent.message');
+    expect(msg?.payload).toEqual({ text: '7341' });
+  });
+
+  it('procesa captura de sesión inexistente: sale error con el mensaje original del proveedor sin traducir a sesión inexistente', () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'modelos-en-casa', 'opencode-2.0.20-resume-sesion-inexistente.jsonl');
+    const lines = fs.readFileSync(fixturePath, 'utf8').trim().split('\n').filter(Boolean);
+
+    const normalizer = new OpencodeStreamNormalizer();
+    const identity = makeIdentity();
+    const envelopes = [];
+
+    let seq = 0;
+    for (const line of lines) {
+      const record = JSON.parse(line);
+      const res = normalizer.normalize(record, makeContext(identity, ++seq));
+      envelopes.push(...res);
+    }
+
+    expect(identity.sessionId).toBe('ses_noexiste000000000000000');
+    const errEvent = envelopes.find((e) => e.kind === 'runtime.error');
+    expect(errEvent).toBeDefined();
+    expect((errEvent?.payload as any)?.message).toBe("Error from provider (Console): OpenCode's free tier can only be used from within OpenCode");
   });
 });

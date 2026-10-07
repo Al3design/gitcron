@@ -143,6 +143,23 @@ const START = {
 };
 
 describe('RuntimeSessionHub', () => {
+  it('reserva el repositorio antes de un arranque asíncrono: dos continuaciones no lanzan dos procesos', async () => {
+    const adapter = new FakeAdapter();
+    const originalStart = adapter.start.bind(adapter);
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const start = vi.spyOn(adapter, 'start').mockImplementation(async (request) => {
+      await pending;
+      return originalStart(request);
+    });
+    const { hub } = makeHub(adapter);
+    const first = hub.start({ ...START, resumeSessionId: 'tool-session', continuesSessionId: 'parent' });
+    const second = hub.start({ ...START, resumeSessionId: 'tool-session', continuesSessionId: 'parent' });
+    release();
+    const results = await Promise.all([first, second]);
+    expect(results[1]).toEqual({ ok: false, error: 'session_already_active' });
+    expect(start).toHaveBeenCalledTimes(1);
+  });
   it('registers the live session on the control bus with only the capabilities it implements', async () => {
     // Éste es el cuarto hueco: sin este registro el bus rechazaba cualquier
     // comando con UNAUTHORIZED_TARGET y el inbox de decisiones era decorativo.
