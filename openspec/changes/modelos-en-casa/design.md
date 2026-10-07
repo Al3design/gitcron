@@ -307,8 +307,35 @@ Por eso:
   del motor en el panel lateral: fecha y procedencia deben ocupar renglones propios.
 - Se retiraron temporalmente los arreglos para comprobar los fallos de regresión; evidencia en
   `tmp/auditoria-27-ui-*-rojo.log`, `tmp/auditoria-27-backend-*-rojo.log` y
-  `tmp/auditoria-27-permisos-rojo.log`. El recorrido con Qwen de `unslothpclocal` sigue pendiente:
-  la prueba e2e del CLI simulado no lo reemplaza y la 5.3 permanece abierta.
+  `tmp/auditoria-27-permisos-rojo.log`. En ese momento faltaba el recorrido real con Qwen:
+  la prueba e2e del CLI simulado no lo reemplazaba. Se realizó después, como se registra abajo.
+
+*Recorrido real desde la notebook por Cloudflare (2026-10-07, pedido de Ale):*
+- Se usa `unslothpc`, configurado tanto en DSH como en OpenCode y GitCron con
+  `https://llm.aledesign.dev/v1`, el modelo `unsloth/Qwen3.8-27B-GGUF` y referencias a
+  `UNSLOTH_API_KEY`, `CF_ACCESS_CLIENT_ID` y `CF_ACCESS_CLIENT_SECRET`. El catálogo remoto respondió
+  HTTP 200 y declaró Qwen cargado. `unslothpclocal` es el acceso por LAN; desde la notebook se comprueba
+  el mismo modelo del servidor de la PC por el proveedor del túnel, según la instrucción actual de Ale.
+- El perfil aislado de GitCron cambia HOME/USERPROFILE y por eso el CLI no encontraba el servicio de
+  OpenCode que ya estaba abierto: `service status` no daba dirección y `model.list` vencía. Con el entorno
+  normal, el catálogo dio 447 modelos (tras una primera respuesta vacía) y reconoció Qwen remoto.
+  `--server` explícito requiere la contraseña interna del servicio y no reemplaza su descubrimiento.
+  La comprobación manual mantiene aislados GitCron y el repositorio, pero el delegado del CLI conserva
+  únicamente las rutas de usuario de OpenCode para reutilizar el servicio y su autenticación existentes.
+  No se inicia, detiene ni reinicia ese servicio; no se modifican las configuraciones personales.
+- Primera corrida real: `pipelineRuntime.start` productivo, con la clave devuelta por `aiUse.status`
+  (sin inventar `expectedModel`), motor OpenCode 2.0.20 y el modelo del túnel. Qwen leyó `semilla.txt`,
+  escribió `comprobacion-qwen.txt` y recordó 762941. La prueba verificó el contenido escrito en disco.
+  En la repetición final el arranque respondió a los 7,3 s y la corrida terminó a los 56,1 s desde el pedido.
+- Continuación desde el formulario visible de SDD: se pidió el código sin releer archivos. Respondió
+  exactamente `762941`, con otra corrida de GitCron y el mismo id de OpenCode
+  `ses_ee9999f5cffehoH9NXL2jQdhP1`, el mismo modelo y `continuesSessionId` apuntando a la primera corrida.
+  El recorrido completo hasta la segunda respuesta tardó 62,5 s desde el pedido inicial.
+- Comprobación manual reutilizable (requiere Windows, OpenCode abierto y el proveedor remoto configurado):
+  `node scripts/e2e.mjs run qwen-tests/qwen-remoto.e2e.ts --config e2e/qwen-remoto.config.ts`.
+  Está separada de la suite habitual sin servidores. Evidencia: `tmp/qwen-remoto-recorrido-final.log`
+  y las capturas de primera corrida, formulario y continuación. Esto completa la 5.3; no completa la 7.1,
+  que incluye importación, edición manual, otros usos/motores y comprobaciones con Ale.
 
 ### D9. Antigravity: adaptador estructurado con captura real antes que código
 Se reemplaza el wrapper por un adaptador sobre `agy -p --output-format stream-json --model <m> --mode
