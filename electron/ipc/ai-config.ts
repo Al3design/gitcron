@@ -80,6 +80,7 @@ import {
 import { isLiteralSecret, referenceName, type SecretNaming } from '../ai/config/literal-secrets';
 import { activeConfigPath, loadServerFor, setUseConfigPathForTesting } from '../ai/use-resolution';
 import { authorizedRepoRoot } from './authorized-repos';
+import { watchGitCronConfigFor } from './commit-message-ai';
 import { errMsg } from './shared';
 
 type Result<T> = { success: boolean; data?: T; error?: string };
@@ -398,6 +399,7 @@ export function registerAiConfigHandlers(): void {
       const args = (rawArgs ?? {}) as { repoPath?: unknown };
       const rawRepo = args.repoPath;
       const repoPath = typeof rawRepo === 'string' && rawRepo.trim() ? authorizedRepoRoot(rawRepo) : null;
+      if (_e?.sender) watchGitCronConfigFor(_e.sender, repoPath);
       const globalPath = resolveActiveConfigPath();
 
       let loaded: LoadedGitCronConfig;

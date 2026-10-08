@@ -61,6 +61,16 @@ export function AiSettingsSection({ repoPath = null }: Props) {
   });
 
   const hasAutoOpenedBrokenRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const reqSeqRef = useRef(0);
+  const repoPathRef = useRef(repoPath);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const toggleGroup = (groupId: string) => {
     setOpenGroups((prev) => {
@@ -77,60 +87,71 @@ export function AiSettingsSection({ repoPath = null }: Props) {
   };
 
   const reload = useCallback(async () => {
+    const api = window.api?.aiConfig;
+    if (!api) {
+      setLoading(false);
+      return;
+    }
+
+    const currentReqId = ++reqSeqRef.current;
+    const currentRepo = repoPath;
+
     try {
-      const api = window.api?.aiConfig;
-      if (!api) return;
       const [configRes, mcpRes] = await Promise.all([
-        api.status({ repoPath }),
-        api.getMcpStatus({ repoPath }),
+        api.status({ repoPath: currentRepo }),
+        api.getMcpStatus({ repoPath: currentRepo }),
       ]);
+
+      // Si el componente se desmontó, el repoPath cambió, o llegó una petición más nueva: descartar
+      if (!isMountedRef.current || reqSeqRef.current !== currentReqId || repoPathRef.current !== currentRepo) {
+        return;
+      }
+
       if (configRes?.success && configRes.data) {
         setStatus(configRes.data);
+        setLoadError(null);
       } else {
         setLoadError(configRes?.error ?? t('aiConfig.unexpectedError'));
       }
+
       if (mcpRes?.success && mcpRes.data) {
         setMcpStatus(mcpRes.data);
       }
     } catch (err: any) {
+      if (!isMountedRef.current || reqSeqRef.current !== currentReqId || repoPathRef.current !== currentRepo) {
+        return;
+      }
       setLoadError(err?.message ?? t('aiConfig.unexpectedError'));
+    } finally {
+      if (isMountedRef.current && reqSeqRef.current === currentReqId && repoPathRef.current === currentRepo) {
+        setLoading(false);
+      }
     }
   }, [repoPath, t]);
 
   useEffect(() => {
+    repoPathRef.current = repoPath;
     let alive = true;
     const run = async () => {
-      const api = window.api?.aiConfig;
-      if (!api) {
-        if (alive) setLoading(false);
-        return;
-      }
-      try {
-        const [configRes, mcpRes] = await Promise.all([
-          api.status({ repoPath }),
-          api.getMcpStatus({ repoPath }),
-        ]);
-        if (!alive) return;
-        if (configRes?.success && configRes.data) {
-          setStatus(configRes.data);
-        } else {
-          setLoadError(configRes?.error ?? t('aiConfig.unexpectedError'));
-        }
-        if (mcpRes?.success && mcpRes.data) {
-          setMcpStatus(mcpRes.data);
-        }
-      } catch (err: any) {
-        if (!alive) return;
-        setLoadError(err?.message ?? t('aiConfig.unexpectedError'));
-      } finally {
-        if (alive) setLoading(false);
-      }
+      if (!alive) return;
+      await reload();
     };
     void run();
     return () => {
       alive = false;
     };
-  }, [repoPath, t]);
+  }, [repoPath, reload]);
+
+  useEffect(() => {
+    const api = window.api?.aiConfig;
+    if (!api?.onConfigChanged) return;
+    const stop = api.onConfigChanged(() => {
+      void reload();
+    });
+    return () => {
+      stop?.();
+    };
+  }, [reload]);
 
   // Si el archivo pasa a estar roto, el grupo 3 («El archivo») se abre solo una vez (C.16)
   const files = useMemo(() => status?.files ?? [], [status?.files]);

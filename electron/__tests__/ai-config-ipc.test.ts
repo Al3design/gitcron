@@ -37,7 +37,12 @@ vi.mock('electron', () => ({
 
 import { registerAiConfigHandlers, setAiConfigPathForTesting, setMcpPathForTesting } from '../ipc/ai-config';
 import { registerAiHandlers } from '../ipc/ai';
-import { registerCommitMessageAiHandlers, setCommitAiConfigPathForTesting, resetCommitAiConfigWatcherForTesting } from '../ipc/commit-message-ai';
+import {
+  registerCommitMessageAiHandlers,
+  setCommitAiConfigPathForTesting,
+  resetCommitAiConfigWatcherForTesting,
+  getWatchedConfigReposForTesting,
+} from '../ipc/commit-message-ai';
 import { setModelLoadSettingsDirForTesting } from '../ai/config/model-load-settings';
 import { resetGitCronConfigCacheForTesting } from '../ai/config/gitcron-config';
 import { setToolModelsExecutorsForTesting, clearToolModelsCacheForTesting } from '../ai/config/tool-models';
@@ -510,6 +515,52 @@ describe('ai-config IPC handlers (tarea 6.1)', () => {
       });
       expect(saveRes.success).toBe(false);
       expect(saveRes.error).toMatch(/Repositorio no autorizado/);
+    });
+
+    it('ai-config:status registra la observación de configuración para la ventana sin depender de otros canales', async () => {
+      resetCommitAiConfigWatcherForTesting();
+      const testSender = { isDestroyed: () => false, send: vi.fn() };
+
+      const statusHandler = handlers.get('ai-config:status')!;
+      const res = await statusHandler({ sender: testSender }, { repoPath: null });
+      expect(res.success).toBe(true);
+
+      // Comportamiento observable: una edición externa en el archivo temporal notifica al sender
+      fs.writeFileSync(globalPath, JSON.stringify({ provider: { test: { name: 'Observado' } } }));
+      await vi.waitFor(() => {
+        expect(testSender.send).toHaveBeenCalledWith('gitcron-config:changed', { repoPath: null });
+      }, { timeout: 1500 });
+
+      // Deduplicación observable: invocar ai-config:status de nuevo con el mismo sender no genera doble notificación
+      testSender.send.mockClear();
+      await statusHandler({ sender: testSender }, { repoPath: null });
+      fs.writeFileSync(globalPath, JSON.stringify({ provider: { test: { name: 'Observado 2' } } }));
+      await vi.waitFor(() => {
+        expect(testSender.send).toHaveBeenCalledWith('gitcron-config:changed', { repoPath: null });
+      }, { timeout: 1500 });
+      expect(testSender.send).toHaveBeenCalledTimes(1);
+
+      // Autorización: si se pasa un repositorio no autorizado, no se observa en el watcher
+      const unauthorizedRepo = path.join(dir, 'no-autorizado');
+      fs.mkdirSync(path.join(unauthorizedRepo, '.git'), { recursive: true });
+      await statusHandler({ sender: testSender }, { repoPath: unauthorizedRepo });
+      expect(getWatchedConfigReposForTesting()).not.toContain(unauthorizedRepo);
+
+      // Si además se pasa un repositorio autorizado, queda registrado en el watcher y notifica con su ruta
+      const authorizedDir = path.join(dir, 'repo-autorizado');
+      fs.mkdirSync(path.join(authorizedDir, '.git'), { recursive: true });
+      const canonical = authorizedRepoStore.authorizeRepo(authorizedDir);
+      expect(canonical).not.toBeNull();
+
+      testSender.send.mockClear();
+      const resRepo = await statusHandler({ sender: testSender }, { repoPath: canonical });
+      expect(resRepo.success).toBe(true);
+      expect(getWatchedConfigReposForTesting()).toContain(canonical);
+
+      fs.writeFileSync(path.join(canonical!, 'gitcron.json'), JSON.stringify({ provider: { r: { name: 'En Repo' } } }));
+      await vi.waitFor(() => {
+        expect(testSender.send).toHaveBeenCalledWith('gitcron-config:changed', { repoPath: canonical });
+      }, { timeout: 1500 });
     });
   });
 });

@@ -1247,4 +1247,328 @@ describe('AiSettingsSection (tarea 6.1)', () => {
       expect(summary.textContent).not.toContain('· — —');
     });
   });
+
+  it('observación en vivo: al dispararse onConfigChanged recarga el estado y refleja el cambio externo; al desmontar cancela la suscripción', async () => {
+    let changeListener: ((event: { repoPath: string | null }) => void) | null = null;
+    const unsub = vi.fn();
+    let currentStatus = { ...mockStatusValid };
+
+    const mockApi = {
+      aiConfig: {
+        status: vi.fn(async () => ({ success: true, data: currentStatus })),
+        getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+        onConfigChanged: vi.fn((cb) => {
+          changeListener = cb;
+          return unsub;
+        }),
+      },
+      aiUse: {
+        status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+      },
+    };
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+    const { unmount } = render(<AiSettingsSection />);
+    await waitFor(() => {
+      expect(mockApi.aiConfig.onConfigChanged).toHaveBeenCalled();
+    });
+
+    // Simulamos cambio externo en el archivo que modifica el estado a roto
+    currentStatus = { ...mockStatusBroken };
+    changeListener!({ repoPath: null });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('section-file-status-pill').textContent).toContain('Con error');
+    });
+
+    unmount();
+    expect(unsub).toHaveBeenCalled();
+  });
+
+  describe('carreras de concurrencia y recuperación de errores (tanda 28b)', () => {
+    function createDeferred<T>() {
+      let resolve!: (value: T) => void;
+      let reject!: (reason?: any) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it('promesas controladas: si la recarga B resuelve antes que la recarga vieja A, queda B y A se descarta', async () => {
+      let changeListener: ((event: { repoPath: string | null }) => void) | null = null;
+      const deferredA = createDeferred<any>();
+      const deferredB = createDeferred<any>();
+      let callCount = 0;
+
+      const statusA = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Viejo A' }],
+      };
+      const statusB = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Nuevo B' }],
+      };
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async () => {
+            callCount++;
+            if (callCount === 1) return { success: true, data: mockStatusValid };
+            if (callCount === 2) return deferredA.promise;
+            if (callCount === 3) return deferredB.promise;
+            return { success: true, data: mockStatusValid };
+          }),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn((cb) => {
+            changeListener = cb;
+            return vi.fn();
+          }),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      render(<AiSettingsSection />);
+      await waitFor(() => {
+        expect(screen.getByTestId('section-file-status-pill')).toBeDefined();
+      });
+
+      // Disparamos evento A (queda pendiente en deferredA)
+      changeListener!({ repoPath: null });
+      // Disparamos evento B (queda pendiente en deferredB)
+      changeListener!({ repoPath: null });
+
+      expect(callCount).toBe(3);
+
+      // Resolvemos B primero
+      deferredB.resolve({ success: true, data: statusB });
+      await waitFor(() => {
+        expect(screen.getByText('Proveedor Nuevo B')).toBeDefined();
+      });
+
+      // Ahora resolvemos la respuesta rezagada A
+      deferredA.resolve({ success: true, data: statusA });
+
+      // Verificamos que se descarta A y permanece B
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getByText('Proveedor Nuevo B')).toBeDefined();
+      expect(screen.queryByText('Proveedor Viejo A')).toBeNull();
+    });
+
+    it('promesas controladas: carga inicial contra recarga: si la recarga resuelve primero, la carga inicial rezagada se descarta', async () => {
+      let changeListener: ((event: { repoPath: string | null }) => void) | null = null;
+      const deferredInitial = createDeferred<any>();
+      const deferredReload = createDeferred<any>();
+      let callCount = 0;
+
+      const statusInitial = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Inicial Rezagado' }],
+      };
+      const statusReload = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Recarga Rápido' }],
+      };
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async () => {
+            callCount++;
+            if (callCount === 1) return deferredInitial.promise;
+            if (callCount === 2) return deferredReload.promise;
+            return { success: true, data: mockStatusValid };
+          }),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn((cb) => {
+            changeListener = cb;
+            return vi.fn();
+          }),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      render(<AiSettingsSection />);
+
+      // Antes de que resuelva la carga inicial, ocurre una recarga externa
+      changeListener!({ repoPath: null });
+
+      // Resolvemos la recarga
+      deferredReload.resolve({ success: true, data: statusReload });
+      await waitFor(() => {
+        expect(screen.getByText('Proveedor Recarga Rápido')).toBeDefined();
+      });
+
+      // Luego resuelve la carga inicial
+      deferredInitial.resolve({ success: true, data: statusInitial });
+
+      // Verificamos que se descarta la carga inicial y queda la recarga
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getByText('Proveedor Recarga Rápido')).toBeDefined();
+      expect(screen.queryByText('Proveedor Inicial Rezagado')).toBeNull();
+    });
+
+    it('promesas controladas: cambio de repositorio descarta respuestas pendientes del repositorio anterior', async () => {
+      const deferredRepoA = createDeferred<any>();
+      const deferredRepoB = createDeferred<any>();
+
+      const statusRepoA = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Repo A' }],
+      };
+      const statusRepoB = {
+        ...mockStatusValid,
+        providers: [{ ...mockStatusValid.providers[0], name: 'Proveedor Repo B' }],
+      };
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async ({ repoPath }: { repoPath?: string | null }) => {
+            if (repoPath === '/repo-a') return deferredRepoA.promise;
+            if (repoPath === '/repo-b') return deferredRepoB.promise;
+            return { success: true, data: mockStatusValid };
+          }),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn(() => vi.fn()),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      const { rerender } = render(<AiSettingsSection repoPath="/repo-a" />);
+
+      // Cambiamos a repo-b antes de que repo-a termine
+      rerender(<AiSettingsSection repoPath="/repo-b" />);
+
+      // Resuelve repo-b
+      deferredRepoB.resolve({ success: true, data: statusRepoB });
+      await waitFor(() => {
+        expect(screen.getByText('Proveedor Repo B')).toBeDefined();
+      });
+
+      // Resuelve repo-a rezagado
+      deferredRepoA.resolve({ success: true, data: statusRepoA });
+
+      // Se comprueba que Repo A no pisa a Repo B
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getByText('Proveedor Repo B')).toBeDefined();
+      expect(screen.queryByText('Proveedor Repo A')).toBeNull();
+    });
+
+    it('promesas controladas: desmontar descarta la respuesta pendiente sin fallos ni actualizaciones de estado', async () => {
+      const deferred = createDeferred<any>();
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async () => deferred.promise),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn(() => vi.fn()),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      const { unmount } = render(<AiSettingsSection />);
+
+      // Desmontamos mientras la promesa sigue pendiente
+      unmount();
+
+      // Resolvemos después del desmontaje
+      deferred.resolve({ success: true, data: mockStatusValid });
+      await new Promise((r) => setTimeout(r, 50));
+      // No debe lanzar excepciones ni renderizar nada
+    });
+
+    it('recuperación de error: fallo por excepción/rechazo IPC seguido de éxito limpia loadError y vuelve a mostrar los ajustes', async () => {
+      let changeListener: ((event: { repoPath: string | null }) => void) | null = null;
+      let shouldFail = true;
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async () => {
+            if (shouldFail) throw new Error('Excepción fatal de IPC en status');
+            return { success: true, data: mockStatusValid };
+          }),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn((cb) => {
+            changeListener = cb;
+            return vi.fn();
+          }),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      render(<AiSettingsSection />);
+
+      // Debe mostrarse el error
+      await waitFor(() => {
+        expect(screen.getByText(/Excepción fatal de IPC en status/)).toBeDefined();
+      });
+      expect(screen.queryByTestId('section-file-status-pill')).toBeNull();
+
+      // Ahora la consulta se recupera y se dispara recarga
+      shouldFail = false;
+      changeListener!({ repoPath: null });
+
+      // El error debe desaparecer y los ajustes deben volver
+      await waitFor(() => {
+        expect(screen.getByTestId('section-file-status-pill')).toBeDefined();
+      });
+      expect(screen.queryByText(/Excepción fatal de IPC en status/)).toBeNull();
+    });
+
+    it('recuperación de error: respuesta success: false seguida de success: true limpia loadError y muestra los ajustes', async () => {
+      let changeListener: ((event: { repoPath: string | null }) => void) | null = null;
+      let shouldFail = true;
+
+      const mockApi = {
+        aiConfig: {
+          status: vi.fn(async () => {
+            if (shouldFail) return { success: false, error: 'Error del proceso principal al consultar' };
+            return { success: true, data: mockStatusValid };
+          }),
+          getMcpStatus: vi.fn(async () => ({ success: true, data: mcpStatusEmpty })),
+          onConfigChanged: vi.fn((cb) => {
+            changeListener = cb;
+            return vi.fn();
+          }),
+        },
+        aiUse: {
+          status: vi.fn(async () => ({ success: true, data: { status: 'unset', use: 'gitcron-commit' } })),
+        },
+      };
+      Object.defineProperty(window, 'api', { configurable: true, value: mockApi });
+
+      render(<AiSettingsSection />);
+
+      // Debe mostrarse el error
+      await waitFor(() => {
+        expect(screen.getByText(/Error del proceso principal al consultar/)).toBeDefined();
+      });
+      expect(screen.queryByTestId('section-file-status-pill')).toBeNull();
+
+      // Ahora la siguiente respuesta es exitosa
+      shouldFail = false;
+      changeListener!({ repoPath: null });
+
+      // El error debe limpiarse
+      await waitFor(() => {
+        expect(screen.getByTestId('section-file-status-pill')).toBeDefined();
+      });
+      expect(screen.queryByText(/Error del proceso principal al consultar/)).toBeNull();
+    });
+  });
 });

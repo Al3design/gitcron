@@ -289,6 +289,11 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-config:copy-mcp-to-clipboard', args),
     saveMcpLiteralSecrets: (args: { filePath: string; name: string; repoPath?: string | null }) =>
       ipcRenderer.invoke('ai-config:save-mcp-literal-secrets', args),
+    onConfigChanged: (cb: (event: { repoPath: string | null }) => void) => {
+      const handler = (_e: unknown, payload: { repoPath: string | null }) => cb(payload);
+      ipcRenderer.on('gitcron-config:changed', handler);
+      return () => ipcRenderer.removeListener('gitcron-config:changed', handler);
+    },
   },
   // Redactar el asunto del commit con un modelo local. Nunca se dispara solo:
   // cada uno de estos canales responde a un botón.

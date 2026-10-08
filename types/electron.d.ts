@@ -475,6 +475,7 @@ interface ElectronAPI {
     prepareMcpCopy(args: import('./ai-config').PrepareMcpCopyPayload): Promise<GitResult<import('./ai-config').AiMcpExportPlanResult>>;
     copyMcpToClipboard(args: import('./ai-config').CopyMcpToClipboardPayload): Promise<GitResult<{ copied: boolean }>>;
     saveMcpLiteralSecrets(args: import('./ai-config').SaveMcpLiteralSecretsPayload): Promise<GitResult<{ savedCount: number; updatedFilePath: string }>>;
+    onConfigChanged(cb: (event: { repoPath: string | null }) => void): () => void;
   };
   /**
    * Historial de usos de IA por repositorio (tarea 4.6, D19).

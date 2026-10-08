@@ -111,6 +111,9 @@ function extraerResumen(nombre, salida) {
       .filter(Boolean)
       .join(' · ');
   }
+  if (nombre === 'build:electron') {
+    return 'dist/main.js · dist/preload.js';
+  }
   if (nombre === 'build') {
     const ruta = salida.match(/○ \/\s+([\d.]+ k?B)\s+([\d.]+ k?B)/);
     return ruta ? `/ ${ruta[1]} · primera carga ${ruta[2]}` : '';
@@ -214,6 +217,12 @@ function main() {
 
   const chequeos = [
     { nombre: 'build', comando: 'pnpm build', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
+    {
+      nombre: 'build:electron',
+      comando: 'pnpm build:electron',
+      cuando: !rapido,
+      motivoSalto: tocadosSolo ? '--tocados' : '--rapido',
+    },
     tocadosSolo
       ? {
           nombre: 'test (tocados)',

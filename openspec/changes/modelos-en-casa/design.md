@@ -640,6 +640,7 @@ ese pedido (el catálogo sólo aporta lo último que se supo); la clave de un se
   (3) Un proveedor al que todavía no se le preguntó no tiene fecha de consulta y dice «sin confirmar», no «no
   respondió». (4) El catálogo arma su contexto con el baúl en el momento (`setModelCatalogContextProvider`):
   sin eso, al arrancar consultaba sin clave y los servidores quedaban caídos.
+  (5) *Tanda 28 (2026-10-07):* «Motores y modelos» no reflejaba ediciones externas de `gitcron.json` en caliente porque `AiSettingsSection` carecía de suscripción a eventos de cambio y `ai-config:status` no registraba la ventana ante `watchGitCronConfigFor`. Se expuso `onConfigChanged` en preload/IPC y la sección se suscribe en su ciclo de vida, actualizando en vivo cambios de valores, avisos de sintaxis rota y su posterior recuperación.
 
 ## Risks / Trade-offs
 
