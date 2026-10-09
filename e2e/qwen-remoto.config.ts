@@ -8,6 +8,20 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { parse } from 'jsonc-parser';
 
+function ensureProcessEnvFromUser(varName: string) {
+  if (!process.env[varName]) {
+    try {
+      const val = spawnSync('powershell', ['-NoProfile', '-Command', `[System.Environment]::GetEnvironmentVariable('${varName}', 'User')`], { encoding: 'utf8', windowsHide: true }).stdout.trim();
+      if (val) process.env[varName] = val;
+    } catch {
+      // ignore
+    }
+  }
+}
+ensureProcessEnvFromUser('UNSLOTH_CONSOLA_API_KEY');
+ensureProcessEnvFromUser('CF_ACCESS_CLIENT_ID');
+ensureProcessEnvFromUser('CF_ACCESS_CLIENT_SECRET');
+
 export function buildSanitizedOpenCodeConfig(source: Record<string, any>): Record<string, any> {
   const unslothpc = source?.provider?.unslothpc;
   if (!unslothpc) throw new Error('La prueba requiere el bloque provider.unslothpc en la configuración');
@@ -41,6 +55,61 @@ export function buildSanitizedOpenCodeConfig(source: Record<string, any>): Recor
   if (source?.agent?.tanda) {
     sanitized.agent = {
       tanda: source.agent.tanda,
+    };
+  }
+
+  return sanitized;
+}
+
+export function buildSanitizedOpenCodeConfigConsola(source: Record<string, any>): Record<string, any> {
+  const unslothconsola = source?.provider?.unslothconsola;
+  if (!unslothconsola) throw new Error('La prueba requiere el bloque provider.unslothconsola en la configuración');
+
+  const options = unslothconsola.options ?? {};
+  for (const value of [options.apiKey, ...Object.values(options.headers ?? {})]) {
+    if (typeof value !== 'string' || !/^\{env:[A-Za-z0-9_]+\}$/.test(value)) {
+      throw new Error('La prueba requiere referencias de entorno, no claves literales');
+    }
+  }
+
+  const model = 'unsloth/Qwen3.5-2B-GGUF';
+  const sanitized: Record<string, any> = {
+    $schema: source?.$schema ?? 'https://opencode.ai/config.json',
+    provider: {
+      unslothconsola: {
+        name: unslothconsola.name,
+        npm: unslothconsola.npm,
+        options: {
+          baseURL: options.baseURL,
+          apiKey: options.apiKey,
+          ...(options.headers ? { headers: options.headers } : {}),
+        },
+        models: {
+          [model]: unslothconsola.models?.[model] ?? { name: 'Qwen 3.5 2B GGUF' },
+        },
+      },
+    },
+  };
+
+  const unslothconsolalocal = source?.provider?.unslothconsolalocal;
+  if (unslothconsolalocal) {
+    const localOptions = unslothconsolalocal.options ?? {};
+    for (const value of [localOptions.apiKey, ...Object.values(localOptions.headers ?? {})]) {
+      if (typeof value !== 'string' || !/^\{env:[A-Za-z0-9_]+\}$/.test(value)) {
+        throw new Error('La prueba requiere referencias de entorno, no claves literales');
+      }
+    }
+    sanitized.provider.unslothconsolalocal = {
+      name: unslothconsolalocal.name,
+      npm: unslothconsolalocal.npm,
+      options: {
+        baseURL: localOptions.baseURL,
+        apiKey: localOptions.apiKey,
+        ...(localOptions.headers ? { headers: localOptions.headers } : {}),
+      },
+      models: {
+        [model]: unslothconsolalocal.models?.[model] ?? { name: 'Qwen 3.5 2B GGUF (LAN)' },
+      },
     };
   }
 
@@ -90,6 +159,28 @@ function fixture(homeDir: string) {
   spawnSync('git', ['add', 'cronometria.txt'], { cwd: tandaRepo, windowsHide: true });
   spawnSync('git', ['-c', 'user.name=Auditoría', '-c', 'user.email=prueba@example.invalid', 'commit', '-m', 'Base cronometría'], { cwd: tandaRepo, windowsHide: true });
   fs.appendFileSync(path.join(tandaRepo, 'cronometria.txt'), 'Agregado: soporte de telemetría de latencia en milisegundos y cálculo de percentiles p95 y p99.\n', 'utf8');
+
+  // Repositorio temporal para tanda 29
+  const tanda29Repo = path.join(homeDir, 'tanda29-repo');
+  fs.mkdirSync(tanda29Repo, { recursive: true });
+  for (const args of [['init'], ['-c', 'user.name=Auditoría', '-c', 'user.email=prueba@example.invalid', 'commit', '--allow-empty', '-m', 'Commit base tanda 29']]) {
+    const result = spawnSync('git', args, { cwd: tanda29Repo, encoding: 'utf8', windowsHide: true, env: { ...process.env, GIT_CONFIG_GLOBAL: 'NUL', GIT_CONFIG_NOSYSTEM: '1' } });
+    if (result.status !== 0) throw new Error('No se pudo preparar el repositorio tanda29');
+  }
+  fs.mkdirSync(path.join(tanda29Repo, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(tanda29Repo, 'src', 'telemetria.ts'), 'export function medirLatencia(ms: number): boolean {\n  return ms >= 0;\n}\n', 'utf8');
+  fs.writeFileSync(path.join(tanda29Repo, 'src', 'index.ts'), 'import { medirLatencia } from "./telemetria";\nmedirLatencia(50);\n', 'utf8');
+  fs.writeFileSync(path.join(tanda29Repo, 'cronometria.txt'), 'Base telemetría y cronometría para tanda 29.\n', 'utf8');
+  const openspecDir = path.join(tanda29Repo, 'openspec');
+  fs.mkdirSync(openspecDir, { recursive: true });
+  fs.writeFileSync(path.join(openspecDir, 'config.yaml'), 'schema: "https://openspec.dev/schema.yaml"\nversion: "0.1.0"\n', 'utf8');
+  spawnSync('git', ['add', '.'], { cwd: tanda29Repo, windowsHide: true });
+  spawnSync('git', ['-c', 'user.name=Auditoría', '-c', 'user.email=prueba@example.invalid', 'commit', '-m', 'feat: modulo base de telemetria y configuracion inicial'], { cwd: tanda29Repo, windowsHide: true });
+  fs.appendFileSync(path.join(tanda29Repo, 'src', 'telemetria.ts'), '\nexport function registrarMuestra(etiqueta: string, valor: number) {\n  return { etiqueta, valor };\n}\n', 'utf8');
+  spawnSync('git', ['add', 'src/telemetria.ts'], { cwd: tanda29Repo, windowsHide: true });
+  spawnSync('git', ['-c', 'user.name=Auditoría', '-c', 'user.email=prueba@example.invalid', 'commit', '-m', 'feat: registro de muestras de telemetria'], { cwd: tanda29Repo, windowsHide: true });
+  fs.appendFileSync(path.join(tanda29Repo, 'cronometria.txt'), 'Agregado soporte para cálculo de percentiles de latencia p95 y p99 en milisegundos.\n', 'utf8');
+  fs.writeFileSync(path.join(tanda29Repo, 'semilla-sdd.txt'), 'Código de prueba tanda 29: 894123\n', 'utf8');
 }
 
 function installedOpenCode(): string {
@@ -118,7 +209,15 @@ if(args[0]==='service'&&args[1]!=='status') { process.stderr.write('No se modifi
 }
 `, 'utf8');
   fs.writeFileSync(path.join(bin,'opencode.cmd'),`@echo off\r\n"${process.execPath}" "${script}" %*\r\n`);
-  return {PATH:`${bin}${path.delimiter}${process.env.PATH??''}`};
+  ensureProcessEnvFromUser('UNSLOTH_CONSOLA_API_KEY');
+  ensureProcessEnvFromUser('CF_ACCESS_CLIENT_ID');
+  ensureProcessEnvFromUser('CF_ACCESS_CLIENT_SECRET');
+  return {
+    PATH: `${bin}${path.delimiter}${process.env.PATH ?? ''}`,
+    UNSLOTH_CONSOLA_API_KEY: process.env.UNSLOTH_CONSOLA_API_KEY ?? '',
+    CF_ACCESS_CLIENT_ID: process.env.CF_ACCESS_CLIENT_ID ?? '',
+    CF_ACCESS_CLIENT_SECRET: process.env.CF_ACCESS_CLIENT_SECRET ?? '',
+  };
 }
 
 export default {

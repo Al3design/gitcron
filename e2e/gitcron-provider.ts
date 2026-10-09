@@ -223,7 +223,11 @@ export function gitcronProvider(options: { fixture?: (homeDir: string) => void; 
       if (entry.child.pid !== undefined) {
         killProcessTree(entry.child.pid);
       }
-      fs.rmSync(entry.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      try {
+        fs.rmSync(entry.profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+      } catch (err: any) {
+        console.warn(`[gitcron-provider] Aviso: no se pudo borrar perfil temporal ${entry.profile} en release (${err?.code || err?.message || err})`);
+      }
     },
     // Corre en el proceso principal de e2e al final de la corrida, después de que salieron los
     // trabajadores: encuentra lo que dejó un trabajador que murió por la marca de la corrida.
@@ -236,10 +240,11 @@ export function gitcronProvider(options: { fixture?: (homeDir: string) => void; 
       }
       for (const entry of fs.readdirSync(os.tmpdir(), { withFileTypes: true })) {
         if (!entry.isDirectory() || !entry.name.startsWith(`${tag}-`)) continue;
+        const profilePath = path.join(os.tmpdir(), entry.name);
         try {
-          fs.rmSync(path.join(os.tmpdir(), entry.name), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-        } catch {
-          // mejor esfuerzo: una carpeta tomada se va en la próxima limpieza del sistema
+          fs.rmSync(profilePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        } catch (err: any) {
+          console.warn(`[gitcron-provider] Aviso: no se pudo borrar carpeta temporal ${profilePath} en sweep (${err?.code || err?.message || err})`);
         }
       }
       return swept;

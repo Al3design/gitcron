@@ -591,6 +591,7 @@ export function RepoSidebar({
 
   return (
     <aside
+      aria-label="Barra lateral"
       className={cn(
         "flex flex-col overflow-hidden z-30 relative bg-bg-surface shrink-0",
         !isDragging && "transition-all duration-300"

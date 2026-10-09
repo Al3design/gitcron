@@ -67,7 +67,7 @@ export function CartoAISettings({ onNavigateToAiModels }: Props = {}) {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4" aria-label={t('cartography.ai.title')}>
       <div className="flex items-center gap-2">
         <Bot size={14} className="text-secondary" />
         <h4 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
@@ -80,6 +80,7 @@ export function CartoAISettings({ onNavigateToAiModels }: Props = {}) {
       <button
         type="button"
         onClick={() => patch({ enabled: !settings.enabled })}
+        aria-label={settings.enabled ? 'IA de Cartografía: Activa' : 'IA de Cartografía: Inactiva'}
         className={cn(
           'w-full px-4 py-3 rounded-lg border text-sm flex items-center justify-center gap-2 transition-colors font-semibold',
           settings.enabled

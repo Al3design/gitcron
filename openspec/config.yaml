@@ -63,7 +63,10 @@ operations:
         sólo las pruebas que dependen de los archivos tocados. La IA ejecutora corre también
         la verificación completa (build y la suite dos veces) para cerrar su tanda; es
         obligatorio tener la completa en verde antes del commit y volver a verificar después
-        de correcciones. El auditor revisa la correspondencia entre código final, resultados
+        de corregir código. Una tanda corre la completa una vez al cerrar, no después de cada
+        paso; si lo último que se tocó son reportes, logs o capturas, no se repite. Una corrida
+        larga se lanza y se lee al terminar, sin esperas con temporizador que revisan el log
+        una y otra vez. El auditor revisa la correspondencia entre código final, resultados
         y evidencia; no ejecuta las pruebas. scripts/verificar.mjs es la fuente del orden
         de las verificaciones y de sus escalones.
         Toda búsqueda con rg lleva la carpeta donde buscar (por ejemplo `rg -n "x" components
@@ -73,6 +76,23 @@ operations:
         Registrar fallos o límites sin convertirlos en éxito ni corregir trabajo ajeno
         fuera del alcance. En tandas sólo documentales, validar los changes afectados
         en modo estricto y revisar el diff.
+      - >-
+        Las comprobaciones contra modelos de IA reales (servidores de casa, túneles,
+        suscripciones por CLI) son cortas y automáticas. Por ejemplo: una petición mínima al
+        modelo y ver que sus modelos aparecen en el selector de la pantalla. Tardan segundos y
+        se corren cuando la tanda toca algo de IA. Los recorridos largos de varias pantallas
+        contra la IA real se corren a pedido, no en cada cierre: dependen de una red y de un
+        hardware que no controlamos. Un recorrido funcional (importar, redactar, lanzar, fallar
+        y recuperar) se demuestra con pruebas automáticas; no se le pide a Alejandro que
+        apriete botones para comprobarlo.
+        Alejandro hace las pruebas de experiencia y diseño (UX/UI) todas juntas, en una
+        ronda propia, y no tarea por tarea. Lo ya aprobado no se reabre para mejorar su
+        evidencia. Si una tanda necesita una segunda corrección, se para y se decide con
+        Alejandro si sigue. Entre el 2026-10-08 y el 2026-10-09, la tarea 7.1 de
+        modelos-en-casa se estiró a cuatro tandas (29, 29b, 29c y 29d) porque cada auditoría
+        pedía más evidencia sobre recorridos que ya funcionaban, y las pruebas contra la IA
+        real corrían en cada cierre. Gastaron la cuota del ejecutor sin hacer avanzar el
+        producto.
       - >-
         Dejar un reporte breve en tmp/reportes/<change>-<tanda>.md con base Git, alcance,
         archivos modificados, comprobaciones ejecutadas y resultados, ruta del log y

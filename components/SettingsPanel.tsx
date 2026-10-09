@@ -525,6 +525,7 @@ export function SettingsPanel({
                   <button
                     type="button"
                     onClick={() => changeEnableCartography(!enableCartography)}
+                    aria-label={enableCartography ? 'Vista Cartografía: Activa' : 'Vista Cartografía: Inactiva'}
                     className={cn(
                       'w-full px-4 py-3 rounded-lg border text-sm flex items-center justify-center gap-2 transition-colors font-semibold',
                       enableCartography
