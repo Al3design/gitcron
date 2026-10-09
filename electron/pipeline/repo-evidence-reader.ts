@@ -7,6 +7,7 @@ import { CheckRepoActions, simpleGit } from 'simple-git';
 import { withRepoLock } from '../git/repo-queue';
 import type {
   BranchDivergence,
+  ChangeLastCommit,
   ChangeSelection,
   ChangeTimestamp,
   DecisionRequest,
@@ -56,6 +57,11 @@ export interface RepoEvidenceReaderDependencies {
    * tienen ningún commit. Es el único caso donde el disco decide.
    */
   changeDirCreatedAt?(repoPath: string, relative: string): Promise<string | null>;
+  /**
+   * Último commit que tocó un cambio determinado (sus archivos o su rama).
+   * Acotado sólo al cambio seleccionado.
+   */
+  changeLastCommit?(repoPath: string, changeId: string, changeRoot?: string): Promise<ChangeLastCommit | null>;
   /**
    * Distancia entre la rama actual y la base local. Opcional: sin ella el
    * snapshot no la lleva, y la vista no afirma nada sobre la base.
@@ -252,6 +258,66 @@ async function defaultChangeHistory(repoPath: string): Promise<ChangeHistoryStam
   });
 }
 
+export function parseCommitLine(line: string): ChangeLastCommit | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('\x00');
+  if (parts.length < 3) return null;
+  const [hash, message, date] = parts;
+  if (!hash || !date) return null;
+  return {
+    hash,
+    shortHash: hash.slice(0, 7),
+    message: message || '',
+    date,
+  };
+}
+
+export async function defaultChangeLastCommit(
+  repoPath: string,
+  changeId: string,
+  changeRoot?: string,
+): Promise<ChangeLastCommit | null> {
+  return withRepoLock(repoPath, async () => {
+    const git = simpleGit(repoPath, { timeout: { block: 10_000 } });
+    const targetPath = changeRoot || `openspec/changes/${changeId}`;
+    let pathCommit: ChangeLastCommit | null = null;
+    try {
+      const rawPath = await git.raw([
+        'log', '-n', '1', '--format=%H%x00%s%x00%aI', '--', targetPath,
+      ]);
+      pathCommit = parseCommitLine(rawPath);
+    } catch {
+      pathCommit = null;
+    }
+
+    // La base es la primera que exista: main y, si no hay, master. Se corta en la
+    // primera aunque la rama no tenga commits propios: probar la siguiente hacía
+    // que una master vieja devolviera commits de main que no son del cambio.
+    let branchCommit: ChangeLastCommit | null = null;
+    for (const base of ['main', 'master']) {
+      const existe = await git.raw(['branch', '--list', base]).then((out) => out.trim() !== '', () => false);
+      if (!existe) continue;
+      try {
+        const rawBranch = await git.raw([
+          'log', '-n', '1', '--format=%H%x00%s%x00%aI', `refs/heads/change/${changeId}`, '--not', `refs/heads/${base}`,
+        ]);
+        branchCommit = parseCommitLine(rawBranch);
+      } catch {
+        // la rama del cambio no existe
+      }
+      break;
+    }
+
+    if (!pathCommit) return branchCommit;
+    if (!branchCommit) return pathCommit;
+
+    const pathTime = new Date(pathCommit.date).getTime();
+    const branchTime = new Date(branchCommit.date).getTime();
+    return branchTime > pathTime ? branchCommit : pathCommit;
+  });
+}
+
 function firstWhyParagraph(markdown: string): string | null {
   const section = /^## Why\s*$([\s\S]*?)(?=^##\s|(?![\s\S]))/im.exec(markdown)?.[1] ?? '';
   const paragraph = section
@@ -274,6 +340,7 @@ export class RepoEvidenceReader {
     statusOpenSpecChange: statusOpenSpecChangeWithCli,
     changeHistory: defaultChangeHistory,
     changeDirCreatedAt: defaultChangeDirCreatedAt,
+    changeLastCommit: defaultChangeLastCommit,
     branchDivergence: readBranchDivergence,
     now: () => new Date().toISOString(),
   }) {}
@@ -296,6 +363,19 @@ export class RepoEvidenceReader {
     if (committed) return { at: committed, source: 'commit' };
     const onDisk = await this.dependencies.changeDirCreatedAt?.(repoPath, changeRoot) ?? null;
     return onDisk ? { at: onDisk, source: 'disk' } : null;
+  }
+
+  private async resolveLastCommit(
+    repoPath: string,
+    changeId: string,
+    changeRoot?: string,
+  ): Promise<ChangeLastCommit | null> {
+    try {
+      const resolver = this.dependencies.changeLastCommit ?? defaultChangeLastCommit;
+      return await resolver(repoPath, changeId, changeRoot);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -438,6 +518,9 @@ export class RepoEvidenceReader {
         // Git primero. El disco sólo cubre el cambio que todavía no se confirmó,
         // y va marcado como tal para que no se lea como una fecha confirmada.
         createdAt: await this.resolveCreatedAt(repoPath, changeId, changeRoot, history),
+        lastCommit: isSelected
+          ? await this.resolveLastCommit(repoPath, changeId, changeRoot)
+          : null,
       });
     }
 
@@ -489,6 +572,7 @@ export class RepoEvidenceReader {
           tasks: tasks.content,
           specs: await this.readDeltaSpecs(repoPath, root, capabilities, diagnostics),
         };
+        selectedArchived.lastCommit = await this.resolveLastCommit(repoPath, selectedArchived.changeId, root);
       }
       for (const report of reports) {
         const file = await safeReadRepoFile(repoPath, report, { maxBytes: 512 * 1024 });

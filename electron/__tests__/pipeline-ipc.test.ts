@@ -32,7 +32,7 @@ describe('Pipeline read-only IPC', () => {
     const send = vi.fn();
     const { registerPipelineHandlers } = await import('../ipc/pipeline');
     registerPipelineHandlers(() => ({ webContents: { send } }) as never, { refresh } as never);
-    expect([...ipc.handlers.keys()]).toEqual(['pipeline:get-snapshot', 'pipeline:subscribe', 'pipeline:unsubscribe', 'pipeline:prewarm']);
+    expect([...ipc.handlers.keys()]).toEqual(['pipeline:get-snapshot', 'pipeline:subscribe', 'pipeline:unsubscribe', 'pipeline:prewarm', 'pipeline:get-change-last-commit']);
     await expect(ipc.handlers.get('pipeline:get-snapshot')?.(null, '')).resolves.toMatchObject({ success: false });
     expect(refresh).not.toHaveBeenCalled();
     await expect(ipc.handlers.get('pipeline:get-snapshot')?.(null, 'C:/repo')).resolves.toEqual({ success: true, data: snapshot });

@@ -316,7 +316,7 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
 
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByText('1.1')).toBeTruthy();
-    expect(screen.getByText(/Tarea principal de integración/)).toBeTruthy();
+    expect(screen.getAllByText(/Tarea principal de integración/)[0]).toBeTruthy();
 
     // 1.3 Artefactos: Pulsar en el riel flotante conmuta a la vista de artefactos
     const artifactsRailBtn = screen.getByRole('button', { name: 'pipeline.switcher.artifacts' });
@@ -381,7 +381,7 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     // c) La vista de tareas del cambio sigue montada en el centro
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByText('1.1')).toBeTruthy();
-    expect(screen.getByText(/Tarea principal de integración/)).toBeTruthy();
+    expect(screen.getAllByText(/Tarea principal de integración/)[0]).toBeTruthy();
 
     // d) El panel flotante cedió su lugar al inspector fijo
     const foldedRail = container.querySelector('nav[class*="switcherRail"]');
@@ -403,7 +403,7 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     expect(usePipelineStore.getState().selectedChangeId).toBe('cambio-operativo');
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByText('1.1')).toBeTruthy();
-    expect(screen.getByText(/Tarea principal de integración/)).toBeTruthy();
+    expect(screen.getAllByText(/Tarea principal de integración/)[0]).toBeTruthy();
   });
 
   it('3. El menú global sigue accesible e interactivo en ambos modos (flotante y fijo)', () => {

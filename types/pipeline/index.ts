@@ -75,6 +75,17 @@ export interface OpenSpecChangeEvidence {
    * cuando no se pudo determinar ni por Git ni por disco.
    */
   createdAt?: ChangeTimestamp | null;
+  /**
+   * Último commit que tocó este cambio (sus archivos de OpenSpec o su rama).
+   */
+  lastCommit?: ChangeLastCommit | null;
+}
+
+export interface ChangeLastCommit {
+  hash: string;
+  shortHash: string;
+  message: string;
+  date: string;
 }
 
 export interface OpenSpecChangeArtifacts {
@@ -170,6 +181,8 @@ export interface OpenSpecArchivedChangeEvidence {
    * de todos haría crecer el snapshot sin que nadie lo mire.
    */
   artifacts?: OpenSpecChangeArtifacts | null;
+  /** Último commit que tocó este cambio archivado. */
+  lastCommit?: ChangeLastCommit | null;
 }
 
 /**

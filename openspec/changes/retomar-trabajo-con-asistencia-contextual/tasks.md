@@ -20,7 +20,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 3. Retomar y orientación
 
-- [ ] 3.1 **IA local:** Construir resumen determinista del cambio con objetivo, evidencia y próximo paso. **Comprobación:** Funciona sin IA; distingue documentos presentes, tareas marcadas, pruebas verificadas y commit.
+- [x] 3.1 **IA local:** Construir resumen determinista del cambio con objetivo, evidencia y próximo paso. **Comprobación:** Funciona sin IA; distingue documentos presentes, tareas marcadas, pruebas verificadas y commit.
 - [ ] 3.2 **IA local:** Invalidar el resumen por cambios de fuentes y exponer referencias fechadas. **Comprobación:** Edición externa y cambio de checkout muestran pendiente de relectura, nunca un resumen viejo como vigente.
 - [ ] 3.3 **IA local:** Añadir narración opcional limitada del resumen con fallback. **Comprobación:** No consulta modelo durante navegación pasiva; fallo conserva resumen determinista y fuentes.
 - [ ] 3.4 **IA local:** Adaptar flotante contextual y alternancia con inspector conservando acciones alcanzables. **Comprobación:** Con panel fijo abierto se preservan contexto y vías de navegación; sin pendientes no presenta alertas vacías.

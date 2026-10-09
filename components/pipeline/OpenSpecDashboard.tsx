@@ -65,6 +65,7 @@ import { PipelineRuntimeLauncher } from './PipelineRuntimeLauncher';
 import { useReducedMotion } from 'motion/react';
 import { ChangeBranchNotice } from './ChangeBranchNotice';
 import { ChangeTimestampLabel } from './ChangeTimestampLabel';
+import { WhereYouLeftOffCard } from './WhereYouLeftOffCard';
 import { OpenSpecUpdateReview } from './OpenSpecUpdateReview';
 import type { ArchivePlan, OpenSpecEngineStatus, OpenSpecInstallPlan, OpenSpecRegistryCheck, OpenSpecUpdatePlan } from '@/types/pipeline';
 import { SpecificationViewer } from './SpecificationViewer';
@@ -2961,6 +2962,12 @@ export function OpenSpecDashboard({
                   </div>
                 </header>
 
+                <WhereYouLeftOffCard
+                  repoPath={repoPath}
+                  selectedChange={selectedChange}
+                  nextTask={nextTask}
+                />
+
                 {/* Pegada a la cabecera y en el cuerpo del medio */}
                 {archiveRequest && (
                   <div className={styles.archiveConfirm}>
@@ -3196,6 +3203,12 @@ export function OpenSpecDashboard({
                       )}
                     </div>
                   </div>
+
+                  <WhereYouLeftOffCard
+                    repoPath={repoPath}
+                    selectedArchive={selectedArchive}
+                  />
+
                   {/* Lo archivado es el registro de lo que se hizo, incluida la
                       firma humana. Revisarlo no debería obligar a salir de la
                       aplicación ni a leer el diff del commit de archivado. */}

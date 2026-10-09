@@ -347,7 +347,7 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
     // La tarea con texto largo se renderiza en el DOM completamente (número en strong, texto en span)
     const taskLabel = screen.getByText('1.1');
     expect(taskLabel).toBeTruthy();
-    const longTaskText = screen.getByText(/Tarea con un texto descriptivo muy largo que no debe ser cortado/);
+    const longTaskText = screen.getAllByText(/Tarea con un texto descriptivo muy largo que no debe ser cortado/)[0];
     expect(longTaskText).toBeTruthy();
 
     // Verificación estricta en el CSS: no existe nowrap ni text-overflow: ellipsis en .taskList > li > strong

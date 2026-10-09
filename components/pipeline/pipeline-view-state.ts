@@ -12,7 +12,7 @@ import type {
   EconomyState,
   PipelineDiffItem,
 } from './pipeline-domain';
-import type { BranchDivergence, ChangeTimestamp, OpenSpecChangeArtifacts, OpenSpecChangeStatus, OpenSpecToolEvidence, OpenSpecValidationStatus, TaskEvidence } from '@/types/pipeline';
+import type { BranchDivergence, ChangeLastCommit, ChangeTimestamp, OpenSpecChangeArtifacts, OpenSpecChangeStatus, OpenSpecToolEvidence, OpenSpecValidationStatus, TaskEvidence } from '@/types/pipeline';
 
 export type PipelineSource = 'git' | 'openspec' | 'runtime';
 
@@ -36,6 +36,8 @@ export type OpenSpecChangeSummary = {
   status?: OpenSpecChangeStatus | null;
   /** Cuándo se creó, con la fuente de la que salió la marca. */
   createdAt?: ChangeTimestamp | null;
+  /** Último commit que tocó este cambio. */
+  lastCommit?: ChangeLastCommit | null;
 };
 
 /**
@@ -86,6 +88,7 @@ export type OpenSpecWorkspaceSnapshot = {
     artifacts?: OpenSpecChangeSummary['artifacts'];
     createdAt?: ChangeTimestamp | null;
     archivedOn?: ChangeTimestamp | null;
+    lastCommit?: ChangeLastCommit | null;
   }>;
   specifications: Array<{
     specificationId: string;
