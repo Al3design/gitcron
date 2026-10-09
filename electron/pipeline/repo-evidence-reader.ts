@@ -7,6 +7,7 @@ import { CheckRepoActions, simpleGit } from 'simple-git';
 import { withRepoLock } from '../git/repo-queue';
 import type {
   BranchDivergence,
+  ChangeCommitsEvidence,
   ChangeLastCommit,
   ChangeSelection,
   ChangeTimestamp,
@@ -273,49 +274,101 @@ export function parseCommitLine(line: string): ChangeLastCommit | null {
   };
 }
 
-export async function defaultChangeLastCommit(
+export function parseCommitLines(raw: string): ChangeLastCommit[] {
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const commits: ChangeLastCommit[] = [];
+  for (const line of lines) {
+    const commit = parseCommitLine(line);
+    if (commit) commits.push(commit);
+  }
+  return commits;
+}
+
+export async function defaultChangeCommits(
   repoPath: string,
   changeId: string,
   changeRoot?: string,
-): Promise<ChangeLastCommit | null> {
+): Promise<ChangeCommitsEvidence> {
   return withRepoLock(repoPath, async () => {
     const git = simpleGit(repoPath, { timeout: { block: 10_000 } });
     const targetPath = changeRoot || `openspec/changes/${changeId}`;
-    let pathCommit: ChangeLastCommit | null = null;
+    let pathCommits: ChangeLastCommit[] = [];
     try {
       const rawPath = await git.raw([
-        'log', '-n', '1', '--format=%H%x00%s%x00%aI', '--', targetPath,
+        'log', '-n', '10', '--format=%H%x00%s%x00%aI', '--', targetPath,
       ]);
-      pathCommit = parseCommitLine(rawPath);
+      pathCommits = parseCommitLines(rawPath);
     } catch {
-      pathCommit = null;
+      pathCommits = [];
     }
 
-    // La base es la primera que exista: main y, si no hay, master. Se corta en la
-    // primera aunque la rama no tenga commits propios: probar la siguiente hacía
-    // que una master vieja devolviera commits de main que no son del cambio.
-    let branchCommit: ChangeLastCommit | null = null;
+    let branchCommits: ChangeLastCommit[] = [];
+    let baseBranch: string | null = null;
     for (const base of ['main', 'master']) {
       const existe = await git.raw(['branch', '--list', base]).then((out) => out.trim() !== '', () => false);
       if (!existe) continue;
+      baseBranch = base;
       try {
         const rawBranch = await git.raw([
-          'log', '-n', '1', '--format=%H%x00%s%x00%aI', `refs/heads/change/${changeId}`, '--not', `refs/heads/${base}`,
+          'log', '-n', '10', '--format=%H%x00%s%x00%aI', `refs/heads/change/${changeId}`, '--not', `refs/heads/${base}`,
         ]);
-        branchCommit = parseCommitLine(rawBranch);
+        branchCommits = parseCommitLines(rawBranch);
       } catch {
         // la rama del cambio no existe
       }
       break;
     }
 
-    if (!pathCommit) return branchCommit;
-    if (!branchCommit) return pathCommit;
+    const commitMap = new Map<string, ChangeLastCommit>();
+    for (const c of [...branchCommits, ...pathCommits]) {
+      if (!commitMap.has(c.hash)) {
+        commitMap.set(c.hash, c);
+      }
+    }
+    const recentCommits = Array.from(commitMap.values())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10);
 
-    const pathTime = new Date(pathCommit.date).getTime();
-    const branchTime = new Date(branchCommit.date).getTime();
-    return branchTime > pathTime ? branchCommit : pathCommit;
+    let commitsAfterLastTask: ChangeLastCommit[] = [];
+    if (branchCommits.length > 0 && baseBranch) {
+      try {
+        const tasksPath = `${targetPath}/tasks.md`;
+        const rawTaskCommit = await git.raw([
+          'log', '-n', '1', '--format=%H%x00%s%x00%aI', `refs/heads/change/${changeId}`, '--not', `refs/heads/${baseBranch}`, '--', tasksPath,
+        ]);
+        const lastTaskCommit = parseCommitLine(rawTaskCommit);
+        if (lastTaskCommit) {
+          const taskCommitDate = new Date(lastTaskCommit.date).getTime();
+          const idx = branchCommits.findIndex((c) => c.hash === lastTaskCommit.hash);
+          if (idx > 0) {
+            commitsAfterLastTask = branchCommits.slice(0, idx);
+          } else if (idx === 0) {
+            commitsAfterLastTask = [];
+          } else {
+            commitsAfterLastTask = branchCommits.filter((c) => new Date(c.date).getTime() > taskCommitDate);
+          }
+        } else {
+          commitsAfterLastTask = branchCommits;
+        }
+      } catch {
+        commitsAfterLastTask = [];
+      }
+    }
+
+    return {
+      recentCommits,
+      commitsAfterLastTask,
+    };
   });
+}
+
+export async function defaultChangeLastCommit(
+  repoPath: string,
+  changeId: string,
+  changeRoot?: string,
+): Promise<ChangeLastCommit | null> {
+  const commits = await defaultChangeCommits(repoPath, changeId, changeRoot);
+  return commits.recentCommits[0] ?? null;
 }
 
 function firstWhyParagraph(markdown: string): string | null {

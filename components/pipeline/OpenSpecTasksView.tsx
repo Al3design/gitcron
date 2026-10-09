@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Copy,
   Eye,
@@ -34,6 +36,7 @@ import type { OpenSpecChangeEvidence, TaskEvidence } from '@/types/pipeline';
 import styles from './OpenSpecDashboard.module.css';
 import { MarkdownViewer } from './MarkdownViewer';
 import { TaskConfirmToast } from './TaskConfirmToast';
+import { parseTaskDetails } from './resume-card';
 
 export interface OpenSpecTasksViewProps {
   repoPath: string;
@@ -143,6 +146,17 @@ export function OpenSpecTasksView({
   // Menú contextual de fila (Bloque C)
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Tarea 3.5: Despliegue de «Cómo se comprueba» por tarea en lista interactiva
+  const [expandedCheckTaskIds, setExpandedCheckTaskIds] = useState<Set<string>>(new Set());
+  const toggleCheckDetail = (taskId: string) => {
+    setExpandedCheckTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
 
   // Estados del editor Markdown (Tareas 8.2 y 8.12)
   const initialDiskMarkdown = selectedChange.artifacts?.tasks
@@ -753,6 +767,8 @@ export function OpenSpecTasksView({
               const isEditing = editingTaskId === task.id;
               const isDragging = draggingTaskId === task.id;
               const isDropTarget = dragOverTaskId === task.id;
+              const details = parseTaskDetails(task);
+              const isCheckOpen = expandedCheckTaskIds.has(task.id);
 
               return (
                 <li
@@ -894,7 +910,39 @@ export function OpenSpecTasksView({
                       </div>
                     </div>
                   ) : (
-                    <span>{resolveText(task)}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col items-start gap-1">
+                        <span>{details.title || resolveText(task)}</span>
+                        {(details.responsible || details.check) && (
+                          <button
+                            type="button"
+                            className={styles.taskCheckToggleBtn}
+                            onClick={() => toggleCheckDetail(task.id)}
+                            aria-expanded={isCheckOpen}
+                            aria-label={`${t('pipeline.resumeCard.howToCheckToggle')}: ${details.title}`}
+                          >
+                            {isCheckOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            <span>{t('pipeline.resumeCard.howToCheckToggle')}</span>
+                          </button>
+                        )}
+                      </div>
+                      {isCheckOpen && (details.responsible || details.check) && (
+                        <div className={styles.taskCheckDetailBox} data-testid={`task-check-detail-${task.id}`}>
+                          {details.responsible && (
+                            <p className={styles.whereYouLeftOffDetailItem}>
+                              <strong>{t('pipeline.resumeCard.responsibleLabel')} </strong>
+                              <span>{details.responsible}</span>
+                            </p>
+                          )}
+                          {details.check && (
+                            <p className={styles.whereYouLeftOffDetailItem}>
+                              <strong>{t('pipeline.resumeCard.checkLabel')} </strong>
+                              <span>{details.check}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Columna 5: Acciones con lápiz y tres puntos horizontales (Ajuste 2) */}

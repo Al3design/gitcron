@@ -5301,6 +5301,119 @@ summary.centerBlock {
   font-weight: 600;
 }
 
+.whereYouLeftOffDoneTasksList,
+.whereYouLeftOffCommitsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.whereYouLeftOffCommitsList {
+  margin-top: var(--space-1);
+}
+
+.whereYouLeftOffDoneTaskItem,
+.whereYouLeftOffCommitItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  line-height: 1.4;
+}
+
+.whereYouLeftOffDoneIcon {
+  color: var(--color-git-add);
+  flex-shrink: 0;
+  transform: translateY(1px);
+}
+
+.whereYouLeftOffCommitIcon {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  transform: translateY(1px);
+}
+
+.whereYouLeftOffEvidenceBox {
+  margin-top: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.whereYouLeftOffEvidenceItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.whereYouLeftOffEvidenceIcon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  transform: translateY(1px);
+}
+
+.whereYouLeftOffRemainingList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.whereYouLeftOffSectionBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+
+.whereYouLeftOffSectionCurrentBadge {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.taskCheckToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  margin-left: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  vertical-align: middle;
+}
+
+.taskCheckToggleBtn:hover {
+  background: var(--color-bg-base);
+}
+
+.taskCheckDetailBox {
+  grid-column: 1 / -1;
+  margin: var(--space-1) 0 var(--space-2) calc(var(--space-6) + 16px);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-base);
+  border-left: 2px solid var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+}
+
 @media (max-width: 640px) {
   .whereYouLeftOffRowsList {
     grid-template-columns: 1fr;

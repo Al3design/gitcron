@@ -3,7 +3,7 @@ import { ipcMain } from 'electron';
 import type { PipelineState } from '../../types/pipeline';
 import { PipelineService } from '../pipeline/pipeline-service';
 import { invalidateEngineToolReportCache } from '../pipeline/openspec-engine-tools';
-import { defaultChangeLastCommit } from '../pipeline/repo-evidence-reader';
+import { defaultChangeCommits, defaultChangeLastCommit } from '../pipeline/repo-evidence-reader';
 import { isValidOpenSpecChangeSlug } from '../../lib/openspec-slug';
 import { errMsg, validRepoPath } from './shared';
 
@@ -139,6 +139,16 @@ export function registerPipelineHandlers(
     try {
       const commit = await defaultChangeLastCommit(repoPath as string, changeId);
       return { success: true, data: commit };
+    } catch (error) {
+      return { success: false, error: errMsg(error) };
+    }
+  });
+  ipcMain.handle('pipeline:get-change-commits', async (_event, repoPath: unknown, changeId: unknown) => {
+    if (!validRepoPath(repoPath)) return { success: false, error: 'Ruta de repositorio inválida o no autorizada' };
+    if (!isValidOpenSpecChangeSlug(changeId)) return { success: false, error: 'Identificador de cambio inválido' };
+    try {
+      const data = await defaultChangeCommits(repoPath as string, changeId as string);
+      return { success: true, data };
     } catch (error) {
       return { success: false, error: errMsg(error) };
     }

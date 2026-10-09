@@ -2,7 +2,7 @@ import type { ChangeLastCommit, ChangeTimestamp, TaskEvidence } from '@/types/pi
 import { resolveTaskLabel, resolveTaskText } from './pipeline-next-action';
 
 /**
- * Resumen determinista "Dónde quedaste" para un cambio OpenSpec (Tarea 3.1).
+ * Resumen determinista "Dónde quedaste" para un cambio OpenSpec (Tareas 3.1 y 3.5).
  *
  * Función pura: mismas entradas, misma respuesta.
  * No invoca IA ni modelos, lee sólo lo que está en disco y en Git.
@@ -34,10 +34,84 @@ export interface ResumeCardNextStepRow extends ResumeCardRow {
   } | null;
 }
 
+export interface ResumeCardTaskItem {
+  id: string;
+  label: string;
+  title: string;
+  text: string;
+  responsible: string | null;
+  check: string | null;
+  completed: boolean;
+}
+
+export interface ResumeCardCommitItem {
+  hash: string;
+  shortHash: string;
+  message: string;
+  date: string;
+  timeAgo: string;
+  text: string;
+}
+
+export interface ResumeCardSectionGroup {
+  sectionName: string;
+  totalTasks: number;
+  completedTasks: number;
+  pendingTasks: number;
+  isCurrent: boolean;
+  label: string;
+}
+
+export interface ResumeCardEvidence {
+  hasEvidence: boolean;
+  commitsAfterLastTask: ResumeCardCommitItem[];
+  uncommittedFiles: string[];
+  session: {
+    runtime: string;
+    role?: string;
+    outcome?: string;
+    statusLabel: string;
+    text: string;
+  } | null;
+  emptyText: string | null;
+}
+
+export interface ResumeCardWhatYouWereDoing {
+  completedTasks: ResumeCardTaskItem[];
+  commits: ResumeCardCommitItem[];
+  emptyText: string | null;
+}
+
+export interface ResumeCardCurrentWork {
+  currentTask: ResumeCardTaskItem | null;
+  isArchived: boolean;
+  allCompleted: boolean;
+  statusText: string;
+  detail: {
+    responsible: string | null;
+    check: string | null;
+  } | null;
+  evidence: ResumeCardEvidence;
+}
+
+export interface ResumeCardRemainingWork {
+  sections: ResumeCardSectionGroup[];
+  allCompleted: boolean;
+  noTasks: boolean;
+  emptyText: string | null;
+}
+
 export interface ResumeCardData {
   changeId: string;
   isArchived: boolean;
   archivedNotice: string | null;
+  objective: {
+    text: string;
+    isFallback: boolean;
+  };
+  whatYouWereDoing: ResumeCardWhatYouWereDoing;
+  currentWork: ResumeCardCurrentWork;
+  remainingWork: ResumeCardRemainingWork;
   rows: {
     objective: ResumeCardRow;
     progress: ResumeCardRow;
@@ -56,6 +130,16 @@ export interface ResumeCardInput {
   tasks?: TaskEvidence[];
   tasksRaw?: string | null;
   lastCommit?: ChangeLastCommit | null;
+  recentCommits?: ChangeLastCommit[] | null;
+  commitsAfterLastTask?: ChangeLastCommit[] | null;
+  uncommittedFiles?: string[] | null;
+  latestSession?: {
+    runtime?: string;
+    role?: string;
+    outcome?: string;
+    active?: boolean;
+    startedAt?: string;
+  } | null;
   now?: string | number | Date;
   locale?: string;
   t?: (key: string, params?: Record<string, string | number>) => string;
@@ -67,21 +151,39 @@ const DEFAULT_TEXTS_ES: Record<string, string> = {
   'pipeline.resumeCard.row.progress': 'Avance',
   'pipeline.resumeCard.row.lastActivity': 'Última actividad',
   'pipeline.resumeCard.row.nextStep': 'Siguiente paso',
+  'pipeline.resumeCard.row.whatYouWereDoing': 'Lo que venías haciendo',
+  'pipeline.resumeCard.row.currentWork': 'En qué estabas',
+  'pipeline.resumeCard.row.remainingWork': 'Lo que queda',
+  'pipeline.resumeCard.howToCheckToggle': 'Cómo se comprueba',
   'pipeline.resumeCard.objectiveEmpty': 'El cambio no tiene propuesta definida todavía.',
   'pipeline.resumeCard.noTasks': 'Sin tareas definidas',
   'pipeline.resumeCard.noCommits': 'Todavía sin commits',
   'pipeline.resumeCard.noPendingTasks': 'Sin tareas pendientes',
   'pipeline.resumeCard.allTasksCompleted': 'Todas las tareas completadas',
+  'pipeline.resumeCard.whatYouWereDoingEmpty': 'Todavía no hay tareas completadas ni commits en este cambio.',
+  'pipeline.resumeCard.noWorkStarted': 'Todavía no se empezó a trabajar en esta tarea.',
   'pipeline.resumeCard.archivedNotice': 'Cambio archivado el {{date}}',
   'pipeline.resumeCard.archivedStep': 'Cambio completado y archivado',
   'pipeline.resumeCard.progressWithSection': '{{completed}} de {{total}} tareas · En «{{section}}»',
   'pipeline.resumeCard.progressAllDone': '{{completed}} de {{total}} tareas · Todas las tareas completadas',
   'pipeline.resumeCard.sectionNumber': 'Sección {{number}}',
   'pipeline.resumeCard.defaultSection': 'Sección inicial',
+  'pipeline.resumeCard.taskSingular': 'tarea',
+  'pipeline.resumeCard.taskPlural': 'tareas',
   'pipeline.resumeCard.lastCommitActivity': '{{message}} · {{timeAgo}}',
+  'pipeline.resumeCard.evidenceCommits': '{{count}} commits posteriores a la última tarea',
+  'pipeline.resumeCard.evidenceCommitSingle': '1 commit posterior a la última tarea',
+  'pipeline.resumeCard.evidenceUncommitted': '{{count}} archivos con cambios sin confirmar',
+  'pipeline.resumeCard.evidenceUncommittedSingle': '1 archivo con cambios sin confirmar',
+  'pipeline.resumeCard.evidenceSession': 'Última sesión de SDD ({{runtime}}): {{status}}',
+  'pipeline.resumeCard.sessionStatus.running': 'en curso',
+  'pipeline.resumeCard.sessionStatus.completed': 'completada',
+  'pipeline.resumeCard.sessionStatus.failed': 'fallida',
+  'pipeline.resumeCard.sessionStatus.interrupted': 'interrumpida',
+  'pipeline.resumeCard.sessionStatus.unknown': 'desconocido',
   'pipeline.resumeCard.responsibleLabel': 'Responsable:',
   'pipeline.resumeCard.checkLabel': 'Comprobación:',
-  'pipeline.resumeCard.detailToggle': 'Detalle',
+  'pipeline.resumeCard.detailToggle': 'Cómo se comprueba',
 };
 
 /**
@@ -144,6 +246,83 @@ export function extractTaskSection(nextTask: TaskEvidence, tasksRaw?: string | n
     return `Sección ${sectionNumberMatch[1]}`;
   }
   return null;
+}
+
+/**
+ * Agrupa tareas por sección y contabiliza las pendientes, marcando la que contiene la próxima tarea.
+ */
+export function groupTasksBySection(
+  tasks: TaskEvidence[],
+  tasksRaw?: string | null,
+  t?: (key: string, params?: Record<string, string | number>) => string,
+): ResumeCardSectionGroup[] {
+  if (!tasks || tasks.length === 0) return [];
+
+  interface SectionHeader {
+    title: string;
+    line: number;
+  }
+  const headers: SectionHeader[] = [];
+  if (tasksRaw) {
+    const rawLines = tasksRaw.split(/\r?\n/);
+    for (let i = 0; i < rawLines.length; i++) {
+      const match = /^##\s+(.+)$/.exec(rawLines[i]);
+      if (match) {
+        headers.push({ title: match[1].trim(), line: i + 1 });
+      }
+    }
+  }
+
+  const sectionMap = new Map<string, { total: number; completed: number; pending: number }>();
+  const firstPending = tasks.find((t) => !t.completed) ?? null;
+  let firstPendingSectionName: string | null = null;
+
+  for (const task of tasks) {
+    let sectionName: string | null = null;
+    if (headers.length > 0 && task.line > 0) {
+      for (let h = headers.length - 1; h >= 0; h--) {
+        if (task.line >= headers[h].line) {
+          sectionName = headers[h].title;
+          break;
+        }
+      }
+    }
+    if (!sectionName) {
+      sectionName = extractTaskSection(task, tasksRaw) ?? (t?.('pipeline.resumeCard.defaultSection') ?? 'Sección inicial');
+    }
+
+    if (firstPending && task.id === firstPending.id) {
+      firstPendingSectionName = sectionName;
+    }
+
+    let entry = sectionMap.get(sectionName);
+    if (!entry) {
+      entry = { total: 0, completed: 0, pending: 0 };
+      sectionMap.set(sectionName, entry);
+    }
+    entry.total++;
+    if (task.completed) entry.completed++;
+    else entry.pending++;
+  }
+
+  const taskSingular = t?.('pipeline.resumeCard.taskSingular') ?? 'tarea';
+  const taskPlural = t?.('pipeline.resumeCard.taskPlural') ?? 'tareas';
+
+  const result: ResumeCardSectionGroup[] = [];
+  for (const [name, stats] of sectionMap.entries()) {
+    const isCurrent = name === firstPendingSectionName;
+    const taskWord = stats.pending === 1 ? taskSingular : taskPlural;
+    result.push({
+      sectionName: name,
+      totalTasks: stats.total,
+      completedTasks: stats.completed,
+      pendingTasks: stats.pending,
+      isCurrent,
+      label: `${name}: ${stats.pending} ${taskWord}`,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -243,6 +422,10 @@ export function deriveResumeCard(input: ResumeCardInput): ResumeCardData {
     tasks = [],
     tasksRaw,
     lastCommit,
+    recentCommits,
+    commitsAfterLastTask,
+    uncommittedFiles,
+    latestSession,
     now = new Date(),
     locale = 'es',
   } = input;
@@ -268,36 +451,197 @@ export function deriveResumeCard(input: ResumeCardInput): ResumeCardData {
     objectiveFallback = true;
   }
 
-  // 2. Avance
-  let progressText = '';
-  let progressFallback = false;
+  // Tareas generales y siguiente paso
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.completed).length;
+  const completedTasksList = tasks.filter((t) => t.completed);
   const nextTask = tasks.find((t) => !t.completed) ?? null;
 
+  // ----------------------------------------------------
+  // BLOQUE 1: Lo que venías haciendo
+  // ----------------------------------------------------
+  const lastCompletedTasks: ResumeCardTaskItem[] = completedTasksList.slice(-3).map((task) => {
+    const parsed = parseTaskDetails(task);
+    return {
+      id: task.id,
+      label: parsed.label,
+      title: parsed.title,
+      text: parsed.label ? `${parsed.label} ${parsed.title}` : parsed.title,
+      responsible: parsed.responsible,
+      check: parsed.check,
+      completed: true,
+    };
+  });
+
+  const rawCommitList: ChangeLastCommit[] = (recentCommits && recentCommits.length > 0)
+    ? recentCommits
+    : (lastCommit ? [lastCommit] : []);
+
+  const lastCommits: ResumeCardCommitItem[] = rawCommitList.slice(0, 3).map((c) => {
+    const shortMessage = c.message.split(/\r?\n/)[0].trim();
+    const timeAgo = formatRelativeTime(c.date, now, locale);
+    return {
+      hash: c.hash,
+      shortHash: c.shortHash || c.hash.slice(0, 7),
+      message: shortMessage,
+      date: c.date,
+      timeAgo,
+      text: `${shortMessage} · ${timeAgo}`,
+    };
+  });
+
+  const whatYouWereDoingEmpty = lastCompletedTasks.length === 0 && lastCommits.length === 0;
+  const whatYouWereDoing: ResumeCardWhatYouWereDoing = {
+    completedTasks: lastCompletedTasks,
+    commits: lastCommits,
+    emptyText: whatYouWereDoingEmpty ? t('pipeline.resumeCard.whatYouWereDoingEmpty') : null,
+  };
+
+  // ----------------------------------------------------
+  // BLOQUE 2: En qué estabas
+  // ----------------------------------------------------
+  const archiveDate = archivedOn?.at ?? archivedAt;
+  const formattedArchiveDate = typeof archiveDate === 'string'
+    ? archiveDate.split('T')[0]
+    : (archiveDate ? String(archiveDate) : '');
+
+  const isArchivedNotice = isArchived
+    ? (archiveDate
+        ? t('pipeline.resumeCard.archivedNotice', { date: formattedArchiveDate })
+        : t('pipeline.resumeCard.archivedStep'))
+    : null;
+
+  let currentTaskItem: ResumeCardTaskItem | null = null;
+  let currentDetail: { responsible: string | null; check: string | null } | null = null;
+  let currentStatusText = '';
+
+  if (isArchived) {
+    currentStatusText = isArchivedNotice ?? t('pipeline.resumeCard.archivedStep');
+  } else if (totalTasks === 0) {
+    currentStatusText = t('pipeline.resumeCard.noTasks');
+  } else if (!nextTask) {
+    currentStatusText = t('pipeline.resumeCard.allTasksCompleted');
+  } else {
+    const parsed = parseTaskDetails(nextTask);
+    currentTaskItem = {
+      id: nextTask.id,
+      label: parsed.label,
+      title: parsed.title,
+      text: parsed.label ? `${parsed.label} ${parsed.title}` : parsed.title,
+      responsible: parsed.responsible,
+      check: parsed.check,
+      completed: false,
+    };
+    currentStatusText = currentTaskItem.text;
+    if (parsed.responsible || parsed.check) {
+      currentDetail = {
+        responsible: parsed.responsible,
+        check: parsed.check,
+      };
+    }
+  }
+
+  // Evidencia de trabajo en la tarea en curso
+  const branchCommitsAfterList: ResumeCardCommitItem[] = (commitsAfterLastTask ?? []).map((c) => {
+    const shortMessage = c.message.split(/\r?\n/)[0].trim();
+    const timeAgo = formatRelativeTime(c.date, now, locale);
+    return {
+      hash: c.hash,
+      shortHash: c.shortHash || c.hash.slice(0, 7),
+      message: shortMessage,
+      date: c.date,
+      timeAgo,
+      text: `${shortMessage} · ${timeAgo}`,
+    };
+  });
+
+  const uncommittedList = (uncommittedFiles ?? []).filter(Boolean);
+
+  let sessionInfo: ResumeCardEvidence['session'] = null;
+  if (latestSession) {
+    const runtime = latestSession.runtime || 'SDD';
+    const outcome = latestSession.outcome || (latestSession.active ? 'running' : 'unknown');
+    const statusLabel = t(`pipeline.resumeCard.sessionStatus.${outcome}`) || outcome;
+    sessionInfo = {
+      runtime,
+      role: latestSession.role,
+      outcome,
+      statusLabel,
+      text: t('pipeline.resumeCard.evidenceSession', { runtime, status: statusLabel }),
+    };
+  }
+
+  const hasEvidence = !isArchived && !(!nextTask && totalTasks > 0) && (
+    branchCommitsAfterList.length > 0 || uncommittedList.length > 0 || Boolean(sessionInfo)
+  );
+
+  const evidenceEmptyText = (!isArchived && Boolean(nextTask) && !hasEvidence)
+    ? t('pipeline.resumeCard.noWorkStarted')
+    : null;
+
+  const currentWork: ResumeCardCurrentWork = {
+    currentTask: currentTaskItem,
+    isArchived,
+    allCompleted: totalTasks > 0 && !nextTask,
+    statusText: currentStatusText,
+    detail: currentDetail,
+    evidence: {
+      hasEvidence,
+      commitsAfterLastTask: branchCommitsAfterList,
+      uncommittedFiles: uncommittedList,
+      session: sessionInfo,
+      emptyText: evidenceEmptyText,
+    },
+  };
+
+  // ----------------------------------------------------
+  // BLOQUE 3: Lo que queda
+  // ----------------------------------------------------
+  const sectionGroups = groupTasksBySection(tasks, tasksRaw, t);
+  const remainingSections = sectionGroups.filter((g) => g.pendingTasks > 0);
+  const allTasksCompleted = totalTasks > 0 && completedTasksList.length === totalTasks;
+
+  let remainingEmptyText: string | null = null;
+  if (totalTasks === 0) {
+    remainingEmptyText = t('pipeline.resumeCard.noTasks');
+  } else if (allTasksCompleted) {
+    remainingEmptyText = t('pipeline.resumeCard.allTasksCompleted');
+  }
+
+  const remainingWork: ResumeCardRemainingWork = {
+    sections: remainingSections,
+    allCompleted: allTasksCompleted,
+    noTasks: totalTasks === 0,
+    emptyText: remainingEmptyText,
+  };
+
+  // ----------------------------------------------------
+  // Compatibilidad con rows
+  // ----------------------------------------------------
+  let progressText = '';
+  let progressFallback = false;
   if (totalTasks === 0) {
     progressText = t('pipeline.resumeCard.noTasks');
     progressFallback = true;
-  } else if (completedTasks === totalTasks) {
+  } else if (allTasksCompleted) {
     progressText = t('pipeline.resumeCard.progressAllDone', {
-      completed: completedTasks,
+      completed: completedTasksList.length,
       total: totalTasks,
     });
   } else {
     const sectionName = (nextTask ? extractTaskSection(nextTask, tasksRaw) : null) ?? t('pipeline.resumeCard.defaultSection');
     progressText = t('pipeline.resumeCard.progressWithSection', {
-      completed: completedTasks,
+      completed: completedTasksList.length,
       total: totalTasks,
       section: sectionName,
     });
   }
 
-  // 3. Última actividad
   let activityText = '';
   let activityFallback = false;
-  if (lastCommit && lastCommit.message) {
-    const shortMessage = lastCommit.message.split(/\r?\n/)[0].trim();
-    const timeAgo = formatRelativeTime(lastCommit.date, now, locale);
+  const primaryCommit = rawCommitList[0] ?? null;
+  if (primaryCommit && primaryCommit.message) {
+    const shortMessage = primaryCommit.message.split(/\r?\n/)[0].trim();
+    const timeAgo = formatRelativeTime(primaryCommit.date, now, locale);
     activityText = t('pipeline.resumeCard.lastCommitActivity', {
       message: shortMessage,
       timeAgo,
@@ -307,37 +651,21 @@ export function deriveResumeCard(input: ResumeCardInput): ResumeCardData {
     activityFallback = true;
   }
 
-  // 4. Siguiente paso
-  let nextStepText = '';
-  let nextStepFallback = false;
+  let legacyNextStepText = '';
+  let legacyNextStepFallback = false;
   let parsedNextTask: ResumeCardParsedTask | null = null;
-  let detail: { responsible: string | null; check: string | null } | null = null;
-
-  const archiveDate = archivedOn?.at ?? archivedAt;
-  const formattedArchiveDate = typeof archiveDate === 'string'
-    ? archiveDate.split('T')[0]
-    : (archiveDate ? String(archiveDate) : '');
-
   if (isArchived) {
-    nextStepText = archiveDate
-      ? t('pipeline.resumeCard.archivedNotice', { date: formattedArchiveDate })
-      : t('pipeline.resumeCard.archivedStep');
-    nextStepFallback = true;
+    legacyNextStepText = isArchivedNotice ?? t('pipeline.resumeCard.archivedStep');
+    legacyNextStepFallback = true;
   } else if (totalTasks === 0) {
-    nextStepText = t('pipeline.resumeCard.noPendingTasks');
-    nextStepFallback = true;
+    legacyNextStepText = t('pipeline.resumeCard.noPendingTasks');
+    legacyNextStepFallback = true;
   } else if (!nextTask) {
-    nextStepText = t('pipeline.resumeCard.allTasksCompleted');
-    nextStepFallback = true;
+    legacyNextStepText = t('pipeline.resumeCard.allTasksCompleted');
+    legacyNextStepFallback = true;
   } else {
     const parsed = parseTaskDetails(nextTask);
-    nextStepText = `${parsed.label} ${parsed.title}`;
-    if (parsed.responsible || parsed.check) {
-      detail = {
-        responsible: parsed.responsible,
-        check: parsed.check,
-      };
-    }
+    legacyNextStepText = `${parsed.label} ${parsed.title}`;
     parsedNextTask = {
       id: nextTask.id,
       label: parsed.label,
@@ -350,16 +678,17 @@ export function deriveResumeCard(input: ResumeCardInput): ResumeCardData {
     };
   }
 
-  const archivedNotice = isArchived
-    ? (archiveDate
-        ? t('pipeline.resumeCard.archivedNotice', { date: formattedArchiveDate })
-        : t('pipeline.resumeCard.archivedStep'))
-    : null;
-
   return {
     changeId,
     isArchived,
-    archivedNotice,
+    archivedNotice: isArchivedNotice,
+    objective: {
+      text: objectiveText,
+      isFallback: objectiveFallback,
+    },
+    whatYouWereDoing,
+    currentWork,
+    remainingWork,
     rows: {
       objective: {
         labelKey: 'pipeline.resumeCard.row.objective',
@@ -378,10 +707,10 @@ export function deriveResumeCard(input: ResumeCardInput): ResumeCardData {
       },
       nextStep: {
         labelKey: 'pipeline.resumeCard.row.nextStep',
-        text: nextStepText,
-        isFallback: nextStepFallback,
+        text: legacyNextStepText,
+        isFallback: legacyNextStepFallback,
         task: parsedNextTask,
-        detail,
+        detail: currentDetail,
       },
     },
   };

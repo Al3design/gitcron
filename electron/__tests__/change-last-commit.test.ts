@@ -4,7 +4,7 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { removeTempDir } from '@/test-utils/temp-dir';
-import { defaultChangeLastCommit } from '../pipeline/repo-evidence-reader';
+import { defaultChangeCommits, defaultChangeLastCommit } from '../pipeline/repo-evidence-reader';
 
 /** Último commit de un cambio para la tarjeta «Dónde quedaste», con git de verdad. */
 describe('último commit de un cambio', () => {
@@ -49,5 +49,20 @@ describe('último commit de un cambio', () => {
 
   it('sin commits que lo toquen, no hay', async () => {
     expect(await defaultChangeLastCommit(repo, 'otro-cambio')).toBeNull();
+  });
+
+  it('defaultChangeCommits devuelve los commits del cambio y los posteriores a tasks.md', async () => {
+    await git.checkoutLocalBranch('change/mi-cambio');
+    await commitFile('openspec/changes/mi-cambio/tasks.md', 'feat: marcar tarea 1.1 hecha', '2026-10-09T11:00:00Z');
+    await commitFile('src/nuevo.ts', 'feat: avance en tarea 1.2', '2026-10-09T13:00:00Z');
+
+    const result = await defaultChangeCommits(repo, 'mi-cambio');
+    expect(result.recentCommits.length).toBeGreaterThanOrEqual(2);
+    expect(result.recentCommits[0].message).toBe('feat: avance en tarea 1.2');
+    expect(result.recentCommits[1].message).toBe('feat: marcar tarea 1.1 hecha');
+
+    // commitsAfterLastTask sólo incluye el commit posterior a tasks.md
+    expect(result.commitsAfterLastTask.length).toBe(1);
+    expect(result.commitsAfterLastTask[0].message).toBe('feat: avance en tarea 1.2');
   });
 });

@@ -426,6 +426,8 @@ contextBridge.exposeInMainWorld('api', {
   pipelineUnsubscribe: (repoPath: string) => ipcRenderer.invoke('pipeline:unsubscribe', repoPath),
   pipelineGetChangeLastCommit: (repoPath: string, changeId: string) =>
     ipcRenderer.invoke('pipeline:get-change-last-commit', repoPath, changeId),
+  pipelineGetChangeCommits: (repoPath: string, changeId: string) =>
+    ipcRenderer.invoke('pipeline:get-change-commits', repoPath, changeId),
   /** Plan del archivado: el comando que se va a ejecutar. No ejecuta nada. */
   pipelineArchivePlan: (repoPath: string, changeId: string) => ipcRenderer.invoke('pipeline:archive-plan', repoPath, changeId),
   /** Archiva un change: mueve el cambio y consolida specs. No toca Git. Acepta motivo opcional. */

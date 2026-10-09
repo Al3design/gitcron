@@ -88,6 +88,11 @@ export interface ChangeLastCommit {
   date: string;
 }
 
+export interface ChangeCommitsEvidence {
+  recentCommits: ChangeLastCommit[];
+  commitsAfterLastTask: ChangeLastCommit[];
+}
+
 export interface OpenSpecChangeArtifacts {
   proposal: string | null;
   design: string | null;

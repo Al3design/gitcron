@@ -548,6 +548,8 @@ interface ElectronAPI {
   pipelineUnsubscribe: (repoPath: string) => Promise<GitResult>;
   /** Lee el último commit que tocó un cambio determinado en el repositorio. */
   pipelineGetChangeLastCommit?: (repoPath: string, changeId: string) => Promise<GitResult<import('./pipeline').ChangeLastCommit | null>>;
+  /** Lee los últimos commits de un cambio y los commits posteriores a la última tarea. */
+  pipelineGetChangeCommits?: (repoPath: string, changeId: string) => Promise<GitResult<import('./pipeline').ChangeCommitsEvidence>>;
   /** Plan del archivado: el comando que se va a ejecutar. No ejecuta nada. */
   pipelineArchivePlan: (repoPath: string, changeId: string) => Promise<GitResult<import('./pipeline').ArchivePlan>>;
   /** Archiva un change desde el proceso principal. No toca Git. Acepta motivo opcional. */

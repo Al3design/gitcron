@@ -2966,6 +2966,7 @@ export function OpenSpecDashboard({
                   repoPath={repoPath}
                   selectedChange={selectedChange}
                   nextTask={nextTask}
+                  latestSession={runtimeSessions[0] ?? null}
                 />
 
                 {/* Pegada a la cabecera y en el cuerpo del medio */}
@@ -3207,6 +3208,7 @@ export function OpenSpecDashboard({
                   <WhereYouLeftOffCard
                     repoPath={repoPath}
                     selectedArchive={selectedArchive}
+                    latestSession={runtimeSessions[0] ?? null}
                   />
 
                   {/* Lo archivado es el registro de lo que se hizo, incluida la

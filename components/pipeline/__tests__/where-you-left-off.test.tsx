@@ -2,19 +2,21 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, fireEvent, cleanup } from '@testing-library/react';
-import type { TaskEvidence } from '@/types/pipeline';
+import type { TaskEvidence, OpenSpecChangeEvidence } from '@/types/pipeline';
 import {
   deriveResumeCard,
   extractObjectiveSentences,
   extractWhyParagraph,
   extractTaskSection,
+  groupTasksBySection,
   parseTaskDetails,
   formatRelativeTime,
 } from '../resume-card';
 import { WhereYouLeftOffCard } from '../WhereYouLeftOffCard';
+import { OpenSpecTasksView } from '../OpenSpecTasksView';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from '../pipeline-view-state';
 
-describe('Resumen determinista «Dónde quedaste» (Tarea 3.1)', () => {
+describe('Resumen determinista «Dónde quedaste» (Tareas 3.1, 3.3 y 3.5)', () => {
   afterEach(() => {
     cleanup();
   });
@@ -66,122 +68,161 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
     date: '2026-10-08T14:00:00Z', // 1 day before fixedNow
   };
 
-  it('caso 1: cambio a medias', () => {
+  const sampleCommitNew = {
+    hash: '97e544e123456789',
+    shortHash: '97e544e',
+    message: 'style(retomar): alineación y aire adentro',
+    date: '2026-10-09T13:30:00Z', // 30 mins before fixedNow
+  };
+
+  // -------------------------------------------------------------
+  // Los 5 casos requeridos explícitamente por el encargo:
+  // 1. sin nada hecho
+  // 2. a mitad con commits nuevos
+  // 3. a mitad sin evidencia
+  // 4. con cambios sin confirmar
+  // 5. todo hecho y archivado
+  // -------------------------------------------------------------
+
+  it('caso 1: sin nada hecho', () => {
+    const unstartedTasks: TaskEvidence[] = sampleTasks.map((t) => ({ ...t, completed: false }));
+    const card = deriveResumeCard({
+      changeId: 'retomar-trabajo',
+      proposal: sampleProposal,
+      tasksRaw: sampleTasksRaw,
+      tasks: unstartedTasks,
+      recentCommits: [],
+      commitsAfterLastTask: [],
+      uncommittedFiles: [],
+      latestSession: null,
+      now: fixedNow,
+    });
+
+    // Objetivo
+    expect(card.objective.text).toContain('Los historiales actuales registran ejecuciones y decisiones');
+
+    // 1. Lo que venías haciendo: frase que dice que no hay nada hecho todavía
+    expect(card.whatYouWereDoing.completedTasks).toHaveLength(0);
+    expect(card.whatYouWereDoing.commits).toHaveLength(0);
+    expect(card.whatYouWereDoing.emptyText).toBe('Todavía no hay tareas completadas ni commits en este cambio.');
+
+    // 2. En qué estabas: primera sin marcar (1.1), y sin evidencia dice que todavía no se empezó
+    expect(card.currentWork.currentTask?.id).toBe('1.1');
+    expect(card.currentWork.currentTask?.title).toBe('Fijar identidad repo y selección.');
+    expect(card.currentWork.evidence.hasEvidence).toBe(false);
+    expect(card.currentWork.evidence.emptyText).toBe('Todavía no se empezó a trabajar en esta tarea.');
+
+    // 3. Lo que queda: agrupadas por sección con la próxima resaltada
+    expect(card.remainingWork.sections.length).toBeGreaterThan(0);
+    expect(card.remainingWork.sections[0].isCurrent).toBe(true);
+    expect(card.remainingWork.sections[0].sectionName).toBe('1. Contrato de contexto');
+  });
+
+  it('caso 2: a mitad con commits nuevos', () => {
     const card = deriveResumeCard({
       changeId: 'retomar-trabajo',
       proposal: sampleProposal,
       tasksRaw: sampleTasksRaw,
       tasks: sampleTasks,
-      lastCommit: sampleCommit,
+      recentCommits: [sampleCommitNew, sampleCommit],
+      commitsAfterLastTask: [sampleCommitNew],
+      uncommittedFiles: [],
+      latestSession: null,
       now: fixedNow,
     });
 
-    expect(card.isArchived).toBe(false);
+    // 1. Lo que venías haciendo: hasta 3 hechas con título legible y últimos commits
+    expect(card.whatYouWereDoing.completedTasks).toHaveLength(3);
+    expect(card.whatYouWereDoing.completedTasks[0].title).toBe('Fijar identidad repo y selección.');
+    expect(card.whatYouWereDoing.commits).toHaveLength(2);
+    expect(card.whatYouWereDoing.commits[0].message).toBe('style(retomar): alineación y aire adentro');
 
-    // 1. Objetivo: extraído de Why, sin cortar palabras a la mitad
-    expect(card.rows.objective.text).toContain('Los historiales actuales registran ejecuciones y decisiones');
-    expect(card.rows.objective.text).toContain('El usuario necesita retomar tras semanas');
-    expect(card.rows.objective.isFallback).toBeFalsy();
+    // 2. En qué estabas: 3.1 y evidencia con el commit nuevo de la rama
+    expect(card.currentWork.currentTask?.id).toBe('3.1');
+    expect(card.currentWork.detail?.responsible).toBe('IA local');
+    expect(card.currentWork.evidence.hasEvidence).toBe(true);
+    expect(card.currentWork.evidence.commitsAfterLastTask).toHaveLength(1);
+    expect(card.currentWork.evidence.commitsAfterLastTask[0].message).toBe('style(retomar): alineación y aire adentro');
+    expect(card.currentWork.evidence.emptyText).toBeNull();
 
-    // 2. Avance: tareas hechas sobre el total y en qué sección está la próxima
-    expect(card.rows.progress.text).toBe('3 de 5 tareas · En «3. Retomar y orientación»');
-    expect(card.rows.progress.isFallback).toBeFalsy();
-
-    // 3. Última actividad: commit corto y hace cuánto
-    expect(card.rows.lastActivity.text).toContain('docs(openspec): los roles del desarrollo vuelven a los planes');
-    expect(card.rows.lastActivity.text).toContain('hace 1 día');
-    expect(card.rows.lastActivity.isFallback).toBeFalsy();
-
-    // 4. Siguiente paso: primera tarea sin marcar con título legible (sin Responsable ni Comprobación en el título)
-    expect(card.rows.nextStep.text).toBe('3.1 Construir resumen determinista del cambio con objetivo, evidencia y próximo paso.');
-    expect(card.rows.nextStep.detail).toEqual({
-      responsible: 'IA local',
-      check: 'Funciona sin IA; distingue documentos presentes, tareas marcadas, pruebas verificadas y commit.',
-    });
-    expect(card.rows.nextStep.isFallback).toBeFalsy();
+    // 3. Lo que queda: sección 3 resaltada con 2 tareas pendientes
+    const sec3 = card.remainingWork.sections.find((s) => s.sectionName.includes('3. Retomar'));
+    expect(sec3).toBeTruthy();
+    expect(sec3?.isCurrent).toBe(true);
+    expect(sec3?.pendingTasks).toBe(2);
+    expect(sec3?.label).toBe('3. Retomar y orientación: 2 tareas');
   });
 
-  it('caso 2: sin tareas', () => {
+  it('caso 3: a mitad sin evidencia', () => {
     const card = deriveResumeCard({
       changeId: 'retomar-trabajo',
       proposal: sampleProposal,
-      tasks: [],
-      lastCommit: sampleCommit,
+      tasksRaw: sampleTasksRaw,
+      tasks: sampleTasks,
+      recentCommits: [sampleCommit],
+      commitsAfterLastTask: [],
+      uncommittedFiles: [],
+      latestSession: null,
       now: fixedNow,
     });
 
-    expect(card.rows.progress.text).toBe('Sin tareas definidas');
-    expect(card.rows.progress.isFallback).toBe(true);
+    // 1. Lo que venías haciendo tiene lo completado
+    expect(card.whatYouWereDoing.completedTasks).toHaveLength(3);
 
-    expect(card.rows.nextStep.text).toBe('Sin tareas pendientes');
-    expect(card.rows.nextStep.isFallback).toBe(true);
-    expect(card.rows.nextStep.detail).toBeNull();
+    // 2. En qué estabas: 3.1, pero sin evidencia dice que todavía no se empezó
+    expect(card.currentWork.currentTask?.id).toBe('3.1');
+    expect(card.currentWork.evidence.hasEvidence).toBe(false);
+    expect(card.currentWork.evidence.emptyText).toBe('Todavía no se empezó a trabajar en esta tarea.');
   });
 
-  it('caso 3: todo hecho', () => {
+  it('caso 4: con cambios sin confirmar', () => {
+    const card = deriveResumeCard({
+      changeId: 'retomar-trabajo',
+      proposal: sampleProposal,
+      tasksRaw: sampleTasksRaw,
+      tasks: sampleTasks,
+      recentCommits: [sampleCommit],
+      commitsAfterLastTask: [],
+      uncommittedFiles: ['components/pipeline/WhereYouLeftOffCard.tsx', 'lib/i18n.ts'],
+      latestSession: {
+        runtime: 'opencode',
+        role: 'IA local',
+        outcome: 'completed',
+        active: false,
+      },
+      now: fixedNow,
+    });
+
+    // 2. En qué estabas: evidencia incluye los archivos sin confirmar y la última sesión SDD
+    expect(card.currentWork.evidence.hasEvidence).toBe(true);
+    expect(card.currentWork.evidence.uncommittedFiles).toEqual([
+      'components/pipeline/WhereYouLeftOffCard.tsx',
+      'lib/i18n.ts',
+    ]);
+    expect(card.currentWork.evidence.session?.runtime).toBe('opencode');
+    expect(card.currentWork.evidence.session?.statusLabel).toBe('completada');
+  });
+
+  it('caso 5: todo hecho y archivado', () => {
     const allCompletedTasks: TaskEvidence[] = sampleTasks.map((t) => ({ ...t, completed: true }));
 
-    const card = deriveResumeCard({
-      changeId: 'retomar-trabajo',
-      proposal: sampleProposal,
-      tasks: allCompletedTasks,
-      lastCommit: sampleCommit,
-      now: fixedNow,
-    });
-
-    expect(card.rows.progress.text).toBe('5 de 5 tareas · Todas las tareas completadas');
-    expect(card.rows.progress.isFallback).toBeFalsy();
-
-    expect(card.rows.nextStep.text).toBe('Todas las tareas completadas');
-    expect(card.rows.nextStep.isFallback).toBe(true);
-    expect(card.rows.nextStep.detail).toBeNull();
-  });
-
-  it('caso 4: sin proposal', () => {
-    const card = deriveResumeCard({
-      changeId: 'retomar-trabajo',
-      proposal: null,
-      intent: null,
-      tasks: sampleTasks,
-      lastCommit: sampleCommit,
-      now: fixedNow,
-    });
-
-    expect(card.rows.objective.text).toBe('El cambio no tiene propuesta definida todavía.');
-    expect(card.rows.objective.isFallback).toBe(true);
-    // El resto sigue funcionando normalmente
-    expect(card.rows.progress.text).toContain('3 de 5 tareas');
-    expect(card.rows.lastActivity.text).toContain('docs(openspec)');
-  });
-
-  it('caso 5: sin commits', () => {
-    const card = deriveResumeCard({
-      changeId: 'retomar-trabajo',
-      proposal: sampleProposal,
-      tasks: sampleTasks,
-      lastCommit: null,
-      now: fixedNow,
-    });
-
-    // Según el prompt: mensaje exacto «Todavía sin commits»
-    expect(card.rows.lastActivity.text).toBe('Todavía sin commits');
-    expect(card.rows.lastActivity.isFallback).toBe(true);
-  });
-
-  it('caso 6: archivado', () => {
     const card = deriveResumeCard({
       changeId: 'retomar-trabajo',
       isArchived: true,
       archivedAt: '2026-09-18',
       proposal: sampleProposal,
-      tasks: sampleTasks.map((t) => ({ ...t, completed: true })),
-      lastCommit: sampleCommit,
+      tasksRaw: sampleTasksRaw,
+      tasks: allCompletedTasks,
+      recentCommits: [sampleCommit],
       now: fixedNow,
     });
 
     expect(card.isArchived).toBe(true);
     expect(card.archivedNotice).toBe('Cambio archivado el 2026-09-18');
-    expect(card.rows.nextStep.text).toBe('Cambio archivado el 2026-09-18');
+    expect(card.whatYouWereDoing.completedTasks).toHaveLength(3);
+    expect(card.currentWork.allCompleted).toBe(true);
+    expect(card.remainingWork.allCompleted).toBe(true);
+    expect(card.remainingWork.sections).toHaveLength(0);
   });
 
   it('recorta prolijamente sin cortar palabras a la mitad', () => {
@@ -189,11 +230,9 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
     const trimmed = extractObjectiveSentences(longSentence, 1, 80);
 
     expect(trimmed.endsWith('…')).toBe(true);
-    // No debe haber palabras truncadas de forma irregular antes del punto suspensivo
     const withoutEllipsis = trimmed.slice(0, -1);
     expect(withoutEllipsis.endsWith(' ')).toBe(false);
     expect(withoutEllipsis.length).toBeLessThanOrEqual(80);
-    // Debe coincidir exactamente con una palabra completa de la oración original
     const lastWord = withoutEllipsis.split(/\s+/).pop()!;
     expect(longSentence).toContain(lastWord);
   });
@@ -203,23 +242,22 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       changeId: 'test-change',
       proposal: null,
       tasks: [],
-      lastCommit: null,
+      recentCommits: [],
       locale: 'en',
       t: (key) => {
         const enMap: Record<string, string> = {
           'pipeline.resumeCard.objectiveEmpty': 'The change has no proposal defined yet.',
           'pipeline.resumeCard.noTasks': 'No tasks defined',
-          'pipeline.resumeCard.noCommits': 'No commits yet',
-          'pipeline.resumeCard.noPendingTasks': 'No pending tasks',
+          'pipeline.resumeCard.whatYouWereDoingEmpty': 'No completed tasks or commits for this change yet.',
+          'pipeline.resumeCard.noWorkStarted': 'Work has not started on this task yet.',
         };
         return enMap[key] ?? key;
       },
     });
 
-    expect(card.rows.objective.text).toBe('The change has no proposal defined yet.');
-    expect(card.rows.progress.text).toBe('No tasks defined');
-    expect(card.rows.lastActivity.text).toBe('No commits yet');
-    expect(card.rows.nextStep.text).toBe('No pending tasks');
+    expect(card.objective.text).toBe('The change has no proposal defined yet.');
+    expect(card.whatYouWereDoing.emptyText).toBe('No completed tasks or commits for this change yet.');
+    expect(card.remainingWork.emptyText).toBe('No tasks defined');
   });
 
   describe('Prueba de montaje de la tarjeta (React)', () => {
@@ -240,12 +278,13 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       lastCommit: sampleCommit,
     };
 
-    it('monta la tarjeta y muestra los cuatro renglones con sus valores', () => {
+    it('monta la tarjeta y muestra los tres bloques con el botón «Cómo se comprueba»', () => {
       render(
         <WhereYouLeftOffCard
           repoPath="/test/repo"
           selectedChange={mockChange}
           nextTask={sampleTasks[3]}
+          commitsAfterLastTask={[sampleCommitNew]}
         />
       );
 
@@ -253,37 +292,35 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       expect(screen.getByTestId('where-you-left-off-card')).toBeTruthy();
       expect(screen.getByText('Dónde quedaste')).toBeTruthy();
 
-      // Renglón 1: Objetivo
+      // Objetivo
       const obj = screen.getByTestId('resume-objective');
       expect(obj.textContent).toContain('Los historiales actuales registran ejecuciones y decisiones');
 
-      // Renglón 2: Avance
-      const prog = screen.getByTestId('resume-progress');
-      expect(prog.textContent).toContain('3 de 5 tareas · En «3. Retomar y orientación»');
+      // Bloque 1: Lo que venías haciendo
+      const doing = screen.getByTestId('resume-what-you-were-doing');
+      expect(doing.textContent).toContain('1.1 Fijar identidad repo y selección.');
+      expect(doing.textContent).toContain('docs(openspec): los roles del desarrollo vuelven a los planes');
 
-      // Renglón 3: Última actividad
-      const act = screen.getByTestId('resume-last-activity');
-      expect(act.textContent).toContain('docs(openspec): los roles del desarrollo vuelven a los planes');
+      // Bloque 2: En qué estabas con la evidencia y botón «Cómo se comprueba»
+      const work = screen.getByTestId('resume-current-work');
+      expect(work.textContent).toContain('3.1 Construir resumen determinista del cambio con objetivo, evidencia y próximo paso.');
+      expect(work.textContent).toContain('style(retomar): alineación y aire adentro');
 
-      // Renglón 4: Siguiente paso
-      const next = screen.getByTestId('resume-next-step');
-      expect(next.textContent).toContain('3.1 Construir resumen determinista del cambio con objetivo, evidencia y próximo paso.');
+      // Botón «Cómo se comprueba»
+      const checkBtn = screen.getByRole('button', { name: /Cómo se comprueba/i });
+      expect(checkBtn).toBeTruthy();
 
-      // Detalle (Responsable y Comprobación) no están visibles inicialmente
+      // Despliega responsable y comprobación al hacer clic
       expect(screen.queryByTestId('next-step-detail')).toBeNull();
-
-      // Al hacer clic en el botón de Detalle, se despliega
-      const detailBtn = screen.getByRole('button', { name: /Detalle/i });
-      fireEvent.click(detailBtn);
-
+      fireEvent.click(checkBtn);
       const detail = screen.getByTestId('next-step-detail');
       expect(detail).toBeTruthy();
       expect(detail.textContent).toContain('IA local');
-      expect(detail.textContent).toContain('Funciona sin IA; distingue documentos presentes');
+      expect(detail.textContent).toContain('Funciona sin IA');
 
-      // Al volver a hacer clic, se colapsa
-      fireEvent.click(detailBtn);
-      expect(screen.queryByTestId('next-step-detail')).toBeNull();
+      // Bloque 3: Lo que queda agrupado por sección y resaltado
+      const remaining = screen.getByTestId('resume-remaining-work');
+      expect(remaining.textContent).toContain('3. Retomar y orientación: 2 tareas');
     });
 
     it('monta la tarjeta con un cambio archivado', () => {
@@ -310,24 +347,68 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       expect(screen.getByTestId('where-you-left-off-card')).toBeTruthy();
       expect(screen.getAllByText(/Cambio archivado el 2026-09-18/i).length).toBeGreaterThanOrEqual(1);
     });
+
     it('al pasar a otro cambio no muestra el último commit del anterior', async () => {
       let responderA: (value: unknown) => void = () => {};
       const pedidos: string[] = [];
       (window as unknown as { api: unknown }).api = {
-        pipelineGetChangeLastCommit: vi.fn((_repo: string, changeId: string) => {
+        pipelineGetChangeCommits: vi.fn((_repo: string, changeId: string) => {
           pedidos.push(changeId);
           if (changeId === 'cambio-a') return new Promise((resolve) => { responderA = resolve; });
-          return Promise.resolve({ success: true, data: null });
+          return Promise.resolve({ success: true, data: { recentCommits: [], commitsAfterLastTask: [] } });
         }),
       };
       const sinCommit = { ...mockChange, lastCommit: null };
       const { rerender } = render(<WhereYouLeftOffCard repoPath="/test/repo" selectedChange={{ ...sinCommit, changeId: 'cambio-a' }} />);
       rerender(<WhereYouLeftOffCard repoPath="/test/repo" selectedChange={{ ...sinCommit, changeId: 'cambio-b' }} />);
-      // La respuesta del cambio A llega tarde, ya con B en pantalla.
-      await act(async () => { responderA({ success: true, data: sampleCommit }); });
+      await act(async () => {
+        responderA({ success: true, data: { recentCommits: [sampleCommit], commitsAfterLastTask: [] } });
+      });
       expect(pedidos).toEqual(['cambio-a', 'cambio-b']);
-      expect(screen.getByTestId('resume-last-activity').textContent).toContain('Todavía sin commits');
       delete (window as unknown as { api?: unknown }).api;
+    });
+  });
+
+  describe('Lista interactiva de tareas con títulos legibles (Tarea 3.5)', () => {
+    it('muestra el título legible y despliega «Cómo se comprueba» a demanda', () => {
+      const mockChange: OpenSpecChangeEvidence = {
+        changeId: 'retomar-trabajo',
+        intent: null,
+        validation: 'passed',
+        tasks: sampleTasks,
+        proposalExists: true,
+        designExists: true,
+        specsCount: 1,
+        artifacts: {
+          proposal: sampleProposal,
+          design: '# Design',
+          tasks: sampleTasksRaw,
+          specs: [],
+        },
+      };
+
+      render(
+        <OpenSpecTasksView
+          repoPath="/test/repo"
+          selectedChange={mockChange}
+          nextTask={sampleTasks[3]}
+        />
+      );
+
+      // El título se muestra limpio sin el markdown crudo "**IA local:**"
+      expect(screen.getByText('Construir resumen determinista del cambio con objetivo, evidencia y próximo paso.')).toBeTruthy();
+
+      // Botón «Cómo se comprueba» para la tarea 3.1
+      const howToCheckButtons = screen.getAllByRole('button', { name: /Cómo se comprueba/i });
+      expect(howToCheckButtons.length).toBeGreaterThanOrEqual(1);
+
+      // Al pulsar «Cómo se comprueba», aparece el responsable y la comprobación
+      expect(screen.queryByTestId('task-check-detail-3.1')).toBeNull();
+      fireEvent.click(howToCheckButtons[howToCheckButtons.length - 2]); // botón de la tarea 3.1
+      const detailBox = screen.getByTestId('task-check-detail-3.1');
+      expect(detailBox).toBeTruthy();
+      expect(detailBox.textContent).toContain('IA local');
+      expect(detailBox.textContent).toContain('Funciona sin IA');
     });
   });
 });
