@@ -79,6 +79,15 @@ Desde esta versión, toda IA lanzable desde SDD puede leer, escribir y correr co
 - **Disponibilidad por capacidades declaradas**, no por el nombre de la IA (`pipeline-intent-capabilities.ts`): una IA sin `runsCommands` no se ofrece para implementar.
 - **Nada de lo que se muestra como aviso manda comandos.** «Ver evidencia» abre el archivo del reporte con el sistema; no se envía nada al canal de control de la sesión.
 
+### 10. Claves de los modelos fuera de los archivos de configuración (v1.20.0)
+
+Desde esta versión GitCron lee proveedores y modelos de `gitcron.json`, un archivo que se edita a mano y puede viajar dentro de un repositorio. Por eso la clave nunca va escrita en el archivo:
+
+- **Referencias, no valores.** Las claves y cabeceras se escriben como `{env:NOMBRE}` o `{file:ruta}`. El valor se resuelve en el proceso principal al armar el pedido y no se guarda en el archivo.
+- **Importar no copia secretos.** Al importar de OpenCode o de un servidor MCP, un valor escrito a mano se reemplaza por una referencia y el valor va al baúl cifrado con `safeStorage`, el mismo mecanismo que el token de GitHub (`electron/ai/config/literal-secrets.ts`, `electron/ai/key-store.ts`).
+- **El renderer no recibe claves.** Sólo pregunta si existe una y puede guardar una nueva; la vista previa de cambios no muestra valores escritos a mano.
+- **Elegir otro servidor es una decisión humana.** Si un proveedor no responde, GitCron ofrece otro con los mismos modelos, pero no manda el pedido a otro destino sin que lo elijas.
+
 ## ⚠️ Vulnerabilidades conocidas en dependencias
 
 Estado actual en `v1.2.0`:

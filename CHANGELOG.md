@@ -4,6 +4,42 @@ Changes are listed from newest to oldest.
 
 ---
 
+## [v1.20.0] - 2026-10-09 - Tus modelos, en toda la app
+
+Segundo cambio del plan de integración: GitCron usa los modelos que tenés, sean de tu casa, de otra PC por un túnel o de una suscripción por línea de comandos, y los elegís en un solo lugar para todas las funciones con IA.
+
+### 🧠 IA y modelos
+
+#### Added
+- **«Motores y modelos» en Ajustes.** Un solo lugar para decidir qué modelo usa cada cosa: redacción de commit, Cartografía, análisis de versiones de OpenSpec, Temporal Agent y agentes de SDD. Agrupado, con el modelo y la intensidad de pensamiento según lo que ofrece cada herramienta.
+- **`gitcron.json`, global y por repositorio**, en el mismo formato que OpenCode. Se puede editar a mano o desde la pantalla: un cambio hecho afuera aparece en Ajustes sin reiniciar.
+- **Importar desde OpenCode.** «Comprobar opencode.json» muestra qué proveedores y servidores MCP trae, y se importan los elegidos. Las claves no se copian: el archivo recibe una referencia y el valor va al baúl cifrado.
+- **Servidores con la API estándar de OpenAI** (Unsloth, LM Studio y otros) y **suscripciones por CLI** (Codex, Antigravity) en la misma elección.
+- **Cada pantalla de IA dice con qué modelo, adónde y de dónde trabaja**, y deja ver lo que se envió.
+- **Historial de usos de IA por repositorio**, con cuánto tardó cada uso y cuántos tokens gastó.
+- **Un servidor que no responde ofrece otro con los mismos modelos.** GitCron no cambia solo: elegís vos y se reintenta.
+- **La IA tiene su color:** un degradé que marca lo que está haciendo o propuso la IA.
+
+### 🤖 Pipeline & Workspace OpenSpec
+
+#### Added
+- **El lanzador de SDD usa el modelo elegido**, también los de un servidor propio a través de OpenCode.
+- **Continuar una sesión de SDD** con su motor y su modelo originales, vinculada a la anterior.
+- **Copiar un servidor MCP** para otra herramienta.
+- **Ciclo en OpenSpec 1.14**, con la lista de herramientas explicada.
+
+#### Fixed
+- **La redacción de commit no se pierde:** sobrevive al cambio de vista, va una por repositorio y en fila, y cancelar corta el pedido en el servidor.
+- **La redacción con Codex arranca en Windows** y no descarta la respuesta por un aviso.
+
+#### Changed
+- **Pruebas sobre GitCron de verdad (e2e)**, con un perfil aislado, como parte de la verificación completa.
+- **Reglas de trabajo en `openspec/config.yaml`:** las pruebas contra IA real son cortas, los recorridos largos se corren a pedido y la verificación completa corre una vez al cerrar.
+
+**Validación:** `build` en 0 · `tsc --noEmit` en 0 · 267 archivos y 2832 pruebas en verde (dos pasadas) · 5 pruebas e2e locales · `eslint` limpio sobre lo tocado · `openspec validate --strict` válido · recorridos con Qwen3.5-2B de Consola por el túnel, uno por pantalla.
+
+---
+
 ## [v1.19.0] - 2026-09-29 - SDD conectado de punta a punta
 
 Primer cambio del plan de integración: lo que SDD mostraba ahora llega a algo real. Las «decisiones» que no tenían a quién responder pasan a ser avisos, toda IA que se lanza desde SDD puede hacer el trabajo completo, y preparar y confirmar un commit desde SDD tiene las mismas operaciones Git que Graph.
