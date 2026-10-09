@@ -36,7 +36,14 @@ Segundo cambio del plan de integración: GitCron usa los modelos que tenés, sea
 - **Pruebas sobre GitCron de verdad (e2e)**, con un perfil aislado, como parte de la verificación completa.
 - **Reglas de trabajo en `openspec/config.yaml`:** las pruebas contra IA real son cortas, los recorridos largos se corren a pedido y la verificación completa corre una vez al cerrar.
 
-**Validación:** `build` en 0 · `tsc --noEmit` en 0 · 267 archivos y 2832 pruebas en verde (dos pasadas) · 5 pruebas e2e locales · `eslint` limpio sobre lo tocado · `openspec validate --strict` válido · recorridos con Qwen3.5-2B de Consola por el túnel, uno por pantalla.
+### 🔒 Seguridad
+
+#### Fixed
+- **Dependencias sin avisos conocidos:** `pnpm audit --prod` pasa de 35 avisos (4 críticos) a 0. simple-git 4, next 15.5.27, electron-builder 26.17 y las librerías que traen.
+- **Push, pull, fetch, clonar con tu cuenta y el rebase interactivo siguen andando con simple-git 4**, que rechaza las variables de Git que no se le declaran. Una prueba con Git de verdad lo vigila.
+- **Los submódulos que apuntan a una carpeta local siguen bloqueados**, como en Git.
+
+**Validación:** `build` en 0 · `tsc --noEmit` en 0 · 268 archivos y 2834 pruebas en verde (dos pasadas) · 5 pruebas e2e locales · `eslint` limpio sobre lo tocado · `openspec validate --strict` válido · recorridos con Qwen3.5-2B de Consola por el túnel, uno por pantalla.
 
 ---
 
