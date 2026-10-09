@@ -61,13 +61,17 @@ operations:
       - >-
         Durante la edición usar comprobaciones focalizadas: pnpm verificar --tocados corre
         sólo las pruebas que dependen de los archivos tocados. La IA ejecutora corre también
-        la verificación completa (build y la suite dos veces) para cerrar su tanda; es
-        obligatorio tener la completa en verde antes del commit y volver a verificar después
+        la verificación completa (`pnpm verificar`) para cerrar su tanda; antes de fusionar a
+        main o de sacar versión se corre `pnpm verificar --todo`, con build y la suite entera
+        dos veces. Es obligatorio tener la completa en verde antes del commit y volver a verificar después
         de corregir código. Una tanda corre la completa una vez al cerrar, no después de cada
         paso; si lo último que se tocó son reportes, logs o capturas, no se repite. Una corrida
         larga se lanza y se lee al terminar, sin esperas con temporizador que revisan el log
         una y otra vez. El auditor revisa la correspondencia entre código final, resultados
-        y evidencia; no ejecuta las pruebas. scripts/verificar.mjs es la fuente del orden
+        y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
+        Un arreglo chico que encuentra la auditoría lo hace el auditor directamente, con su
+        verificación, en vez de devolverlo al ejecutor: cada vuelta le cuesta al ejecutor
+        releer toda la tanda. Lo que es trabajo nuevo vuelve al ejecutor. scripts/verificar.mjs es la fuente del orden
         de las verificaciones y de sus escalones.
         Toda búsqueda con rg lleva la carpeta donde buscar (por ejemplo `rg -n "x" components
         electron lib`, o `.`): sin carpeta, rg lee la entrada estándar y en una terminal no

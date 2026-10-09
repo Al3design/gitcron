@@ -14,11 +14,16 @@
 //                                  (lib/i18n.ts lo importa casi todo).
 //   pnpm verificar --rapido        cierre de la IA ejecutora y arreglos que tocan piezas
 //                                  centrales: toda la suite una vez, sin build (~2 min).
-//   pnpm verificar                 auditoría antes del commit y antes de fusionar: build,
-//                                  test ×2, e2e y todo lo demás (~5 min). Abre ventanas
-//                                  reales de GitCron unos segundos para las pruebas e2e.
-//                                  Ale, 2026-10-02: el ejecutor y la auditoría corrían los dos
-//                                  la completa.
+//   pnpm verificar                 cierre de tanda y antes del commit: toda la suite una vez,
+//                                  una segunda pasada sólo de las pruebas que dependen de lo
+//                                  tocado, e2e y todo lo demás. El build de las pantallas
+//                                  (`pnpm build`) se saltea si no se tocó nada que lo afecte.
+//                                  Abre ventanas reales de GitCron unos segundos para las e2e.
+//                                  Ale, 2026-10-09: tardaba ~5 min y se repetía en cada vuelta
+//                                  de corrección; la segunda pasada entera y el build sin
+//                                  pantallas tocadas eran casi la mitad.
+//   pnpm verificar --todo          antes de fusionar a main o de sacar versión: build siempre
+//                                  y la suite entera dos veces (~5 min), como era antes.
 //
 //   --desde <ref>                  compara contra <ref> en vez de HEAD (p. ej. `--desde main`
 //                                  para todo el change, o `--desde HEAD~2` después de commitear)
@@ -35,6 +40,16 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 const tocadosSolo = args.includes('--tocados');
 const rapido = args.includes('--rapido') || tocadosSolo;
+const todo = args.includes('--todo');
+
+/**
+ * Lo que puede cambiar el build de las pantallas. Si nada de esto se tocó, el
+ * `out/` anterior sigue valiendo y `pnpm build` se saltea (a menos que falte,
+ * porque font-size-as-color lo lee).
+ */
+const AFECTA_BUILD = /^(app|components|hooks|lib|public|styles|types)\/|^(next\.config\.[a-z]+|postcss\.config\.[a-z]+|tailwind\.config\.[a-z]+|tsconfig\.json|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/;
+/** Una prueba no cambia el build aunque viva en components/ o lib/. */
+const ES_PRUEBA = /(^|\/)__tests__\/|\.test\.(ts|tsx)$/;
 const changeArg = args.includes('--change') ? args[args.indexOf('--change') + 1] : null;
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
 
@@ -214,9 +229,17 @@ function main() {
   // Para `vitest related`: código y estilos que siguen existiendo (un archivo
   // borrado no tiene pruebas que dependan de él).
   const tocadosCodigo = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
+  const buildNecesario =
+    todo || !existsSync('out/_next/static/css') || tocados.some((f) => AFECTA_BUILD.test(f) && !ES_PRUEBA.test(f));
+  const relacionadas = tocadosCodigo.map((f) => `"${f}"`).join(' ');
 
   const chequeos = [
-    { nombre: 'build', comando: 'pnpm build', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
+    {
+      nombre: 'build',
+      comando: 'pnpm build',
+      cuando: !rapido && buildNecesario,
+      motivoSalto: rapido ? (tocadosSolo ? '--tocados' : '--rapido') : 'no se tocó nada de las pantallas',
+    },
     {
       nombre: 'build:electron',
       comando: 'pnpm build:electron',
@@ -231,7 +254,17 @@ function main() {
           motivoSalto: 'ningún archivo de código tocado',
         }
       : { nombre: 'test (1)', comando: 'pnpm test', cuando: true },
-    { nombre: 'test (2)', comando: 'pnpm test', cuando: !rapido, motivoSalto: tocadosSolo ? '--tocados' : '--rapido' },
+    todo
+      ? { nombre: 'test (2)', comando: 'pnpm test', cuando: true }
+      : {
+          // La segunda pasada busca pruebas que fallan de a ratos bajo carga. La
+          // tanda responde por las que dependen de lo que tocó; la suite entera
+          // dos veces queda para --todo.
+          nombre: 'test (2, tocados)',
+          comando: `pnpm exec vitest related --run --passWithNoTests ${relacionadas}`,
+          cuando: !rapido && tocadosCodigo.length > 0,
+          motivoSalto: rapido ? (tocadosSolo ? '--tocados' : '--rapido') : 'ningún archivo de código tocado',
+        },
     {
       nombre: 'e2e',
       comando: 'pnpm e2e',

@@ -159,7 +159,9 @@ describe('git worktree and submodule IPC handlers', () => {
     // 4. Update submodule
     const updateSubResult = await submoduleUpdate(null, mainRepoPath, 'libs/sub', true) as { success: boolean };
     expect(updateSubResult.success).toBe(true);
-  }, 20_000);
+  // Unas treinta llamadas a git reales (clonar el submódulo, update, sync): 8 s sola en
+  // Windows y más de 20 s con la suite entera y la máquina cargada (2026-10-09).
+  }, 30_000);
 
   it('force-stages only the requested file inside an ignored directory', async () => {
     const repoPath = path.join(tempDir, 'ignored-stage-repo');
