@@ -6,7 +6,7 @@
 // Tres escalones, de menor a mayor (Ale, 2026-10-01: «si la herramienta va
 // creciendo, cada vez se hace eterno esto»). Lo lento queda para cuando importa:
 //
-//   pnpm verificar --tocados       mientras se trabaja y arreglos chicos de auditoría: sólo
+//   pnpm verificar                 por omisión, igual que --tocados: mientras se trabaja y para cerrar una tanda. Sólo
 //                                  las pruebas que dependen de los archivos tocados
 //                                  (vitest related), tsc, eslint, openspec validate,
 //                                  diff --check, trampas. Crece con el cambio, no con la
@@ -14,7 +14,7 @@
 //                                  (lib/i18n.ts lo importa casi todo).
 //   pnpm verificar --rapido        cierre de la IA ejecutora y arreglos que tocan piezas
 //                                  centrales: toda la suite una vez, sin build (~2 min).
-//   pnpm verificar                 cierre de tanda y antes del commit: toda la suite una vez,
+//   pnpm verificar --completa      cuando se juntaron varias tandas, antes de fusionar: toda la suite una vez,
 //                                  una segunda pasada sólo de las pruebas que dependen de lo
 //                                  tocado, e2e y todo lo demás. El build de las pantallas
 //                                  (`pnpm build`) se saltea si no se tocó nada que lo afecte.
@@ -22,6 +22,9 @@
 //                                  Ale, 2026-10-09: tardaba ~5 min y se repetía en cada vuelta
 //                                  de corrección; la segunda pasada entera y el build sin
 //                                  pantallas tocadas eran casi la mitad.
+//                                  Ale, 2026-10-09 (más tarde): una tanda por un color de CSS tardó
+//                                  más de 30 min de reloj repitiendo la completa; desde entonces una
+//                                  tanda cierra con la de lo tocado y la completa no es la de omisión.
 //   pnpm verificar --todo          antes de fusionar a main o de sacar versión: build siempre
 //                                  y la suite entera dos veces (~5 min), como era antes.
 //
@@ -38,9 +41,12 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-const tocadosSolo = args.includes('--tocados');
-const rapido = args.includes('--rapido') || tocadosSolo;
 const todo = args.includes('--todo');
+const completa = args.includes('--completa') || todo;
+const rapidoPedido = args.includes('--rapido');
+// Sin indicación, sólo lo tocado: la completa se pide con --completa o --todo.
+const tocadosSolo = !completa && !rapidoPedido;
+const rapido = rapidoPedido || tocadosSolo;
 
 /**
  * Lo que puede cambiar el build de las pantallas. Si nada de esto se tocó, el

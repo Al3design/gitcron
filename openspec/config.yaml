@@ -59,15 +59,16 @@ operations:
         volver a pedir autorización. Las instrucciones actuales del usuario prevalecen
         sobre un prompt histórico: ante contradicciones, identificar la fuente concreta.
       - >-
-        Durante la edición usar comprobaciones focalizadas: pnpm verificar --tocados corre
-        sólo las pruebas que dependen de los archivos tocados. La IA ejecutora corre también
-        la verificación completa (`pnpm verificar`) para cerrar su tanda; antes de fusionar a
-        main o de sacar versión se corre `pnpm verificar --todo`, con build y la suite entera
-        dos veces. Es obligatorio tener la completa en verde antes del commit y volver a verificar después
-        de corregir código. Una tanda corre la completa una vez al cerrar, no después de cada
-        paso; si lo último que se tocó son reportes, logs o capturas, no se repite. Una corrida
-        larga se lanza y se lee al terminar, sin esperas con temporizador que revisan el log
-        una y otra vez. El auditor revisa la correspondencia entre código final, resultados
+        Una tanda se verifica con `pnpm verificar`, que corre sólo lo que depende de los
+        archivos tocados (pruebas relacionadas, tsc, eslint, openspec validate). Se usa
+        mientras se trabaja y para cerrar la tanda, y es la que tiene que estar en verde
+        antes del commit. La verificación completa (`pnpm verificar --completa`) se corre
+        cuando se juntaron varias tandas, antes de fusionar a main; `--todo`, con build y la
+        suite entera dos veces, antes de sacar versión. La IA ejecutora no corre la completa
+        para cerrar una tanda. El 2026-10-09 una tanda tardó más de 30 minutos de reloj
+        repitiendo la completa después de cada arreglo, uno de ellos un color de CSS. Una
+        corrida larga se lanza y se lee al terminar, sin esperas con temporizador que revisan
+        el log una y otra vez. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
         Un arreglo chico que encuentra la auditoría lo hace el auditor directamente, con su
         verificación, en vez de devolverlo al ejecutor: cada vuelta le cuesta al ejecutor
