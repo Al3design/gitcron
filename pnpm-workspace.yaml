@@ -9,7 +9,20 @@ allowBuilds:
   unrs-resolver: true
 
 # Security overrides — force-bump vulnerable transitive deps.
-# GHSA-qx2v-qp2m-jg93: postcss < 8.5.10 has XSS via unescaped </style>.
-# next@15.5.18 pins postcss to an older minor; this override lifts it.
 overrides:
-  postcss: '>=8.5.10'
+  # GHSA-fxqj-rqcc-2cmp: PostCSS <= 8.5.22 reads arbitrary files when from is unset.
+  postcss: '>=8.5.23'
+  # GHSA-mwcw-c2x4-8c55: nanoid < 3.3.16 predictable generation in postcss.
+  nanoid: '>=3.3.16'
+  # GHSA-3453-6272-3584: source-map-js < 1.2.2 regex denial of service via postcss.
+  source-map-js: '>=1.2.2'
+  # GHSA-36ch-w5ch-8wcc: browserslist < 4.28.7 query parsing vulnerability.
+  browserslist: '>=4.28.7'
+  # GHSA-w5vr-8v7q-w6rv: baseline-browser-mapping < 2.11.0 process termination DoS.
+  baseline-browser-mapping: '>=2.11.0'
+  # GHSA-5463-8796-574v: sharp < 0.35.5 multiple high/moderate image processing vulnerabilities.
+  sharp: '>=0.35.5'
+  # GHSA-h67p-54hq-rp68: js-yaml <= 4.1.1 quadratic DoS and prototype pollution via electron-updater.
+  js-yaml: '>=4.1.2'
+  # GHSA-67hx-6x53-jw92: @babel/core < 7.29.1 parsing vulnerability via next/styled-jsx.
+  '@babel/core': '^7.29.7'

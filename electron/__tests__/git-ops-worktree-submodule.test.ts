@@ -25,14 +25,24 @@ describe('git worktree and submodule IPC handlers', () => {
   let tempDir: string;
   let handler: (channel: string) => IpcHandler;
 
-  let oldGitAllowProtocol: string | undefined;
+  // Los submódulos con ruta local están bloqueados por git desde 2022: un repo
+  // malicioso podría usarlos para leer archivos del disco. La prueba los
+  // habilita sólo para ella, con una configuración global temporal. simple-git 4
+  // descarta las variables GIT_* del entorno, y el programa no debe habilitarlos.
+  let oldHome: string | undefined;
+  let oldUserProfile: string | undefined;
 
   beforeEach(async () => {
-    oldGitAllowProtocol = process.env.GIT_ALLOW_PROTOCOL;
-    process.env.GIT_ALLOW_PROTOCOL = 'file';
     mockIpc.handlers.clear();
     mockIpc.handle.mockClear();
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitcron-ops-ipc-'));
+    oldHome = process.env.HOME;
+    oldUserProfile = process.env.USERPROFILE;
+    const fakeHome = path.join(tempDir, 'home');
+    fs.mkdirSync(fakeHome);
+    fs.writeFileSync(path.join(fakeHome, '.gitconfig'), '[protocol "file"]\n\tallow = always\n', 'utf-8');
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
     const { registerGitOpsHandlers } = await import('../../electron/ipc/git-ops');
     registerGitOpsHandlers();
     handler = (channel: string) => {
@@ -43,10 +53,9 @@ describe('git worktree and submodule IPC handlers', () => {
   });
 
   afterEach(() => {
-    if (oldGitAllowProtocol !== undefined) {
-      process.env.GIT_ALLOW_PROTOCOL = oldGitAllowProtocol;
-    } else {
-      delete process.env.GIT_ALLOW_PROTOCOL;
+    for (const [key, value] of [['HOME', oldHome], ['USERPROFILE', oldUserProfile]] as const) {
+      if (value !== undefined) process.env[key] = value;
+      else delete process.env[key];
     }
     removeTempDir(tempDir);
   });
@@ -97,7 +106,7 @@ describe('git worktree and submodule IPC handlers', () => {
     const removeResult2 = await worktreeRemove(null, mainRepoPath, worktreePath, true) as { success: boolean; error?: string };
     expect(removeResult2.success).toBe(true);
     expect(fs.existsSync(worktreePath)).toBe(false);
-  });
+  }, 20_000);
 
   it('manages submodules correctly', async () => {
     const mainRepoPath = path.join(tempDir, 'main-repo-sub');

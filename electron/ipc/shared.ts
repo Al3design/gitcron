@@ -47,7 +47,28 @@ const NO_CREDENTIAL_HELPER_OPTIONS: Partial<SimpleGitOptions> = {
     allowUnsafeCredentialHelper: true,
     allowUnsafeAskPass: true,
   },
+  // simple-git 4 rechaza toda variable GIT_* que se le pase sin declararla.
+  // Sin esto, push/pull/fetch/clone con token fallan antes de llamar a git.
+  allowEnvironment: ['GIT_TERMINAL_PROMPT'],
 };
+
+/**
+ * El entorno del proceso sin las variables que simple-git 4 vigila (`GIT_*` y
+ * `SSH_ASKPASS`). Para los casos en que se arma un entorno a partir de
+ * `process.env`: si GitCron se abrió desde una terminal con, por ejemplo,
+ * `GIT_EDITOR` definido, pasarla de vuelta hace que simple-git rechace el
+ * comando entero. Las variables que GitCron sí usa se agregan después y se
+ * declaran con `allowEnvironment`.
+ */
+export function processEnvWithoutGuardedGitVars(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (/^GIT_/i.test(key) || /^SSH_ASKPASS$/i.test(key)) continue;
+    env[key] = value;
+  }
+  return env;
+}
 
 export function getGitHubAuthOptions(token: string): Partial<SimpleGitOptions> {
   const basic = Buffer.from(`x-access-token:${token}`, 'utf8').toString('base64');

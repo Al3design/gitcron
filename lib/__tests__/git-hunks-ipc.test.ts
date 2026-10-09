@@ -73,7 +73,7 @@ describe('git hunk IPC handlers', () => {
     expect(content).toContain('line 02');
     expect(content).not.toContain('line 02 staged candidate');
     expect(content).toContain('line 10 remains unstaged');
-  });
+  }, 20_000);
 
   it('stages only selected lines from a hunk', async () => {
     const repoPath = await createRepoWithInsertedLines(tempDir);

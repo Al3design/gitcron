@@ -18,7 +18,7 @@
 import { app } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 
 import {
   applyPrivacyScope,

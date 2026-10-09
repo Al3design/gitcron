@@ -29,7 +29,7 @@ import {
 import type { AIKeyProviderId as ProviderId } from '../ai/key-store';
 import type { AIPredictionProvider, PredictionResult, SpeculativeBranch, MaterializeIdeaInput } from '../../types/temporal-agent';
 import { buildMaterializationPlan } from '../../lib/materialize-idea';
-import { errMsg, sanitizeForLog, validRepoPath } from './shared';
+import { errMsg, processEnvWithoutGuardedGitVars, sanitizeForLog, validRepoPath } from './shared';
 
 // PHASE 4: stub the provider so we don't spend OpenRouter credit yet. The real
 // adapter is wired in Phase 5 — flip this to false then. The mock still runs the
@@ -260,16 +260,12 @@ export function registerAiHandlers(): void {
       // Child env for git: inherit the process env but DROP the vars simple-git's
       // safety guard refuses (editor/ssh/askpass/diff hooks leaking from the
       // launching shell, e.g. GIT_EDITOR="code --wait", SSH_ASKPASS, …). Our
-      // plumbing commands invoke none of these, so removing them is safe.
-      const baseEnv: Record<string, string> = { ...(process.env as Record<string, string>), GIT_TERMINAL_PROMPT: '0' };
-      for (const k of [
-        'GIT_EDITOR', 'GIT_SEQUENCE_EDITOR', 'GIT_ASKPASS', 'SSH_ASKPASS',
-        'GIT_SSH', 'GIT_SSH_COMMAND', 'GIT_EXTERNAL_DIFF', 'GIT_PROXY_COMMAND',
-      ]) {
-        delete baseEnv[k];
-      }
+      // plumbing commands invoke none of these, so removing them is safe. The
+      // two we do set are declared with allowEnvironment (simple-git 4).
+      const baseEnv: Record<string, string> = { ...processEnvWithoutGuardedGitVars(), GIT_TERMINAL_PROMPT: '0' };
+      const gitOptions = { baseDir: repoPath, allowEnvironment: ['GIT_TERMINAL_PROMPT', 'GIT_INDEX_FILE'] };
 
-      const g = simpleGit(repoPath).env(baseEnv);
+      const g = simpleGit(gitOptions).env(baseEnv);
 
       // Refuse if the branch or flight tag already exist (don't clobber). Checked
       // BEFORE any write, so a collision can never leave partial state.
@@ -296,7 +292,7 @@ export function registerAiHandlers(): void {
 
       // 2) Build a tree = HEAD's tree + IDEA.md, using a TEMP index (never the real one).
       tmpIndex = path.join(app.getPath('temp'), `gitcron-index-${Date.now()}`);
-      const gi = simpleGit(repoPath).env({ ...baseEnv, GIT_INDEX_FILE: tmpIndex });
+      const gi = simpleGit(gitOptions).env({ ...baseEnv, GIT_INDEX_FILE: tmpIndex });
       await gi.raw(['read-tree', headSha]);
       await gi.raw(['update-index', '--add', '--cacheinfo', `100644,${blobSha},IDEA.md`]);
       const treeSha = (await gi.raw(['write-tree'])).trim();

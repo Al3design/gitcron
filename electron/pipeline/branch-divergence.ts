@@ -1,4 +1,4 @@
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import type { BranchDivergence } from '../../types/pipeline';
 import { withRepoLock } from '../git/repo-queue';
 

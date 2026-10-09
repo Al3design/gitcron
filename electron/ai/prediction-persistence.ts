@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import simpleGit from 'simple-git';
+import { simpleGit } from 'simple-git';
 import { insertPrediction } from '../db/repository';
 import type {
   ContextScope,

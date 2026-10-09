@@ -18,7 +18,7 @@ import { parseBranchTracking } from './branch-tracking';
 import { isBranchMerged } from './branch-merge';
 import { parseUnifiedDiff, type ApplyHunkOptions } from '../../lib/hunk-patch';
 import { withRepoLock } from '../git/repo-queue';
-import { errMsg, resolveRepoRelativePath, sanitizeForLog } from './shared';
+import { errMsg, processEnvWithoutGuardedGitVars, resolveRepoRelativePath, sanitizeForLog } from './shared';
 
 // Resuelve la branch por defecto del repo para consultas de "merged": primero
 // el symbolic-ref de origin/HEAD, luego main/master locales, y como último
@@ -1124,7 +1124,9 @@ if (mode === 'sequence') {
         baseDir: targetPath,
         unsafe: {
           allowUnsafeEditor: true
-        }
+        },
+        // simple-git 4: las variables GIT_* que GitCron pone se declaran.
+        allowEnvironment: ['GIT_SEQUENCE_EDITOR', 'GIT_EDITOR'],
       });
       gitDir = (await g.revparse(['--git-dir'])).trim();
       const absoluteGitDir = path.isAbsolute(gitDir) ? gitDir : path.join(targetPath, gitDir);
@@ -1144,7 +1146,7 @@ if (mode === 'sequence') {
 
       // 3. Execute git rebase -i baseHash
       const rebaseEnv = {
-        ...process.env,
+        ...processEnvWithoutGuardedGitVars(),
         GIT_SEQUENCE_EDITOR: `node "${helperPath}" sequence`,
         GIT_EDITOR: `node "${helperPath}" editor`,
         GITCRON_REBASE_PLAN_PATH: planPath
@@ -1179,7 +1181,9 @@ if (mode === 'sequence') {
         baseDir: targetPath,
         unsafe: {
           allowUnsafeEditor: true
-        }
+        },
+        // simple-git 4: las variables GIT_* que GitCron pone se declaran.
+        allowEnvironment: ['GIT_SEQUENCE_EDITOR', 'GIT_EDITOR'],
       });
       gitDir = (await g.revparse(['--git-dir'])).trim();
       const absoluteGitDir = path.isAbsolute(gitDir) ? gitDir : path.join(targetPath, gitDir);
@@ -1192,7 +1196,7 @@ if (mode === 'sequence') {
       }
 
       const rebaseEnv = {
-        ...process.env,
+        ...processEnvWithoutGuardedGitVars(),
         GIT_SEQUENCE_EDITOR: `node "${helperPath}" sequence`,
         GIT_EDITOR: `node "${helperPath}" editor`,
         GITCRON_REBASE_PLAN_PATH: planPath
