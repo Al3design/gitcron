@@ -56,6 +56,9 @@ const rapido = rapidoPedido || tocadosSolo;
 const AFECTA_BUILD = /^(app|components|hooks|lib|public|styles|types)\/|^(next\.config\.[a-z]+|postcss\.config\.[a-z]+|tailwind\.config\.[a-z]+|tsconfig\.json|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$/;
 /** Una prueba no cambia el build aunque viva en components/ o lib/. */
 const ES_PRUEBA = /(^|\/)__tests__\/|\.test\.(ts|tsx)$/;
+/** El catálogo de textos y las pruebas que lo cuidan (ver el filtro de `vitest related`). */
+const CATALOGO_TEXTOS = 'lib/i18n.ts';
+const PRUEBAS_TEXTOS = ['lib/__tests__/i18n-claves-usadas.test.ts', 'components/pipeline/__tests__/pipeline-i18n.test.ts'];
 const changeArg = args.includes('--change') ? args[args.indexOf('--change') + 1] : null;
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
 
@@ -234,7 +237,16 @@ function main() {
   const change = changeDeLaRama();
   // Para `vitest related`: código y estilos que siguen existiendo (un archivo
   // borrado no tiene pruebas que dependan de él).
-  const tocadosCodigo = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
+  const tocadosCodigoTodos = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
+  // lib/i18n.ts es el catálogo de textos y casi toda la interfaz lo importa: pasarlo
+  // a `vitest related` arrastra unas 110 pruebas por agregar una palabra. Un texto
+  // nuevo no cambia lógica; lo que puede romper (claves faltantes o sin usar) lo
+  // cubren sus pruebas propias, y los componentes que usan el texto nuevo ya están
+  // entre los tocados. Con --completa y --todo corre la suite entera igual.
+  const tocaTextos = tocadosCodigoTodos.includes(CATALOGO_TEXTOS);
+  const tocadosCodigo = tocaTextos
+    ? [...tocadosCodigoTodos.filter((f) => f !== CATALOGO_TEXTOS), ...PRUEBAS_TEXTOS.filter((f) => existsSync(f))]
+    : tocadosCodigoTodos;
   const buildNecesario =
     todo || !existsSync('out/_next/static/css') || tocados.some((f) => AFECTA_BUILD.test(f) && !ES_PRUEBA.test(f));
   const relacionadas = tocadosCodigo.map((f) => `"${f}"`).join(' ');
