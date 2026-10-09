@@ -1,6 +1,6 @@
 # Plan de integración de GitCron
 
-Actualizado el 2026-09-29. La base del relevamiento fue GitCron 1.18.0 / HEAD `6336fdc`, con OpenSpec 1.13.2. El primer cambio quedó archivado con GitCron 1.19.0; el siguiente es `modelos-en-casa`, propuesto en su propia rama. Plan preparado no significa función terminada.
+Actualizado el 2026-10-09. La base del relevamiento fue GitCron 1.18.0 / HEAD `6336fdc`, con OpenSpec 1.13.2. El primer cambio quedó archivado con GitCron 1.19.0; `modelos-en-casa` se archivó el 2026-10-09; el siguiente es `retomar-trabajo-con-asistencia-contextual`. Plan preparado no significa función terminada.
 
 ## Qué conservamos y qué cambia
 
@@ -15,7 +15,7 @@ WebMCP/MCP Apps no son dependencias de estos cambios: añadir un protocolo no re
 | Prioridad | Cambio | Resultado y estado |
 |---|---|---|
 | 1 | [Cerrar conexiones operativas](changes/archive/2026-09-29-cerrar-conexiones-operativas-de-sdd/proposal.md) | Archivado el 2026-09-29 con GitCron 1.19.0: avisos en lugar de decisiones sin destino, toda IA lanzable con las mismas capacidades, navegación y recorrido preparar→confirmar→Graph auditados, inspector de SDD con las operaciones Git de Graph. La sincronización de specs sin archivar pasó a cobertura operativa. |
-| 2 | [Modelos en casa](changes/modelos-en-casa/proposal.md) | En curso desde el 2026-09-29, en su rama: `gitcron.json` propio en el formato de OpenCode (editable a mano y reflejado en la pantalla, secretos por variables), MCP en `mcp.json` con la notación compartida, suscripciones por CLI y servidores por API con el estándar de OpenAI en una misma elección, pedido efectivo visible con su procedencia. Empieza por mediciones y un recorrido angosto con Unsloth local y Codex. |
+| 2 | [Modelos en casa](changes/archive/2026-10-09-modelos-en-casa/proposal.md) | Archivado el 2026-10-09 (del 2026-09-29 en su rama). Pendientes anotados en su tasks.md: Consola por red local y Temporal con Codex por pantalla. Alcance: `gitcron.json` propio en el formato de OpenCode (editable a mano y reflejado en la pantalla, secretos por variables), MCP en `mcp.json` con la notación compartida, suscripciones por CLI y servidores por API con el estándar de OpenAI en una misma elección, pedido efectivo visible con su procedencia. Empieza por mediciones y un recorrido angosto con Unsloth local y Codex. |
 | 3 | [Retomar con asistencia contextual](changes/retomar-trabajo-con-asistencia-contextual/proposal.md) | Contexto/conversación durables, orientación breve y flotante pertinente, consumiendo la gestión de modelos compartida. Candidato para decisiones reales pedidas por una IA durante una sesión (anotado 2026-09-29 en cerrar-conexiones design.md). |
 | Intercalable después de 1 | [Retirar cambios obsoletos](changes/retirar-cambios-openspec-obsoletos/proposal.md) | Retiro explícito sin consolidar deltas e historia honesta. |
 | Intercalable después de 1 | [Configuración global](changes/administrar-configuracion-global-de-openspec/proposal.md) | Un editor global, alcance claro y estado efectivo por repo. |
