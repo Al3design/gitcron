@@ -5158,8 +5158,12 @@ summary.centerBlock {
    TARJETA «DÓNDE QUEDASTE» (Tarea 3.1)
    ========================================================================== */
 .whereYouLeftOffContainer {
-  margin: var(--space-3) 0;
-  padding: var(--space-3);
+  /* Alineada con el encabezado del cambio y la lista de tareas: el mismo margen
+     lateral del cuerpo de SDD, y aire adentro para que el texto no toque el borde. */
+  width: calc(100% - 2 * var(--sdd-body-gutter));
+  max-width: calc(var(--sdd-body-width) - 2 * var(--sdd-body-gutter));
+  margin: var(--space-3) auto;
+  padding: var(--space-3) var(--space-5);
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-default);
