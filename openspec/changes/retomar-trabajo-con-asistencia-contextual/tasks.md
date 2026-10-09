@@ -4,7 +4,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 1. Contrato de contexto
 
-- [ ] 1.1 **Orquestador/auditor:** Fijar identidad repo+checkout+HEAD y selección discriminada reutilizando stores existentes. **Comprobación:** Contrato en design distingue conversación consultiva de sesión de ejecución; conserva el límite existente de una ejecución por repo.
+- [x] 1.1 **Orquestador/auditor:** Fijar identidad repo+checkout+HEAD y selección discriminada reutilizando stores existentes. **Comprobación:** Contrato en design distingue conversación consultiva de sesión de ejecución; conserva el límite existente de una ejecución por repo.
 - [ ] 1.2 **IA local:** Implementar el resolvedor de referencias de contexto autorizado en main. **Comprobación:** Rechaza otro repo, rutas fuera de scope y selección obsoleta sin leer archivos externos.
 - [ ] 1.3 **IA local:** Publicar contribuciones tipadas de vista y acciones disponibles. **Comprobación:** Prueba dos vistas y una extensión desconocida; no agrega un switch monolítico de todas las pantallas.
 

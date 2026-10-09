@@ -18,6 +18,38 @@ Ver proposal.md para alcance y dependencias; specs/ contiene los contratos obser
 
 Usar identidad repo de main junto a checkout/worktree, HEAD, rama y selección discriminada (commit, archivo, change/task, propuesta temporal, nodo). Cada vista aporta referencias, no copias enormes de su estado; main valida referencias antes de leer o actuar.
 
+#### Contrato de contexto (tarea 1.1, 2026-10-09)
+
+**Identidad.** Se reutiliza la resolución que ya hace `PipelineService.resolveBinding`, sin una segunda:
+
+| Campo | Qué es | De dónde sale |
+|---|---|---|
+| `repoKey` | El repositorio, compartido por todos sus worktrees | `gitCommonDirDigest` del binding (`git rev-parse --git-common-dir`, resumido) |
+| `checkoutId` | Una carpeta de trabajo concreta: el repo principal o un worktree | El `repoId` actual de `pipeline_repo`, que ya es uno por ruta canónica |
+| `checkoutPath` | Ruta canónica (`realpath`) de esa carpeta | `canonicalPath` del binding; además tiene que estar autorizada en `authorizedRepoStore` |
+| `head` | `{ sha, branch }`; `branch` es `null` con HEAD separado | Se lee en main al capturar el contexto |
+
+Una conversación y un resumen pertenecen a un `checkoutId`: dos worktrees del mismo repo tienen conversaciones separadas, y `repoKey` sólo sirve para ofrecer lo del repo hermano, nunca para mezclarlo en silencio. El renderer no manda rutas sueltas: manda la ruta del repo abierto (`activeRepoPath`), y main la resuelve y la autoriza como hoy.
+
+**Selección discriminada.** Cada vista aporta como mucho una referencia, desde el estado que ya tiene, sin store nuevo:
+
+| `kind` | Campos | Fuente actual |
+|---|---|---|
+| `none` | — | Ninguna selección |
+| `commit` | `sha` | `selectedCommit` de git-store (Graph) y `selectedHash` del Cronométrico |
+| `file` | `path` relativo al checkout, `at`: `'worktree'` o un `sha` | `selectedFile` de git-store |
+| `change` | `changeId`, `taskId?` | `selectedChangeId` de pipeline-store y la tarea resaltada de SDD |
+| `temporal-idea` | `runId`, `branchId` | Rama especulativa elegida en el Agente Temporal (`speculative_branch`, por corrida) |
+| `carto-node` | `nodeId` | `selectedNode` de CartographyView |
+
+Una referencia viaja con el `head.sha` en el que se tomó. Antes de leer o de actuar, main la revalida contra el checkout actual: si HEAD cambió y la referencia depende de él (un archivo en el worktree, un nodo del grafo), o si lo señalado ya no existe, la selección queda **obsoleta**. Una selección obsoleta se muestra como tal y no se usa en silencio. Las rutas se resuelven dentro del checkout autorizado; una que sale de él se rechaza sin leer nada. El contenido nunca viaja desde el renderer: main lo lee recién cuando la referencia pasó la validación.
+
+**Conversación consultiva y sesión de ejecución.**
+
+- Una **conversación consultiva** es texto: pregunta, respuesta, el contexto usado y sus referencias. Se guarda en SQLite por `checkoutId` (tareas 2.1 y 2.2), no abre procesos ni ejecuta herramientas, y puede convivir con cualquier otra cosa que pase en el repo. Retomarla restaura sus mensajes y nada más.
+- Una **sesión de ejecución** es un proceso de IA lanzado por `runtime-session-hub`. Sigue el límite que ya existe: una sesión activa por ruta canónica de checkout, y una segunda se rechaza con `session_already_active`. Esta regla no cambia.
+- Una conversación puede **proponer** lanzar una sesión. El lanzamiento va por el mismo controlador y la misma confirmación que el lanzador de SDD, y queda sujeto a ese límite. La conversación nunca abre un proceso propio para esquivarlo, y continuar una conversación no continúa un proceso.
+
 ### 2. Decisión de implementación
 
 Conversaciones en SQLite versionado y particionado; mensajes, contexto usado, referencias, operaciones y resultados. Guardar texto visible saneado, no razonamiento privado ni secretos. El usuario puede consultar y eliminar una conversación. El replay no relanza herramientas.
