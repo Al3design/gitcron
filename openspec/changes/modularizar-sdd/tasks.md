@@ -13,7 +13,7 @@
 
 ## 3. Textos
 
-- [ ] 3.1 **IA local:** Partir `lib/i18n.ts` por pantalla en `lib/i18n/`, con `useT` y las claves iguales. **Comprobación:** Pruebas de i18n en verde; ninguna clave cambia de valor.
+- [x] 3.1 **IA local:** Partir `lib/i18n.ts` por pantalla en `lib/i18n/`, con `useT` y las claves iguales. **Comprobación:** Pruebas de i18n en verde; ninguna clave cambia de valor.
 
 ## 4. Cierre
 
