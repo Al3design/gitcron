@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
 import styles from './OpenSpecDashboard.module.css';
+import { Row } from '@/components/ui';
 import {
   groupActivity,
   runtimeDisplayName,
@@ -123,7 +124,7 @@ export function ActivityFeed({
               const pressed = active.has(channel) && !disabled;
               const Icon = CHANNEL_ICONS[channel];
               return (
-                <div key={channel} className={styles.activityFilterRow}>
+                <Row key={channel} gap="2">
                   <button
                     type="button"
                     role="switch"
@@ -148,7 +149,7 @@ export function ActivityFeed({
                     <Icon aria-hidden="true" />
                     <span>{t(`pipeline.channel.${channel}`)}</span>
                   </label>
-                </div>
+                </Row>
               );
             })}
           </aside>

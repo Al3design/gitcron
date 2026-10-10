@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertCircle, Check, Copy, Loader2 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { usePipelineStore } from '@/lib/pipeline-store';
+import { Text } from '@/components/ui';
 import type { OpenSpecInstallResult } from '@/types/pipeline';
 import { assessOpenSpecEngineAfterInstall } from './pipeline-domain';
 import styles from './OpenSpecDashboard.module.css';
@@ -259,9 +260,9 @@ export const OpenSpecGlobalInstallPrompt: React.FC<OpenSpecGlobalInstallPromptPr
       role="region"
       aria-label={t('pipeline.openspec.engine.install.confirmGlobalAction')}
     >
-      <p className={styles.engineInstallConfirmPrompt}>
+      <Text variant="secondary-xs" as="p">
         {t('pipeline.openspec.engine.install.confirmGlobalPrompt')}
-      </p>
+      </Text>
 
       {command ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-1)' }}>

@@ -36,6 +36,7 @@ import type { PipelineSnapshot } from './pipeline-view-state';
 import { useOpenSpecInit } from '@/hooks/use-openspec-init';
 import { useOpenSpecVersionAnalysis } from '@/hooks/use-openspec-version-analysis';
 import { usePipelineStore } from '@/lib/pipeline-store';
+import { Stack, Row } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 export interface OpenSpecUpdateReviewProps {
@@ -567,13 +568,13 @@ export const OpenSpecUpdateReview: React.FC<OpenSpecUpdateReviewProps> = ({
           outputInventory={installed?.outputInventory}
         >
           {effectiveStatus?.toolReport?.source === 'gitcron-fallback' && (
-            <div className={styles.fallbackNoticeRow} role="status" style={{ margin: 'var(--space-1) 0 var(--space-2)' }}>
+            <Row gap="2" role="status" style={{ margin: 'var(--space-1) 0 var(--space-2)' }}>
               <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-xs)' }}>
                 {t('pipeline.openspec.engine.fallbackNotice', {
                   reason: resolveFallbackReasonText(effectiveStatus.toolReport.fallbackReason, t),
                 })}
               </span>
-            </div>
+            </Row>
           )}
           <OpenSpecToolList
             present={openSpecPresent}
@@ -689,12 +690,12 @@ export const OpenSpecUpdateReview: React.FC<OpenSpecUpdateReviewProps> = ({
               {/* 1. MATRIZ DECLARADA */}
               <div>
                 <h3 className={styles.reviewSectionTitle}>{t('pipeline.openspec.engine.matrix.title')}</h3>
-                <div className={styles.reviewFactItem}>
+                <Stack gap="1">
                   <span className={styles.reviewFactLabel}>{t('pipeline.openspec.engine.matrix.actionLabel')}:</span>
                   <strong style={{ color: action === 'none' ? 'var(--color-git-add)' : action === 'blocked' ? 'var(--color-error)' : 'var(--color-warning)' }}>
                     {actionLabel}
                   </strong>
-                </div>
+                </Stack>
 
                 {action === 'blocked' && (
                   <p style={{ margin: 'var(--space-1) 0 0', color: 'var(--color-error)', fontSize: 'var(--font-size-xs)' }}>

@@ -36,6 +36,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Row } from '@/components/ui';
 import { useGitStore } from '@/lib/git-store';
 import { changeIdFromBranch } from '@/lib/change-branch';
 import { usePipelineStore } from '@/lib/pipeline-store';
@@ -1334,7 +1335,7 @@ export function OpenSpecDashboard({
                     </div>
                     <div className={styles.archiveCommandBox}>
                       <pre className={styles.archiveCommand}><code>{archiveRequest.command}</code></pre>
-                      <div className={styles.archiveCommandActions}>
+                      <Row gap="2">
                         <button
                           type="button"
                           className={styles.secondaryAction}
@@ -1353,7 +1354,7 @@ export function OpenSpecDashboard({
                           {archiveCmdExecuting ? <Loader2 size={13} className={styles.spin} aria-hidden="true" /> : <Play size={13} aria-hidden="true" />}
                           <span>{archiveCmdExecuting ? t('pipeline.openspec.archive.commandRunning') : t('pipeline.openspec.archive.executeCommand')}</span>
                         </button>
-                      </div>
+                      </Row>
                     </div>
                     {pendingOf(selectedChange).length > 0 && (
                       <div className={styles.archivePendingWarning} role="status">

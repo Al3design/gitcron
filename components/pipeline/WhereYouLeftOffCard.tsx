@@ -14,6 +14,7 @@ import type { ChangeLastCommit, TaskEvidence } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
+import { Stack, Row } from '@/components/ui';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from './pipeline-view-state';
 import { deriveResumeCard } from './resume-card';
 import styles from './OpenSpecDashboard.module.css';
@@ -158,10 +159,10 @@ export function WhereYouLeftOffCard({
       data-testid="where-you-left-off-card"
     >
       <div className={styles.whereYouLeftOffHeader}>
-        <div className={styles.whereYouLeftOffTitleGroup}>
+        <Row gap="2">
           <Milestone size={14} className={styles.whereYouLeftOffTitleIcon} aria-hidden="true" />
           <h4 className={styles.whereYouLeftOffTitle}>{t('pipeline.resumeCard.title')}</h4>
-        </div>
+        </Row>
         {archivedNotice && (
           <span className={styles.whereYouLeftOffArchivedBadge}>
             {archivedNotice}
@@ -215,7 +216,7 @@ export function WhereYouLeftOffCard({
         {/* Bloque 2: En qué estabas */}
         <dt className={styles.whereYouLeftOffRowLabel}>{t('pipeline.resumeCard.row.currentWork')}</dt>
         <dd className={styles.whereYouLeftOffRowValue} data-testid="resume-current-work">
-          <div className={styles.whereYouLeftOffNextStepContent}>
+          <Stack gap="1">
             <div className={styles.whereYouLeftOffNextStepHeader}>
               {currentWork.currentTask && onNavigateToTask ? (
                 <button
@@ -300,7 +301,7 @@ export function WhereYouLeftOffCard({
                 </span>
               </div>
             ) : null}
-          </div>
+          </Stack>
         </dd>
 
         {/* Bloque 3: Lo que queda */}
@@ -311,7 +312,7 @@ export function WhereYouLeftOffCard({
               {remainingWork.emptyText}
             </span>
           ) : remainingWork.sections.length > 0 ? (
-            <div className={styles.whereYouLeftOffRemainingList} data-testid="resume-remaining-sections">
+            <Row gap="2" wrap data-testid="resume-remaining-sections">
               {remainingWork.sections.map((sec) => {
                 const targetTaskId = sec.firstPendingTaskId ?? sec.firstTaskId;
                 const isClickable = Boolean(targetTaskId && onNavigateToTask);
@@ -343,7 +344,7 @@ export function WhereYouLeftOffCard({
                   </span>
                 );
               })}
-            </div>
+              </Row>
           ) : null}
         </dd>
 

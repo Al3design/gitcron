@@ -10,6 +10,7 @@ import type {
   OpenSpecGraphArtifact,
 } from '@/types/pipeline';
 import { PipelineRuntimeLauncher } from './PipelineRuntimeLauncher';
+import { Row } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 export type DetailTab = 'proposal' | 'design' | 'specs' | 'tasks';
@@ -411,7 +412,7 @@ export function PipelineArtifactGraph({
                   ))}
                 </ul>
               )}
-              <div className={styles.timelineConfirmActions}>
+              <Row gap="2">
                 <button
                   type="button"
                   className={styles.timelineConfirmBtn}
@@ -426,7 +427,7 @@ export function PipelineArtifactGraph({
                 >
                   {t('common.cancel')}
                 </button>
-              </div>
+              </Row>
             </div>
           )}
 

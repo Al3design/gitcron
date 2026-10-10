@@ -21,6 +21,7 @@ import { usePipelineStore } from '@/lib/pipeline-store';
 import { assessOpenSpecEngineTargetVersion } from './pipeline-domain';
 import { OpenSpecGlobalInstallPrompt } from './OpenSpecGlobalInstallConfirm';
 import { getUpdateBlockReasonKey } from '@/lib/openspec-update-guide';
+import { Row } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 function formatMismatchMessage(
@@ -204,7 +205,7 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
 
   if (isLoading) {
     return (
-      <div className={styles.reviewActionWithReason}>
+      <Row gap="2" wrap>
         <button
           type="button"
           className={styles.primaryAction}
@@ -212,13 +213,13 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
         >
           {t('pipeline.openspec.engine.reading')}
         </button>
-      </div>
+      </Row>
     );
   }
 
   if (!hasRun && !engine && (isRepoInitialized === false || repoState === 'not-initialized')) {
     return (
-      <div className={styles.reviewActionWithReason}>
+      <Row gap="2" wrap>
         <button
           type="button"
           className={styles.primaryAction}
@@ -239,13 +240,13 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
             {effectiveDisabledReason}
           </span>
         )}
-      </div>
+      </Row>
     );
   }
 
   if (!hasRun && !engine && pendingTools && pendingTools.length > 0) {
     return (
-      <div className={styles.reviewActionWithReason}>
+      <Row gap="2" wrap>
         <button
           type="button"
           className={styles.primaryAction}
@@ -266,14 +267,14 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
             {effectiveDisabledReason}
           </span>
         )}
-      </div>
+      </Row>
     );
   }
 
   // a) Si !hasRun && !engine && !plannedIntegration && !effectiveDisabledReason
   if (!hasRun && !engine && !plannedIntegration && !effectiveDisabledReason) {
     return (
-      <div className={styles.reviewActionWithReason}>
+      <Row gap="2" wrap>
         <button
           type="button"
           className={styles.primaryAction}
@@ -281,7 +282,7 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
         >
           {t('pipeline.openspec.engine.summary.allUpToDate')}
         </button>
-      </div>
+      </Row>
     );
   }
 
@@ -753,7 +754,7 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
           onCancel={handleCancelGlobal}
         />
       ) : (
-        <div className={styles.reviewActionWithReason}>
+        <Row gap="2" wrap>
           <button
             type="button"
             className={styles.primaryAction}
@@ -774,7 +775,7 @@ export const OpenSpecUpdateRunner: React.FC<OpenSpecUpdateRunnerProps> = ({
               {effectiveDisabledReason}
             </span>
           )}
-        </div>
+        </Row>
       )}
 
       {planLineText && !hasRun && !showWarningConfirm && !showGlobalConfirm && (

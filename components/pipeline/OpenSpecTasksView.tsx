@@ -37,6 +37,7 @@ import styles from './OpenSpecDashboard.module.css';
 import { MarkdownViewer } from './MarkdownViewer';
 import { TaskConfirmToast } from './TaskConfirmToast';
 import { parseTaskDetails } from './resume-card';
+import { Row } from '@/components/ui';
 
 export interface OpenSpecTasksViewProps {
   repoPath: string;
@@ -613,7 +614,7 @@ export function OpenSpecTasksView({
     <div className={styles.centerBlock}>
       {/* Barra superior de tareas: solapas a la izquierda, conteo y agregar a la derecha (Bloque F) */}
       <div className={styles.tasksHeader}>
-        <div className={styles.tasksHeaderControls}>
+        <Row gap="2">
           <div className={styles.viewModeToggle} role="group" aria-label={t('pipeline.openspec.tasks.title')}>
             <button
               type="button"
@@ -659,7 +660,7 @@ export function OpenSpecTasksView({
               <span>{t('pipeline.openspec.sync.unavailable')}</span>
             </span>
           </div>
-        </div>
+        </Row>
 
         <div className={styles.tasksHeaderInfo}>
           <span className={styles.tasksCountBadge}>
@@ -1078,7 +1079,7 @@ export function OpenSpecTasksView({
                 </span>
               )}
             </div>
-            <div className={styles.markdownFormattedActions}>
+            <Row gap="2">
               {/* 1. Uno que ALTERNA: ojo en crudo para ir a formato, código en formato para volver a crudo */}
               <button
                 type="button"
@@ -1115,7 +1116,7 @@ export function OpenSpecTasksView({
               >
                 {copiedMarkdown ? <Check size={12} /> : <Copy size={12} />}
               </button>
-            </div>
+            </Row>
           </div>
 
           {markdownMode === 'formatted' ? (

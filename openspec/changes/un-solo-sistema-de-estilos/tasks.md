@@ -7,11 +7,12 @@
 
 ## 2. Piezas compartidas
 
-- [ ] 2.1 **IA local:** Crear `Stack`, `Row`, `PlainList` y `Text` en `components/ui/`, cada una con su módulo y sólo tokens de `@theme`. **Comprobación:** Prueba de cada pieza; las pruebas de paleta y sintaxis CSS las recorren.
+- [x] 2.1 **IA local:** Crear `Stack`, `Row`, `PlainList` y `Text` en `components/ui/`, cada una con su módulo y sólo tokens de `@theme`. **Comprobación:** Prueba de cada pieza; las pruebas de paleta y sintaxis CSS las recorren.
 
 ## 3. Reemplazo por zonas
 
-- [ ] 3.1 **IA local:** Reemplazar en SDD (`components/pipeline/sdd/` y `OpenSpecDashboard.module.css`) los bloques repetidos por las piezas, y los alias `--sp-N` por `--space-N`. **Comprobación:** Capturas reales iguales antes y después; pruebas sin cambiar lo que comprueban; menos líneas de CSS.
+- [x] 3.1 **IA local:** Reemplazar en SDD (`components/pipeline/sdd/` y `OpenSpecDashboard.module.css`) los bloques repetidos por las piezas, y los alias `--sp-N` por `--space-N`. **Comprobación:** Capturas reales iguales antes y después; pruebas sin cambiar lo que comprueban; menos líneas de CSS.
+  - 2026-10-10: piezas usadas en los bloques que sólo declaraban un acomodo y alias `--sp-N` eliminados (`OpenSpecDashboard.module.css` de 4853 a 4728 líneas). Quedan para la 3.2, porque se pueden reemplazar igual: `.draftLogReasoningBox` y `.startHeaderTitleGroup` (columna, separación 1), `.rawEditorContainer`, `.markdownFormattedContainer`, `.skeletonBlock` y `.journeyNext` (columna, separación 2, ancho completo), `.sessionRanAt`, `.sessionContinues` y `.flowHint` (texto técnico chico) y las listas `.aiSentParamList` / `.whereYouLeftOff*List`.
 - [ ] 3.2 **IA local:** Lo mismo en `components/ai/`, y dejar en un solo módulo las reglas copiadas entre `AiSentDetails.module.css` y `OpenSpecDashboard.module.css`. **Comprobación:** Capturas iguales de Motores y modelos y del detalle de lo enviado; pruebas en verde.
 
 ## 4. Cierre

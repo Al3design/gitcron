@@ -1,6 +1,7 @@
 'use client';
 
 import { useT } from '@/hooks/use-translation';
+import { Row } from '@/components/ui';
 import type { PipelineViewState } from './pipeline-view-state';
 import styles from './OpenSpecDashboard.module.css';
 
@@ -38,13 +39,13 @@ export function PipelineEmptyState({
         data-estado="loading"
       >
         <header className={styles.skeletonHeader} data-skeleton="header">
-          <div className={styles.skeletonHeaderLeft}>
+          <Row gap="2" wrap>
             <div className={styles.skeletonBranchPill} />
             <div className={styles.skeletonBadge} />
             <div className={styles.skeletonBadge} />
             <div className={styles.skeletonBadge} />
             <div className={styles.skeletonBadge} />
-          </div>
+          </Row>
           <div className={styles.skeletonButton} />
         </header>
 

@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useT } from '@/hooks/use-translation';
 import { PipelineNewChangeFlow } from '../PipelineNewChangeFlow';
+import { Row } from '@/components/ui';
 import type { OpenSpecChangeSummary, PipelineSnapshot } from '../pipeline-view-state';
 import type { RuntimeProjection, TaskEvidence } from '@/types/pipeline';
 import shared from '../OpenSpecDashboard.module.css';
@@ -273,10 +274,10 @@ function ArchivedStartScreen({
                   onKeyDown={(e) => handleCardKeyDown(e, change.changeId)}
                 >
                   <div className={styles.startItemHead}>
-                    <div className={styles.startItemTitleWithIcon}>
+                    <Row gap="2">
                       <CheckCircle2 size={13} className={styles.startArchivedIcon} />
                       <strong>{change.changeId}</strong>
-                    </div>
+                    </Row>
                   </div>
                   <p>{change.archivedAt ?? t('pipeline.openspec.dateUnknown')}</p>
                 </li>

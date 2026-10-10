@@ -15,6 +15,7 @@ import {
   isInstalledBehindCycle,
 } from '@/lib/openspec-version';
 import { deriveProfileWorkflowRows } from '@/lib/openspec-profile';
+import { Stack, Row, PlainList } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 import { useGitStore } from '@/lib/git-store';
 import { usePipelineStore } from '@/lib/pipeline-store';
@@ -668,7 +669,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
       {!engineInstalled && (
         <div className={styles.engineInstallSection} aria-label={t('pipeline.openspec.engine.install.globalTitle')}>
           {/* Instalación local: botón con estado de progreso y motivo inline si está bloqueada (9.2 y 9.5) */}
-          <div className={styles.engineInstallActionRow}>
+          <Row gap="2" wrap>
             <button
               type="button"
               className={styles.primaryAction}
@@ -690,12 +691,12 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                 {localBlockedReason}
               </span>
             )}
-          </div>
+          </Row>
 
           {/* Instalación global y confirmación previa (9.3 y 9.5) */}
           {!isConfirmingGlobal ? (
             <>
-              <div className={styles.engineInstallActionRow}>
+              <Row gap="2" wrap>
                 <button
                   type="button"
                   className={styles.primaryAction}
@@ -727,7 +728,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                     {t('pipeline.openspec.engine.install.globalUnavailable')}
                   </span>
                 )}
-              </div>
+              </Row>
 
               {/* Comando literal dinámico con botón de copiado (9.3) */}
               {displayCommand ? (
@@ -868,7 +869,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
         </div>
 
         {status.pendingTools && status.pendingTools.length > 0 && (
-          <div className={styles.pendingToolsContainer}>
+          <Stack gap="1">
             {(() => {
               const pendingLabels = status.pendingTools
                 .map((id) => status.toolReport?.tools.find((t) => t.id === id)?.label ?? id)
@@ -964,7 +965,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                 </button>
               </div>
             )}
-          </div>
+          </Stack>
         )}
 
         {status.toolReport?.source === 'gitcron-fallback' && (
@@ -1032,7 +1033,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
           {/* Diagnósticos del Motor CLI (openspec doctor & context) (Grupo 3b) */}
           <div className={styles.cliDiagnosticsSection}>
             {/* 1. openspec doctor --json */}
-            <div className={styles.cliDiagnosticGroup} data-testid="openspec-doctor-section">
+            <Stack gap="1" data-testid="openspec-doctor-section">
               <h3 className={styles.reviewSectionTitle}>
                 {t('pipeline.openspec.engine.advanced.doctorTitle')}
               </h3>
@@ -1064,15 +1065,15 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                     );
                   }
                   return (
-                    <ul className={styles.cliDiagnosticList}>
+                    <PlainList gap="1">
                       {doctorDiagnostics.map((diag, idx) => (
                         <li key={`${diag.code}-${idx}`} className={styles.cliDiagnosticItem}>
-                          <div className={styles.cliDiagnosticItemRow}>
+                          <Row gap="2">
                             <span className={styles.cliSeverityBadge} data-severity={diag.severity}>
                               {diag.severity}
                             </span>
                             <span>{diag.message}</span>
-                          </div>
+                          </Row>
                           {diag.fix && (
                             <span className={styles.cliDiagnosticFix}>
                               {t('pipeline.openspec.engine.advanced.fixLabel', { fix: diag.fix })}
@@ -1080,14 +1081,14 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                           )}
                         </li>
                       ))}
-                    </ul>
+                    </PlainList>
                   );
                 })()
               )}
-            </div>
+            </Stack>
 
             {/* 2. openspec context --json */}
-            <div className={styles.cliDiagnosticGroup} data-testid="openspec-context-section">
+            <Stack gap="1" data-testid="openspec-context-section">
               <h3 className={styles.reviewSectionTitle}>
                 {t('pipeline.openspec.engine.advanced.contextTitle')}
               </h3>
@@ -1117,15 +1118,15 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                     );
                   }
                   return (
-                    <ul className={styles.cliDiagnosticList}>
+                    <PlainList gap="1">
                       {contextDiagnostics.map((diag, idx) => (
-                        <li key={`${diag.code}-${idx}`} className={styles.cliDiagnosticItem}>
-                          <div className={styles.cliDiagnosticItemRow}>
+                         <li key={`${diag.code}-${idx}`} className={styles.cliDiagnosticItem}>
+                          <Row gap="2">
                             <span className={styles.cliSeverityBadge} data-severity={diag.severity}>
                               {diag.severity}
                             </span>
                             <span>{diag.message}</span>
-                          </div>
+                          </Row>
                           {diag.fix && (
                             <span className={styles.cliDiagnosticFix}>
                               {t('pipeline.openspec.engine.advanced.fixLabel', { fix: diag.fix })}
@@ -1133,11 +1134,11 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
                           )}
                         </li>
                       ))}
-                    </ul>
+                    </PlainList>
                   );
                 })()
               )}
-            </div>
+            </Stack>
           </div>
         </div>
       </div>

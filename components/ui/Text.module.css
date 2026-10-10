@@ -1,0 +1,13 @@
+.secondaryXs {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  margin: 0;
+}
+
+.monoXs {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--font-size-xs);
+  font-style: normal;
+  margin: 0;
+}

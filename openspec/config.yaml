@@ -82,7 +82,9 @@ operations:
         trampas (protecciones aflojadas, catch vacíos, pruebas ablandadas, capturas anteriores
         al código) y Fallow sobre las líneas agregadas (exports o archivos sin uso, funciones
         demasiado complejas, ciclos) ya las revisa el script, y la lectura se concentra en lo
-        que el script no puede juzgar. El auditor revisa la correspondencia entre código final, resultados
+        que el script no puede juzgar. Las capturas de antes y después de una tanda se comparan
+        con `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`, que da el porcentaje de
+        píxeles distintos y una imagen con las diferencias en rojo; a ojo se escapan. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
         Un arreglo chico que encuentra la auditoría lo hace el auditor directamente, con su
         verificación, en vez de devolverlo al ejecutor: cada vuelta le cuesta al ejecutor

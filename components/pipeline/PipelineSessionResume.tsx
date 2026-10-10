@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useId, useMemo } from 'react';
 import type { RuntimeProjection, PipelineDiscoveryEntry } from '@/types/pipeline/projection';
 import { runtimeDisplayName } from './pipeline-domain';
 import { useT } from '@/hooks/use-translation';
+import { Stack } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 export interface PipelineSessionResumeProps {
@@ -190,7 +191,7 @@ export function PipelineSessionResume({
         </p>
       )}
 
-      <div className={styles.resumeField}>
+      <Stack gap="1">
         <label htmlFor={instructionInputId} className={styles.resumeLabel}>
           {t('pipeline.openspec.resume.instructionLabel')}
         </label>
@@ -205,7 +206,7 @@ export function PipelineSessionResume({
           disabled={busy}
           rows={3}
         />
-      </div>
+      </Stack>
 
       {errorText && (
         <p className={styles.resumeError} role="alert">
