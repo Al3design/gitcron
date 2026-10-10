@@ -15,7 +15,7 @@
 
 ## Decisions
 
-### 1. El sistema: lo decide Alejandro (tarea 1.1)
+### 1. El sistema: módulos CSS (decidido por Alejandro el 2026-10-10, tarea 1.1)
 
 | Opción | A favor | En contra |
 |---|---|---|
@@ -46,7 +46,7 @@ Cada tanda reemplaza los bloques repetidos de una zona por las piezas compartida
 
 ### 5. La regla queda escrita
 
-En `openspec/config.yaml` y en `DESIGN.MD`: con qué sistema se escribe el código nuevo, cuándo se crea una pieza compartida y la regla de los módulos CSS (una clase vive en un solo módulo, y una regla combinada se queda donde viven sus clases).
+En `openspec/config.yaml`, el único lugar de las reglas: con qué sistema se escribe el código nuevo, cuándo se crea una pieza compartida y la regla de los módulos CSS (una clase vive en un solo módulo, y una regla combinada se queda donde viven sus clases).
 
 ## Risks / Trade-offs
 
@@ -59,4 +59,4 @@ Por zonas, una tanda por zona, empezando por SDD (ya partida). Los componentes d
 
 ## Open Questions
 
-La elección del sistema (decisión 1), que es de Alejandro.
+Ninguna. El sistema quedó decidido el 2026-10-10: módulos CSS.

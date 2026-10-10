@@ -2,8 +2,8 @@
 
 ## 1. Decisión y regla
 
-- [ ] 1.1 **Alejandro:** Elegir el sistema de estilos del proyecto entre módulos CSS (recomendado) y Tailwind, según la tabla de design.md. **Comprobación:** Decisión anotada en design.md con fecha.
-- [ ] 1.2 **Orquestador/auditor:** Escribir la regla en `openspec/config.yaml` y `DESIGN.MD`: sistema para el código nuevo, umbral de tres repeticiones para una pieza compartida y la regla de los módulos CSS. **Comprobación:** Regla en un solo lugar de cada documento, sin repetirla en prompts.
+- [x] 1.1 **Alejandro:** Elegir el sistema de estilos del proyecto entre módulos CSS (recomendado) y Tailwind, según la tabla de design.md. **Comprobación:** Decisión anotada en design.md con fecha.
+- [x] 1.2 **Orquestador/auditor:** Escribir la regla en `openspec/config.yaml`: sistema para el código nuevo, umbral de tres repeticiones para una pieza compartida y la regla de los módulos CSS. **Comprobación:** Regla en un solo lugar, sin repetirla en prompts (DESIGN.MD es el pedido original de la maqueta, no un documento de reglas).
 
 ## 2. Piezas compartidas
 

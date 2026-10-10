@@ -18,6 +18,16 @@ context: |
   acá, en un documento de invariantes y en cada prompt: las tres versiones diferían, y la del
   documento omitía el paso que hacía fallar la suite.
 
+  Los estilos se escriben con módulos CSS (`*.module.css` junto a su componente) y sus
+  valores salen sólo de los tokens de `@theme` en app/globals.css; el código nuevo no usa
+  clases de Tailwind, y un componente con Tailwind se pasa a módulos cuando una tanda lo
+  toca (decisión de Alejandro, 2026-10-10). Un acomodo o estilo de texto que se repite
+  tres veces o más va a una pieza compartida de components/ui/. Una clase vive en un solo
+  módulo: copiarla a otro archivo crea otra clase, y una regla combinada (`.a .b`) sólo
+  funciona si sus clases viven en el mismo módulo que usa el componente que las dibuja.
+  En modularizar-sdd, una regla así se mudó sola y las fechas de un cambio archivado se
+  separaron 16 px.
+
   Nada se cita por número. Se escribe lo que la regla dice, o no se escribe. Una referencia
   como «conforme al invariante 12» deja de significar algo en el momento en que ese documento
   se mueve o se borra, y no hay forma de darse cuenta: nada falla. El mismo día se encontraron
