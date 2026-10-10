@@ -68,7 +68,11 @@ operations:
         para cerrar una tanda. El 2026-10-09 una tanda tardó más de 30 minutos de reloj
         repitiendo la completa después de cada arreglo, uno de ellos un color de CSS. Una
         corrida larga se lanza y se lee al terminar, sin esperas con temporizador que revisan
-        el log una y otra vez. El auditor revisa la correspondencia entre código final, resultados
+        el log una y otra vez. La auditoría empieza por la salida de `pnpm verificar`: las
+        trampas (protecciones aflojadas, catch vacíos, pruebas ablandadas, capturas anteriores
+        al código) y Fallow sobre las líneas agregadas (exports o archivos sin uso, funciones
+        demasiado complejas, ciclos) ya las revisa el script, y la lectura se concentra en lo
+        que el script no puede juzgar. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
         Un arreglo chico que encuentra la auditoría lo hace el auditor directamente, con su
         verificación, en vez de devolverlo al ejecutor: cada vuelta le cuesta al ejecutor
