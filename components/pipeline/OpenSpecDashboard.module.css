@@ -490,146 +490,13 @@
    se estaba parado. */
 .primaryAction:focus-visible,
 .secondaryAction:focus-visible,
-.groupToggle:focus-visible,
-.fileChoice:focus-within,
 .startPendingToggle:focus-visible,
 .startArchived button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
 
-/* Título y acciones en la misma fila. Las acciones a la derecha y arriba: al
-   final de la lista quedaban fuera de vista con veinte archivos, y había que
-   bajar hasta el fondo para encontrar el botón de lo que uno acababa de elegir. */
-/* Dos filas fijas: identidad y rama arriba, conteo y acciones abajo, las dos
-   arrancando en el margen izquierdo. Antes las acciones flotaban a la derecha y
-   caían a una segunda línea recién cuando no entraban, así que su posición
-   dependía del ancho de la ventana. */
-.prepareHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: var(--sp-3);
-  margin-block-end: var(--sp-4);
-}
-.prepareHead > div:first-child { flex: 1 1 100%; min-width: 0; }
-.prepareActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
 
-/* Lista de archivos a preparar. Aireada a propósito: en filas apretadas la ruta
-   y su checkbox se leían como un bloque y había que apuntar con el mouse. */
-.fileList { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-3) 0 var(--sp-2); }
-.fileList li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
-  font-weight: 500; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-}
-.fileList li span { min-width: 0; overflow-wrap: anywhere; }
-/* Cada grupo de archivos, encapsulado igual que el sector de la IA. El título,
-   la explicación de la procedencia y la lista de casillas quedaban uno debajo
-   del otro dependiendo del orden para saber qué explicación correspondía a qué
-   lista. Con dos o tres grupos —lo normal acá— eso obliga a leer para separar.
-   Ale lo pidió junto con el sector de la IA. */
-.fileGroup {
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-text-primary) 2%, transparent);
-}
-.fileGroup + .fileGroup { margin-block-start: var(--sp-3); }
-.fileGroup:first-of-type { margin-block-start: var(--sp-2); }
-
-/* Panel de preparación del repositorio. Ocupa el centro y desplaza con su propio
-   scroll: con veinte archivos modificados, un flotante anclado al encabezado
-   quedaba apretado, y una sección fija le comía alto al panel aun sin nada que
-   confirmar. */
-.prepareArea {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
-  overflow-y: auto;
-}
-
-.prepareArea > p { margin: 0 0 var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-.prepareArea code { color: var(--color-primary); }
-.prepareEmpty { padding-top: var(--space-2); }
-
-/* Ancho reservado y cifras de ancho fijo: el conteo pasa de «0 de 5» a «5 de 5»
-   y de una cifra a dos, y sin esto arrastraba el título del panel y su
-   descripción cada vez que se tildaba una casilla. */
-.prepareCount {
-  align-self: center;
-  min-width: 9rem;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
-  text-align: left;
-}
-
-/* Encabezado de grupo: título con su control, descripción, y la línea que cierra
-   el encabezado antes de la lista. Las tres separaciones salen de la escala; el
-   título necesita su propio margen inferior porque su fila contiene un botón más
-   alto que el texto, y sin él la descripción quedaba tocándolo. */
-.fileGroup > p {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  margin: 0 0 var(--sp-3);
-}
-.fileGroup > p > strong { color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-
-/* Nivel 3: control de contenido, no de acción sobre el repositorio. Verde, para
-   no competir con el cian de las acciones. Como texto suelto al lado del título
-   se leía como parte del título y no como algo apretable. */
-.groupToggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  min-block-size: 2.75rem;
-  min-height: 2.75rem;
-  padding: var(--space-2) var(--space-3);
-  padding: var(--sp-1) var(--sp-3);
-  border: 1px solid color-mix(in srgb, var(--color-git-add) 34%, transparent);
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-git-add);
-  cursor: pointer;
-  font-weight: 600; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  /* «Sumar todos» y «Quitar todos» no miden lo mismo: sin reservar el ancho de
-     la variante más larga, el rótulo del grupo se corría al tildar. */
-  min-width: 9.5rem;
-}
-.groupToggle:hover { border-color: var(--color-git-add); background: color-mix(in srgb, var(--color-git-add) 12%, transparent); }
-.groupToggle:disabled { border-color: var(--color-border-subtle); color: var(--color-text-secondary); cursor: default; background: none; }
-
-/* Qué contiene el grupo. La descripción cierra el encabezado, así que la línea
-   que lo separa de la lista vive acá y no bajo el título. */
-.groupHelp {
-  margin: 0;
-  padding-block-end: var(--sp-3);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs); line-height: 1.6; font-family: var(--font-mono), ui-monospace, monospace;
-}
-
-
-/* Qué clase de archivo es. Sólo en el grupo que ningún cambio reclama, que es
-   donde no hay otra información. No es atribución: no dice de qué trabajo vino. */
-.fileKind {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
-  color: var(--color-text-secondary);
-  font-weight: 600; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  font-style: normal;
-}
 
 /* El mensaje se corrige acá, donde se decide qué entra. */
 /* La rama del cambio, declarada antes de crearse. Es una escritura de Git, así
@@ -640,51 +507,7 @@
 .flowCheck strong { color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; overflow-wrap: anywhere; }
 .flowCheck em { color: var(--color-text-secondary); font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
 
-/* La rama a la que va el commit. Dato, no control: este panel no ejecuta
-   ninguna operación de Git. */
-.prepareBranch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
-  color: var(--color-text-primary);
-  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  font-style: normal;
-}
 
-.messageField { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
-.messageField > strong { flex: 0 0 auto; padding-top: var(--space-2); color: var(--color-text-secondary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-.messageField textarea {
-  min-width: 0;
-  /* Crece con el texto (asunto + cuerpo) hasta un tope; después desplaza. */
-  field-sizing: content;
-  max-height: 12lh;
-  resize: vertical;
-  line-height: 1.5;
-  flex: 1 1 auto;
-  padding: var(--space-2) var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-input);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-}
-.messageField textarea::placeholder {
-  color: var(--color-text-secondary);
-  opacity: 0.85;
-}
-/* El contorno no se apaga: antes iba `outline: none` con un cambio de borde de
-   un píxel como único reemplazo, y encima sobre `:focus`, así que también se
-   disparaba al hacer clic. */
-.messageField textarea:focus-visible { border-color: var(--color-primary); outline: var(--focus-ring); outline-offset: 1px; }
-.messageField textarea:focus:not(:focus-visible) { border-color: var(--color-primary); }
-.messageField textarea:disabled {
-  background: color-mix(in srgb, var(--color-bg-base) 70%, var(--color-border-subtle));
-  color: var(--color-text-secondary);
-  cursor: not-allowed;
-}
 
 /* La frase de espera, debajo del campo.
    Se probó encima, con fondo semitransparente, y se leía encimada con el texto
@@ -739,35 +562,7 @@
   font-size: var(--font-size-xs);
   font-family: var(--font-mono), ui-monospace, monospace;
 }
-.aiResolvedError {
-  margin: 0;
-  flex: 1 1 auto;
-  color: var(--color-error);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono), ui-monospace, monospace;
-}
-.aiSentSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.aiSentToggle {
-  align-self: flex-start;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-default);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  cursor: pointer;
-  transition: color 150ms ease, border-color 150ms ease;
-}
-.aiSentToggle:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-primary);
-}
+
 .aiSentDetails {
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border-subtle);
@@ -1014,14 +809,6 @@
    abajo que a los costados. */
 .aiPanel > .aiRow { margin-block-start: 0; }
 
-/* Advertencias del esquema de gitcron.json (3.5): no bloquean, así que van con el
-   gris atenuado de la app (secundario al 70 %) y en la letra chica de los metadatos. */
-.aiConfigWarning {
-  margin: var(--sp-1) 0 0;
-  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
-  font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace;
-  overflow-wrap: anywhere;
-}
 .aiPanel > :last-child { margin-block-end: 0; }
 
 /* El botón «Redactar con IA» se distingue como acción de IA (borde y texto violeta, D20)
@@ -1064,22 +851,6 @@
   font-size: var(--font-size-xs); line-height: 1.6; font-family: var(--font-mono), ui-monospace, monospace;
 }
 
-/* La etiqueta envuelve la fila entera: con el área del tamaño de la casilla
-   había que apuntar, que es el mismo defecto que ya se corrigió en la lista de
-   tareas. El padding negativo compensa para no mover la fila. */
-.fileChoice {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-.fileChoice:hover { background: var(--color-bg-overlay); }
-.fileChoice input[type='checkbox'],
 .flowCheck input[type='checkbox'] {
   appearance: none;
   -webkit-appearance: none;
@@ -1095,21 +866,17 @@
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
-.fileChoice input[type='checkbox']:hover,
 .flowCheck input[type='checkbox']:hover {
   border-color: var(--color-primary);
 }
-.fileChoice input[type='checkbox']:focus-visible,
 .flowCheck input[type='checkbox']:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 1px;
 }
-.fileChoice input[type='checkbox']:checked,
 .flowCheck input[type='checkbox']:checked {
   background-color: var(--color-primary);
   border-color: var(--color-primary);
 }
-.fileChoice input[type='checkbox']:checked::after,
 .flowCheck input[type='checkbox']:checked::after {
   content: '';
   width: 8px;
@@ -1117,29 +884,6 @@
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
   background-color: var(--color-bg-base);
 }
-
-/* Estado del archivo, con los mismos colores que el panel de preparación de Git.
-   `M` modificado, `A` agregado, `D` borrado, `R` renombrado, `U` sin seguimiento. */
-/* El estado se dice con palabra, no con la inicial: un dato que sólo aparecía en
-   el `title` no estaba presentado. El ancho fijo mantiene alineadas las rutas,
-   que es lo que permite barrer la lista. */
-.fileStatus {
-  display: inline-flex;
-  width: 5.5rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-1) var(--space-1);
-  border-radius: var(--radius-default);
-  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.03em;
-  background: color-mix(in srgb, var(--color-border-subtle) 16%, transparent);
-  color: var(--color-text-secondary);
-}
-.fileStatus[data-status='modified'] { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-git-mod); }
-.fileStatus[data-status='added'] { background: color-mix(in srgb, var(--color-git-add) 18%, transparent); color: var(--color-git-add); }
-.fileStatus[data-status='deleted'] { background: color-mix(in srgb, var(--color-error) 18%, transparent); color: var(--color-error); }
-.fileStatus[data-status='renamed'] { background: color-mix(in srgb, var(--color-primary) 18%, transparent); color: var(--color-primary); }
 
 
 /* Acción textual dentro de una línea de texto: sumar o quitar toda la lista.

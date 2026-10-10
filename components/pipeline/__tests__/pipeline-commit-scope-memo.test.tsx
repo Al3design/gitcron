@@ -2,7 +2,7 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeProjection } from '@/types/pipeline';
-import { OpenSpecDashboard } from '../OpenSpecDashboard';
+import { SddPrepareCommit } from '../sdd';
 import type { PipelineSnapshot } from '../pipeline-view-state';
 import { useGitStore, type GitFile } from '@/lib/git-store';
 import * as changeCommitScope from '@/lib/change-commit-scope';
@@ -86,24 +86,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('OpenSpecDashboard · commitScope memoizado', () => {
+describe('Preparar commit · commitScope memoizado', () => {
   it('no recalcula deriveRepoCommitScope en un re-render sin cambios', () => {
     const deriveSpy = vi.spyOn(changeCommitScope, 'deriveRepoCommitScope');
 
-    const { rerender } = render(<OpenSpecDashboard {...PROPS_BASE} />);
+    const { rerender } = render(<SddPrepareCommit {...PROPS_BASE} />);
 
     const llamadasTrasPrimerRender = deriveSpy.mock.calls.length;
     expect(llamadasTrasPrimerRender).toBeGreaterThanOrEqual(1);
 
     // Re-render con las mismas props: nada cambió, la memo NO se invalida.
-    rerender(<OpenSpecDashboard {...PROPS_BASE} />);
+    rerender(<SddPrepareCommit {...PROPS_BASE} />);
     expect(deriveSpy.mock.calls.length).toBe(llamadasTrasPrimerRender);
   });
 
   it('sí recalcula cuando modifiedFiles cambia', () => {
     const deriveSpy = vi.spyOn(changeCommitScope, 'deriveRepoCommitScope');
 
-    const { rerender } = render(<OpenSpecDashboard {...PROPS_BASE} />);
+    const { rerender } = render(<SddPrepareCommit {...PROPS_BASE} />);
     const llamadasTrasPrimerRender = deriveSpy.mock.calls.length;
 
     // modifiedFiles cambia: la memo se invalida y se recalcula.
@@ -113,17 +113,17 @@ describe('OpenSpecDashboard · commitScope memoizado', () => {
         { path: 'b.ts', status: 'added', staged: false },
       ],
     });
-    rerender(<OpenSpecDashboard {...PROPS_BASE} />);
+    rerender(<SddPrepareCommit {...PROPS_BASE} />);
     expect(deriveSpy.mock.calls.length).toBeGreaterThan(llamadasTrasPrimerRender);
   });
 
   it('sí recalcula cuando la rama cambia (branchAttribution se invalida)', () => {
     const deriveSpy = vi.spyOn(changeCommitScope, 'deriveRepoCommitScope');
 
-    const { rerender } = render(<OpenSpecDashboard {...PROPS_BASE} />);
+    const { rerender } = render(<SddPrepareCommit {...PROPS_BASE} />);
     const llamadasTrasPrimerRender = deriveSpy.mock.calls.length;
 
-    rerender(<OpenSpecDashboard {...PROPS_BASE} currentBranch="change/otro-cambio" />);
+    rerender(<SddPrepareCommit {...PROPS_BASE} currentBranch="change/otro-cambio" />);
     expect(deriveSpy.mock.calls.length).toBeGreaterThan(llamadasTrasPrimerRender);
   });
 });

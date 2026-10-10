@@ -1,0 +1,244 @@
+/* Estilos exclusivos de SddPrepareCommit (Tanda 2: Tarea 2.2) */
+
+.prepareHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--sp-3);
+  margin-block-end: var(--sp-4);
+}
+.prepareHead > div:first-child { flex: 1 1 100%; min-width: 0; }
+.prepareActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
+
+.fileList { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-3) 0 var(--sp-2); }
+.fileList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-weight: 500; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+}
+.fileList li span { min-width: 0; overflow-wrap: anywhere; }
+
+.fileGroup {
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text-primary) 2%, transparent);
+}
+.fileGroup + .fileGroup { margin-block-start: var(--sp-3); }
+.fileGroup:first-of-type { margin-block-start: var(--sp-2); }
+
+.prepareArea {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  overflow-y: auto;
+}
+
+.prepareArea > p { margin: 0 0 var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
+.prepareArea code { color: var(--color-primary); }
+.prepareEmpty { padding-top: var(--space-2); }
+
+.prepareCount {
+  align-self: center;
+  min-width: 9rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.fileGroup > p {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+}
+.fileGroup > p > strong { color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
+
+.groupToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-block-size: 2.75rem;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--color-git-add) 34%, transparent);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-git-add);
+  cursor: pointer;
+  font-weight: 600; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+  min-width: 9.5rem;
+}
+.groupToggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.groupToggle:hover { border-color: var(--color-git-add); background: color-mix(in srgb, var(--color-git-add) 12%, transparent); }
+.groupToggle:disabled { border-color: var(--color-border-subtle); color: var(--color-text-secondary); cursor: default; background: none; }
+
+.groupHelp {
+  margin: 0;
+  padding-block-end: var(--sp-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs); line-height: 1.6; font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.fileKind {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-secondary);
+  font-weight: 600; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+  font-style: normal;
+}
+
+.prepareBranch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-primary);
+  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+  font-style: normal;
+}
+
+.messageField { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
+.messageField > strong { flex: 0 0 auto; padding-top: var(--space-2); color: var(--color-text-secondary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
+.messageField textarea {
+  min-width: 0;
+  field-sizing: content;
+  max-height: 12lh;
+  resize: vertical;
+  line-height: 1.5;
+  flex: 1 1 auto;
+  padding: var(--space-2) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+}
+.messageField textarea::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+.messageField textarea:focus-visible { border-color: var(--color-primary); outline: var(--focus-ring); outline-offset: 1px; }
+.messageField textarea:focus:not(:focus-visible) { border-color: var(--color-primary); }
+.messageField textarea:disabled {
+  background: color-mix(in srgb, var(--color-bg-base) 70%, var(--color-border-subtle));
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.aiResolvedError {
+  margin: 0;
+  flex: 1 1 auto;
+  color: var(--color-error);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.aiSentToggle {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-default);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.aiSentToggle:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.aiConfigWarning {
+  margin: var(--sp-1) 0 0;
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+  font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+
+.fileChoice {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.fileChoice:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.fileChoice:hover { background: var(--color-bg-overlay); }
+.fileChoice input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-overlay);
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.fileChoice input[type='checkbox']:hover {
+  border-color: var(--color-primary);
+}
+.fileChoice input[type='checkbox']:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+.fileChoice input[type='checkbox']:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.fileChoice input[type='checkbox']:checked::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+  background-color: var(--color-bg-base);
+}
+
+.fileStatus {
+  display: inline-flex;
+  width: 5.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-1);
+  border-radius: var(--radius-default);
+  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--color-border-subtle) 16%, transparent);
+  color: var(--color-text-secondary);
+}
+.fileStatus[data-status='modified'] { background: color-mix(in srgb, var(--color-warning) 18%, transparent); color: var(--color-git-mod); }
+.fileStatus[data-status='added'] { background: color-mix(in srgb, var(--color-git-add) 18%, transparent); color: var(--color-git-add); }
+.fileStatus[data-status='deleted'] { background: color-mix(in srgb, var(--color-error) 18%, transparent); color: var(--color-error); }
+.fileStatus[data-status='renamed'] { background: color-mix(in srgb, var(--color-primary) 18%, transparent); color: var(--color-primary); }
