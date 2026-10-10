@@ -86,6 +86,15 @@
   --space-6: 2rem; /* 32px - Separación de bloques mayores */
   --space-8: 3rem; /* 48px - Espaciado de página o layout amplio */
 
+  /* Contorno de foco de los controles, en un solo lugar (antes vivía sólo en la
+     hoja de SDD y los módulos que salieron de ella no podían usarlo). */
+  --focus-ring: 2px solid var(--color-primary);
+  --focus-offset: 2px;
+
+  /* Ancho y margen lateral del cuerpo de SDD: los usan el armazón y sus zonas. */
+  --sdd-body-width: 1100px;
+  --sdd-body-gutter: var(--space-5);
+
   /* Shared Spacing, Padding & Margins (Affects: general responsive flex margins, based on DESIGN.MD) */
   --spacing-panel-gap: 1px;
   --spacing-container-padding: 1rem;

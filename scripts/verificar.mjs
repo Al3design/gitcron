@@ -38,7 +38,7 @@
 // porque `next dev` y el build usan la misma carpeta `.next`.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const todo = args.includes('--todo');
@@ -58,6 +58,8 @@ const AFECTA_BUILD = /^(app|components|hooks|lib|public|styles|types)\/|^(next\.
 const ES_PRUEBA = /(^|\/)__tests__\/|\.test\.(ts|tsx)$/;
 /** El catálogo de textos y las pruebas que lo cuidan (ver el filtro de `vitest related`). */
 const ES_CATALOGO_TEXTOS = (f) => f === 'lib/i18n.ts' || f.startsWith('lib/i18n/');
+/** Pruebas que recorren los archivos de estilos por ruta (paleta, sintaxis, escala, tamaños). */
+const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
 const PRUEBAS_TEXTOS = ['lib/__tests__/i18n-claves-usadas.test.ts', 'components/pipeline/__tests__/pipeline-i18n.test.ts'];
 const changeArg = args.includes('--change') ? args[args.indexOf('--change') + 1] : null;
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
@@ -70,7 +72,7 @@ const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 
  * actualiza acá con causa. Medidos el 2026-09-21.
  */
 const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 894 }, // corrido de 1031 en modularizar-02: extracción de preparación de commit (antes de 1133 en modularizar-01)
+  { archivo: 'components/pipeline/sdd/useEngineStatus.ts', linea: 42 }, // el mismo error de OpenSpecDashboard.tsx (setState al cambiar de repo), mudado en modularizar-03; ahí lo habían tapado con eslint-disable
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 175 }, // corrido de 162 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 135 en 07)
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 231 }, // corrido de 218 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 191 en 07)
   { archivo: 'components/cartography/CartoAskBox.tsx', linea: 65 }, // preexistente (linea 63 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
@@ -189,6 +191,19 @@ function capturasViejas(tocados) {
   return viejas.length > 0 ? [`${carpeta}: ${viejas.length} captura(s) anteriores al último cambio de código`] : [];
 }
 
+/**
+ * El diff de un archivo contra la base, con los archivos nuevos sin seguimiento
+ * como si se hubieran agregado enteros: `git diff` no los muestra, y por ese
+ * hueco las trampas no vieron un eslint-disable y dos catch vacíos en los
+ * módulos nuevos de modularizar-sdd (los encontró recién la completa).
+ */
+function diffAgregado(archivo) {
+  const nuevo = git(`ls-files --others --exclude-standard -- "${archivo}"`).trim() !== '';
+  if (!nuevo) return git(`diff -U0 ${base} -- "${archivo}"`);
+  const contenido = existsSync(archivo) ? readFileSync(archivo, 'utf8') : '';
+  return contenido.split(/\r?\n/).map((l) => `+${l}`).join('\n');
+}
+
 function trampas() {
   const avisos = [];
   const tocados = archivosTocados();
@@ -207,7 +222,7 @@ function trampas() {
     (f) => /\.(ts|tsx|mjs)$/.test(f) && !/__tests__|\.test\.|fixtures|scripts\//.test(f),
   );
   for (const archivo of produccion) {
-    const diff = git(`diff -U0 ${base} -- "${archivo}"`);
+    const diff = diffAgregado(archivo);
     const agregado = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++'));
     const texto = agregado.join('\n');
     if (/NODE_ENV|\.mock\b|vi\.fn|import\.meta\.vitest/.test(texto)) {
@@ -232,7 +247,7 @@ function trampas() {
   // Pruebas que se ablandan para pasar.
   const pruebas = tocados.filter((f) => /__tests__|\.test\.|\.e2e\./.test(f));
   for (const archivo of pruebas) {
-    const agregado = git(`diff -U0 ${base} -- "${archivo}"`).split(/\r?\n/)
+    const agregado = diffAgregado(archivo).split(/\r?\n/)
       .filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
     if (/\.(skip|only)\(/.test(agregado)) avisos.push(`${archivo}: .skip / .only agregado`);
     // Subir el límite de tiempo de una prueba tapa lentitud real o una espera mal
@@ -252,7 +267,7 @@ function trampas() {
   // siguió cambiando hasta las 19:04.
   avisos.push(...capturasViejas(tocados));
   for (const archivo of tocados.filter((f) => f.endsWith('.css'))) {
-    const diff = git(`diff -U0 ${base} -- "${archivo}"`);
+    const diff = diffAgregado(archivo);
     const agregado = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
     if (/!important/.test(agregado)) avisos.push(`${archivo}: !important agregado`);
     if (/max-width:\s*0\b/.test(agregado)) avisos.push(`${archivo}: max-width: 0 agregado`);
@@ -301,9 +316,15 @@ function main() {
   // cubren sus pruebas propias, y los componentes que usan el texto nuevo ya están
   // entre los tocados. Con --completa y --todo corre la suite entera igual.
   const tocaTextos = tocadosCodigoTodos.some(ES_CATALOGO_TEXTOS);
-  const tocadosCodigo = tocaTextos
+  const conTextos = tocaTextos
     ? [...tocadosCodigoTodos.filter((f) => !ES_CATALOGO_TEXTOS(f)), ...PRUEBAS_TEXTOS.filter((f) => existsSync(f))]
     : tocadosCodigoTodos;
+  // Las pruebas de estilos leen los .css por ruta, sin importarlos: «vitest related»
+  // no las encuentra. En modularizar-sdd sólo las corrió la completa.
+  const tocaEstilos = tocadosCodigoTodos.some((f) => f.endsWith(".css"));
+  const tocadosCodigo = tocaEstilos
+    ? [...conTextos, ...PRUEBAS_ESTILOS.filter((f) => existsSync(f) && !conTextos.includes(f))]
+    : conTextos;
   const buildNecesario =
     todo || !existsSync('out/_next/static/css') || tocados.some((f) => AFECTA_BUILD.test(f) && !ES_PRUEBA.test(f));
   const relacionadas = tocadosCodigo.map((f) => `"${f}"`).join(' ');

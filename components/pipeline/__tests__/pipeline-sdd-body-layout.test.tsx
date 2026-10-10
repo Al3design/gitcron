@@ -1077,14 +1077,16 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
     const headerModulePath = path.resolve(process.cwd(), 'components/pipeline/sdd/SddChangeHeader.module.css');
     const css = fs.readFileSync(modulePath, 'utf-8');
     const headerCss = fs.readFileSync(headerModulePath, 'utf-8');
+    // El ancho y el margen del cuerpo se declaran en globals.css desde modularizar-sdd.
+    const globalsCss = fs.readFileSync(path.resolve(process.cwd(), 'app/globals.css'), 'utf-8');
 
     it('(a) encabezado, cuerpo, panel de archivado, esqueleto y vista de configuración consumen --sdd-body-width y --sdd-body-gutter', () => {
-      // 1. .dashboard declara la variable base y el relleno mínimo
+      // 1. globals.css declara el ancho y el relleno del cuerpo; .dashboard, el panel derecho
       const dashboardMatch = css.match(/\.dashboard\s*\{([^}]+)\}/);
       expect(dashboardMatch).toBeTruthy();
       const dashboardRules = dashboardMatch![1];
-      expect(dashboardRules).toMatch(/--sdd-body-width:\s*1100px/);
-      expect(dashboardRules).toMatch(/--sdd-body-gutter:\s*var\(--space-5\)/);
+      expect(globalsCss).toMatch(/--sdd-body-width:\s*1100px/);
+      expect(globalsCss).toMatch(/--sdd-body-gutter:\s*var\(--space-5\)/);
       expect(dashboardRules).toMatch(/--right-panel-width:\s*320px/);
 
       // 2. .changeHeader consume --sdd-body-width y --sdd-body-gutter
@@ -1128,7 +1130,7 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
 
     it('(b) sin umbral por container query: --sdd-body-width es 1100px y los bloques usan width: 100%', () => {
       expect(css).not.toMatch(/@container\s*\([^)]*min-width/);
-      expect(css).toMatch(/--sdd-body-width:\s*1100px/);
+      expect(globalsCss).toMatch(/--sdd-body-width:\s*1100px/);
       const headerBlockMatch = headerCss.match(/\.changeHeader\s*\{([^}]+)\}/);
       expect(headerBlockMatch).toBeTruthy();
       expect(headerBlockMatch![1]).toMatch(/width:\s*100%/);

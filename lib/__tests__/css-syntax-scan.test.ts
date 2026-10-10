@@ -27,6 +27,12 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
       'components/ai/AiSentDetails.module.css',
       'components/ai/AiUseLine.module.css',
       'components/pipeline/OpenSpecDashboard.module.css',
+      'components/pipeline/sdd/SddArchivedChange.module.css',
+      'components/pipeline/sdd/SddChangeHeader.module.css',
+      'components/pipeline/sdd/SddPrepareCommit.module.css',
+      'components/pipeline/sdd/SddStartScreens.module.css',
+      'components/pipeline/sdd/SddStatusBar.module.css',
+      'components/pipeline/sdd/views/SddTasksView.module.css',
     ]);
   });
 

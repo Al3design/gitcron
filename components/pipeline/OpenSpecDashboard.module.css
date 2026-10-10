@@ -66,19 +66,12 @@
   --sp-4: var(--space-4);
   --sp-5: var(--space-5);
   --sp-6: var(--space-6);
-  /* Contorno de foco, en un token para no repetir el valor en cada control:
-     escribirlo regla por regla es el mismo patrón de valores sueltos que ya
-     obligó a rehacer el espaciado. */
-  --focus-ring: 2px solid var(--color-primary);
-  --focus-offset: 2px;
   /* Alto mínimo de un control con texto chico. WCAG 2.2 pide 24px de objetivo;
      los controles del panel quedaban en ~18px por tener sólo padding. */
   --control-min: 2.75rem;
 }
 
 .dashboard {
-  --sdd-body-width: 1100px;
-  --sdd-body-gutter: var(--space-5);
   --right-panel-width: 320px;
   display: flex;
   min-height: 0;

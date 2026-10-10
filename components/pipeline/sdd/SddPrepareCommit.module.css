@@ -5,13 +5,13 @@
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: var(--sp-3);
-  margin-block-end: var(--sp-4);
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
 }
 .prepareHead > div:first-child { flex: 1 1 100%; min-width: 0; }
 .prepareActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; }
 
-.fileList { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-3) 0 var(--sp-2); }
+.fileList { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-3) 0 var(--space-2); }
 .fileList li {
   display: flex;
   align-items: center;
@@ -22,13 +22,13 @@
 .fileList li span { min-width: 0; overflow-wrap: anywhere; }
 
 .fileGroup {
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-text-primary) 2%, transparent);
 }
-.fileGroup + .fileGroup { margin-block-start: var(--sp-3); }
-.fileGroup:first-of-type { margin-block-start: var(--sp-2); }
+.fileGroup + .fileGroup { margin-block-start: var(--space-3); }
+.fileGroup:first-of-type { margin-block-start: var(--space-2); }
 
 .prepareArea {
   display: flex;
@@ -56,8 +56,8 @@
 .fileGroup > p {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  margin: 0 0 var(--sp-3);
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
 }
 .fileGroup > p > strong { color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 
@@ -65,11 +65,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-1);
+  gap: var(--space-1);
   min-block-size: 2.75rem;
   min-height: 2.75rem;
   padding: var(--space-2) var(--space-3);
-  padding: var(--sp-1) var(--sp-3);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-git-add) 34%, transparent);
   border-radius: var(--radius-md);
   background: none;
@@ -87,7 +87,7 @@
 
 .groupHelp {
   margin: 0;
-  padding-block-end: var(--sp-3);
+  padding-block-end: var(--space-3);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs); line-height: 1.6; font-family: var(--font-mono), ui-monospace, monospace;
 }
@@ -115,7 +115,7 @@
   font-style: normal;
 }
 
-.messageField { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0 0 var(--sp-5); }
+.messageField { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0 0 var(--space-5); }
 .messageField > strong { flex: 0 0 auto; padding-top: var(--space-2); color: var(--color-text-secondary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 .messageField textarea {
   min-width: 0;
@@ -169,7 +169,7 @@
 }
 
 .aiConfigWarning {
-  margin: var(--sp-1) 0 0;
+  margin: var(--space-1) 0 0;
   color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
   font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace;
   overflow-wrap: anywhere;

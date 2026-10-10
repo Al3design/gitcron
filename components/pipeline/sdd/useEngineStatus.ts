@@ -37,7 +37,6 @@ export function useEngineStatus({
   const [engineLoading, setEngineLoading] = useState<boolean>(true);
   const [installPlan, setInstallPlan] = useState<OpenSpecInstallPlan | null>(null);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let isMounted = true;
     setEngineSnapshot(null);
@@ -88,7 +87,6 @@ export function useEngineStatus({
       isMounted = false;
     };
   }, [repoPath, engineChangeToken]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const effectiveEngineStatus = useMemo<OpenSpecEngineStatus | null>(() => {
     if (propEngineStatus !== undefined) return propEngineStatus;

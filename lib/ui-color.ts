@@ -68,6 +68,7 @@ export function getDeclaredTokens(globalsCssContent?: string): Set<string> {
     '--font-sans', '--font-mono',
     '--radius-sm', '--radius-default', '--radius-md', '--radius-lg', '--radius-xl', '--radius-2xl', '--radius-full',
     '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-8', '--space-10', '--space-12', '--space-16',
+    '--focus-ring', '--focus-offset', '--sdd-body-width', '--sdd-body-gutter',
     '--spacing-panel-gap', '--spacing-container-padding', '--spacing-element-gap', '--spacing-list-item-y',
     '--opacity-glass-bg', '--opacity-glass-header', '--opacity-glass-sticky',
     '--backdrop-blur-glass-md', '--backdrop-blur-glass-xl',
