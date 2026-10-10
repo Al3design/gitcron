@@ -8,8 +8,8 @@
 
 - [x] 2.1 **IA local:** Extraer las vistas del cambio (Resumen, Tareas, Artefactos, Diffs, Actividad) a `components/pipeline/sdd/views/`, con `useSddNavigation` y sus estilos. **Comprobación:** Pruebas de SDD en verde sin cambiar lo que comprueban; cada vista se monta sola en una prueba; capturas iguales a las de referencia.
 - [x] 2.2 **IA local:** Extraer la preparación del commit a `SddPrepareCommit` con `usePrepareCommit` y sus estilos. **Comprobación:** Pruebas de redacción y preparación en verde; captura igual a la de referencia.
-- [ ] 2.3 **IA local:** Extraer la barra de estado (`SddStatusBar`, con `useEngineStatus`) y el encabezado del cambio (`SddChangeHeader`). **Comprobación:** Pruebas en verde; capturas iguales.
-- [ ] 2.4 **IA local:** Extraer el cambio archivado (`SddArchivedChange`, con `useArchiveFlow`) y las pantallas de inicio (`SddStartScreens`). **Comprobación:** Pruebas en verde; capturas iguales; `OpenSpecDashboard.tsx` queda como armazón.
+- [x] 2.3 **IA local:** Extraer la barra de estado (`SddStatusBar`, con `useEngineStatus`) y el encabezado del cambio (`SddChangeHeader`). **Comprobación:** Pruebas en verde; capturas iguales.
+- [x] 2.4 **IA local:** Extraer el cambio archivado (`SddArchivedChange`, con `useArchiveFlow`) y las pantallas de inicio (`SddStartScreens`). **Comprobación:** Pruebas en verde; capturas iguales; `OpenSpecDashboard.tsx` queda como armazón.
 
 ## 3. Textos
 

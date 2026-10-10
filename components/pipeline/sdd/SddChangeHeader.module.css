@@ -1,0 +1,130 @@
+/* Estilos exclusivos de SddChangeHeader (Tanda 3: Tarea 2.3) */
+
+/* Una sola columna desde que se retiró la barra de fases. El alto mínimo baja
+   con ella: sostenía dos filas de etapas que ya no están, y conservarlo dejaría
+   un hueco que pide llenarse con algo. */
+.changeHeader {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: var(--sdd-body-width);
+  margin: 0 auto;
+  padding: var(--space-4) var(--sdd-body-gutter) var(--space-2);
+  background: var(--color-bg-base);
+  flex-wrap: wrap;
+}
+
+.headerIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.changeTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.headerIdentity h3,
+.changeTitleGroup h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.headerIdentity h3 strong,
+.changeTitleGroup h3 strong {
+  color: var(--color-text-primary);
+}
+
+.changeTitleGroup .nextStepInline {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-align: left;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.changeTitle h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.04em;
+}
+.changeTitle h3 strong {
+  color: var(--color-text-primary);
+}
+
+/* Relectura de evidencia en curso. Vivía en la barra de fases; al retirarse, la
+   señal se muda al encabezado del cambio, que es a quien pertenece: informa que
+   la evidencia se está releyendo, no que una etapa esté cambiando. Sin esto el
+   atributo quedaría sólo para el test y la espera sería invisible. */
+.changeHeader[data-revalidating] .changeTitle h3 {
+  animation: revalidatePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes revalidatePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .changeHeader[data-revalidating] .changeTitle h3 {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.nextStepInline {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+@container (max-width: 1180px) {
+  .changeHeader {
+    grid-template-columns: minmax(12rem, 0.8fr) minmax(23rem, 1.2fr);
+    padding-inline: var(--sdd-body-gutter);
+  }
+}
+
+@container (max-width: 860px) {
+  .changeHeader {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+.changeHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}

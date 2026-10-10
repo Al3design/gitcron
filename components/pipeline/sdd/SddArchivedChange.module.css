@@ -1,0 +1,120 @@
+/* Estilos exclusivos de SddArchivedChange (Tanda 3: Tarea 2.4) */
+
+.completedSummary,
+.noActiveChange {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-3);
+  color: var(--color-git-add);
+}
+
+.completedSummary > p,
+.noActiveChange > p {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.completedSummary h3,
+.noActiveChange h3 {
+  margin: var(--space-1) 0;
+  color: var(--color-text-primary);
+  font-weight: 700;
+  font-size: var(--font-size-xl);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.completedSummary > span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.noActiveChange {
+  align-items: center;
+  text-align: center;
+  color: var(--color-primary);
+}
+
+/* Artefactos de un cambio ya archivado, dentro de su ficha.
+   La ficha centra su contenido y tiene ancho acotado; el visor necesita el
+   ancho completo y alineación propia, o el markdown queda centrado y angosto. */
+.archivedArtifacts {
+  width: 100%;
+  max-width: none;
+  margin-top: var(--space-4);
+  text-align: left;
+}
+
+/* Alineada al inicio, no centrada.
+   `justify-content: center` recorta el comienzo del contenido al desbordar y ese
+   recorte no se alcanza con scroll. `safe center` lo evita, pero si el motor no
+   lo soporta la declaración entera se descarta y vuelve a quedar `center`: el
+   defecto reaparecería sin ninguna señal. Con los artefactos adentro el contenido
+   siempre desborda, así que centrar no aporta nada y alinear al inicio hace que
+   todo se recorra como una sola pieza. */
+.completedSummary {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+/* Con el visor adentro, el respiro lateral de la ficha —hasta 5rem por lado—
+   angosta el markdown. Se reduce sólo en ese caso. */
+.completedSummary:has(.archivedArtifacts) {
+  padding-inline: var(--space-3);
+}
+
+/* Identidad del cambio archivado. Agrupada, pero parte del flujo: se intentó
+   fijarla arriba y el resto pasaba por debajo asomándose contra su fondo. El
+   contenido del cuerpo se recorre entero, de una sola pieza. */
+.completedHeader {
+  align-self: stretch;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* Reserva de espacio para los artefactos del archivado, para que la vista no
+   salte de una ficha corta a una pantalla entera cuando llega la relectura. */
+.archivedArtifacts[data-pending] {
+  display: grid;
+  place-items: center;
+  min-height: 18rem;
+}
+
+
+.archiveScope {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+.archiveScope p { margin: var(--space-2) 0 var(--space-1); }
+.archiveScope strong { color: var(--color-text-primary); font-weight: 650; }
+.archiveScope code { color: var(--color-primary); }
+.archiveScope ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  max-height: 7rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.archiveScope p[data-tone='sign'] { color: var(--color-git-add); }
+.archiveScope p[data-tone='out'] strong,
+.archiveScope ul[data-tone='out'] { color: var(--color-warning); }
+
+.archiveCommitToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SddPrepareCommit, FileStatusBadge } from '../sdd';
+import { SddPrepareCommit, FileStatusBadge, usePrepareCommit } from '../sdd';
 import { useGitStore } from '@/lib/git-store';
 import { usePipelineStore } from '@/lib/pipeline-store';
+import { renderHook } from '@testing-library/react';
 
 vi.mock('@/hooks/use-translation', () => ({
   useT: () => (key: string, params?: Record<string, unknown>) =>
@@ -52,6 +53,12 @@ describe('SddPrepareCommit (Isolated)', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('usePrepareCommit inicializa correctamente el scope y los estados', () => {
+    const { result } = renderHook(() => usePrepareCommit({ repoPath, currentBranch: 'main' }));
+    expect(result.current.commitScope).toBeDefined();
+    expect(result.current.commitScope.groups).toBeDefined();
   });
 
   it('se monta en aislamiento y muestra el título y la lista de archivos para preparar', () => {

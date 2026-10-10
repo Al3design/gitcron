@@ -593,7 +593,7 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
 
   describe('4.16 / Observaciones 48, 49 y 50: Tarjetas de inicio, geometría de tareas y contenedor de evidencia', () => {
     it('Obs 48: las tarjetas de inicio retiran el borde perimetral, [data-branch] usa border-left y .startPendingToggle no tiene borde', () => {
-      const modulePath = path.resolve(process.cwd(), 'components/pipeline/OpenSpecDashboard.module.css');
+      const modulePath = path.resolve(process.cwd(), 'components/pipeline/sdd/SddStartScreens.module.css');
       const css = fs.readFileSync(modulePath, 'utf-8');
 
       // 1. .startList > li tiene border: 0 (no conserva border: 1px solid)
@@ -1074,7 +1074,9 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
 
   describe('Tanda 1: Un solo ancho para el cuerpo SDD, encabezado que cubre y riel despegado (Tareas 1.1 a 1.4)', () => {
     const modulePath = path.resolve(process.cwd(), 'components/pipeline/OpenSpecDashboard.module.css');
+    const headerModulePath = path.resolve(process.cwd(), 'components/pipeline/sdd/SddChangeHeader.module.css');
     const css = fs.readFileSync(modulePath, 'utf-8');
+    const headerCss = fs.readFileSync(headerModulePath, 'utf-8');
 
     it('(a) encabezado, cuerpo, panel de archivado, esqueleto y vista de configuración consumen --sdd-body-width y --sdd-body-gutter', () => {
       // 1. .dashboard declara la variable base y el relleno mínimo
@@ -1086,7 +1088,7 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
       expect(dashboardRules).toMatch(/--right-panel-width:\s*320px/);
 
       // 2. .changeHeader consume --sdd-body-width y --sdd-body-gutter
-      const headerMatch = css.match(/\.changeHeader\s*\{([^}]+)\}/);
+      const headerMatch = headerCss.match(/\.changeHeader\s*\{([^}]+)\}/);
       expect(headerMatch).toBeTruthy();
       const headerRules = headerMatch![1];
       expect(headerRules).toMatch(/max-width:\s*var\(--sdd-body-width\)/);
@@ -1127,7 +1129,12 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
     it('(b) sin umbral por container query: --sdd-body-width es 1100px y los bloques usan width: 100%', () => {
       expect(css).not.toMatch(/@container\s*\([^)]*min-width/);
       expect(css).toMatch(/--sdd-body-width:\s*1100px/);
-      for (const selector of ['.changeHeader', '.startScreen', '.archiveConfirm', '.skeletonCenter']) {
+      const headerBlockMatch = headerCss.match(/\.changeHeader\s*\{([^}]+)\}/);
+      expect(headerBlockMatch).toBeTruthy();
+      expect(headerBlockMatch![1]).toMatch(/width:\s*100%/);
+      expect(headerBlockMatch![1]).toMatch(/max-width:\s*var\(--sdd-body-width\)/);
+
+      for (const selector of ['.startScreen', '.archiveConfirm', '.skeletonCenter']) {
         const blockMatch = css.match(new RegExp(`\\${selector}\\s*\\{([^}]+)\\}`));
         expect(blockMatch).toBeTruthy();
         expect(blockMatch![1]).toMatch(/width:\s*100%/);

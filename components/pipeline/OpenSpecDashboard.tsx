@@ -3,19 +3,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
-  AlertCircle,
   AlertTriangle,
   Archive,
   ArrowRight,
   Check,
   CheckCircle2,
-  Circle,
   Code2,
   Copy,
   FileCode2,
   FileSearch,
   FileText,
-  ChevronDown,
   ChevronLeft,
   FolderOpen,
   ListChecks,
@@ -23,46 +20,35 @@ import {
   Milestone,
   MinusSquare,
   MoreHorizontal,
-  Package,
   Pencil,
   Plus,
   PlusSquare,
-  Star,
-  GitBranch,
-  GitCommit,
   GitCompare,
-  GitMerge,
   Loader2,
-  Monitor,
   Pause,
   Play,
   RefreshCw,
-  ShieldCheck,
   User,
   Wrench,
   MessageSquareText,
   BrainCircuit,
-  PanelRight,
   RotateCcw,
   Undo2,
 } from 'lucide-react';
-import { ContentHeader } from '@/components/ContentHeader';
 import { cn } from '@/lib/utils';
 import { useGitStore } from '@/lib/git-store';
 import { changeIdFromBranch } from '@/lib/change-branch';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
-import { PipelineDetails, type DetailTab } from './PipelineDetails';
+import type { DetailTab } from './PipelineDetails';
 import { useReducedMotion } from 'motion/react';
 import { ChangeBranchNotice } from './ChangeBranchNotice';
-import { ChangeTimestampLabel } from './ChangeTimestampLabel';
-import { WhereYouLeftOffCard } from './WhereYouLeftOffCard';
 import { OpenSpecUpdateReview } from './OpenSpecUpdateReview';
-import type { ArchivePlan, OpenSpecEngineStatus, OpenSpecInstallPlan, OpenSpecRegistryCheck, OpenSpecUpdatePlan } from '@/types/pipeline';
+import type { OpenSpecEngineStatus, OpenSpecUpdatePlan } from '@/types/pipeline';
 import { SpecificationViewer } from './SpecificationViewer';
 import { TaskConfirmToast } from './TaskConfirmToast';
-import { PipelineNewChangeFlow, type PipelineNewChangeMode } from './PipelineNewChangeFlow';
+import type { PipelineNewChangeMode } from './PipelineNewChangeFlow';
 import { ViewSwitcherRail, type ViewSwitcherItem } from './ViewSwitcherRail';
 import {
   useSddNavigation,
@@ -73,10 +59,16 @@ import {
   SddDiffsView,
   SddActivityView,
   SddPrepareCommit,
+  useEngineStatus,
+  SddStatusBar,
+  SddChangeHeader,
+  useArchiveFlow,
+  SddArchivedChange,
+  SddStartScreens,
+  type StartView,
 } from './sdd';
 import { useNewChangeDraft, useNewChangeDraftStore } from '@/lib/new-change-draft-store';
 import {
-  composeArchiveInstruction,
   deriveArchiveAvailability,
   derivePipelineNextAction,
   hasDiffEvidence,
@@ -86,28 +78,13 @@ import {
   type PipelineActionIntent,
 } from './pipeline-next-action';
 import {
-  getOpenSpecEngineUpgrade,
   groupActivity,
-  hasOpenSpecEngineAttention,
   runtimeDisplayName,
   type ActivityChannel,
 } from './pipeline-domain';
 import type { OpenSpecChangeSummary, PipelineSnapshot } from './pipeline-view-state';
-import {
-  OPENSPEC_CYCLE_TARGET_VERSION,
-  isInstalledBehindCycle,
-} from '@/lib/openspec-version';
-import { readEngineStatus } from '@/lib/engine-status-reader';
 import { configWarningLines, contributingConfigFiles, formatConfigParseError, lastValidNotices, paramWarningText } from '@/lib/gitcron-config-messages';
 import styles from './OpenSpecDashboard.module.css';
-
-const INTEGRATION_STATE_KEY_MAP: Record<string, string> = {
-  'up-to-date': 'pipeline.openspec.engine.integrationState.upToDate',
-  outdated: 'pipeline.openspec.engine.integrationState.outdated',
-  conflicted: 'pipeline.openspec.engine.integrationState.conflicted',
-  custom: 'pipeline.openspec.engine.integrationState.custom',
-  unknown: 'pipeline.openspec.engine.integrationState.unknown',
-};
 
 function getSecondaryActionIcon(intent: PipelineActionIntent): React.ReactNode | null {
   switch (intent.kind) {
@@ -295,19 +272,7 @@ export function OpenSpecDashboard({
    * intento sobre esa tarea, que es justo lo que traba un change.
    */
   const [launchTarget, setLaunchTarget] = useState<{ instruction: string; taskId: string | null } | null>(null);
-  /**
-   * Archivado pendiente de confirmación humana.
-   *
-   * Archivar escribe en el repositorio —mueve el change y consolida sus specs—,
-   * así que no se dispara con el click del control: primero se muestra el
-   * comando exacto y recién al confirmarlo se ejecuta.
-   */
-  const [archiveRequest, setArchiveRequest] = useState<{ changeId: string; command: string } | null>(null);
-  const [archivePlanData, setArchivePlanData] = useState<ArchivePlan | null>(null);
-  const [archiveBusy, setArchiveBusy] = useState(false);
-  const [archiveReason, setArchiveReason] = useState('');
-  const [copiedArchiveCmd, setCopiedArchiveCmd] = useState(false);
-  const [archiveCmdExecuting, setArchiveCmdExecuting] = useState(false);
+
   /**
    * Panel de preparación abierto. Se abre a pedido desde el estado del árbol y
    * no al detectar que hay algo sin confirmar: abrirse solo taparía lo que se
@@ -322,13 +287,7 @@ export function OpenSpecDashboard({
       : state.prepareOpen),
   );
   const setPrepareOpen = usePipelineStore((state) => state.setPrepareOpen);
-  /**
-   * Cambios desplegados en la pantalla de entrada, y si la lista de archivados
-   * está abierta. Plegados por defecto: con cuatro cambios de veintiocho tareas,
-   * una pantalla de estado desplegada sería una lista de tareas.
-   */
-  const [expandedStart, setExpandedStart] = useState<Record<string, boolean>>({});
-  const [archivedOpen, setArchivedOpen] = useState(false);
+
 
   /**
    * Especificación abierta en el centro, si hay alguna.
@@ -395,8 +354,6 @@ export function OpenSpecDashboard({
    */
   const reducedMotion = useReducedMotion();
 
-  /** Motivo real informado por el CLI. No se normaliza a un mensaje propio. */
-  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   /**
    * Que el flujo esté abierto es parte del borrador y no estado local.
@@ -884,165 +841,39 @@ export function OpenSpecDashboard({
    */
   const uiLanguage = useGitStore((state) => state.language);
 
-  const [engineSnapshot, setEngineSnapshot] = useState<OpenSpecEngineStatus | null>(null);
-  const [latestRegistryCheck, setLatestRegistryCheck] = useState<OpenSpecRegistryCheck | null>(null);
-  const [engineLoading, setEngineLoading] = useState<boolean>(true);
-  const [installPlan, setInstallPlan] = useState<OpenSpecInstallPlan | null>(null);
+  const {
+    effectiveEngineStatus,
+    effectiveEngineLoading,
+    attentionReasons,
+    attentionReasonSeparator,
+    installPlan,
+  } = useEngineStatus({
+    repoPath,
+    propEngineStatus,
+    propEngineLoading,
+  });
 
-  useEffect(() => {
-    let isMounted = true;
-    setEngineSnapshot(null);
-    setLatestRegistryCheck(null);
-    setInstallPlan(null);
-    setEngineLoading(true);
-
-    if (typeof window !== 'undefined' && window.api?.pipelineOpenSpec) {
-      readEngineStatus(repoPath, (snapshot) => {
-        if (isMounted) {
-          setEngineSnapshot(snapshot);
-          setEngineLoading(false);
-        }
-      }).catch(() => {
-        if (isMounted) {
-          setEngineSnapshot(null);
-          setEngineLoading(false);
-        }
-      });
-      const getCheck = window.api.pipelineOpenSpec.checkLatestVersion
-        ? window.api.pipelineOpenSpec.checkLatestVersion()
-        : Promise.resolve(null);
-      const getPlan = window.api.pipelineOpenSpec.getInstallPlan
-        ? window.api.pipelineOpenSpec.getInstallPlan(repoPath)
-        : Promise.resolve(null);
-
-      getCheck
-        .then((check) => {
-          if (isMounted && check) {
-            setLatestRegistryCheck(check);
-          }
-        })
-        .catch(() => {});
-
-      getPlan
-        .then((plan) => {
-          if (isMounted && plan) {
-            setInstallPlan(plan);
-          }
-        })
-        .catch(() => {});
-    } else {
-      setEngineLoading(false);
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [repoPath, engineChangeToken]);
-
-  const effectiveEngineStatus = useMemo<OpenSpecEngineStatus | null>(() => {
-    if (propEngineStatus !== undefined) return propEngineStatus;
-    if (!engineSnapshot) return null;
-    if (!latestRegistryCheck) return engineSnapshot;
-    return {
-      ...engineSnapshot,
-      latestAvailable: latestRegistryCheck,
-    };
-  }, [propEngineStatus, engineSnapshot, latestRegistryCheck]);
-
-  const effectiveEngineLoading = propEngineLoading !== undefined ? propEngineLoading : engineLoading;
-
-  /**
-   * Razones reales observadas del estado del motor para la franja de identidad (7.15).
-   */
-  const attentionReasonSeparator = uiLanguage === 'en' ? ' and ' : uiLanguage === 'zh' ? '，' : ' y ';
-  const attentionReasons = effectiveEngineStatus
-    ? [
-        ...(effectiveEngineStatus.integrationState === 'outdated'
-          ? [t('pipeline.openspec.engine.attentionReason.outdated')]
-          : []),
-        ...(effectiveEngineStatus.repoState === 'not-initialized'
-          ? [t('pipeline.openspec.engine.attentionReason.notInitialized')]
-          : []),
-        ...(effectiveEngineStatus.divergence?.isDivergent
-          ? [t('pipeline.openspec.engine.attentionReason.divergent')]
-          : []),
-      ]
-    : [];
-
-
-
-
-
-
-  /**
-   * Ejecuta el archivado ya confirmado.
-   *
-   * El resultado se lee de lo que devuelve el CLI, no del hecho de que la
-   * llamada terminó: un fallo muestra el motivo real y el cambio sigue activo.
-   */
-  const confirmArchive = () => {
-    const api = typeof window !== 'undefined' ? window.api : undefined;
-    if (!archiveRequest || archiveBusy || fixtureActive || !api?.pipelineArchiveChange || isMainOrMaster) return;
-    setArchiveBusy(true);
-    setArchiveError(null);
-    const trimmedReason = archiveReason.trim();
-    const archivePromise = trimmedReason
-      ? api.pipelineArchiveChange(repoPath, archiveRequest.changeId, trimmedReason)
-      : api.pipelineArchiveChange(repoPath, archiveRequest.changeId);
-    void archivePromise
-      .then((response) => {
-        const result = response as { success?: boolean; error?: string } | null;
-        if (result?.success) {
-          setArchiveRequest(null);
-          setArchiveReason('');
-          // Por la superficie de notificaciones de la aplicación, no por una
-          // propia: el éxito de archivar no es una clase de aviso distinta de
-          // las demás, y el toast ya resuelve autocierre y cierre manual.
-          setSuccess(t('pipeline.openspec.archive.done', { change: archiveRequest.changeId }));
-          // La evidencia se relee: el cambio pasa a figurar entre los archivados
-          // porque el disco lo dice, no porque la llamada haya vuelto sin error.
-          onRefresh?.();
-          return;
-        }
-        setArchiveError(result?.error || 'unknown');
-      })
-      .catch((error: unknown) => setArchiveError(error instanceof Error ? error.message : 'unknown'))
-      .finally(() => setArchiveBusy(false));
-  };
-
-  const handleCopyArchiveCommand = async () => {
-    if (!archiveRequest?.command) return;
-    try {
-      await navigator.clipboard.writeText(archiveRequest.command);
-      setCopiedArchiveCmd(true);
-      setTimeout(() => setCopiedArchiveCmd(false), 2000);
-    } catch {
-      // Ignorar fallo de portapapeles
-    }
-  };
-
-  const handleExecuteArchiveCommand = async () => {
-    if (!archiveRequest?.command || archiveCmdExecuting || isMainOrMaster) return;
-    const api = typeof window !== 'undefined' ? window.api : undefined;
-    if (!api?.pipelineOpenSpec?.executeCommand) return;
-    setArchiveCmdExecuting(true);
-    setArchiveError(null);
-    try {
-      const res = await api.pipelineOpenSpec.executeCommand({ repoPath, command: archiveRequest.command });
-      if (res.success) {
-        setArchiveRequest(null);
-        setArchiveReason('');
-        setSuccess(t('pipeline.openspec.archive.done', { change: archiveRequest.changeId }));
-        onRefresh?.();
-      } else {
-        setArchiveError(res.error || res.stderr || res.stdout || 'Error al ejecutar comando');
-      }
-    } catch (err) {
-      setArchiveError(err instanceof Error ? err.message : 'unknown');
-    } finally {
-      setArchiveCmdExecuting(false);
-    }
-  };
+  const {
+    archiveRequest,
+    archiveReason,
+    setArchiveReason,
+    archiveError,
+    setArchiveError,
+    archiveBusy,
+    archiveCmdExecuting,
+    copiedArchiveCmd,
+    archivePlanData,
+    startArchive,
+    confirmArchive,
+    handleCopyArchiveCommand,
+    handleExecuteArchiveCommand,
+    cancelArchive,
+  } = useArchiveFlow({
+    repoPath,
+    isMainOrMaster,
+    fixtureActive,
+    onRefresh,
+  });
 
   /**
    * Inicializa OpenSpec en el repositorio abierto.
@@ -1154,18 +985,9 @@ export function OpenSpecDashboard({
       case 'start-archive': {
         closeFlow();
         setLaunchTarget(null);
-        setArchiveError(null);
-        setArchivePlanData(null);
-        setArchiveRequest({ changeId: intent.changeId, command: composeArchiveInstruction(intent.changeId) });
+        startArchive(intent.changeId);
         setActiveChangeView('tasks');
         setCenterTab('work');
-        if (typeof window !== 'undefined' && window.api?.pipelineArchivePlan) {
-          void window.api.pipelineArchivePlan(repoPath, intent.changeId).then((res) => {
-            if (res.success && res.data) {
-              setArchivePlanData(res.data);
-            }
-          }).catch(() => {});
-        }
         break;
       }
       case 'view-activity':
@@ -1356,274 +1178,26 @@ export function OpenSpecDashboard({
         ['--right-panel-width' as string]: typeof rightWidth === 'number' ? `${rightWidth}px` : undefined,
       } as React.CSSProperties}
     >
-      <ContentHeader className="h-11 border-b border-border-subtle/15 flex items-center justify-between gap-3 normal-case font-normal shrink-0">
-        {/* Left: Branch name and repo status indicators */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {/* Branch name */}
-          <div className="flex items-center gap-1.5 min-w-0 shrink">
-            <GitBranch size={13} className="shrink-0 text-text-secondary/70" />
-            <span
-              className="font-mono font-semibold text-xs text-text-primary truncate"
-              title={currentBranch || '-'}
-            >
-              {currentBranch || '-'}
-            </span>
-          </div>
-
-          {/* Indicators */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Working tree state */}
-            <div
-              role="status"
-              title={workingTreeClean ? t('pipeline.openspec.repo.clean') : t('pipeline.openspec.repo.changed')}
-              className={cn(
-                'flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0',
-                workingTreeClean
-                  ? 'bg-secondary/10 text-secondary'
-                  : 'bg-git-mod/15 text-git-mod'
-              )}
-            >
-              {workingTreeClean ? (
-                <Check size={11} strokeWidth={2.5} className="shrink-0" />
-              ) : (
-                <AlertCircle size={11} className="shrink-0" />
-              )}
-              <span>
-                {workingTreeClean
-                  ? t('sidebar.workingTreeClean')
-                  : `${modifiedFiles.length} ${t('sidebar.workingTreeModified')}`}
-              </span>
-            </div>
-
-            {/* Tracking / validation status */}
-            {(() => {
-              const tracking = (currentBranch && branchTracking) ? branchTracking[currentBranch] : undefined;
-              if (tracking?.gone) {
-                return (
-                  <div
-                    role="status"
-                    title={t('sidebar.branchStatus.gone', { upstream: tracking.upstream ?? '' })}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-error/15 text-error"
-                  >
-                    <AlertCircle size={11} className="shrink-0" />
-                    <span>{t('sidebar.upstreamGone')}</span>
-                  </div>
-                );
-              }
-              if (tracking && (tracking.ahead > 0 || tracking.behind > 0)) {
-                return (
-                  <div
-                    role="status"
-                    title={t('sidebar.branchStatus.diverged', {
-                      upstream: tracking.upstream ?? '',
-                      ahead: tracking.ahead,
-                      behind: tracking.behind,
-                    })}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-secondary/10 text-secondary font-mono"
-                  >
-                    <GitMerge size={11} className="shrink-0" />
-                    <span>+{tracking.ahead} -{tracking.behind}</span>
-                  </div>
-                );
-              }
-              if (tracking) {
-                return (
-                  <div
-                    role="status"
-                    title={t('sidebar.branchStatus.synced', { upstream: tracking.upstream ?? '' })}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-secondary/10 text-secondary"
-                  >
-                    <Check size={11} strokeWidth={2.5} className="shrink-0" />
-                    <span>{t('sidebar.branchStatus.syncedShort')}</span>
-                  </div>
-                );
-              }
-              return (
-                <div
-                  role="status"
-                  title={t('sidebar.branchStatus.local')}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-text-primary/[0.035] text-text-secondary/80"
-                >
-                  <Monitor size={11} className="shrink-0" />
-                  <span>{t('sidebar.branchStatus.localShort')}</span>
-                </div>
-              );
-            })()}
-
-            {/* OpenSpec Engine version */}
-            {(() => {
-              if (effectiveEngineLoading || !effectiveEngineStatus) {
-                return (
-                  <div
-                    role="status"
-                    title={t('pipeline.openspec.engine.reading')}
-                    className="relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 font-mono bg-text-primary/[0.035] text-text-secondary/80"
-                  >
-                    <Package size={11} className="shrink-0 animate-pulse" />
-                    <span>{t('pipeline.openspec.engine.reading')}</span>
-                  </div>
-                );
-              }
-              const cliInstalled = effectiveEngineStatus?.cli?.installed ?? false;
-              const runtimeVer = effectiveEngineStatus?.cli?.runtimeVersion ?? null;
-              const isAbsent = !cliInstalled;
-              const notDetected = cliInstalled && runtimeVer === null;
-              const isBehind = isInstalledBehindCycle(runtimeVer);
-              const versionStr = isAbsent
-                ? t('pipeline.openspec.engine.status.absent')
-                : notDetected
-                  ? t('pipeline.openspec.engine.pill.notDetected')
-                  : `OpenSpec v${runtimeVer}`;
-              const stateKey = effectiveEngineStatus?.integrationState
-                ? (INTEGRATION_STATE_KEY_MAP[effectiveEngineStatus.integrationState] ?? 'pipeline.openspec.engine.integrationState.unknown')
-                : null;
-              const stateStr = stateKey ? t(stateKey) : null;
-              const upgrade = getOpenSpecEngineUpgrade(effectiveEngineStatus);
-              const engineAttention = isAbsent || notDetected || hasOpenSpecEngineAttention(effectiveEngineStatus) || isBehind || upgrade !== null;
-              const cycleNotice = isBehind
-                ? t('pipeline.openspec.engine.versionBehindCycle', { installed: runtimeVer ?? '?', cycle: OPENSPEC_CYCLE_TARGET_VERSION })
-                : null;
-              const engineTitle = (isAbsent || notDetected)
-                ? [
-                    versionStr,
-                    stateStr,
-                    engineAttention && attentionReasons.length > 0 ? attentionReasons.join(attentionReasonSeparator) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                : [
-                    versionStr,
-                    t('pipeline.openspec.engine.cycleVersion', { version: OPENSPEC_CYCLE_TARGET_VERSION }),
-                    stateStr,
-                    cycleNotice,
-                    upgrade ? t('pipeline.openspec.engine.pill.upgradeAvailable', { latest: upgrade.latest }) : null,
-                    engineAttention && attentionReasons.length > 0 ? attentionReasons.join(attentionReasonSeparator) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ');
-
-              return (
-                <div
-                  role="status"
-                  title={engineTitle}
-                  onClick={() => {
-                    setReviewOpen(true);
-                  }}
-                  className={cn(
-                    'relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 font-mono',
-                    engineAttention
-                      ? 'bg-warning/15 text-warning'
-                      : 'bg-text-primary/[0.035] text-text-secondary/80',
-                    'cursor-pointer hover:bg-text-primary/[0.07]',
-                  )}
-                >
-                  <Package size={11} className="shrink-0" />
-                  <span>{versionStr}</span>
-                  {upgrade && (
-                    <span
-                      className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-git-mod ring-2 ring-bg-base/70 shadow-[0_0_8px_var(--color-git-mod)]"
-                      aria-label={t('pipeline.openspec.engine.pill.upgradeAvailable', { latest: upgrade.latest })}
-                      data-upgrade="available"
-                    />
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* OpenSpec Validation status */}
-            {(() => {
-              const valStatus = selectedChange?.validation;
-              let valText = t('pipeline.openspec.notApplicable');
-              let valClass = 'bg-text-primary/[0.035] text-text-secondary/80';
-              let valIcon = <ShieldCheck size={11} className="shrink-0" />;
-
-              if (selectedChange) {
-                if (valStatus === 'passed') {
-                  valText = t('pipeline.openspec.validation.passed');
-                  valClass = 'bg-secondary/10 text-secondary';
-                  valIcon = <Check size={11} strokeWidth={2.5} className="shrink-0" />;
-                } else if (valStatus === 'failed') {
-                  valText = t('pipeline.openspec.validation.failed');
-                  valClass = 'bg-error/15 text-error';
-                  valIcon = <AlertCircle size={11} className="shrink-0" />;
-                } else {
-                  valText = t('pipeline.openspec.validation.unknown');
-                  valClass = 'bg-text-primary/[0.035] text-text-secondary/80';
-                  valIcon = <ShieldCheck size={11} className="shrink-0" />;
-                }
-              }
-
-              return (
-                <div
-                  role="status"
-                  title={`${t('pipeline.openspec.evidence.validation')}: ${valText}`}
-                  className={cn(
-                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0',
-                    valClass,
-                  )}
-                >
-                  {valIcon}
-                  <span>{valText}</span>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Right: Acciones de encabezado */}
-        <div className="shrink-0 ml-auto flex items-center gap-1.5">
-          <div className="bg-bg-base/80 border border-border-subtle/30 rounded-lg flex items-center p-0.5 shadow-sm">
-            <button
-              type="button"
-              data-clean={workingTreeClean}
-              aria-expanded={prepareOpen}
-              title={t('pipeline.openspec.prepare.open')}
-              onClick={() => {
-                const next = !prepareOpen;
-                setPrepareOpen(next, repoPath);
-                if (next && onEnsureRightOpen) {
-                  onEnsureRightOpen();
-                }
-              }}
-              className={cn(
-                "h-7 px-2.5 py-1 rounded-md transition-all duration-150 flex items-center justify-center gap-1.5",
-                prepareOpen
-                  ? "bg-secondary/15 text-secondary shadow-[0_0_6px_color-mix(in_srgb,var(--color-git-add)_25%,transparent)]"
-                  : "text-text-secondary hover:text-text-primary hover:bg-border-subtle/50"
-              )}
-            >
-              <GitCommit size={13} className="shrink-0" />
-              <span className="text-[length:var(--font-size-xs)] leading-none font-semibold">{t('pipeline.openspec.prepare.open')}</span>
-            </button>
-          </div>
-
-          {/* Alternar resumen fijado (intercambiador de vistas) */}
-          <div className="bg-bg-base/80 border border-border-subtle/30 rounded-lg flex items-center p-0.5 shadow-sm">
-            <button
-              type="button"
-              data-testid="pipeline.switcher.toggle"
-              data-active={isSwitcherOpen ? 'true' : undefined}
-              aria-label={t('pipeline.switcher.toggle')}
-              aria-expanded={isSwitcherVisible}
-              aria-disabled={rightOpen}
-              disabled={rightOpen}
-              title={rightOpen ? t('pipeline.switcher.toggleDisabledHelp') : t('pipeline.switcher.toggle')}
-              onClick={() => {
-                if (!rightOpen) {
-                  setIsSwitcherOpen((prev) => !prev);
-                }
-              }}
-              className={cn(
-                styles.iconBtn,
-                isSwitcherOpen && styles.iconBtnActive,
-                rightOpen && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <PanelRight size={13} className="shrink-0" />
-            </button>
-          </div>
-        </div>
-      </ContentHeader>
+      <SddStatusBar
+        currentBranch={currentBranch}
+        workingTreeClean={workingTreeClean}
+        modifiedFilesCount={modifiedFiles.length}
+        branchTracking={branchTracking}
+        effectiveEngineLoading={effectiveEngineLoading}
+        effectiveEngineStatus={effectiveEngineStatus}
+        attentionReasons={attentionReasons}
+        attentionReasonSeparator={attentionReasonSeparator}
+        selectedChange={selectedChange}
+        prepareOpen={prepareOpen}
+        repoPath={repoPath}
+        setPrepareOpen={setPrepareOpen}
+        onEnsureRightOpen={onEnsureRightOpen}
+        isSwitcherOpen={isSwitcherOpen}
+        setIsSwitcherOpen={setIsSwitcherOpen}
+        isSwitcherVisible={isSwitcherVisible}
+        rightOpen={rightOpen}
+        onOpenReview={() => setReviewOpen(true)}
+      />
 
       <div className={styles.body}>
         <main className={styles.center}>
@@ -1742,24 +1316,14 @@ export function OpenSpecDashboard({
               )}
               <div className={styles.startBody} ref={startBodyRef}>
                 {/* Encabezado limpio: contenido dentro del cuerpo del medio */}
-                <header
-                  ref={changeHeaderRef}
-                  className={styles.changeHeader}
-                  data-revalidating={revalidating || undefined}
-                  aria-busy={revalidating || undefined}
-                >
-                  <div className={styles.headerIdentity}>
-                    <div className={styles.changeTitleGroup}>
-                      <h3>
-                        {t('pipeline.openspec.change.active')}: <strong>{selectedChange.changeId}</strong>
-                        <ChangeTimestampLabel labelKey="pipeline.openspec.stamp.created" stamp={selectedChange.createdAt} />
-                      </h3>
-                      {!launchTarget && nextAction.helpKey && (
-                        <p className={styles.nextStepInline}>{t(nextAction.helpKey, nextAction.helpParams)}</p>
-                      )}
-                    </div>
-                  </div>
-                </header>
+                <SddChangeHeader
+                  changeHeaderRef={changeHeaderRef}
+                  selectedChange={selectedChange}
+                  revalidating={revalidating}
+                  launchTarget={launchTarget}
+                  nextActionHelpKey={nextAction.helpKey}
+                  nextActionHelpParams={nextAction.helpParams}
+                />
 
                 {/* Pegada a la cabecera y en el cuerpo del medio */}
                 {archiveRequest && (
@@ -1846,7 +1410,7 @@ export function OpenSpecDashboard({
                         type="button"
                         className={styles.secondaryAction}
                         disabled={archiveBusy}
-                        onClick={() => { setArchiveRequest(null); setArchiveReason(''); setArchiveError(null); setArchivePlanData(null); }}
+                        onClick={cancelArchive}
                       >
                         {t('pipeline.openspec.archive.cancel')}
                       </button>
@@ -1938,87 +1502,22 @@ export function OpenSpecDashboard({
                 />
               )}
               <div className={styles.startBody} ref={startBodyRef}>
-                <section className={styles.completedSummary}>
-                  {/* La identidad del cambio queda fija arriba mientras se recorren
-                      sus artefactos: al llegar el contenido, el resumen se iba de
-                      vista con el scroll y se perdía de qué cambio se estaba
-                      mirando. */}
-                  <div className={styles.completedHeader}>
-                    <CheckCircle2 size={38} />
-                    <p>{t('pipeline.openspec.change.completed')}</p>
-                    <h3>{selectedArchive.changeId}</h3>
-                    {/* Creación y archivado, ambas con hora: con la fecha sola no se
-                        podía saber cuánto duró el trabajo.
-
-                        Acá vivían tres filas que se retiraron. Dos eran texto
-                        constante —"Especificaciones principales" y "Actividad y
-                        evidencia" rendían siempre "Conservadas", sin consultar el
-                        cambio— y la tercera mostraba una ruta cuya fecha ya estaba
-                        impresa arriba. Una fila que siempre dice lo mismo enseña a
-                        saltear el bloque entero, incluido lo que sí varía. */}
-                    <div className={styles.completedStamps}>
-                      <ChangeTimestampLabel labelKey="pipeline.openspec.stamp.created" stamp={selectedArchive.createdAt} />
-                      <ChangeTimestampLabel labelKey="pipeline.openspec.stamp.archived" stamp={selectedArchive.archivedOn} />
-                      {!selectedArchive.archivedOn && (
-                        <span className={styles.changeStamp}>
-                          <span>{t('pipeline.openspec.stamp.archived')}</span> {selectedArchive.archivedAt ?? t('pipeline.openspec.dateUnknown')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <WhereYouLeftOffCard
-                    repoPath={repoPath}
-                    selectedArchive={selectedArchive}
-                    latestSession={runtimeSessions[0] ?? null}
-                  />
-
-                  {/* Lo archivado es el registro de lo que se hizo, incluida la
-                      firma humana. Revisarlo no debería obligar a salir de la
-                      aplicación ni a leer el diff del commit de archivado. */}
-                  {/* La región existe desde el primer render, aunque el contenido
-                      todavía no haya llegado: al seleccionar un archivado hay una
-                      relectura de por medio, y sin reservar el espacio la vista
-                      saltaba de una ficha corta a una pantalla entera. */}
-                  <div className={styles.archivedArtifacts} data-pending={!selectedArchive.artifacts || undefined}>
-                    {!selectedArchive.artifacts ? (
-                      <p className={styles.archivedPending}>{t('pipeline.revalidating')}</p>
-                    ) : (
-                      <PipelineDetails
-                        snapshot={snapshot}
-                        repoPath={repoPath}
-                        isArchived={true}
-                        selectedChange={{
-                          changeId: selectedArchive.changeId,
-                          intent: null,
-                          tasks: [],
-                          proposalExists: selectedArchive.artifacts.proposal !== null,
-                          designExists: selectedArchive.artifacts.design !== null,
-                          specsCount: selectedArchive.artifacts.specs.length,
-                          validation: 'unknown',
-                          artifacts: selectedArchive.artifacts,
-                        }}
-                        tab={evidenceTab}
-                        onTabChange={setEvidenceTab}
-                      />
-                    )}
-                  </div>
-                  {flowMode && (
-                    <>
-                      <PipelineNewChangeFlow
-                        repoPath={repoPath}
-                        projection={projection}
-                        blockedByFixture={fixtureActive}
-                        onStarted={() => setCenterTab('activity')}
-                        currentBranch={currentBranch}
-                        divergence={snapshot.branchDivergence}
-                        workingTreeClean={workingTreeClean}
-                        onRefresh={onRefresh}
-                        onOpenChange={handleOpenChange}
-                      />
-                    </>
-                  )}
-                </section>
+                <SddArchivedChange
+                  repoPath={repoPath}
+                  snapshot={snapshot}
+                  selectedArchive={selectedArchive}
+                  runtimeSessions={runtimeSessions}
+                  evidenceTab={evidenceTab}
+                  setEvidenceTab={setEvidenceTab}
+                  flowMode={flowMode}
+                  projection={projection}
+                  fixtureActive={fixtureActive}
+                  currentBranch={currentBranch}
+                  workingTreeClean={workingTreeClean}
+                  onRefresh={onRefresh}
+                  onOpenChange={handleOpenChange}
+                  onSetCenterTab={setCenterTab}
+                />
               </div>
             </div>
           ) : (
@@ -2033,207 +1532,33 @@ export function OpenSpecDashboard({
                - Intercambiar preserva la posición de scroll y el estado de la vista. */
             <div className={styles.startScreenWrapper}>
               <div className={styles.startBody} ref={startBodyRef}>
-                {activeStartView === 'in-progress' && (
-                  <section className={styles.startScreen} aria-label={t('pipeline.openspec.start.title')}>
-                    <header className={styles.startHeader}>
-                      <div className={styles.startHeaderTitleGroup}>
-                        <h3>{t('pipeline.openspec.start.title')}</h3>
-                        <p className={styles.startSpecsBadge}>
-                          <span>
-                            {specifications.length === 0
-                              ? t('pipeline.openspec.start.specsPending')
-                              : t('pipeline.openspec.start.specificationsCount', { count: specifications.length })}
-                          </span>
-                          <span> · </span>
-                          <span data-testid="start-global-progress">
-                            {globalTaskPercent !== null
-                              ? t('pipeline.openspec.start.globalProgress', { percent: globalTaskPercent })
-                              : t('pipeline.openspec.start.noTasksToMeasure')}
-                          </span>
-                        </p>
-                      </div>
-                    </header>
-
-                    {/* Centro de la pantalla: CAMBIOS EN CURSO */}
-                    <div className={styles.startMainBlock}>
-                      <div className={styles.startBlock}>
-                        <h4>{t('pipeline.openspec.start.inProgress')} <span>{activeChanges.length}</span></h4>
-                        {activeChanges.length === 0 ? (
-                          <p className={styles.startNote}>{t('pipeline.openspec.start.noActive')}</p>
-                        ) : (
-                          <ul className={styles.startList}>
-                            {startChanges.map(({ change, progress }) => {
-                              const isPinned = pinnedChangeIds.includes(change.changeId);
-                              return (
-                                <li
-                                  key={change.changeId}
-                                  data-branch={change.changeId === branchChangeId || undefined}
-                                  data-pinned={isPinned || undefined}
-                                  tabIndex={0}
-                                  role="button"
-                                  aria-label={`${change.changeId} ${t('pipeline.openspec.start.enter')}`}
-                                  onClick={(e) => handleCardClick(e, change.changeId)}
-                                  onKeyDown={(e) => handleCardKeyDown(e, change.changeId)}
-                                >
-                                  <div className={styles.startItemHead}>
-                                    <strong>{change.changeId}</strong>
-                                    {/* La rama se señala, no navega: gastarla en saltar
-                                        adentro la volvía invisible. */}
-                                    {change.changeId === branchChangeId && (
-                                      <em className={styles.branchPill}>{t('pipeline.openspec.start.branchMatch')}</em>
-                                    )}
-                                    {/* Criterio de diseño (2026-09-08, Obs. 8.16 & 8.17): La tarjeta entera es pulsable para abrir el cambio.
-                                        El botón «Abrir» se retira. La estrella de fijado se ubica arriba a la derecha y detiene la propagación. */}
-                                    <button
-                                      type="button"
-                                      className={cn(styles.iconBtn, styles.startCardPinBtn, isPinned && styles.startCardPinBtnPinned)}
-                                      title={isPinned ? t('pipeline.openspec.start.unpinAction') : t('pipeline.openspec.start.pinAction')}
-                                      aria-label={isPinned ? `${t('pipeline.openspec.start.pinned')}: ${t('pipeline.openspec.start.unpinAction')}` : t('pipeline.openspec.start.pinAction')}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        togglePinChange(change.changeId);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        e.stopPropagation();
-                                      }}
-                                    >
-                                      <Star size={13} aria-hidden="true" />
-                                    </button>
-                                  </div>
-                                  <p title={change.intent ?? undefined}>{change.intent ?? t('pipeline.openspec.intentUnknown')}</p>
-                                  <div className={styles.startProgress}>
-                                    <span>
-                                      {progress.total === 0
-                                        ? t('pipeline.openspec.start.noTasks')
-                                        : t('pipeline.openspec.start.tasks', { done: progress.completed, total: progress.total })}
-                                    </span>
-                                    {progress.total > 0 && (
-                                      <span className={styles.startBar} aria-hidden="true">
-                                        <span style={{ width: `${progress.percent}%` }} />
-                                      </span>
-                                    )}
-                                    {/* Saber que van cinco de seis no dice cuál es la
-                                        sexta, que es con lo que se decide. Plegado por
-                                        defecto: con cuatro cambios de veintiocho tareas,
-                                        esta pantalla sería una lista de tareas. */}
-                                    {pendingOf(change).length > 0 && (
-                                      <button
-                                        type="button"
-                                        className={styles.startPendingToggle}
-                                        aria-expanded={expandedStart[change.changeId] ?? false}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setExpandedStart((current) => ({
-                                            ...current,
-                                            [change.changeId]: !(current[change.changeId] ?? false),
-                                          }));
-                                        }}
-                                        onKeyDown={(e) => {
-                                          e.stopPropagation();
-                                        }}
-                                      >
-                                        <ChevronDown size={12} />
-                                        {tCount('pipeline.openspec.start.pending', pendingOf(change).length)}
-                                      </button>
-                                    )}
-                                  </div>
-                                  {(expandedStart[change.changeId] ?? false) && (
-                                    /* Sólo lo pendiente: el avance ya está en la barra y
-                                       en el conteo, y lo que falta es lo que sirve. */
-                                    <ul className={styles.startPending}>
-                                      {pendingOf(change).map((task) => (
-                                        <li key={task.id}><Circle size={9} /> {task.text}</li>
-                                      ))}
-                                    </ul>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {activeStartView === 'archived' && (
-                  <section className={styles.startScreen} aria-label={t('pipeline.openspec.start.archived')}>
-                    <header className={styles.startHeader}>
-                      <div className={styles.startHeaderTitleGroup}>
-                        <h3>{t('pipeline.openspec.start.archived')}</h3>
-                        <p className={styles.startSpecsBadge}>
-                          {tCount('pipeline.openspec.start.archivedCount', archivedChanges.length)}
-                        </p>
-                      </div>
-                    </header>
-
-                    <div className={styles.startMainBlock}>
-                      <div className={styles.startBlock}>
-                        <h4>{t('pipeline.openspec.start.closed')} <span>{archivedChanges.length}</span></h4>
-                        {archivedChanges.length === 0 ? (
-                          <p className={styles.startNote}>{t('pipeline.openspec.start.neverArchived')}</p>
-                        ) : (
-                          <ul className={styles.startList}>
-                            {archivedChanges.map((change) => (
-                              <li
-                                key={`${change.archivedAt}-${change.changeId}`}
-                                tabIndex={0}
-                                role="button"
-                                aria-label={`${change.changeId} ${t('pipeline.openspec.start.enter')}`}
-                                onClick={(e) => handleCardClick(e, change.changeId)}
-                                onKeyDown={(e) => handleCardKeyDown(e, change.changeId)}
-                              >
-                                <div className={styles.startItemHead}>
-                                  <div className={styles.startItemTitleWithIcon}>
-                                    <CheckCircle2 size={13} className={styles.startArchivedIcon} />
-                                    <strong>{change.changeId}</strong>
-                                  </div>
-                                </div>
-                                <p>{change.archivedAt ?? t('pipeline.openspec.dateUnknown')}</p>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {activeStartView === 'new-change' && (
-                  <section className={styles.startScreen} aria-label={t('pipeline.newChange.title')}>
-                    <header className={styles.startHeader}>
-                      <div className={styles.startHeaderTitleGroup}>
-                        <h3>{t('pipeline.newChange.title')}</h3>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.secondaryAction}
-                        onClick={() => {
-                          dismissFlow();
-                          handleSwitchStartView('in-progress');
-                        }}
-                      >
-                        {t('pipeline.newChange.close')}
-                      </button>
-                    </header>
-
-                    <div className={styles.startMainBlock}>
-                      <div className={styles.startNewChangeModal}>
-                        <PipelineNewChangeFlow
-                          repoPath={repoPath}
-                          projection={projection}
-                          blockedByFixture={fixtureActive}
-                          onStarted={() => setCenterTab('activity')}
-                          currentBranch={currentBranch}
-                          divergence={snapshot.branchDivergence}
-                          workingTreeClean={workingTreeClean}
-                          onRefresh={onRefresh}
-                          onOpenChange={handleOpenChange}
-                        />
-                      </div>
-                    </div>
-                  </section>
-                )}
+                <SddStartScreens
+                  activeStartView={activeStartView}
+                  specifications={specifications}
+                  globalTaskPercent={globalTaskPercent}
+                  activeChanges={activeChanges}
+                  archivedChanges={archivedChanges}
+                  startChanges={startChanges}
+                  branchChangeId={branchChangeId}
+                  pinnedChangeIds={pinnedChangeIds}
+                  togglePinChange={togglePinChange}
+                  handleCardClick={handleCardClick}
+                  handleCardKeyDown={handleCardKeyDown}
+                  onDismissFlow={() => {
+                    dismissFlow();
+                    handleSwitchStartView('in-progress');
+                  }}
+                  onSwitchStartView={handleSwitchStartView}
+                  repoPath={repoPath}
+                  projection={projection}
+                  fixtureActive={fixtureActive}
+                  currentBranch={currentBranch}
+                  snapshot={snapshot}
+                  workingTreeClean={workingTreeClean}
+                  onRefresh={onRefresh}
+                  onOpenChange={handleOpenChange}
+                  onSetCenterTab={setCenterTab}
+                />
               </div>
 
               {isSwitcherMounted && (

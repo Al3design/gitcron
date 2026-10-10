@@ -1113,11 +1113,13 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
 
   describe('4.15 / Observación 46: Encabezado sticky (.changeHeader) con scroll en el cuerpo', () => {
     it('el encabezado permanece fijo y opaco sobre el lienzo cuando el cuerpo se desplaza en scroll profundo', () => {
+      const headerCssPath = path.resolve(process.cwd(), 'components/pipeline/sdd/SddChangeHeader.module.css');
+      const headerCssContent = fs.readFileSync(headerCssPath, 'utf-8');
       const cssPath = path.resolve(process.cwd(), 'components/pipeline/OpenSpecDashboard.module.css');
       const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
       // 1. .changeHeader está declarado con position: sticky, top: 0, z-index >= 4 y background opaco var(--color-bg-base)
-      const headerMatch = cssContent.match(/\.changeHeader\s*\{([^}]+)\}/);
+      const headerMatch = headerCssContent.match(/\.changeHeader\s*\{([^}]+)\}/);
       expect(headerMatch).not.toBeNull();
       const headerBody = headerMatch![1];
       expect(headerBody).toMatch(/position:\s*sticky/);

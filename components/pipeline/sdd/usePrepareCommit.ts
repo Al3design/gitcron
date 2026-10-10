@@ -213,6 +213,8 @@ export interface UsePrepareCommitOptions {
   rightOpen?: boolean;
 }
 
+export type UsePrepareCommitResult = ReturnType<typeof usePrepareCommit>;
+
 export function usePrepareCommit({
   repoPath,
   currentBranch,

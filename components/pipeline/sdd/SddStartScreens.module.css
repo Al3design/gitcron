@@ -1,0 +1,305 @@
+/* Estilos exclusivos de SddStartScreens (Tanda 3: Tarea 2.4) */
+
+.startItemTitleWithIcon {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.startArchivedIcon {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.startMainBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+}
+
+.startBlock > h4 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-secondary);
+  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.startBlock > h4 > span {
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+}
+
+.startNote {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startPendingToggle + .startNote,
+.startArchived + .startNote {
+  margin-top: var(--space-3);
+}
+
+.startList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startList > li {
+  padding: var(--space-3) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-overlay);
+  cursor: pointer;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.startList > li:hover {
+  background: color-mix(in srgb, var(--color-bg-overlay) 85%, var(--color-text-primary));
+}
+
+.startList > li:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.startList > li[data-branch] {
+  border-left: 3px solid var(--color-primary);
+}
+
+.startList > li > p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: var(--space-2) 0 var(--space-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startItemHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.startItemHead > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startItemHead > button {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.branchPill {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-xl);
+  color: var(--color-primary);
+  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.startProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startPendingToggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sp-1);
+  min-block-size: 2.75rem;
+  min-height: 2.75rem;
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  transition: color 120ms ease;
+}
+
+.startPendingToggle:hover {
+  color: var(--color-primary);
+}
+
+.startPendingToggle svg {
+  transition: transform 120ms ease;
+}
+
+.startPendingToggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.startPending {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startPending > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startPending > li svg {
+  flex: 0 0 auto;
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+}
+
+.startBar {
+  flex: 1 1 auto;
+  height: 0.28rem;
+  border-radius: var(--radius-default);
+  background: var(--color-border-subtle);
+}
+
+.startBar > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-default);
+  background: var(--color-primary);
+}
+
+.startNewChangeModal {
+  max-width: 48rem;
+  width: 100%;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-overlay) 40%, transparent);
+  padding: var(--space-5);
+}
+
+.startNewChangeModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.startNewChangeModalHeader > h4 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* Control de fijado en tarjetas de inicio (Bloque D - Estrella):
+   Visible permanentemente cuando está fijada (estrella rellena con color de acento),
+   y sólo en contorno durante hover/focus cuando no lo está (como la estrella de Gmail). */
+.startCardPinBtn {
+  margin-left: auto;
+  opacity: 0;
+}
+
+.startCardPinBtnPinned {
+  opacity: 1;
+  color: var(--color-primary);
+}
+
+.startCardPinBtnPinned svg {
+  fill: currentColor;
+}
+
+.startList > li:hover .startCardPinBtn,
+.startList > li:focus-within .startCardPinBtn {
+  opacity: 1;
+}
+
+.startPendingToggle:focus-visible,
+.startArchived button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.startArchived {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startArchived button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.startArchived button:hover {
+  background: var(--color-bg-overlay);
+}
+
+.startArchived strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.startArchived span {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.startArchived svg {
+  align-self: center;
+  flex: 0 0 auto;
+  color: var(--color-git-add);
+}

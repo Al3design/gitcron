@@ -908,7 +908,7 @@ describe('pantalla de entrada del repositorio', () => {
       expect(pinnedBtn.className).toContain('startCardPinBtnPinned');
 
       // Verificación CSS de relleno
-      const modulePath = path.resolve(process.cwd(), 'components/pipeline/OpenSpecDashboard.module.css');
+      const modulePath = path.resolve(process.cwd(), 'components/pipeline/sdd/SddStartScreens.module.css');
       const css = fs.readFileSync(modulePath, 'utf-8');
       expect(css).toMatch(/\.startCardPinBtnPinned\s+svg\s*\{[^}]*fill:\s*currentColor/);
     });

@@ -221,77 +221,7 @@
   background: var(--color-bg-base);
 }
 
-/* Una sola columna desde que se retiró la barra de fases. El alto mínimo baja
-   con ella: sostenía dos filas de etapas que ya no están, y conservarlo dejaría
-   un hueco que pide llenarse con algo. */
-.changeHeader {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  flex: 0 0 auto;
-  width: 100%;
-  max-width: var(--sdd-body-width);
-  margin: 0 auto;
-  padding: var(--space-4) var(--sdd-body-gutter) var(--space-2);
-  background: var(--color-bg-base);
-  flex-wrap: wrap;
-}
 
-.headerIdentity {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.changeTitleGroup {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.headerIdentity h3,
-.changeTitleGroup h3 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-weight: 650;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.04em;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.headerIdentity h3 strong,
-.changeTitleGroup h3 strong {
-  color: var(--color-text-primary);
-}
-
-.changeTitleGroup .nextStepInline {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  text-align: left;
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-left: auto;
-  flex-wrap: wrap;
-}
-
-
-.changeTitle h3 { margin: 0; color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-sm); font-family: var(--font-mono), ui-monospace, monospace; letter-spacing: 0.04em; }
-.changeTitle h3 strong { color: var(--color-text-primary); }
 
 .tabsRow {
   display: flex;
@@ -489,9 +419,7 @@
    oscuro casi no se distingue: recorrer con teclado era perder de vista dónde
    se estaba parado. */
 .primaryAction:focus-visible,
-.secondaryAction:focus-visible,
-.startPendingToggle:focus-visible,
-.startArchived button:focus-visible {
+.secondaryAction:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -951,20 +879,7 @@
 .archiveConfirm .actions { margin-top: 0; }
 
 
-/* Relectura de evidencia en curso. Vivía en la barra de fases; al retirarse, la
-   señal se muda al encabezado del cambio, que es a quien pertenece: informa que
-   la evidencia se está releyendo, no que una etapa esté cambiando. Sin esto el
-   atributo quedaría sólo para el test y la espera sería invisible. */
-.changeHeader[data-revalidating] .changeTitle h3 { animation: revalidatePulse 1.2s ease-in-out infinite; }
 
-@keyframes revalidatePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .changeHeader[data-revalidating] .changeTitle h3 { animation: none; opacity: 0.6; }
-}
 
 .spin { animation: archiveSpin 0.9s linear infinite; }
 @keyframes archiveSpin { to { transform: rotate(360deg); } }
@@ -1271,18 +1186,7 @@
 /* Con relleno a los costados por lo mismo que .draftLog: sin él quedaba pegado a los bordes. */
 .railMeta { display: flex; justify-content: space-between; padding: var(--sp-2) var(--sp-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 
-.completedSummary,
-.noActiveChange {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  overflow-y: auto;
-  padding: var(--space-6) var(--space-3);
-  color: var(--color-git-add);
-}
+
 
 /* `.startScreenWrapper` es el contenedor del anclaje de `.switcherRail` (Tarea 4.10):
    Aloja al panel y a `.startBody` como hermanos flex dentro de `.center` (`overflow-y: auto`).
@@ -1307,16 +1211,7 @@
   order: 1;
 }
 
-.startItemTitleWithIcon {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 
-.startArchivedIcon {
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
-}
 
 .startScreen {
   display: flex;
@@ -1360,150 +1255,7 @@
   font-family: var(--font-mono), ui-monospace, monospace;
 }
 
-.startMainBlock {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  flex: 1 1 auto;
-}
 
-.startBlock > h4 {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-3);
-  color: var(--color-text-secondary);
-  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.startBlock > h4 > span { color: var(--color-primary); font-size: var(--font-size-sm); }
-
-/* Una cuenta en cero que no significa ausencia se dice con palabras. Mostrarla
-   como cifra junto a las demás hacía leer como vacío un repositorio que sólo
-   todavía no archivó nada. */
-.startNote { margin: 0 0 var(--space-1); color: var(--color-text-secondary); font-size: var(--font-size-xs); line-height: 1.5; font-family: var(--font-mono), ui-monospace, monospace; }
-/* La cuenta de especificaciones venía pegada al control de archivados y las dos
-   líneas se leían como una. */
-.startPendingToggle + .startNote,
-.startArchived + .startNote { margin-top: var(--space-3); }
-
-.startList { display: flex; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-.startList > li {
-  padding: var(--space-3) var(--space-3);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-overlay);
-  cursor: pointer;
-  transition: background-color 150ms ease, box-shadow 150ms ease;
-}
-.startList > li:hover {
-  background: color-mix(in srgb, var(--color-bg-overlay) 85%, var(--color-text-primary));
-}
-.startList > li:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
-}
-.startList > li[data-branch] {
-  border-left: 3px solid var(--color-primary);
-}
-.startList > li > p {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: var(--space-2) 0 var(--space-2);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace;
-}
-
-.startItemHead { display: flex; align-items: center; gap: var(--space-2); }
-.startItemHead > strong { min-width: 0; overflow-wrap: anywhere; color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-.startItemHead > button { margin-left: auto; flex: 0 0 auto; }
-
-.branchPill {
-  flex: 0 0 auto;
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-xl);
-  color: var(--color-primary);
-  font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-  font-style: normal;
-  text-transform: uppercase;
-}
-
-.startProgress { display: flex; align-items: center; gap: var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-
-/* Desplegables de la pantalla de entrada: qué falta en un cambio, y la lista
-   completa de archivados. Plegados por defecto para que esto siga siendo una
-   pantalla de estado y no una lista de tareas. */
-.startPendingToggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--sp-1);
-  min-block-size: 2.75rem;
-  min-height: 2.75rem;
-  padding: var(--sp-1) var(--sp-2);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-weight: 600;
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  transition: color 120ms ease;
-}
-.startPendingToggle:hover {
-  color: var(--color-primary);
-}
-.startPendingToggle svg {
-  transition: transform 120ms ease;
-}
-.startPendingToggle[aria-expanded='true'] svg {
-  transform: rotate(180deg);
-}
-
-.startPending { margin: var(--space-3) 0 0; padding: 0; list-style: none; }
-.startPending > li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-xs); line-height: 1.5; font-family: var(--font-mono), ui-monospace, monospace;
-}
-.startPending > li svg { flex: 0 0 auto; margin-top: var(--space-1); color: var(--color-text-secondary); }
-
-.startArchived { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
-.startArchived button {
-  display: flex;
-  width: 100%;
-  align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  text-align: left;
-  font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
-}
-.startArchived button:hover { background: var(--color-bg-overlay); }
-.startArchived strong { min-width: 0; overflow-wrap: anywhere; color: var(--color-text-primary); font-weight: 600; }
-.startArchived span { margin-left: auto; flex: 0 0 auto; }
-.startArchived svg { align-self: center; flex: 0 0 auto; color: var(--color-git-add); }
-.startBar { flex: 1 1 auto; height: 0.28rem; border-radius: var(--radius-default); background: var(--color-border-subtle); }
-.startBar > span { display: block; height: 100%; border-radius: var(--radius-default); background: var(--color-primary); }
-
-.completedSummary > p,
-.noActiveChange > p { margin: var(--space-3) 0 var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-.completedSummary h3,
-.noActiveChange h3 { margin: var(--space-1) 0; color: var(--color-text-primary); font-weight: 700; font-size: var(--font-size-xl); font-family: var(--font-mono), ui-monospace, monospace; }
-.completedSummary > span { color: var(--color-text-secondary); font-size: var(--font-size-xs); }
-.noActiveChange { align-items: center; text-align: center; color: var(--color-primary); }
 
 /* Lo que le falta al repositorio para que el método funcione.
    Ámbar y no rojo: es algo que conviene resolver, no un fallo. Va arriba de la
@@ -1761,11 +1513,6 @@ summary.centerBlock {
 /* Con cambio activo la guía no es un bloque aparte: el stepper ya dice dónde
    estás y el CTA lleva la tarea en el nombre. Queda una sola línea sobre los
    botones, que explica qué va a pasar al confirmarlos. */
-.nextStepInline {
-  margin: 0 0 var(--space-4);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs); line-height: 1.5; font-family: var(--font-mono), ui-monospace, monospace;
-}
 
 /* Flujo de cambio nuevo */
 /* Ocupa el ancho del centro, no una fracción: con las ayudas por campo, 44rem
@@ -1820,13 +1567,8 @@ summary.centerBlock {
 
 
 
-@container (max-width: 1180px) {
-  .changeHeader { grid-template-columns: minmax(12rem, 0.8fr) minmax(23rem, 1.2fr); padding-inline: var(--sdd-body-gutter); }
-}
-
 @container (max-width: 860px) {
   .intentSwitch { flex-wrap: wrap; }
-  .changeHeader { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
   .taskDetail dl { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -1839,49 +1581,6 @@ summary.centerBlock {
   --right-panel-width: 320px; animation: none; opacity: 0.65; }
 }
 
-/* Alcance del archivado: mensajes, lo que entra y lo que queda fuera. Lo último
-   se muestra a propósito — un manifiesto con una omisión es el modo de fallo más
-   silencioso que tiene esto. */
-.archiveScope { margin: 0 0 var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); line-height: 1.6; font-family: var(--font-mono), ui-monospace, monospace; }
-.archiveScope p { margin: var(--space-2) 0 var(--space-1); }
-.archiveScope strong { color: var(--color-text-primary); font-weight: 650; }
-.archiveScope code { color: var(--color-primary); }
-.archiveScope ul { margin: 0; padding-left: var(--space-4); max-height: 7rem; overflow-y: auto; scrollbar-width: thin; }
-.archiveScope p[data-tone='sign'] { color: var(--color-git-add); }
-.archiveScope p[data-tone='out'] strong,
-.archiveScope ul[data-tone='out'] { color: var(--color-warning); }
-.archiveCommitToggle { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
-/* Artefactos de un cambio ya archivado, dentro de su ficha. */
-/* Artefactos de un cambio ya archivado, dentro de su ficha.
-   La ficha centra su contenido y tiene ancho acotado; el visor necesita el
-   ancho completo y alineación propia, o el markdown queda centrado y angosto. */
-.archivedArtifacts {
-  width: 100%;
-  max-width: none;
-  margin-top: var(--space-4);
-  text-align: left;
-}
-/* Alineada al inicio, no centrada.
-   `justify-content: center` recorta el comienzo del contenido al desbordar y ese
-   recorte no se alcanza con scroll. `safe center` lo evita, pero si el motor no
-   lo soporta la declaración entera se descarta y vuelve a quedar `center`: el
-   defecto reaparecería sin ninguna señal. Con los artefactos adentro el contenido
-   siempre desborda, así que centrar no aporta nada y alinear al inicio hace que
-   todo se recorra como una sola pieza. */
-.completedSummary { flex: 0 0 auto; justify-content: flex-start; overflow: visible; }
-
-/* Con el visor adentro, el respiro lateral de la ficha —hasta 5rem por lado—
-   angosta el markdown. Se reduce sólo en ese caso. */
-.completedSummary:has(.archivedArtifacts) { padding-inline: var(--space-3); }
-
-/* Identidad del cambio archivado. Agrupada, pero parte del flujo: se intentó
-   fijarla arriba y el resto pasaba por debajo asomándose contra su fondo. El
-   contenido del cuerpo se recorre entero, de una sola pieza. */
-.completedHeader {
-  align-self: stretch;
-  padding-bottom: var(--space-3);
-  margin-bottom: var(--space-2);
-}
 /* Marcas de tiempo de un cambio.
    Se espacian con la escala --sp-*: ajustar valores sueltos queja por queja ya
    desalineó otras cosas antes. */
@@ -1897,16 +1596,6 @@ summary.centerBlock {
 .changeStamp em { font-style: normal; opacity: 0.85; }
 /* Junto al título del cambio activo, no debajo: es donde se busca su identidad. */
 .changeStamp:not(:first-child) { margin-left: var(--sp-3); }
-.completedStamps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1) var(--sp-4);
-  margin-top: var(--sp-2);
-}
-.completedStamps .changeStamp:not(:first-child) { margin-left: 0; }
-/* Reserva de espacio para los artefactos del archivado, para que la vista no
-   salte de una ficha corta a una pantalla entera cuando llega la relectura. */
-.archivedArtifacts[data-pending] { display: grid; place-items: center; min-height: 18rem; }
 .archivedPending { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 
 /* OpenSpec Engine Card */
@@ -2913,33 +2602,7 @@ summary.centerBlock {
   line-height: 1.6;
 }
 
-/* Contenedor soberano para nuevo cambio en el cuerpo (Observación 24: sin modal ni overlay) */
-.startNewChangeModal {
-  max-width: 48rem;
-  width: 100%;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-bg-overlay) 40%, transparent);
-  padding: var(--space-5);
-}
 
-.startNewChangeModalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.startNewChangeModalHeader > h4 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-weight: 650;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-mono), ui-monospace, monospace;
-}
 
 /* ==========================================================================
    Intercambiador dinámico de vistas (ViewSwitcherRail)
@@ -3511,27 +3174,7 @@ summary.centerBlock {
   box-shadow: 0 -2px 0 0 var(--color-primary);
 }
 
-/* Control de fijado en tarjetas de inicio (Bloque D - Estrella):
-   Visible permanentemente cuando está fijada (estrella rellena con color de acento),
-   y sólo en contorno durante hover/focus cuando no lo está (como la estrella de Gmail). */
-.startCardPinBtn {
-  margin-left: auto;
-  opacity: 0;
-}
 
-.startCardPinBtnPinned {
-  opacity: 1;
-  color: var(--color-primary);
-}
-
-.startCardPinBtnPinned svg {
-  fill: currentColor;
-}
-
-.startList > li:hover .startCardPinBtn,
-.startList > li:focus-within .startCardPinBtn {
-  opacity: 1;
-}
 
 .taskInlineEdit {
   display: flex;
@@ -3767,12 +3410,7 @@ summary.centerBlock {
   line-height: 1.6;
 }
 
-.changeHeaderActions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
-}
+
 
 .archiveReasonField {
   display: flex;
@@ -5204,4 +4842,19 @@ summary.centerBlock {
   .whereYouLeftOffRowLabel {
     margin-top: var(--space-1);
   }
+}
+
+/* Fechas del cambio archivado. Queda acá y no en SddArchivedChange.module.css
+   porque la regla cruza dos módulos: las fechas las dibuja ChangeTimestampLabel
+   con .changeStamp de este archivo, y una copia local de .changeStamp no las
+   alcanza (en modularizar-03 se perdió el margin-left: 0 y se separaron 16 px). */
+.completedStamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  margin-top: var(--sp-2);
+}
+
+.completedStamps .changeStamp:not(:first-child) {
+  margin-left: 0;
 }
