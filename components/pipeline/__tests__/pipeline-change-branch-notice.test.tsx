@@ -160,6 +160,7 @@ function renderDashboard(currentBranch: string) {
   );
   // El panel abre en su pantalla de entrada: hay que entrar al cambio.
   fireEvent.click(screen.getAllByRole('button', { name: /openspec\.start\.enter/ })[0]);
+  fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
 }
 
 describe('el panel, con un cambio abierto', () => {

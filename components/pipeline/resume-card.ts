@@ -60,6 +60,8 @@ export interface ResumeCardSectionGroup {
   pendingTasks: number;
   isCurrent: boolean;
   label: string;
+  firstPendingTaskId?: string | null;
+  firstTaskId?: string | null;
 }
 
 export interface ResumeCardEvidence {
@@ -273,7 +275,7 @@ export function groupTasksBySection(
     }
   }
 
-  const sectionMap = new Map<string, { total: number; completed: number; pending: number }>();
+  const sectionMap = new Map<string, { total: number; completed: number; pending: number; firstTaskId: string | null; firstPendingTaskId: string | null }>();
   const firstPending = tasks.find((t) => !t.completed) ?? null;
   let firstPendingSectionName: string | null = null;
 
@@ -297,12 +299,17 @@ export function groupTasksBySection(
 
     let entry = sectionMap.get(sectionName);
     if (!entry) {
-      entry = { total: 0, completed: 0, pending: 0 };
+      entry = { total: 0, completed: 0, pending: 0, firstTaskId: null, firstPendingTaskId: null };
       sectionMap.set(sectionName, entry);
     }
+    if (!entry.firstTaskId) entry.firstTaskId = task.id;
     entry.total++;
-    if (task.completed) entry.completed++;
-    else entry.pending++;
+    if (task.completed) {
+      entry.completed++;
+    } else {
+      entry.pending++;
+      if (!entry.firstPendingTaskId) entry.firstPendingTaskId = task.id;
+    }
   }
 
   const taskSingular = t?.('pipeline.resumeCard.taskSingular') ?? 'tarea';
@@ -319,6 +326,8 @@ export function groupTasksBySection(
       pendingTasks: stats.pending,
       isCurrent,
       label: `${name}: ${stats.pending} ${taskWord}`,
+      firstPendingTaskId: stats.firstPendingTaskId,
+      firstTaskId: stats.firstTaskId,
     });
   }
 

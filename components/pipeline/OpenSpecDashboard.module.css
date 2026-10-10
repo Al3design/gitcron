@@ -375,6 +375,14 @@
 .taskList > li[data-current='true']:hover {
   background: color-mix(in srgb, var(--color-bg-overlay) 75%, var(--color-text-primary));
 }
+.taskList > li[data-highlighted='true'] {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--color-bg-overlay) 70%, var(--color-primary));
+}
+.taskList > li[data-highlighted='true']:hover {
+  background: color-mix(in srgb, var(--color-bg-overlay) 60%, var(--color-primary));
+}
 .taskList > li > span {
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -5245,13 +5253,38 @@ summary.centerBlock {
 
 .whereYouLeftOffNextStepHeader {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
 }
 
 .whereYouLeftOffNextStepTitle {
   font-weight: 500;
+}
+
+.whereYouLeftOffTaskLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-subtle);
+  text-underline-offset: 3px;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.whereYouLeftOffTaskLink:hover {
+  color: var(--color-primary);
+  text-decoration-color: var(--color-primary);
+}
+
+.whereYouLeftOffTaskLink:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 .whereYouLeftOffDetailToggleBtn {
@@ -5381,6 +5414,24 @@ summary.centerBlock {
   font-weight: 600;
 }
 
+.whereYouLeftOffSectionButton {
+  cursor: pointer;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
+  font: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.whereYouLeftOffSectionButton:hover {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-bg-overlay) 80%, var(--color-primary));
+}
+
+.whereYouLeftOffSectionButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .taskCheckToggleBtn {
   display: inline-flex;
   align-items: center;
@@ -5423,4 +5474,24 @@ summary.centerBlock {
   .whereYouLeftOffRowLabel {
     margin-top: var(--space-1);
   }
+}
+
+/* Vuelta al Resumen desde la vista Tareas (visible aunque el menú de vistas esté oculto). */
+.backToOverview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-default);
+  cursor: pointer;
+}
+
+.backToOverview:hover {
+  background: var(--color-bg-overlay);
 }

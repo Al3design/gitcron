@@ -122,6 +122,11 @@ afterEach(() => {
 function enterChange() {
   const [enter] = screen.getAllByRole('button', { name: /openspec\.start\.enter/ });
   fireEvent.click(enter);
+  // El cambio abre por defecto en Resumen; navegar a Tareas para interactuar con la lista
+  const tasksBtn = screen.queryByRole('button', { name: /pipeline\.switcher\.tasks/ });
+  if (tasksBtn) {
+    fireEvent.click(tasksBtn);
+  }
 }
 
 describe('cambiar el estado de una tarea desde la guía', { timeout: 15_000 }, () => {

@@ -141,9 +141,11 @@ function renderSdd(currentBranch = 'main') {
     />,
   );
 
-  // Abrir el cambio
+  // Abrir el cambio y conmutar a Tareas para las pruebas de maquetación de tareas
   const enterBtn = screen.getAllByRole('button', { name: /openspec\.start\.enter/ })[0];
   fireEvent.click(enterBtn);
+  const tasksBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
+  fireEvent.click(tasksBtn);
   return rendered;
 }
 
@@ -777,8 +779,9 @@ describe('Maquetación del cuerpo de SDD (Tareas 2.2 a 2.6 y Grupo 3)', () => {
         />,
       );
 
-      // Entrar al cambio
+      // Entrar al cambio y conmutar a Tareas
       fireEvent.click(screen.getAllByRole('button', { name: /openspec\.start\.enter/ })[0]);
+      fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
 
       const taskList = document.querySelector('ol[class*="taskList"]');
       expect(taskList).toBeTruthy();

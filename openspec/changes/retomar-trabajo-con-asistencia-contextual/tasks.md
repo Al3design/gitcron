@@ -25,7 +25,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [ ] 3.3 **IA local:** Añadir narración opcional limitada del resumen con fallback. **Comprobación:** No consulta modelo durante navegación pasiva; fallo conserva resumen determinista y fuentes.
 - [ ] 3.4 **IA local:** Adaptar flotante contextual y alternancia con inspector conservando acciones alcanzables. **Comprobación:** Con panel fijo abierto se preservan contexto y vías de navegación; sin pendientes no presenta alertas vacías.
 - [x] 3.5 **IA local:** Aplicar títulos legibles, tareas resumidas y detalle a demanda en entrada/detalle SDD. **Comprobación:** Texto original sigue accesible, estado documental no parece implementación completa y no fuerza fases fijas.
-- [ ] 3.6 **IA local:** Hacer del resumen la pantalla de inicio de un cambio: vista «Resumen» primera y por omisión en el menú de vistas de SDD, la lista de tareas como otra vista, y desde el resumen se llega a la tarea en curso o a una sección pendiente (decisión de Alejandro, 2026-10-09). **Comprobación:** Abrir un cambio, activo o archivado, muestra el resumen; tocar la tarea en curso abre Tareas con esa tarea resaltada; ninguna entrada del menú se duplica ni desaparece al cambiar de vista.
+- [x] 3.6 **IA local:** Hacer del resumen la pantalla de inicio de un cambio: vista «Resumen» primera y por omisión en el menú de vistas de SDD, la lista de tareas como otra vista, y desde el resumen se llega a la tarea en curso o a una sección pendiente (decisión de Alejandro, 2026-10-09). **Comprobación:** Abrir un cambio, activo o archivado, muestra el resumen; tocar la tarea en curso abre Tareas con esa tarea resaltada; ninguna entrada del menú se duplica ni desaparece al cambiar de vista.
 
 ## 4. Aceptación
 

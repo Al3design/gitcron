@@ -20,6 +20,7 @@ import {
   FolderOpen,
   ListChecks,
   ListTodo,
+  Milestone,
   MinusSquare,
   MoreHorizontal,
   Package,
@@ -479,8 +480,14 @@ export function OpenSpecDashboard({
 
   type StartView = 'in-progress' | 'archived' | 'new-change';
   const [activeStartView, setActiveStartView] = useState<StartView>(() => (draft.open ? 'new-change' : 'in-progress'));
-  type ActiveChangeView = 'tasks' | 'artifacts' | 'diffs' | 'activity';
-  const [activeChangeView, setActiveChangeView] = useState<ActiveChangeView>('tasks');
+  type ActiveChangeView = 'overview' | 'tasks' | 'artifacts' | 'diffs' | 'activity';
+  const [activeChangeView, setActiveChangeView] = useState<ActiveChangeView>('overview');
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+
+  const handleNavigateToTask = (taskId: string) => {
+    setActiveChangeView('tasks');
+    setHighlightedTaskId(taskId);
+  };
   /**
    * Aclaración de arquitectura (Revisión visual 4.6 / Tarea 3.4):
    * Que el control «Alternar resumen fijado» corra el contenido del medio para hacerle
@@ -928,55 +935,64 @@ export function OpenSpecDashboard({
       slotIndex: 1,
     });
 
-    // Ranura 2: Vista principal alternativa (Tareas / Artefactos)
-    if (activeChangeView === 'artifacts') {
+    // Vista nueva «Resumen», primera del menú de cambio
+    if (activeChangeView !== 'overview') {
+      items.push({
+        id: 'overview',
+        label: t('pipeline.switcher.overview'),
+        icon: <Milestone size={13} />,
+        slotIndex: 2,
+      });
+    }
+
+    // Tareas (con contador de pendientes)
+    if (activeChangeView !== 'tasks') {
       items.push({
         id: 'tasks',
         label: t('pipeline.switcher.tasks'),
         count: selectedChange ? pendingOf(selectedChange).length : 0,
         icon: <ListChecks size={13} />,
-        slotIndex: 2,
+        slotIndex: 3,
       });
-    } else {
+    }
+
+    // Artefactos y evidencia
+    if (activeChangeView !== 'artifacts') {
       items.push({
         id: 'artifacts',
         label: t('pipeline.switcher.artifacts'),
         icon: <FileText size={13} />,
-        slotIndex: 2,
+        slotIndex: 4,
       });
-      if (activeChangeView !== 'tasks') {
-        items.push({
-          id: 'tasks',
-          label: t('pipeline.switcher.tasks'),
-          count: selectedChange ? pendingOf(selectedChange).length : 0,
-          icon: <ListChecks size={13} />,
-          slotIndex: 3,
-        });
-      }
     }
 
-    // Ranura 3: Diffs (sólo si hay cambios sin confirmar)
-    if (hasDiffs) {
+    // Diffs (sólo si hay cambios sin confirmar)
+    if (hasDiffs && activeChangeView !== 'diffs') {
       items.push({
         id: 'diffs',
         label: t('pipeline.switcher.diffs'),
         count: snapshot.diffs?.length ?? 0,
         icon: <Code2 size={13} />,
-        slotIndex: (activeChangeView === 'tasks' || activeChangeView === 'artifacts') ? 3 : 4,
+        slotIndex: 5,
       });
     }
 
-    // Ranura 4: Actividad (sólo si hay sesión o bitácora)
-    if (hasActivity) {
+    // Actividad (sólo si hay sesión o bitácora)
+    if (hasActivity && activeChangeView !== 'activity') {
       items.push({
         id: 'activity',
         label: t('pipeline.switcher.activity'),
         badge: runtimeActive ? t('pipeline.openspec.task.running') : undefined,
         count: visibleActivity.length > 0 ? visibleActivity.length : null,
         icon: <Activity size={13} />,
-        slotIndex: (activeChangeView === 'tasks' || activeChangeView === 'artifacts') ? 4 : 5,
+        slotIndex: 5,
       });
     }
+
+    // Asignación estable y contigua de ranuras (1..N sin duplicados ni huecos)
+    items.forEach((item, index) => {
+      item.slotIndex = index + 1;
+    });
 
     return items;
   }, [launchTarget, activeChangeView, selectedChange, hasDiffs, hasActivity, snapshot.diffs?.length, runtimeActive, visibleActivity.length, t]);
@@ -1927,7 +1943,7 @@ export function OpenSpecDashboard({
   const selectChange = (changeId: string) => {
     setSelection(changeId);
     onSelectChange?.(changeId);
-    setActiveChangeView('tasks');
+    setActiveChangeView('overview');
     setCenterTab('work');
     setLaunchTarget(null);
     closeFlow();
@@ -2048,6 +2064,7 @@ export function OpenSpecDashboard({
     setSelection(changeId);
     clearDraft(repoPath);
     setLaunchTarget(null);
+    setActiveChangeView('overview');
   };
   const changeEnvironmentSlot = (() => {
     const mismatchNotice = selectedChange ? (
@@ -2517,7 +2534,7 @@ export function OpenSpecDashboard({
                       if (viewId === 'start') {
                         setSelection(null);
                         setActiveStartView('in-progress');
-                        setActiveChangeView('tasks');
+                        setActiveChangeView('overview');
                       } else {
                         setActiveChangeView(viewId as ActiveChangeView);
                       }
@@ -2929,7 +2946,7 @@ export function OpenSpecDashboard({
                     if (viewId === 'start') {
                       setSelection(null);
                       setActiveStartView('in-progress');
-                      setActiveChangeView('tasks');
+                      setActiveChangeView('overview');
                     } else {
                       setActiveChangeView(viewId as ActiveChangeView);
                     }
@@ -2961,13 +2978,6 @@ export function OpenSpecDashboard({
                     </div>
                   </div>
                 </header>
-
-                <WhereYouLeftOffCard
-                  repoPath={repoPath}
-                  selectedChange={selectedChange}
-                  nextTask={nextTask}
-                  latestSession={runtimeSessions[0] ?? null}
-                />
 
                 {/* Pegada a la cabecera y en el cuerpo del medio */}
                 {archiveRequest && (
@@ -3062,6 +3072,19 @@ export function OpenSpecDashboard({
                   </div>
                 )}
 
+                {/* Vista 1: RESUMEN (pantalla de inicio del cambio) */}
+                {activeChangeView === 'overview' && (
+                  <section className={styles.startScreen} aria-label={t('pipeline.switcher.overview')}>
+                    <WhereYouLeftOffCard
+                      repoPath={repoPath}
+                      selectedChange={selectedChange}
+                      nextTask={nextTask}
+                      latestSession={runtimeSessions[0] ?? null}
+                      onNavigateToTask={handleNavigateToTask}
+                    />
+                  </section>
+                )}
+
                   {/* Vista A: TAREAS (o pantalla dedicada de continuación) */}
                   {activeChangeView === 'tasks' && (
                     launchTarget ? (
@@ -3095,6 +3118,17 @@ export function OpenSpecDashboard({
                       </section>
                     ) : (
                       <section className={styles.startScreen} aria-label={t('pipeline.switcher.tasks')}>
+                        {/* La vuelta al Resumen no depende del menú de vistas: con el
+                            panel derecho abierto ese menú se oculta, y el Resumen es
+                            de donde se llega acá. */}
+                        <button
+                          type="button"
+                          className={styles.backToOverview}
+                          onClick={() => setActiveChangeView('overview')}
+                        >
+                          <ChevronLeft size={13} aria-hidden="true" />
+                          <span>{t('pipeline.switcher.backToOverview')}</span>
+                        </button>
                         <OpenSpecTasksView
                           key={selectedChange.changeId}
                           repoPath={repoPath}
@@ -3110,6 +3144,7 @@ export function OpenSpecDashboard({
                           setSuccess={setSuccess}
                           resolveTaskLabel={resolveTaskLabel}
                           resolveTaskText={resolveTaskText}
+                          highlightTaskId={highlightedTaskId}
                         />
                       </section>
                     ))}

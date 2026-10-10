@@ -310,9 +310,14 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     expect(screen.getByRole('region', { name: 'pipeline.openspec.start.title' })).toBeTruthy();
     expect(screen.getByText('cambio-operativo')).toBeTruthy();
 
-    // 1.2 Tarea: Entrar al cambio conduce a la vista de tareas
+    // 1.2 Resumen -> Tarea: Entrar al cambio conduce a Resumen por defecto, y desde allí o el riel a Tareas
     const enterBtn = screen.getByRole('button', { name: /openspec\.start\.enter/ });
     fireEvent.click(enterBtn);
+
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
+
+    const tasksRailBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
+    fireEvent.click(tasksRailBtn);
 
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByText('1.1')).toBeTruthy();
@@ -340,8 +345,8 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     expect(screen.getByRole('region', { name: 'pipeline.switcher.artifacts' })).toBeTruthy();
 
     // Volver a tareas
-    const tasksRailBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
-    fireEvent.click(tasksRailBtn);
+    const backTasksRailBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
+    fireEvent.click(backTasksRailBtn);
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
 
     // Regresar al Objetivo general (inicio)
@@ -354,10 +359,14 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     const onSelectChange = vi.fn();
     const { container } = render(<SddHarness initialRightOpen={false} onSelectChange={onSelectChange} />);
 
-    // Entrar al cambio
+    // Entrar al cambio (abre en Resumen por defecto)
     fireEvent.click(screen.getByRole('button', { name: /openspec\.start\.enter/ }));
-    expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
     expect(usePipelineStore.getState().selectedChangeId).toBe('cambio-operativo');
+
+    // Conmutar a Tareas
+    fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
 
     // Estado inicial: flotante montado, inspector fijo oculto
     const railInitial = container.querySelector('nav[class*="switcherRail"]');

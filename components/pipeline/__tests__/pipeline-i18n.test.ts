@@ -132,6 +132,7 @@ const PIPELINE_KEYS = [
   'pipeline.switcher.views',
   'pipeline.switcher.toggle',
   'pipeline.switcher.toggleDisabledHelp',
+  'pipeline.switcher.overview',
   'pipeline.switcher.tasks',
   'pipeline.switcher.artifacts',
   'pipeline.switcher.diffs',

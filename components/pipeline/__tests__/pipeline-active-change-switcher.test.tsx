@@ -258,30 +258,36 @@ function renderStartScreen(options: { rightOpen?: boolean } = {}) {
 }
 
 describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
-  it('elegir una entrada del panel intercambia la vista del cuerpo entre tareas y artefactos', () => {
+  it('elegir una entrada del panel intercambia la vista del cuerpo entre resumen, tareas y artefactos', () => {
     renderActiveChange();
 
-    // 1. Por defecto en el cuerpo se monta la vista soberana de tareas
-    expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
-    expect(screen.getByRole('list')).toBeTruthy();
+    // 1. Por defecto en el cuerpo se monta la vista soberana de resumen
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
+    expect(screen.getByTestId('where-you-left-off-card')).toBeTruthy();
 
-    // 2. El rail ofrece la vista alternativa de artefactos
+    // 2. El rail ofrece tareas y artefactos
+    const tasksBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
+    expect(tasksBtn).toBeTruthy();
     const artifactsBtn = screen.getByRole('button', { name: 'pipeline.switcher.artifacts' });
     expect(artifactsBtn).toBeTruthy();
 
-    // 3. Al hacer clic en artefactos, el cuerpo pasa a mostrar artefactos y evidencia
-    fireEvent.click(artifactsBtn);
-    expect(screen.getByRole('region', { name: 'pipeline.switcher.artifacts' })).toBeTruthy();
-    expect(screen.getByRole('tablist', { name: 'pipeline.details.title' })).toBeTruthy();
-
-    // 4. El rail ahora ofrece tareas para poder volver
-    const tasksBtn = screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ });
-    expect(tasksBtn).toBeTruthy();
-
-    // 5. Al hacer clic en tareas, el cuerpo vuelve a mostrar las tareas
+    // 3. Al hacer clic en tareas, el cuerpo pasa a mostrar la lista de tareas
     fireEvent.click(tasksBtn);
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByRole('list')).toBeTruthy();
+
+    // 4. El rail ahora ofrece resumen para poder volver
+    const overviewBtn = screen.getByRole('button', { name: 'pipeline.switcher.overview' });
+    expect(overviewBtn).toBeTruthy();
+
+    // 5. Al hacer clic en artefactos, el cuerpo pasa a mostrar artefactos y evidencia
+    fireEvent.click(screen.getByRole('button', { name: 'pipeline.switcher.artifacts' }));
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.artifacts' })).toBeTruthy();
+    expect(screen.getByRole('tablist', { name: 'pipeline.details.title' })).toBeTruthy();
+
+    // 6. Al hacer clic en resumen, vuelve a la vista de resumen
+    fireEvent.click(screen.getByRole('button', { name: 'pipeline.switcher.overview' }));
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
   });
 
   it('sin diffs la entrada de diffs no existe en el panel y con diffs permite verlos', () => {
@@ -343,6 +349,9 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
 
   it('los textos de las tareas no se cortan con elipsis ni nowrap en los estilos', () => {
     renderActiveChange();
+
+    // Navegar a Tareas para ver la lista de tareas
+    fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
 
     // La tarea con texto largo se renderiza en el DOM completamente (número en strong, texto en span)
     const taskLabel = screen.getByText('1.1');
@@ -461,7 +470,9 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
   it('continuar con tarea abre pantalla dedicada de lanzador sin empujar tareas, y el riel ofrece volver a tareas o cancelar', () => {
     renderActiveChange();
 
-    // 1. Inicialmente se muestran las tareas
+    // 1. Inicialmente se muestra el resumen, y se puede navegar a tareas
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
     expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
     expect(screen.getByRole('list')).toBeTruthy();
 
@@ -651,6 +662,59 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
     const body = wrapper?.querySelector('div[class*="startBody"]');
     expect(rail).toBeTruthy();
     expect(body).toBeTruthy();
+  });
+
+  it('un cambio activo o archivado abre por omisión en Resumen', () => {
+    // Activo
+    const { unmount } = renderActiveChange();
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
+    expect(screen.getByTestId('where-you-left-off-card')).toBeTruthy();
+    unmount();
+
+    // Archivado
+    renderArchivedChange('cambio-archivado');
+    expect(screen.getByTestId('where-you-left-off-card')).toBeTruthy();
+  });
+
+  it('desde el Resumen, tocar la tarea en curso o una sección lleva a Tareas con la tarea resaltada', () => {
+    renderActiveChange();
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.overview' })).toBeTruthy();
+
+    // Tocar la tarea en curso
+    const currentTaskBtn = screen.getByTestId('resume-current-task-title');
+    fireEvent.click(currentTaskBtn);
+
+    // Conduce a la vista de Tareas
+    expect(screen.getByRole('region', { name: 'pipeline.switcher.tasks' })).toBeTruthy();
+    expect(screen.getByRole('list')).toBeTruthy();
+    const highlightedLi = document.querySelector('li[data-highlighted="true"]');
+    expect(highlightedLi).toBeTruthy();
+    expect(highlightedLi?.getAttribute('data-task-id')).toBe('t-1');
+  });
+
+  it('ninguna entrada del menú se duplica ni desaparece al alternar entre vistas', () => {
+    renderActiveChange();
+
+    // En Resumen: rail tiene start, tasks, artifacts (más openspec-config)
+    const rail = screen.getByRole('navigation', { name: 'pipeline.switcher.views' });
+    const viewButtonsInOverview = rail.querySelectorAll('button[data-view-id]');
+    const idsInOverview = Array.from(viewButtonsInOverview).map((b) => b.getAttribute('data-view-id'));
+    expect(idsInOverview).toEqual(['start', 'tasks', 'artifacts', 'openspec-config']);
+
+    // Ir a Tareas
+    fireEvent.click(screen.getByRole('button', { name: /pipeline\.switcher\.tasks/ }));
+    const idsInTasks = Array.from(rail.querySelectorAll('button[data-view-id]')).map((b) => b.getAttribute('data-view-id'));
+    expect(idsInTasks).toEqual(['start', 'overview', 'artifacts', 'openspec-config']);
+
+    // Ir a Artefactos
+    fireEvent.click(screen.getByRole('button', { name: 'pipeline.switcher.artifacts' }));
+    const idsInArtifacts = Array.from(rail.querySelectorAll('button[data-view-id]')).map((b) => b.getAttribute('data-view-id'));
+    expect(idsInArtifacts).toEqual(['start', 'overview', 'tasks', 'openspec-config']);
+
+    // Volver a Resumen
+    fireEvent.click(screen.getByRole('button', { name: 'pipeline.switcher.overview' }));
+    const idsBackToOverview = Array.from(rail.querySelectorAll('button[data-view-id]')).map((b) => b.getAttribute('data-view-id'));
+    expect(idsBackToOverview).toEqual(['start', 'tasks', 'artifacts', 'openspec-config']);
   });
 
   it('desde un cambio archivado y desde una especificación, el panel ofrece la salida adecuada', () => {

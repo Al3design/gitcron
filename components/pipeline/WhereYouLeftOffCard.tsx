@@ -34,6 +34,7 @@ export interface WhereYouLeftOffCardProps {
   recentCommits?: ChangeLastCommit[] | null;
   commitsAfterLastTask?: ChangeLastCommit[] | null;
   defaultExpandedDetail?: boolean;
+  onNavigateToTask?: (taskId: string) => void;
 }
 
 export function WhereYouLeftOffCard({
@@ -45,6 +46,7 @@ export function WhereYouLeftOffCard({
   recentCommits: recentCommitsProp,
   commitsAfterLastTask: commitsAfterLastTaskProp,
   defaultExpandedDetail = false,
+  onNavigateToTask,
 }: WhereYouLeftOffCardProps) {
   const t = useT();
   const lang = useGitStore((state) => state.language) ?? 'es';
@@ -215,12 +217,24 @@ export function WhereYouLeftOffCard({
         <dd className={styles.whereYouLeftOffRowValue} data-testid="resume-current-work">
           <div className={styles.whereYouLeftOffNextStepContent}>
             <div className={styles.whereYouLeftOffNextStepHeader}>
-              <span
-                className={currentWork.currentTask ? styles.whereYouLeftOffNextStepTitle : styles.whereYouLeftOffFallbackValue}
-                data-testid="resume-current-task-title"
-              >
-                {currentWork.statusText}
-              </span>
+              {currentWork.currentTask && onNavigateToTask ? (
+                <button
+                  type="button"
+                  className={cn(styles.whereYouLeftOffNextStepTitle, styles.whereYouLeftOffTaskLink)}
+                  data-testid="resume-current-task-title"
+                  onClick={() => onNavigateToTask(currentWork.currentTask!.id)}
+                  title={t('pipeline.resumeCard.goToTask')}
+                >
+                  {currentWork.statusText}
+                </button>
+              ) : (
+                <span
+                  className={currentWork.currentTask ? styles.whereYouLeftOffNextStepTitle : styles.whereYouLeftOffFallbackValue}
+                  data-testid="resume-current-task-title"
+                >
+                  {currentWork.statusText}
+                </span>
+              )}
               {currentWork.detail && (
                 <button
                   type="button"
@@ -298,18 +312,37 @@ export function WhereYouLeftOffCard({
             </span>
           ) : remainingWork.sections.length > 0 ? (
             <div className={styles.whereYouLeftOffRemainingList} data-testid="resume-remaining-sections">
-              {remainingWork.sections.map((sec) => (
-                <span
-                  key={sec.sectionName}
-                  className={cn(
-                    styles.whereYouLeftOffSectionBadge,
-                    sec.isCurrent && styles.whereYouLeftOffSectionCurrentBadge,
-                  )}
-                  data-current={sec.isCurrent || undefined}
-                >
-                  {sec.label}
-                </span>
-              ))}
+              {remainingWork.sections.map((sec) => {
+                const targetTaskId = sec.firstPendingTaskId ?? sec.firstTaskId;
+                const isClickable = Boolean(targetTaskId && onNavigateToTask);
+                return isClickable ? (
+                  <button
+                    key={sec.sectionName}
+                    type="button"
+                    className={cn(
+                      styles.whereYouLeftOffSectionBadge,
+                      styles.whereYouLeftOffSectionButton,
+                      sec.isCurrent && styles.whereYouLeftOffSectionCurrentBadge,
+                    )}
+                    data-current={sec.isCurrent || undefined}
+                    onClick={() => onNavigateToTask!(targetTaskId!)}
+                    title={t('pipeline.resumeCard.goToSectionTasks')}
+                  >
+                    {sec.label}
+                  </button>
+                ) : (
+                  <span
+                    key={sec.sectionName}
+                    className={cn(
+                      styles.whereYouLeftOffSectionBadge,
+                      sec.isCurrent && styles.whereYouLeftOffSectionCurrentBadge,
+                    )}
+                    data-current={sec.isCurrent || undefined}
+                  >
+                    {sec.label}
+                  </span>
+                );
+              })}
             </div>
           ) : null}
         </dd>

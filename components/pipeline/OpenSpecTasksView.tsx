@@ -52,6 +52,7 @@ export interface OpenSpecTasksViewProps {
   setSuccess?: (msg: string) => void;
   resolveTaskLabel?: (task: TaskEvidence) => string;
   resolveTaskText?: (task: TaskEvidence) => string;
+  highlightTaskId?: string | null;
 }
 
 export type ViewMode = 'list' | 'markdown';
@@ -90,6 +91,7 @@ export function OpenSpecTasksView({
   setSuccess,
   resolveTaskLabel: customResolveLabel,
   resolveTaskText: customResolveText,
+  highlightTaskId,
 }: OpenSpecTasksViewProps) {
   const t = useT();
 
@@ -106,6 +108,20 @@ export function OpenSpecTasksView({
   };
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+  useEffect(() => {
+    if (!highlightTaskId) return;
+    const timer = setTimeout(() => {
+      setViewMode('list');
+      const el = typeof document !== 'undefined'
+        ? document.querySelector(`[data-task-id="${highlightTaskId}"]`)
+        : null;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [highlightTaskId]);
   const [markdownMode, setMarkdownMode] = useState<MarkdownMode>(() => {
     try {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(MARKDOWN_VIEW_PREF_KEY) : null;
@@ -769,12 +785,15 @@ export function OpenSpecTasksView({
               const isDropTarget = dragOverTaskId === task.id;
               const details = parseTaskDetails(task);
               const isCheckOpen = expandedCheckTaskIds.has(task.id);
+              const isHighlighted = task.id === highlightTaskId;
 
               return (
                 <li
                   key={task.id}
+                  data-task-id={task.id}
                   data-completed={task.completed}
                   data-current={current}
+                  data-highlighted={isHighlighted ? 'true' : undefined}
                   data-dragging={isDragging || undefined}
                   data-drop-target={isDropTarget || undefined}
                   draggable={!isEditing && !fixtureActive && !isAnyBusy}
