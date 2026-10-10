@@ -1,12 +1,25 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
-    "electron/preload.ts"
+    "electron/preload.ts",
+    // Scripts que se corren a mano o desde package.json (verificar, tandas, capturas).
+    "scripts/**/*.mjs",
+    // Configuración y pruebas e2e: las arma el runner de e2e, no la app.
+    "e2e/**/*.ts"
   ],
   "ignoreDependencies": [
     "wait-on",
     // Node builtin (node:sqlite) — not an npm package, never in package.json.
-    "node:sqlite"
+    "node:sqlite",
+    // El motor de Cartografía (@colbymchenry/codegraph) las carga en tiempo de
+    // ejecución desde su bundle nativo. Tienen que ser dependencias directas para
+    // que electron-builder las meta en el app.asar: borrarlas rompe Cartografía en
+    // la versión instalada aunque todo pase en desarrollo (v1.10.2).
+    "@colbymchenry/codegraph-win32-x64",
+    "web-tree-sitter",
+    "commander",
+    "ignore",
+    "picomatch"
   ],
   // ProviderId existe a propósito en dos capas: la runtime (union estricta en
   // ai/providers) y la de storage (string laxo en db/types). Los consumidores

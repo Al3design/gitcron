@@ -38,7 +38,7 @@
 // porque `next dev` y el build usan la misma carpeta `.next`.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const todo = args.includes('--todo');
@@ -135,6 +135,9 @@ function extraerResumen(nombre, salida) {
       .filter(Boolean)
       .join(' · ');
   }
+  if (nombre === 'fallow') {
+    return salida.trim().split(/\r?\n/).pop() ?? '';
+  }
   if (nombre === 'build:electron') {
     return 'dist/main.js · dist/preload.js';
   }
@@ -165,6 +168,27 @@ function ultimasLineas(texto, cantidad) {
  * Trampas medidas del ejecutor. No reemplazan la lectura del diff: avisan de lo
  * que ya pasó más de una vez.
  */
+/**
+ * Capturas en la carpeta de reportes más reciente que son anteriores al último
+ * cambio de código tocado: no muestran el código que se entrega.
+ */
+function capturasViejas(tocados) {
+  const raiz = 'tmp/reportes';
+  if (!existsSync(raiz)) return [];
+  const carpetas = readdirSync(raiz, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => `${raiz}/${d.name}`)
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  const carpeta = carpetas[0];
+  if (!carpeta) return [];
+  const capturas = readdirSync(carpeta).filter((f) => f.endsWith('.png')).map((f) => `${carpeta}/${f}`);
+  const codigo = tocados.filter((f) => /.(tsx?|css)$/.test(f) && !/__tests__|.test./.test(f) && existsSync(f));
+  if (capturas.length === 0 || codigo.length === 0) return [];
+  const ultimoCodigo = Math.max(...codigo.map((f) => statSync(f).mtimeMs));
+  const viejas = capturas.filter((f) => statSync(f).mtimeMs < ultimoCodigo);
+  return viejas.length > 0 ? [`${carpeta}: ${viejas.length} captura(s) anteriores al último cambio de código`] : [];
+}
+
 function trampas() {
   const avisos = [];
   const tocados = archivosTocados();
@@ -193,7 +217,40 @@ function trampas() {
     // Silenciar una regla de lint es tapar un error, no arreglarlo. Medido en
     // la tanda 4d: dos disables para esconder setState en efecto y deps faltantes.
     if (/eslint-disable/.test(texto)) avisos.push(`${archivo}: eslint-disable agregado`);
+    // Aflojar una protección para que algo pase. Medido el 2026-10-09: para que pasara
+    // una prueba de submódulos se habilitó file:// en el programa (protocol.file.allow
+    // con allowUnsafeProtocolOverride), lo que git bloquea desde 2022.
+    if (/allowUnsafe|protocol\.[a-z]+\.allow|dangerously|--no-verify/.test(texto)) {
+      avisos.push(`${archivo}: protección aflojada (allowUnsafe / protocol.*.allow / dangerously): revisar si hace falta en el programa`);
+    }
+    // Un error tragado sin decir nada esconde el próximo fallo.
+    if (/catch\s*(\([^)]*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(texto)) {
+      avisos.push(`${archivo}: catch vacío agregado`);
+    }
   }
+
+  // Pruebas que se ablandan para pasar.
+  const pruebas = tocados.filter((f) => /__tests__|\.test\.|\.e2e\./.test(f));
+  for (const archivo of pruebas) {
+    const agregado = git(`diff -U0 ${base} -- "${archivo}"`).split(/\r?\n/)
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
+    if (/\.(skip|only)\(/.test(agregado)) avisos.push(`${archivo}: .skip / .only agregado`);
+    // Subir el límite de tiempo de una prueba tapa lentitud real o una espera mal
+    // hecha; a veces es legítimo (git real en Windows), pero se mira.
+    if (/\},\s*\d[\d_]{3,}\s*\)|testTimeout|timeout:\s*\d[\d_]{4,}/.test(agregado)) {
+      avisos.push(`${archivo}: límite de tiempo de prueba subido`);
+    }
+    // En e2e, elegir por posición (.first / .nth) en vez de por nombre o región se
+    // rompe en cuanto cambia el orden. Medido en la tanda 29b.
+    if (/\.e2e\./.test(archivo) && /\.(first|nth)\(/.test(agregado)) {
+      avisos.push(`${archivo}: localizador por posición (.first / .nth) en e2e`);
+    }
+  }
+
+  // Capturas de la tanda más viejas que el código que dicen mostrar. Medido el
+  // 2026-10-09: una captura de las 18:30 se entregó como evidencia de código que
+  // siguió cambiando hasta las 19:04.
+  avisos.push(...capturasViejas(tocados));
   for (const archivo of tocados.filter((f) => f.endsWith('.css'))) {
     const diff = git(`diff -U0 ${base} -- "${archivo}"`);
     const agregado = diff.split(/\r?\n/).filter((l) => l.startsWith('+') && !l.startsWith('+++')).join('\n');
@@ -301,6 +358,14 @@ function main() {
       comando: `pnpm exec openspec validate ${change} --strict`,
       cuando: change !== null,
       motivoSalto: 'la rama no es change/<id>; usar --change',
+    },
+    {
+      // Código muerto, complejidad y duplicación que agregó lo tocado (no lo que ya
+      // estaba): segundos para lo que a la auditoría le lleva leer archivo por archivo.
+      nombre: 'fallow',
+      comando: `node scripts/fallow-tocados.mjs --desde ${base}`,
+      cuando: tocadosCodigoTodos.some((f) => /\.(ts|tsx|mjs|js)$/.test(f)),
+      motivoSalto: 'ningún archivo de código tocado',
     },
     { nombre: 'git diff --check', comando: 'git diff --check', cuando: true },
   ];
