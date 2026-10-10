@@ -51,7 +51,7 @@ Las pruebas actuales de SDD siguen pasando sin cambiar lo que comprueban; sólo 
 ## Risks / Trade-offs
 
 - Pasar demasiadas props entre el armazón y las zonas vuelve a acoplar todo: si una zona necesita más de diez, su lógica va a un hook.
-- Mover clases de CSS puede romper selectores anidados entre zonas: buscar cada clase antes de moverla.
+- Mover clases de CSS puede romper selectores anidados entre zonas: buscar cada clase antes de moverla. Con módulos CSS, una clase copiada a otro archivo es otra clase. Una regla combinada (`.a .b`, `.a + .b`, `.a:has(.b)`) funciona sólo si las dos clases viven en el mismo módulo que usa el componente que las dibuja. Medido en las tandas 1 y 3: `.startScreen` quedó copiada en seis archivos, y `.completedStamps .changeStamp` se mudó a SddArchivedChange mientras las fechas las dibuja ChangeTimestampLabel con el módulo compartido, así que las fechas se separaron 16 px. Una regla que cruza módulos se queda en `OpenSpecDashboard.module.css`.
 - Choques con otras tandas sobre los mismos archivos: no correr esta partición en paralelo con trabajo en SDD.
 
 ## Migration Plan
