@@ -63,6 +63,17 @@ operations:
         sin un límite fijo de archivos ni equivalencia obligatoria entre casilla y prompt.
         Las rutas orientan el alcance, no prohíben leer dependencias necesarias.
       - >-
+        Desde el 2026-10-10 la ejecutora es una IA local con contexto de hasta 120.000 tokens
+        (Qwen3.8 27B por OpenCode o DeepSeek Harness, o Qwen3.8 Flash Next en Strata). Con
+        ella, el prompt es autocontenido: dice qué archivos leer y en qué líneas, trae las
+        firmas, tipos, imports y el esqueleto ya resueltos por el orquestador, y prohíbe
+        explorar con búsquedas. Si le queda algo por averiguar, la IA local sale a buscar y
+        entra en bucle; en el proyecto de preinscriptos TED repitió la misma búsqueda 246
+        veces sin escribir nada. Una tanda toca pocos archivos, y el orquestador la parte
+        antes que pedirle a la IA que abarque una zona entera. El reporte de la IA local no
+        se toma como prueba: el orquestador corre `pnpm verificar`, compara las capturas y
+        lee el diff.
+      - >-
         El orquestador prepara el contexto y audita el diff y sus consumidores reales;
         la IA local implementa la tanda. Las decisiones pendientes se explicitan cuando
         cambian el alcance; las correcciones normales dentro del encargo no requieren
