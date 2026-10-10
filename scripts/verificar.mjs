@@ -70,7 +70,7 @@ const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 
  * actualiza acá con causa. Medidos el 2026-09-21.
  */
 const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1133 }, // corrido de 1117 en retomar-03: import de Milestone y activeChangeView overview (antes de 1116 en retomar-01)
+  { archivo: 'components/pipeline/OpenSpecDashboard.tsx', linea: 1031 }, // corrido de 1133 en modularizar-01: extracción de vistas (antes de 1117 en retomar-03)
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 175 }, // corrido de 162 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 135 en 07)
   { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 231 }, // corrido de 218 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 191 en 07)
   { archivo: 'components/cartography/CartoAskBox.tsx', linea: 65 }, // preexistente (linea 63 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14

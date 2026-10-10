@@ -60,7 +60,6 @@ import { MIN_CONTEXT_LENGTH, filterDraftableModels, type CommitAiLastRequest, ty
 import { useRememberedAiModel, useRememberedAiSettings, rememberAiSettings, rememberAiModel as rememberAiModelGlobally, getRememberedAiModel, formatAiDeviceLabel } from '@/lib/ai-model-memory';
 import { useT } from '@/hooks/use-translation';
 import type { RuntimeProjection } from '@/types/pipeline';
-import { ActivityFeed } from './ActivityFeed';
 import { PipelineDetails, type DetailTab } from './PipelineDetails';
 import { PipelineRuntimeLauncher } from './PipelineRuntimeLauncher';
 import { useReducedMotion } from 'motion/react';
@@ -70,11 +69,18 @@ import { WhereYouLeftOffCard } from './WhereYouLeftOffCard';
 import { OpenSpecUpdateReview } from './OpenSpecUpdateReview';
 import type { ArchivePlan, OpenSpecEngineStatus, OpenSpecInstallPlan, OpenSpecRegistryCheck, OpenSpecUpdatePlan } from '@/types/pipeline';
 import { SpecificationViewer } from './SpecificationViewer';
-import { LazyDiffViewer } from './LazyDiffViewer';
 import { TaskConfirmToast } from './TaskConfirmToast';
-import { OpenSpecTasksView } from './OpenSpecTasksView';
 import { PipelineNewChangeFlow, type PipelineNewChangeMode } from './PipelineNewChangeFlow';
 import { ViewSwitcherRail, type ViewSwitcherItem } from './ViewSwitcherRail';
+import {
+  useSddNavigation,
+  type ActiveChangeView,
+  SddOverviewView,
+  SddTasksView,
+  SddArtifactsView,
+  SddDiffsView,
+  SddActivityView,
+} from './sdd';
 import { AiModelControls } from './AiModelControls';
 import { AiUseLine } from '../ai/AiUseLine';
 import { AiSentDetails } from '../ai/AiSentDetails';
@@ -334,12 +340,6 @@ export function OpenSpecDashboard({
    */
   const [launchTarget, setLaunchTarget] = useState<{ instruction: string; taskId: string | null } | null>(null);
   /**
-   * El launcher descubre los runtimes de forma asíncrona. Mientras no resolvió,
-   * su interior está vacío; el panel contenedor no pinta su marco hasta que haya
-   * algo para ver, para no ofrecer un recuadro vacío.
-   */
-  const [launcherLoading, setLauncherLoading] = useState(false);
-  /**
    * Archivado pendiente de confirmación humana.
    *
    * Archivar escribe en el repositorio —mueve el change y consolida sus specs—,
@@ -480,14 +480,6 @@ export function OpenSpecDashboard({
 
   type StartView = 'in-progress' | 'archived' | 'new-change';
   const [activeStartView, setActiveStartView] = useState<StartView>(() => (draft.open ? 'new-change' : 'in-progress'));
-  type ActiveChangeView = 'overview' | 'tasks' | 'artifacts' | 'diffs' | 'activity';
-  const [activeChangeView, setActiveChangeView] = useState<ActiveChangeView>('overview');
-  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
-
-  const handleNavigateToTask = (taskId: string) => {
-    setActiveChangeView('tasks');
-    setHighlightedTaskId(taskId);
-  };
   /**
    * Aclaración de arquitectura (Revisión visual 4.6 / Tarea 3.4):
    * Que el control «Alternar resumen fijado» corra el contenido del medio para hacerle
@@ -907,116 +899,22 @@ export function OpenSpecDashboard({
   const hasDiffs = hasDiffEvidence(snapshot);
   const hasActivity = runtimeActive || visibleActivity.length > 0;
 
-  const changeViews: ViewSwitcherItem[] = useMemo(() => {
-    if (launchTarget) {
-      return [
-        {
-          id: 'tasks',
-          label: t('pipeline.switcher.tasksReturn'),
-          count: selectedChange ? selectedChange.tasks.length : null,
-          icon: <ListChecks size={13} />,
-          slotIndex: 1,
-        },
-        {
-          id: 'start',
-          label: t('pipeline.switcher.start'),
-          icon: <Undo2 size={13} />,
-          slotIndex: 2,
-        },
-      ];
-    }
-    const items: ViewSwitcherItem[] = [];
-
-    // Ranura 1: Volver a cambios en curso (navegación contextual dinámica del panel)
-    items.push({
-      id: 'start',
-      label: t('pipeline.openspec.start.inProgress'),
-      icon: <ListTodo size={13} />,
-      slotIndex: 1,
-    });
-
-    // Vista nueva «Resumen», primera del menú de cambio
-    if (activeChangeView !== 'overview') {
-      items.push({
-        id: 'overview',
-        label: t('pipeline.switcher.overview'),
-        icon: <Milestone size={13} />,
-        slotIndex: 2,
-      });
-    }
-
-    // Tareas (con contador de pendientes)
-    if (activeChangeView !== 'tasks') {
-      items.push({
-        id: 'tasks',
-        label: t('pipeline.switcher.tasks'),
-        count: selectedChange ? pendingOf(selectedChange).length : 0,
-        icon: <ListChecks size={13} />,
-        slotIndex: 3,
-      });
-    }
-
-    // Artefactos y evidencia
-    if (activeChangeView !== 'artifacts') {
-      items.push({
-        id: 'artifacts',
-        label: t('pipeline.switcher.artifacts'),
-        icon: <FileText size={13} />,
-        slotIndex: 4,
-      });
-    }
-
-    // Diffs (sólo si hay cambios sin confirmar)
-    if (hasDiffs && activeChangeView !== 'diffs') {
-      items.push({
-        id: 'diffs',
-        label: t('pipeline.switcher.diffs'),
-        count: snapshot.diffs?.length ?? 0,
-        icon: <Code2 size={13} />,
-        slotIndex: 5,
-      });
-    }
-
-    // Actividad (sólo si hay sesión o bitácora)
-    if (hasActivity && activeChangeView !== 'activity') {
-      items.push({
-        id: 'activity',
-        label: t('pipeline.switcher.activity'),
-        badge: runtimeActive ? t('pipeline.openspec.task.running') : undefined,
-        count: visibleActivity.length > 0 ? visibleActivity.length : null,
-        icon: <Activity size={13} />,
-        slotIndex: 5,
-      });
-    }
-
-    // Asignación estable y contigua de ranuras (1..N sin duplicados ni huecos)
-    items.forEach((item, index) => {
-      item.slotIndex = index + 1;
-    });
-
-    return items;
-  }, [launchTarget, activeChangeView, selectedChange, hasDiffs, hasActivity, snapshot.diffs?.length, runtimeActive, visibleActivity.length, t]);
-
-
-  /**
-   * Evidencia observada de la sesión ligada al cambio seleccionado.
-   *
-   * Es evidencia **de sesión**, no de tarea: ningún runtime atribuye archivos ni
-   * líneas a una tarea concreta de `tasks.md`. Mostrarla como si fuera por tarea
-   * sería inventar la atribución, así que se rotula por lo que realmente es y
-   * queda `null` cuando el stream no la reportó.
-   */
-  const changeSession = projection && selectedChange && projection.changeId === selectedChange.changeId
-    ? projection
-    : null;
-  const gitDelta = (() => {
-    const entry = changeSession?.activity.find((item) => item.text?.startsWith('git.changed '));
-    const match = entry?.text ? /^git\.changed files=(\d+) additions=(\d+|unknown) deletions=(\d+|unknown)$/.exec(entry.text) : null;
-    return match ? { files: match[1], additions: match[2], deletions: match[3] } : null;
-  })();
-  const lastObservedActivity = changeSession?.activity
-    .filter((item) => item.channel === 'narrative' || item.channel === 'tool')
-    .at(-1)?.text ?? null;
+  const {
+    activeChangeView,
+    setActiveChangeView,
+    highlightedTaskId,
+    setHighlightedTaskId,
+    handleNavigateToTask,
+    changeViews,
+  } = useSddNavigation({
+    selectedChange,
+    launchTarget,
+    hasDiffs,
+    hasActivity,
+    diffCount: snapshot.diffs?.length ?? 0,
+    activityCount: visibleActivity.length > 0 ? visibleActivity.length : null,
+    runtimeActive,
+  });
 
   /**
    * Abre un artefacto en la columna central.
@@ -3072,121 +2970,66 @@ export function OpenSpecDashboard({
                   </div>
                 )}
 
-                {/* Vista 1: RESUMEN (pantalla de inicio del cambio) */}
+                {/* Vistas del cambio: Resumen, Tareas, Artefactos, Diffs, Actividad */}
                 {activeChangeView === 'overview' && (
-                  <section className={styles.startScreen} aria-label={t('pipeline.switcher.overview')}>
-                    <WhereYouLeftOffCard
-                      repoPath={repoPath}
-                      selectedChange={selectedChange}
-                      nextTask={nextTask}
-                      latestSession={runtimeSessions[0] ?? null}
-                      onNavigateToTask={handleNavigateToTask}
-                    />
-                  </section>
+                  <SddOverviewView
+                    repoPath={repoPath}
+                    selectedChange={selectedChange}
+                    nextTask={nextTask}
+                    latestSession={runtimeSessions[0] ?? null}
+                    onNavigateToTask={handleNavigateToTask}
+                  />
                 )}
 
-                  {/* Vista A: TAREAS (o pantalla dedicada de continuación) */}
-                  {activeChangeView === 'tasks' && (
-                    launchTarget ? (
-                      <section className={styles.startScreen} aria-label={t('pipeline.openspec.launcher.title')}>
-                        <div
-                          className={cn(styles.centerBlock, styles.launcherPanel)}
-                          data-launcher-loading={launcherLoading || undefined}
-                        >
-                          <h4 className={styles.blockHeader}>
-                            <Play size={13} aria-hidden="true" />
-                            <span>{t('pipeline.openspec.launcher.title')}</span>
-                          </h4>
-                          <PipelineRuntimeLauncher
-                            key={`${selectedChange.changeId}:${launchTarget.taskId ?? 'archive'}`}
-                            repoPath={repoPath}
-                            projection={projection}
-                            intent="implement-task"
-                            initialInstruction={launchTarget.instruction}
-                            changeId={selectedChange.changeId}
-                            taskId={launchTarget.taskId}
-                            blockedByFixture={fixtureActive}
-                            startLabelKey={launchTarget.taskId ? 'pipeline.launcher.startApply' : 'pipeline.launcher.startArchive'}
-                            onStarted={() => {
-                              setLaunchTarget(null);
-                              setActiveChangeView('activity');
-                              setCenterTab('activity');
-                            }}
-                            onDiscoveringChange={setLauncherLoading}
-                          />
-                        </div>
-                      </section>
-                    ) : (
-                      <section className={styles.startScreen} aria-label={t('pipeline.switcher.tasks')}>
-                        {/* La vuelta al Resumen no depende del menú de vistas: con el
-                            panel derecho abierto ese menú se oculta, y el Resumen es
-                            de donde se llega acá. */}
-                        <button
-                          type="button"
-                          className={styles.backToOverview}
-                          onClick={() => setActiveChangeView('overview')}
-                        >
-                          <ChevronLeft size={13} aria-hidden="true" />
-                          <span>{t('pipeline.switcher.backToOverview')}</span>
-                        </button>
-                        <OpenSpecTasksView
-                          key={selectedChange.changeId}
-                          repoPath={repoPath}
-                          selectedChange={selectedChange}
-                          fixtureActive={fixtureActive}
-                          runtimeActive={runtimeActive}
-                          runningName={runningName}
-                          nextTask={nextTask}
-                          changeSession={changeSession}
-                          gitDelta={gitDelta}
-                          lastObservedActivity={lastObservedActivity}
-                          onRefresh={onRefresh}
-                          setSuccess={setSuccess}
-                          resolveTaskLabel={resolveTaskLabel}
-                          resolveTaskText={resolveTaskText}
-                          highlightTaskId={highlightedTaskId}
-                        />
-                      </section>
-                    ))}
+                {activeChangeView === 'tasks' && (
+                  <SddTasksView
+                    repoPath={repoPath}
+                    selectedChange={selectedChange}
+                    launchTarget={launchTarget}
+                    runtime={{
+                      projection,
+                      fixtureActive,
+                      runtimeActive,
+                      runningName,
+                    }}
+                    nextTask={nextTask}
+                    highlightTaskId={highlightedTaskId}
+                    onBackToOverview={() => setActiveChangeView('overview')}
+                    onLaunchStarted={() => {
+                      setLaunchTarget(null);
+                      setActiveChangeView('activity');
+                      setCenterTab('activity');
+                    }}
+                    onRefresh={onRefresh}
+                    setSuccess={setSuccess}
+                  />
+                )}
 
-                  {/* Vista B: ARTEFACTOS Y EVIDENCIA */}
-                  {activeChangeView === 'artifacts' && (
-                    <section className={styles.startScreen} aria-label={t('pipeline.switcher.artifacts')}>
-                      <PipelineDetails
-                        snapshot={snapshot}
-                        repoPath={repoPath}
-                        selectedChange={selectedChange}
-                        tab={evidenceTab}
-                        onTabChange={setEvidenceTab}
-                      />
-                    </section>
-                  )}
+                {activeChangeView === 'artifacts' && (
+                  <SddArtifactsView
+                    snapshot={snapshot}
+                    repoPath={repoPath}
+                    selectedChange={selectedChange}
+                    tab={evidenceTab}
+                    onTabChange={setEvidenceTab}
+                  />
+                )}
 
-                  {/* Vista C: DIFFS (sólo si hay cambios sin confirmar) */}
-                  {activeChangeView === 'diffs' && (
-                    <section className={styles.startScreen} aria-label={t('pipeline.switcher.diffs')}>
-                      <div className={styles.centerBlock}>
-                        <LazyDiffViewer
-                          diffs={snapshot.diffs ?? []}
-                          agentRuntimes={Object.fromEntries(snapshot.agents.map((agent) => [agent.agentId, agent.runtime]))}
-                        />
-                      </div>
-                    </section>
-                  )}
+                {activeChangeView === 'diffs' && (
+                  <SddDiffsView
+                    diffs={snapshot.diffs ?? []}
+                    agentRuntimes={Object.fromEntries(snapshot.agents.map((agent) => [agent.agentId, agent.runtime]))}
+                  />
+                )}
 
-                  {/* Vista D: ACTIVIDAD (sólo si hay sesión o bitácora) */}
-                  {activeChangeView === 'activity' && (
-                    <section className={styles.startScreen} aria-label={t('pipeline.switcher.activity')}>
-                      <div className={styles.centerBlock}>
-                        <ActivityFeed
-                          entries={visibleActivity}
-                          reasoningAvailable={selectedReasoningAvailable}
-                          runtimeAttached={selectedSession !== null || projection !== null}
-                          agentRuntimes={Object.fromEntries(snapshot.agents.map((agent) => [agent.agentId, agent.runtime]))}
-                        />
-                      </div>
-                    </section>
-                  )}
+                {activeChangeView === 'activity' && (
+                  <SddActivityView
+                    entries={visibleActivity}
+                    reasoningAvailable={selectedReasoningAvailable}
+                    runtimeAttached={selectedSession !== null || projection !== null}
+                    agentRuntimes={Object.fromEntries(snapshot.agents.map((agent) => [agent.agentId, agent.runtime]))}
+                  />
+                )}
                 </div>
               </div>
           ) : selectedArchive ? (

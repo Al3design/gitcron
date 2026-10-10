@@ -543,7 +543,9 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
     // Observación 41: Extraemos las declaraciones de font-size de .blockHeader y de los controles vivos del panel (.railActionItem, que reemplaza al histórico .backToStart)
-    const blockHeaderMatch = cssContent.match(/\.blockHeader\s*\{[^}]*font-size:\s*var\((--font-size-[a-z0-9-]+)\)/);
+    // .blockHeader vive en el módulo de la vista Tareas desde modularizar-sdd.
+    const tasksCss = fs.readFileSync(path.resolve(__dirname, '../sdd/views/SddTasksView.module.css'), 'utf-8');
+    const blockHeaderMatch = tasksCss.match(/\.blockHeader\s*\{[^}]*font-size:\s*var\((--font-size-[a-z0-9-]+)\)/);
     const buttonMatch = cssContent.match(/(?:\.railItem|\.railActionItem)[^{]*\{[^}]*font-size:\s*var\((--font-size-[a-z0-9-]+)\)/);
 
     expect(blockHeaderMatch).not.toBeNull();

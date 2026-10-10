@@ -1,0 +1,40 @@
+/* Sólo lo que usa la vista Tareas. Lo compartido (startScreen, centerBlock,
+   launcherPanel) sigue en OpenSpecDashboard.module.css: copiarlo acá crea otra
+   clase y deja afuera las reglas combinadas del original. */
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-2);
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.blockHeader > svg {
+  flex: 0 0 auto;
+}
+
+/* Vuelta al Resumen (visible aunque el menú de vistas esté oculto). */
+.backToOverview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-default);
+  cursor: pointer;
+}
+
+.backToOverview:hover {
+  background: var(--color-bg-overlay);
+}

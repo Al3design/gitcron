@@ -1774,20 +1774,6 @@ summary.centerBlock {
   margin-bottom: 0;
 }
 
-.blockHeader {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin: 0 0 var(--sp-2);
-  font-weight: 600; font-size: var(--font-size-md); font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-primary);
-}
-
-.blockHeader > svg {
-  flex: 0 0 auto;
-}
 
 /* El aviso: una línea. El detalle vive en el rail, así que acá sólo hace falta
    lo que interrumpe. Ocupa el ancho del contenedor como el resto de los bloques
@@ -5474,24 +5460,4 @@ summary.centerBlock {
   .whereYouLeftOffRowLabel {
     margin-top: var(--space-1);
   }
-}
-
-/* Vuelta al Resumen desde la vista Tareas (visible aunque el menú de vistas esté oculto). */
-.backToOverview {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  align-self: flex-start;
-  margin-bottom: var(--space-2);
-  padding: var(--space-1) var(--space-2);
-  font-size: var(--font-size-xs);
-  color: var(--color-primary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-default);
-  cursor: pointer;
-}
-
-.backToOverview:hover {
-  background: var(--color-bg-overlay);
 }
