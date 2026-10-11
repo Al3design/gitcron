@@ -10,6 +10,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
 import type { AiTextUse } from '@/types/ai-use';
 import type { CommitAiLastRequest } from '@/types/commit-message-ai';
+import { cn } from '@/lib/utils';
+import { Stack, PlainList } from '@/components/ui';
 import styles from './AiSentDetails.module.css';
 
 export interface AiSentDetailsProps {
@@ -53,13 +55,13 @@ export function AiSentDetails({ use, request: externalRequest, busy, className }
   if (!req) {
     if (busy) {
       return (
-        <div className={`${styles.aiSentSection} ${className ?? ''}`.trim()}>
+        <Stack gap="2" className={cn(styles.aiSentSection, className)}>
           <span className={styles.aiSendingText}>
             <span>
               <span className="ai-thinking-text">{t('aiUse.sending')}</span>
             </span>
           </span>
-        </div>
+        </Stack>
       );
     }
     return null;
@@ -73,7 +75,7 @@ export function AiSentDetails({ use, request: externalRequest, busy, className }
   };
 
   return (
-    <div className={`${styles.aiSentSection} ${className ?? ''}`.trim()}>
+    <Stack gap="2" className={cn(styles.aiSentSection, className)}>
       <button
         type="button"
         className={styles.aiSentToggle}
@@ -101,14 +103,14 @@ export function AiSentDetails({ use, request: externalRequest, busy, className }
             <dt>{t('pipeline.openspec.prepare.aiSentParams')}</dt>
             <dd>
               {Object.keys(req.parameters).length > 0 ? (
-                <ul className={styles.aiSentParamList}>
+                <PlainList gap="1" className={styles.aiSentParamList}>
                   {Object.entries(req.parameters).map(([key, item]) => (
                     <li key={key}>
                       <code>{key}</code>: <span>{typeof item.value === 'object' ? JSON.stringify(item.value) : String(item.value)}</span>
                       <span className={styles.aiSentProvenance}> ({sentOrigin(item)})</span>
                     </li>
                   ))}
-                </ul>
+                </PlainList>
               ) : (
                 <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
               )}
@@ -116,14 +118,14 @@ export function AiSentDetails({ use, request: externalRequest, busy, className }
             <dt>{t('pipeline.openspec.prepare.aiSentHeaders')}</dt>
             <dd>
               {req.headers.length > 0 ? (
-                <ul className={styles.aiSentHeaderList}>
+                <PlainList gap="1" className={styles.aiSentHeaderList}>
                   {req.headers.map((h) => (
                     <li key={h.name}>
                       <code>{h.name}</code>
                       <span className={styles.aiSentProvenance}> ({sentOrigin(h)})</span>
                     </li>
                   ))}
-                </ul>
+                </PlainList>
               ) : (
                 <span>{t('pipeline.openspec.prepare.aiSentNone')}</span>
               )}
@@ -137,6 +139,6 @@ export function AiSentDetails({ use, request: externalRequest, busy, className }
           </dl>
         </div>
       )}
-    </div>
+    </Stack>
   );
 }

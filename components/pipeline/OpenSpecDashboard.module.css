@@ -208,8 +208,6 @@
   background: var(--color-bg-base);
 }
 
-
-
 .tabsRow {
   display: flex;
   flex: 0 0 auto;
@@ -411,8 +409,6 @@
   outline-offset: var(--focus-offset);
 }
 
-
-
 /* El mensaje se corrige acá, donde se decide qué entra. */
 /* La rama del cambio, declarada antes de crearse. Es una escritura de Git, así
    que se ve y se puede desactivar. */
@@ -421,8 +417,6 @@
 .flowCheck > span { display: grid; gap: var(--space-1); min-width: 0; }
 .flowCheck strong { color: var(--color-text-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; overflow-wrap: anywhere; }
 .flowCheck em { color: var(--color-text-secondary); font-size: var(--font-size-xs); line-height: 1.45; font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
-
-
 
 /* La frase de espera, debajo del campo.
    Se probó encima, con fondo semitransparente, y se leía encimada con el texto
@@ -478,48 +472,6 @@
   font-family: var(--font-mono), ui-monospace, monospace;
 }
 
-.aiSentDetails {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-base);
-  font-size: var(--font-size-xs);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  color: var(--color-text-secondary);
-}
-.aiSentList {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-1) var(--space-3);
-  margin: 0;
-  padding: 0;
-}
-.aiSentList dt {
-  font-weight: 650;
-  color: var(--color-text-primary);
-}
-.aiSentList dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.aiSentProvenance {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-.aiSentParamList,
-.aiSentHeaderList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.aiSentParamList code,
-.aiSentHeaderList code {
-  color: var(--color-text-primary);
-  font-family: inherit;
-}
 /* El contador vive dentro de la fila de la IA, en el hueco que dejan los dos
    números. Antes estaba en una línea propia arriba: aparecía de golpe al
    apretar el botón y empujaba el panel entero hacia abajo, justo en el momento
@@ -800,7 +752,6 @@
   background-color: var(--color-bg-base);
 }
 
-
 /* Acción textual dentro de una línea de texto: sumar o quitar toda la lista.
    No compite con el botón de preparar, que es la acción real del panel. */
 .linkAction {
@@ -864,9 +815,6 @@
 .archiveConfirmHead > strong { color: var(--color-primary); font-weight: 650; font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 .archiveConfirmHead > span { color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 .archiveConfirm .actions { margin-top: 0; }
-
-
-
 
 .spin { animation: archiveSpin 0.9s linear infinite; }
 @keyframes archiveSpin { to { transform: rotate(360deg); } }
@@ -956,12 +904,6 @@
   font-style: normal;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono), ui-monospace, monospace;
-}
-
-.draftLogReasoningBox {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 
 .draftLogReasoningHeader {
@@ -1173,8 +1115,6 @@
 /* Con relleno a los costados por lo mismo que .draftLog: sin él quedaba pegado a los bordes. */
 .railMeta { display: flex; justify-content: space-between; padding: var(--space-2) var(--space-3); color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; }
 
-
-
 /* `.startScreenWrapper` es el contenedor del anclaje de `.switcherRail` (Tarea 4.10):
    Aloja al panel y a `.startBody` como hermanos flex dentro de `.center` (`overflow-y: auto`).
    Se declara `flex: 1 0 auto` (prohibiendo `flex-shrink: 1`) para evitar que el wrapper se encoja
@@ -1198,8 +1138,6 @@
   order: 1;
 }
 
-
-
 .startScreen {
   display: flex;
   min-height: 0;
@@ -1220,29 +1158,12 @@
   padding-bottom: var(--space-3);
 }
 
-.startHeaderTitleGroup {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.startHeaderTitleGroup > h3 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-weight: 650;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.04em;
-}
-
 .startSpecsBadge {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-family: var(--font-mono), ui-monospace, monospace;
 }
-
-
 
 /* Lo que le falta al repositorio para que el método funcione.
    Ámbar y no rojo: es algo que conviene resolver, no un fallo. Va arriba de la
@@ -1256,7 +1177,6 @@
 summary.centerBlock {
   margin-bottom: 0;
 }
-
 
 /* El aviso: una línea. El detalle vive en el rail, así que acá sólo hace falta
    lo que interrumpe. Ocupa el ancho del contenedor como el resto de los bloques
@@ -1302,7 +1222,6 @@ summary.centerBlock {
 .branchBase > em { display: block; margin-top: var(--space-1); font-style: normal; opacity: 0.75; }
 
 .startScreen .readiness { margin-inline: 0; }
-
 
 .readinessList { display: grid; gap: var(--space-1); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 /* Nombre, carpeta y estado juntos a la izquierda, del ancho de su texto: con
@@ -1526,10 +1445,8 @@ summary.centerBlock {
   font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace;
 }
 
-.sessionRanAt { color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
-.sessionContinues { color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
-.sessionRanAt, .sessionContinues { flex-basis: 100%; }
-
+/* La hora de la sesión y «continúa» bajan a su propia línea dentro del encabezado. */
+.sessionMoment { flex-basis: 100%; }
 
 .flowFields { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-4); }
 .flowField { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -1550,9 +1467,6 @@ summary.centerBlock {
 .flowField input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .flowField [aria-invalid='true'] { border-color: var(--color-error); }
 .flowError { color: var(--color-error); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
-.flowHint { color: var(--color-text-secondary); font-size: var(--font-size-xs); font-family: var(--font-mono), ui-monospace, monospace; font-style: normal; }
-
-
 
 @container (max-width: 860px) {
   .intentSwitch { flex-wrap: wrap; }
@@ -1952,7 +1866,6 @@ summary.centerBlock {
   gap: var(--space-3);
 }
 
-
 .cliDiagnosticHeader {
   display: flex;
   align-items: center;
@@ -1977,7 +1890,6 @@ summary.centerBlock {
   padding: var(--space-1) 0;
 }
 
-
 .cliDiagnosticItem {
   display: flex;
   flex-direction: column;
@@ -1987,7 +1899,6 @@ summary.centerBlock {
   background: var(--color-bg-overlay);
   font-size: var(--font-size-xs);
 }
-
 
 .cliSeverityBadge {
   font-size: var(--font-size-xs);
@@ -2147,7 +2058,6 @@ summary.centerBlock {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
 }
-
 
 .reviewFactLabel {
   color: var(--color-text-secondary);
@@ -2539,8 +2449,6 @@ summary.centerBlock {
   line-height: 1.6;
 }
 
-
-
 /* ==========================================================================
    Intercambiador dinámico de vistas (ViewSwitcherRail)
    ========================================================================== */
@@ -2825,7 +2733,6 @@ summary.centerBlock {
   color: var(--color-text-primary);
 }
 
-
 .viewModeToggle {
   display: inline-flex;
   background: color-mix(in srgb, var(--color-bg-overlay) 70%, transparent);
@@ -2889,7 +2796,6 @@ summary.centerBlock {
   align-self: flex-start;
   z-index: 2;
 }
-
 
 .activityFilterLabel {
   display: inline-flex;
@@ -3101,8 +3007,6 @@ summary.centerBlock {
   box-shadow: 0 -2px 0 0 var(--color-primary);
 }
 
-
-
 .taskInlineEdit {
   display: flex;
   flex-direction: column;
@@ -3202,10 +3106,7 @@ summary.centerBlock {
   font-size: var(--font-size-xs);
 }
 
-.rawEditorContainer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.markdownView {
   width: 100%;
 }
 
@@ -3305,13 +3206,6 @@ summary.centerBlock {
   color: var(--color-git-add);
 }
 
-.markdownFormattedContainer {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  width: 100%;
-}
-
 .markdownFormattedHeader {
   display: flex;
   align-items: center;
@@ -3322,7 +3216,6 @@ summary.centerBlock {
   color: var(--color-text-secondary);
 }
 
-
 .markdownFormattedBody {
   padding: var(--space-4);
   border-radius: var(--radius-default);
@@ -3331,8 +3224,6 @@ summary.centerBlock {
   font-size: var(--font-size-sm);
   line-height: 1.6;
 }
-
-
 
 .archiveReasonField {
   display: flex;
@@ -3377,7 +3268,6 @@ summary.centerBlock {
   gap: var(--space-2);
   margin: var(--space-2) 0;
 }
-
 
 .syncBlockedInline {
   display: inline-flex;
@@ -3470,7 +3360,6 @@ summary.centerBlock {
   min-height: 2.75rem;
 }
 
-
 .reviewDiagnosticsDetails {
   margin-top: var(--space-2);
 }
@@ -3524,7 +3413,6 @@ summary.centerBlock {
   margin-top: var(--space-2);
 }
 
-
 .engineInstallDetails {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
@@ -3540,7 +3428,6 @@ summary.centerBlock {
   border-radius: var(--radius-sm);
   margin-top: var(--space-2);
 }
-
 
 .engineInstallConfirmActions {
   display: flex;
@@ -3638,7 +3525,6 @@ summary.centerBlock {
   cursor: not-allowed;
   opacity: 0.5;
 }
-
 
 .profileWorkflowName {
   flex: 1;
@@ -3826,7 +3712,6 @@ summary.centerBlock {
   padding: 0 var(--space-4);
 }
 
-
 .skeletonBranchPill {
   width: 9.5rem;
   height: 1.6rem;
@@ -3871,9 +3756,6 @@ summary.centerBlock {
 }
 
 .skeletonBlock {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   width: 100%;
 }
 
@@ -4185,7 +4067,6 @@ summary.centerBlock {
   color: var(--color-text-secondary);
 }
 
-
 .timelineConfirmBtn {
   padding: var(--space-1) var(--space-3);
   font-size: var(--font-size-xs);
@@ -4287,9 +4168,6 @@ summary.centerBlock {
 }
 
 .journeyNext {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   width: 100%;
 }
 
@@ -4438,7 +4316,6 @@ summary.centerBlock {
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
-
 .whereYouLeftOffTitleIcon {
   color: var(--color-primary);
   flex-shrink: 0;
@@ -4491,7 +4368,6 @@ summary.centerBlock {
   color: var(--color-text-secondary);
   font-style: italic;
 }
-
 
 .whereYouLeftOffNextStepHeader {
   display: flex;
@@ -4576,16 +4452,6 @@ summary.centerBlock {
   font-weight: 600;
 }
 
-.whereYouLeftOffDoneTasksList,
-.whereYouLeftOffCommitsList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 .whereYouLeftOffCommitsList {
   margin-top: var(--space-1);
 }
@@ -4630,7 +4496,6 @@ summary.centerBlock {
   color: var(--color-text-secondary);
   transform: translateY(1px);
 }
-
 
 .whereYouLeftOffSectionBadge {
   display: inline-flex;

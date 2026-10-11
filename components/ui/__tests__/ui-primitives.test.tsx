@@ -35,6 +35,11 @@ describe('components/ui - Piezas compartidas de maquetación y texto', () => {
       const { container: c4 } = render(<Stack gap="4" />);
       expect((c4.firstElementChild as HTMLElement).className).toContain('gap4');
     });
+
+    it('soporta la prop polimórfica as (ej: section)', () => {
+      const { container } = render(<Stack as="section" gap="2" />);
+      expect((container.firstElementChild as HTMLElement).tagName).toBe('SECTION');
+    });
   });
 
   describe('Row', () => {

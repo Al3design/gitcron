@@ -6,6 +6,15 @@
   flex-shrink: 0;
 }
 
+.startHeaderTitle > h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  letter-spacing: 0.04em;
+}
+
 .startMainBlock {
   display: flex;
   flex-direction: column;

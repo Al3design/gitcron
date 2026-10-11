@@ -14,7 +14,7 @@ import type { ChangeLastCommit, TaskEvidence } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
-import { Stack, Row } from '@/components/ui';
+import { Stack, Row, PlainList } from '@/components/ui';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from './pipeline-view-state';
 import { deriveResumeCard } from './resume-card';
 import styles from './OpenSpecDashboard.module.css';
@@ -190,24 +190,24 @@ export function WhereYouLeftOffCard({
           ) : (
             <div>
               {whatYouWereDoing.completedTasks.length > 0 && (
-                <div className={styles.whereYouLeftOffDoneTasksList}>
+                <PlainList gap="1">
                   {whatYouWereDoing.completedTasks.map((task) => (
-                    <div key={task.id} className={styles.whereYouLeftOffDoneTaskItem}>
+                    <li key={task.id} className={styles.whereYouLeftOffDoneTaskItem}>
                       <Check size={12} className={styles.whereYouLeftOffDoneIcon} aria-hidden="true" />
                       <span>{task.text}</span>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </PlainList>
               )}
               {whatYouWereDoing.commits.length > 0 && (
-                <div className={styles.whereYouLeftOffCommitsList}>
+                <PlainList gap="1" className={styles.whereYouLeftOffCommitsList}>
                   {whatYouWereDoing.commits.map((commit) => (
-                    <div key={commit.hash} className={styles.whereYouLeftOffCommitItem}>
+                    <li key={commit.hash} className={styles.whereYouLeftOffCommitItem}>
                       <GitCommit size={12} className={styles.whereYouLeftOffCommitIcon} aria-hidden="true" />
                       <span>{commit.text}</span>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </PlainList>
               )}
             </div>
           )}

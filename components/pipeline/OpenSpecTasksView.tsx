@@ -37,7 +37,7 @@ import styles from './OpenSpecDashboard.module.css';
 import { MarkdownViewer } from './MarkdownViewer';
 import { TaskConfirmToast } from './TaskConfirmToast';
 import { parseTaskDetails } from './resume-card';
-import { Row } from '@/components/ui';
+import { Row, Stack } from '@/components/ui';
 
 export interface OpenSpecTasksViewProps {
   repoPath: string;
@@ -1069,7 +1069,7 @@ export function OpenSpecTasksView({
 
       {/* VISTA 2: Vista Markdown unificada (Ajuste 3) */}
       {viewMode === 'markdown' && (
-        <div className={markdownMode === 'formatted' ? styles.markdownFormattedContainer : styles.rawEditorContainer}>
+        <Stack gap="2" className={styles.markdownView}>
           <div className={markdownMode === 'formatted' ? styles.markdownFormattedHeader : styles.rawEditorHeader}>
             <div className="flex items-center gap-2">
               <span>{selectedChange.changeId}/tasks.md</span>
@@ -1142,7 +1142,7 @@ export function OpenSpecTasksView({
               aria-label={t('pipeline.openspec.task.viewRaw')}
             />
           )}
-        </div>
+        </Stack>
       )}
 
       {/* Toast de confirmación de desmarcado */}

@@ -13,6 +13,7 @@ import { ActivityFeed } from './ActivityFeed';
 import { BranchBaseNotice } from './ChangeBranchNotice';
 import { PipelineRuntimeLauncher } from './PipelineRuntimeLauncher';
 import { validateExploreForm, validateProposeForm } from './pipeline-guided-forms';
+import { Stack, Text } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 export type PipelineNewChangeMode = 'propose' | 'explore';
@@ -437,9 +438,9 @@ export function PipelineNewChangeFlow({
                 {t(errors.description)}
               </em>
             ) : (
-              <em id={`${fieldId}-description-help`} className={styles.flowHint}>
+              <Text variant="mono-xs" as="em" id={`${fieldId}-description-help`}>
                 {t('pipeline.newChange.explore.descriptionHelp')}
-              </em>
+              </Text>
             )}
           </label>
 
@@ -486,10 +487,10 @@ export function PipelineNewChangeFlow({
                     runtimeAttached={exploreProj.active}
                   />
                 ) : (
-                  <p className={styles.flowHint}>{t('pipeline.journey.noAnswer')}</p>
+                  <Text variant="mono-xs" as="p">{t('pipeline.journey.noAnswer')}</Text>
                 )
               ) : (
-                <p className={styles.flowHint}>{t('pipeline.journey.noAnswer')}</p>
+                <Text variant="mono-xs" as="p">{t('pipeline.journey.noAnswer')}</Text>
               )}
             </div>
           )}
@@ -501,7 +502,7 @@ export function PipelineNewChangeFlow({
           )}
 
           {isExploreDone && (
-            <div className={styles.journeyNext}>
+            <Stack gap="2" className={styles.journeyNext}>
               <button
                 type="button"
                 className={styles.primaryAction}
@@ -509,7 +510,7 @@ export function PipelineNewChangeFlow({
               >
                 {t('pipeline.journey.explore.next')}
               </button>
-            </div>
+            </Stack>
           )}
         </div>
       )}
@@ -534,7 +535,7 @@ export function PipelineNewChangeFlow({
                 {t(errors.objective)}
               </em>
             ) : (
-              <em className={styles.flowHint}>{t('pipeline.newChange.propose.objectiveHelp')}</em>
+              <Text variant="mono-xs" as="em">{t('pipeline.newChange.propose.objectiveHelp')}</Text>
             )}
           </label>
 
@@ -555,11 +556,11 @@ export function PipelineNewChangeFlow({
                 {t(errors.slug)}
               </em>
             ) : (
-              <em id={`${fieldId}-slug-help`} className={styles.flowHint}>
+              <Text variant="mono-xs" as="em" id={`${fieldId}-slug-help`}>
                 {t('pipeline.newChange.propose.slugHelp')}
                 {' '}
                 {t('pipeline.newChange.propose.slugTarget')}
-              </em>
+              </Text>
             )}
           </label>
 
@@ -571,7 +572,7 @@ export function PipelineNewChangeFlow({
               value={constraints}
               onChange={(event) => setConstraints(event.target.value)}
             />
-            <em className={styles.flowHint}>{t('pipeline.newChange.propose.constraintsHelp')}</em>
+            <Text variant="mono-xs" as="em">{t('pipeline.newChange.propose.constraintsHelp')}</Text>
           </label>
 
           <label className={styles.flowCheck}>
@@ -662,10 +663,10 @@ export function PipelineNewChangeFlow({
                     runtimeAttached={proposeProj.active}
                   />
                 ) : (
-                  <p className={styles.flowHint}>{t('pipeline.journey.noAnswer')}</p>
+                  <Text variant="mono-xs" as="p">{t('pipeline.journey.noAnswer')}</Text>
                 )
               ) : (
-                <p className={styles.flowHint}>{t('pipeline.journey.noAnswer')}</p>
+                <Text variant="mono-xs" as="p">{t('pipeline.journey.noAnswer')}</Text>
               )}
             </div>
           )}
@@ -683,7 +684,7 @@ export function PipelineNewChangeFlow({
           )}
 
           {isProposeSuccess ? (
-            <div className={styles.journeyNext}>
+            <Stack gap="2" className={styles.journeyNext}>
               <p className={styles.journeyNotice}>
                 {t('pipeline.journey.changeCreated', { change: draft.proposedChangeId! })}
               </p>
@@ -694,13 +695,13 @@ export function PipelineNewChangeFlow({
               >
                 {t('pipeline.journey.viewChange')}
               </button>
-            </div>
+            </Stack>
           ) : (
-            <div className={styles.journeyNext}>
+            <Stack gap="2" className={styles.journeyNext}>
               <p className={styles.journeyNotice}>
                 {t('pipeline.journey.continuesInChange')}
               </p>
-            </div>
+            </Stack>
           )}
         </div>
       )}

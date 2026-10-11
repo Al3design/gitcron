@@ -10,6 +10,7 @@ import { useT } from '@/hooks/use-translation';
 import type { AiUse, AiUseDestination, AiUseStatus } from '@/types/ai-use';
 import { runtimeDisplayName } from '../pipeline/pipeline-domain';
 import { AiModelPicker } from './AiModelPicker';
+import { Stack, Row } from '@/components/ui';
 import styles from './AiUseLine.module.css';
 
 interface Props {
@@ -130,7 +131,7 @@ export function AiUseLine({
     const altKey = (status.alternatives?.length ?? 0) > 1 ? 'aiUse.alternativesMany' : 'aiUse.alternativesOne';
 
     return (
-      <div className={styles.block}>
+      <Stack gap="1">
         <p className={styles.line}>
           {lineText}
           {status.modelSource === 'general' ? t('aiUse.general') : status.isException ? t('aiUse.exception') : ''}
@@ -142,7 +143,7 @@ export function AiUseLine({
         {status.destination === 'external-service' && (
           <p className={styles.externalNotice}>{t('aiUse.externalNotice', { provider: status.providerName })}</p>
         )}
-        <div className={styles.actionRow}>
+        <Row gap="2" wrap>
           {showChooseModel && (
             <button
               type="button"
@@ -163,7 +164,7 @@ export function AiUseLine({
               {t('aiUse.showInFolder')}
             </button>
           )}
-        </div>
+        </Row>
         {showPicker && (
           <AiModelPicker
             use={use}
@@ -183,16 +184,16 @@ export function AiUseLine({
             {t(altKey, { providers: altProviders })}
           </p>
         )}
-      </div>
+      </Stack>
     );
   }
 
   if (status.status === 'disabled') {
     const dir = status.sourceDir;
     return (
-      <div className={styles.block}>
+      <Stack gap="1">
         <p className={styles.line}>{t('aiUse.disabled')}</p>
-        <div className={styles.actionRow}>
+        <Row gap="2" wrap>
           {showChooseModel && (
             <button
               type="button"
@@ -213,7 +214,7 @@ export function AiUseLine({
               {t('aiUse.showInFolder')}
             </button>
           )}
-        </div>
+        </Row>
         {showPicker && (
           <AiModelPicker
             use={use}
@@ -225,7 +226,7 @@ export function AiUseLine({
             }}
           />
         )}
-      </div>
+      </Stack>
     );
   }
 
@@ -236,9 +237,9 @@ export function AiUseLine({
   const withSelector = screenChoice && Boolean(status.canLoad);
   const unsetText = isAgent ? t('aiUse.unsetAgent') : (withSelector ? t('aiUse.unsetScreen') : t('aiUse.unset'));
   return (
-    <div className={styles.block}>
+    <Stack gap="1">
       <p className={styles.line}>{unsetText}</p>
-      <div className={styles.actionRow}>
+      <Row gap="2" wrap>
         {!withSelector && showChooseModel && (
           <button
             type="button"
@@ -249,7 +250,7 @@ export function AiUseLine({
           </button>
         )}
         {status.offer && (
-          <p className={styles.offer}>
+          <Row gap="2" wrap>
             <button type="button" className={styles.adopt} disabled={adopting} onClick={() => { void adopt(); }}>
               {adopting ? t('aiUse.adopting') : t('aiUse.adopt', { label: status.offer.label })}
             </button>
@@ -258,9 +259,9 @@ export function AiUseLine({
                 ? t('aiUse.adoptNoteProvider', { file: status.offer.file, provider: status.offer.addsProvider })
                 : t('aiUse.adoptNote', { file: status.offer.file })}
             </span>
-          </p>
+          </Row>
         )}
-      </div>
+      </Row>
       {showPicker && !withSelector && (
         <AiModelPicker
           use={use}
@@ -276,6 +277,6 @@ export function AiUseLine({
         <p className={styles.note}>{t('aiUse.unsetHint', { use })}</p>
       )}
       {adoptError && <p className={styles.problem} role="alert">{adoptError}</p>}
-    </div>
+    </Stack>
   );
 }

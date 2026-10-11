@@ -20,6 +20,7 @@ import {
 import type { PipelineSnapshot } from './pipeline-view-state';
 import { readEngineStatus } from '@/lib/engine-status-reader';
 import { PipelineSessionResume } from './PipelineSessionResume';
+import { Text } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 const ACTIVITY_ICONS: Record<ActivityChannel, React.ComponentType<{ size?: number }>> = {
@@ -149,14 +150,15 @@ export function OpenSpecInspector({
   });
 
   // OpenSpec engine and tools state
-  const [engineStatus, setEngineStatus] = useState<OpenSpecEngineStatus | null>(null);
+  const [readStatus, setEngineStatus] = useState<OpenSpecEngineStatus | null>(null);
+  // Sin repo no hay estado que mostrar: se deriva acá en vez de vaciarlo desde el efecto.
+  const engineStatus = repoPath ? readStatus : null;
   const [registryCheck, setRegistryCheck] = useState<OpenSpecRegistryCheck | null>(null);
 
   // Mismo camino de fetch que se reutiliza al re-leer el estado tras una
   // escritura de perfil (onChanged de la tarjeta): no hay un segundo fetch.
   const refetchEngineStatus = useCallback(() => {
     if (!repoPath || typeof window === 'undefined' || !window.api?.pipelineOpenSpec?.getEngineStatus) {
-      setEngineStatus(null);
       return;
     }
     let cancelled = false;
@@ -226,11 +228,11 @@ export function OpenSpecInspector({
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selectedSessionId && !filteredSessions.some((session) => session.sessionId === selectedSessionId)) {
-      setSelectedSessionId(null);
-    }
-  }, [filteredSessions, selectedSessionId]);
+  // Si la sesión elegida ya no está en la lista, se suelta en el mismo render
+  // (ajuste de estado durante el render, sin un efecto que dispare otro render).
+  if (selectedSessionId && !filteredSessions.some((session) => session.sessionId === selectedSessionId)) {
+    setSelectedSessionId(null);
+  }
 
   const effectiveSessionId = useMemo(() => {
     if (selectedSessionId && filteredSessions.some((s) => s.sessionId === selectedSessionId)) {
@@ -258,7 +260,6 @@ export function OpenSpecInspector({
     : (filteredSessions[0] ? (filteredSessions[0].active ? 'running' : filteredSessions[0].outcome) : 'idle');
   const totalRequirements = openSpec?.specifications?.reduce((acc, spec) => acc + (typeof spec.requirements === 'number' ? spec.requirements : 0), 0) ?? 0;
 
-
   return (
     <aside className={`${styles.activityRail} ${styles.openspecScope}`} aria-label={t('pipeline.openspec.activity.title')}>
       <div className={styles.railSections}>
@@ -280,19 +281,19 @@ export function OpenSpecInspector({
                 <span className={styles.liveDot} data-active={selectedSession?.active || undefined} />
                 <em>{t(resolveSessionStatusI18nKey(sessionStatusKey))}</em>
                 {selectedSession && (
-                  <em className={styles.sessionRanAt}>
+                  <Text variant="mono-xs" as="em" className={styles.sessionMoment}>
                     {t('pipeline.openspec.activity.ranAt', { at: formatSessionMoment(selectedSession.startedAt) })}
-                  </em>
+                  </Text>
                 )}
                 {selectedSession?.continuesSessionId && (
-                  <em className={styles.sessionContinues}>
+                  <Text variant="mono-xs" as="em" className={styles.sessionMoment}>
                     {t('pipeline.openspec.session.continues', {
                       time: (() => {
                         const continued = runtimeSessions.find((s) => s.sessionId === selectedSession.continuesSessionId);
                         return continued ? formatTime(continued.startedAt) : '…';
                       })(),
                     })}
-                  </em>
+                  </Text>
                 )}
               </span>
               {filteredSessions.length > 1 && (

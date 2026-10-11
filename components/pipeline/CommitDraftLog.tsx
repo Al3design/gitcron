@@ -22,6 +22,7 @@ import { useGitStore } from '@/lib/git-store';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { DraftingThought } from './DraftingThought';
+import { Stack } from '../ui';
 import styles from './OpenSpecDashboard.module.css';
 
 /**
@@ -281,7 +282,7 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
           {/* Sólo si hay algo. Un modelo que no razona —medido en la notebook: 0
               de 23 cuadros— dejaba un recuadro vacío ocupando media columna. */}
           {log.reasoning.length > 0 && (
-            <div className={styles.draftLogReasoningBox}>
+            <Stack gap="1">
               <div className={styles.draftLogReasoningHeader}>
                 <button
                   type="button"
@@ -325,7 +326,7 @@ export function CommitDraftLog({ notice, draftId }: CommitDraftLogProps) {
                   </span>
                 </button>
               )}
-            </div>
+            </Stack>
           )}
           {/* La respuesta, aparte del razonamiento: son dos cosas distintas y
               mezclarlas haría imposible ver cuál de las dos terminó. Lo que

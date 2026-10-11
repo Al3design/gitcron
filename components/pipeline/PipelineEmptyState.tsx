@@ -1,7 +1,7 @@
 'use client';
 
 import { useT } from '@/hooks/use-translation';
-import { Row } from '@/components/ui';
+import { Row, Stack } from '@/components/ui';
 import type { PipelineViewState } from './pipeline-view-state';
 import styles from './OpenSpecDashboard.module.css';
 
@@ -51,7 +51,7 @@ export function PipelineEmptyState({
 
         <div className={styles.skeletonBody}>
           <main className={styles.skeletonCenter} data-skeleton="center">
-            <section className={styles.skeletonBlock}>
+            <Stack as="section" gap="2" className={styles.skeletonBlock}>
               <div className={styles.skeletonBlockTitle} />
               <div className={styles.skeletonCard}>
                 <div className={styles.skeletonLine} style={{ width: '90%' }} />
@@ -59,9 +59,9 @@ export function PipelineEmptyState({
                 <div className={styles.skeletonLine} style={{ width: '82%' }} />
                 <div className={styles.skeletonLine} style={{ width: '55%' }} />
               </div>
-            </section>
+            </Stack>
 
-            <section className={styles.skeletonBlock}>
+            <Stack as="section" gap="2" className={styles.skeletonBlock}>
               <div className={styles.skeletonBlockTitle} />
               <div className={styles.skeletonCard}>
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -72,16 +72,16 @@ export function PipelineEmptyState({
                   </div>
                 ))}
               </div>
-            </section>
+            </Stack>
 
-            <section className={styles.skeletonBlock}>
+            <Stack as="section" gap="2" className={styles.skeletonBlock}>
               <div className={styles.skeletonBlockTitle} />
               <div className={styles.skeletonCard}>
                 <div className={styles.skeletonLine} style={{ width: '85%' }} />
                 <div className={styles.skeletonLine} style={{ width: '65%' }} />
                 <div className={styles.skeletonLine} style={{ width: '75%' }} />
               </div>
-            </section>
+            </Stack>
           </main>
 
           {!rightOpen && (

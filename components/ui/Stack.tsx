@@ -1,9 +1,10 @@
-import { type HTMLAttributes, forwardRef } from 'react';
+import { type HTMLAttributes, forwardRef, type ElementType } from 'react';
 import { cn } from '@/lib/utils';
 import styles from './Stack.module.css';
 
-export interface StackProps extends HTMLAttributes<HTMLDivElement> {
+export interface StackProps extends HTMLAttributes<HTMLElement> {
   gap?: '1' | '2' | '3' | '4';
+  as?: ElementType;
 }
 
 const gapClassMap: Record<'1' | '2' | '3' | '4', string> = {
@@ -13,18 +14,18 @@ const gapClassMap: Record<'1' | '2' | '3' | '4', string> = {
   '4': styles.gap4,
 };
 
-export const Stack = forwardRef<HTMLDivElement, StackProps>(function Stack(
-  { gap, className, children, ...props },
+export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
+  { gap, as: Component = 'div', className, children, ...props },
   ref,
 ) {
   return (
-    <div
+    <Component
       ref={ref}
       className={cn(styles.stack, gap && gapClassMap[gap], className)}
       {...props}
     >
       {children}
-    </div>
+    </Component>
   );
 });
 

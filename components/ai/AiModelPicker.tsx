@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
 import type { AiToolProvider, AiUse, AiUseChoosePayload } from '@/types/ai-use';
+import { Stack } from '@/components/ui';
 import styles from './AiModelPicker.module.css';
 
 export interface AiModelPickerProps {
@@ -276,7 +277,7 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
 
       <div className={styles.fieldGrid}>
         {/* Proveedor */}
-        <div className={styles.fieldGroup}>
+        <Stack gap="1">
           <label htmlFor={`picker-provider-${use}`} className={styles.fieldLabel}>
             {t('aiUse.provider')}
           </label>
@@ -306,10 +307,10 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
               {refreshing ? t('aiUse.refreshing') : t('aiUse.refresh')}
             </button>
           </div>
-        </div>
+        </Stack>
 
         {/* Modelo */}
-        <div className={styles.fieldGroup}>
+        <Stack gap="1">
           <label htmlFor={`picker-model-${use}`} className={styles.fieldLabel}>
             {t('aiUse.model')}
           </label>
@@ -331,11 +332,11 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
               <option value="">{t('aiUse.noModelsAvailable')}</option>
             )}
           </select>
-        </div>
+        </Stack>
 
         {/* Variante (si el modelo declara) */}
         {hasVariants && (
-          <div className={styles.fieldGroup}>
+          <Stack gap="1">
             <label htmlFor={`picker-variant-${use}`} className={styles.fieldLabel}>
               {t('aiUse.variant')}
             </label>
@@ -353,12 +354,12 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
                 </option>
               ))}
             </select>
-          </div>
+          </Stack>
         )}
 
         {/* Intensidad / razonamiento (si el modelo declara) */}
         {hasEffort && (
-          <div className={styles.fieldGroup}>
+          <Stack gap="1">
             <label htmlFor={`picker-effort-${use}`} className={styles.fieldLabel}>
               {t('aiUse.effort')}
             </label>
@@ -375,7 +376,7 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
                 </option>
               ))}
             </select>
-          </div>
+          </Stack>
         )}
       </div>
 

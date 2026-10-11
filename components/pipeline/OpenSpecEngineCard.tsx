@@ -387,16 +387,16 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
         aria-label={title ?? t('pipeline.openspec.engine.cardTitle')}
         data-estado="loading"
       >
-        <section className={styles.skeletonBlock}>
+        <Stack as="section" gap="2" className={styles.skeletonBlock}>
           <div className={styles.skeletonBlockTitle} />
           <div className={styles.skeletonCard}>
             <div className={styles.skeletonLine} style={{ width: '45%' }} />
             <div className={styles.skeletonLine} style={{ width: '65%' }} />
             <div className={styles.skeletonLine} style={{ width: '35%' }} />
           </div>
-        </section>
+        </Stack>
 
-        <section className={styles.skeletonBlock}>
+        <Stack as="section" gap="2" className={styles.skeletonBlock}>
           <div className={styles.skeletonBlockTitle} style={{ width: '6rem' }} />
           <div className={styles.skeletonCard}>
             <div className={styles.skeletonToolRow}>
@@ -418,7 +418,7 @@ export const OpenSpecEngineCard: React.FC<OpenSpecEngineCardProps> = ({
               <div className={styles.skeletonToolStatus} />
             </div>
           </div>
-        </section>
+        </Stack>
       </div>
     );
   }

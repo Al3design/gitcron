@@ -4,6 +4,7 @@ import { GitBranch } from 'lucide-react';
 import type { BranchDivergence } from '@/types/pipeline';
 import { useT } from '@/hooks/use-translation';
 import { deriveChangeBranchState } from '@/lib/change-branch';
+import { Text } from '@/components/ui';
 import styles from './OpenSpecDashboard.module.css';
 
 /**
@@ -63,7 +64,7 @@ export function BranchBaseNotice({ divergence, branch }: BranchBaseNoticeProps) 
   // Sin el dato no se afirma nada: no medir no es «está al día».
   if (!divergence) return null;
   if (!divergence.measured) {
-    return <p className={styles.flowHint}>{t('pipeline.openspec.branch.baseUnknown')}</p>;
+    return <Text variant="mono-xs" as="p">{t('pipeline.openspec.branch.baseUnknown')}</Text>;
   }
   // Al día y sin trabajo propio: no hay nada que decir sobre la base.
   if (divergence.behind === 0 && divergence.ahead === 0) return null;

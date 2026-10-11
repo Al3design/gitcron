@@ -8,7 +8,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useT } from '@/hooks/use-translation';
 import { PipelineNewChangeFlow } from '../PipelineNewChangeFlow';
-import { Row } from '@/components/ui';
+import { Row, Stack } from '@/components/ui';
 import type { OpenSpecChangeSummary, PipelineSnapshot } from '../pipeline-view-state';
 import type { RuntimeProjection, TaskEvidence } from '@/types/pipeline';
 import shared from '../OpenSpecDashboard.module.css';
@@ -184,7 +184,7 @@ function InProgressStartScreen({
   return (
     <section className={shared.startScreen} aria-label={t('pipeline.openspec.start.title')}>
       <header className={shared.startHeader}>
-        <div className={shared.startHeaderTitleGroup}>
+        <Stack gap="1" className={styles.startHeaderTitle}>
           <h3>{t('pipeline.openspec.start.title')}</h3>
           <p className={shared.startSpecsBadge}>
             <span>
@@ -199,7 +199,7 @@ function InProgressStartScreen({
                 : t('pipeline.openspec.start.noTasksToMeasure')}
             </span>
           </p>
-        </div>
+        </Stack>
       </header>
 
       {/* Centro de la pantalla: CAMBIOS EN CURSO */}
@@ -249,12 +249,12 @@ function ArchivedStartScreen({
   return (
     <section className={shared.startScreen} aria-label={t('pipeline.openspec.start.archived')}>
       <header className={shared.startHeader}>
-        <div className={shared.startHeaderTitleGroup}>
+        <Stack gap="1" className={styles.startHeaderTitle}>
           <h3>{t('pipeline.openspec.start.archived')}</h3>
           <p className={shared.startSpecsBadge}>
             {tCount('pipeline.openspec.start.archivedCount', archivedChanges.length)}
           </p>
-        </div>
+        </Stack>
       </header>
 
       <div className={styles.startMainBlock}>
@@ -320,9 +320,9 @@ function NewChangeStartScreen({
   return (
     <section className={shared.startScreen} aria-label={t('pipeline.newChange.title')}>
       <header className={shared.startHeader}>
-        <div className={shared.startHeaderTitleGroup}>
+        <Stack gap="1" className={styles.startHeaderTitle}>
           <h3>{t('pipeline.newChange.title')}</h3>
-        </div>
+        </Stack>
         <button
           type="button"
           className={shared.secondaryAction}

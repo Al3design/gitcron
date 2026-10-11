@@ -1,9 +1,6 @@
 /* Detalle del pedido efectivo de un uso de IA (D14).
    Letra chica de metadatos, gris secundario y bordes sutiles. */
 .aiSentSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
@@ -60,16 +57,6 @@
 .aiSentProvenance {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
-}
-
-.aiSentParamList,
-.aiSentHeaderList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 
 .aiSentParamList code,

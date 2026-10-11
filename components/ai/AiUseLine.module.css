@@ -1,12 +1,6 @@
 /* Qué modelo usa un uso de texto (tarea 4.3). Letra chica de metadatos y el gris de
    la app, como la línea de la caja de la redacción; el botón es una acción de IA y
    lleva su violeta (D20). */
-.block {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 .line,
 .note,
 .problem {
@@ -27,14 +21,6 @@
 
 .problem {
   color: var(--color-error);
-}
-
-.offer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
 }
 
 .adopt {
@@ -74,13 +60,6 @@
 
 .alternativesNote {
   color: var(--color-text-secondary);
-}
-
-.actionRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 .showInFolder {
