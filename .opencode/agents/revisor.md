@@ -3,6 +3,9 @@ description: Revisor local opcional de una tanda de GitCron. Lee el prompt de re
 mode: subagent
 permission:
   question: deny
+  # Las skills del repo (OpenSpec, React, Electron…) son para los modelos grandes y
+  # para el producto; la ejecutora trabaja con su prompt autocontenido y AGENTS.md.
+  skill: deny
   task: deny
   webfetch: deny
   websearch: deny

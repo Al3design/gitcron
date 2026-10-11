@@ -11,6 +11,9 @@ color: "#2f6f9f"
 # acá van solo los permisos y lo propio de OpenCode.
 permission:
   question: deny
+  # Las skills del repo (OpenSpec, React, Electron…) son para los modelos grandes y
+  # para el producto; la ejecutora trabaja con su prompt autocontenido y AGENTS.md.
+  skill: deny
   doom_loop: deny
   webfetch: deny
   websearch: deny
