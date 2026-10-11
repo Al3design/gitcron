@@ -1,7 +1,7 @@
 # speculative-branches-preference Specification
 
 ## Purpose
-TBD - created by archiving change redistribuir-navegacion-y-controles. Update Purpose after archive.
+Mostrar las ramas especulativas sólo cuando la persona lo pide, recordando la elección por repositorio, con un interruptor que refleja el estado real.
 ## Requirements
 ### Requirement: Las ramas especulativas SHALL mostrarse sólo cuando la persona lo pide
 

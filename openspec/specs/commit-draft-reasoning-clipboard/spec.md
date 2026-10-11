@@ -1,7 +1,7 @@
 # commit-draft-reasoning-clipboard Specification
 
 ## Purpose
-TBD - created by archiving change copiar-razonamiento-redaccion-ia. Update Purpose after archive.
+Poder copiar el razonamiento de una redacción de commit, con los mensajes de copiado traducidos.
 ## Requirements
 ### Requirement: Control de copiado de razonamiento
 El componente de registro de redacción SHALL proporcionar un control interactivo para copiar el texto completo del razonamiento del modelo al portapapeles siempre que exista razonamiento disponible.

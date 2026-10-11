@@ -1,7 +1,7 @@
 # narrow-chat-model-error-pattern Specification
 
 ## Purpose
-TBD - created by archiving change acotar-patron-error-modelo-no-apto. Update Purpose after archive.
+Reconocer, por el contexto del error, cuándo falló una redacción porque el modelo elegido no sirve para redactar.
 ## Requirements
 ### Requirement: Reconocimiento contextual de fallos por modelo no apto para redacción
 La función de traducción de errores de streaming SHALL identificar fallos por modelos no aptos para redacción exclusivamente cuando el error refiera a un código HTTP 400 de la petición o a la incompatibilidad del modelo como generador de chat.

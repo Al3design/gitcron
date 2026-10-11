@@ -1,7 +1,7 @@
 # ui-content-header Specification
 
 ## Purpose
-TBD - created by archiving change unificar-encabezado-de-contenido. Update Purpose after archive.
+El encabezado único del área de contenido: rótulos traducidos, los controles cuyo alcance es la vista y el mismo encabezado para las dos representaciones del grafo.
 ## Requirements
 ### Requirement: El área de contenido SHALL encabezarse con una pieza única
 

@@ -1,7 +1,7 @@
 # ui-side-panels Specification
 
 ## Purpose
-TBD - created by archiving change compartir-paneles-laterales-entre-vistas. Update Purpose after archive.
+Los paneles laterales son parte del armazón y las vistas sólo aportan su contenido; el panel derecho es una tarjeta que se puede redimensionar.
 ## Requirements
 ### Requirement: Los lugares de panel SHALL pertenecer al armazón y las vistas SHALL aportar contenido
 

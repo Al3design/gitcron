@@ -1,7 +1,7 @@
 # ui-navigation-layout Specification
 
 ## Purpose
-TBD - created by archiving change redistribuir-navegacion-y-controles. Update Purpose after archive.
+Dónde vive cada control según su alcance: la navegación entre vistas en el panel lateral, la barra superior ordenada por frecuencia, desplegables accesibles por teclado y un lienzo que se adapta sin reconstruir los nodos.
 ## Requirements
 ### Requirement: Cada control SHALL residir en la superficie que corresponde a su alcance
 

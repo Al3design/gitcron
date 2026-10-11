@@ -1,7 +1,7 @@
 # task-checkbox-editing Specification
 
 ## Purpose
-TBD - created by archiving change check-tasks-from-app. Update Purpose after archive.
+Marcar, desmarcar, editar y borrar tareas de un tasks.md desde la aplicación, con confirmación donde hace falta, todo registrado en el repositorio y sin tocar cambios archivados.
 
 ## Requirements
 

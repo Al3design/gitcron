@@ -1,7 +1,7 @@
 # repo-watch-lifecycle Specification
 
 ## Purpose
-TBD - created by archiving change single-repo-watch-subscription. Update Purpose after archive.
+Observar cada repositorio abierto una sola vez, por eventos y con un único handle recursivo, refrescando sin relecturas redundantes y limpiando al cerrar.
 
 ## Requirements
 

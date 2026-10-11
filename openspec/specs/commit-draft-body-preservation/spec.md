@@ -1,7 +1,7 @@
 # commit-draft-body-preservation Specification
 
 ## Purpose
-TBD - created by archiving change conservar-cuerpo-mensaje-commit. Update Purpose after archive.
+Al normalizar un mensaje de commit redactado con IA, conservar el cuerpo y el formato convencional, y poder copiar el resultado.
 ## Requirements
 ### Requirement: Preservación de cuerpo y formato convencional en normalización
 La función de normalización del mensaje de commit redactado SHALL preservar el cuerpo completo del mensaje separándolo del asunto mediante una línea en blanco, eliminando cercados de código y comillas envolventes del asunto.

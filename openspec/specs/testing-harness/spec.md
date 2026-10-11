@@ -1,7 +1,7 @@
 # testing-harness Specification
 
 ## Purpose
-TBD - created by archiving change make-temp-repo-cleanup-reliable. Update Purpose after archive.
+Que el resultado de las pruebas no dependa de la limpieza ni de la concurrencia: una prueba que pasó no falla por lo que hace al terminar.
 ## Requirements
 ### Requirement: Un test que pasó no falla por su propia limpieza
 

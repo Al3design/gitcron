@@ -1,7 +1,7 @@
 # pipeline-openspec-update-execution Specification
 
 ## Purpose
-TBD - created by archiving change actualizar-openspec-desde-la-herramienta. Update Purpose after archive.
+Correr `openspec update` en el repositorio autorizado de forma segura: con Git limpio, sin dejar actualizaciones a medias y contando uno por uno los archivos que cambió.
 ## Requirements
 ### Requirement: Ejecución segura de openspec update en el repositorio autorizado
 GitCron SHALL permitir la ejecución del comando `openspec update` únicamente sobre repositorios

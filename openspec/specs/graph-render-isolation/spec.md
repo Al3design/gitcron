@@ -1,7 +1,7 @@
 # graph-render-isolation Specification
 
 ## Purpose
-TBD - created by archiving change memoize-graph-commit-nodes. Update Purpose after archive.
+Que mover el encuadre del grafo no reconstruya los nodos: sólo los cambios de contenido reconstruyen, y las manijas de interacción no rompen la memoización.
 ## Requirements
 ### Requirement: Mover el encuadre no reconstruye los nodos
 La capa de nodos de commit SHALL NOT reconstruirse cuando lo único que cambia es el encuadre del

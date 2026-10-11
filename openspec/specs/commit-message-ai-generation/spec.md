@@ -1,7 +1,7 @@
 # commit-message-ai-generation Specification
 
 ## Purpose
-TBD - created by archiving change cuerpo-mensaje-commit-ia. Update Purpose after archive.
+Generar con IA un mensaje de commit con asunto y cuerpo, sin contar caracteres, y validar el formato convencional sin bloquear a la persona.
 ## Requirements
 ### Requirement: Generación de mensaje con asunto y cuerpo sin conteo de caracteres
 El sistema SHALL solicitar al modelo de lenguaje local un mensaje de commit compuesto por un asunto convencional conciso, una línea en blanco y un cuerpo explicativo en prosa en español cuando exista contexto suficiente, sin exigirle al modelo un conteo de caracteres.

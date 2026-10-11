@@ -1,7 +1,7 @@
 # pipeline-guided-workflow Specification
 
 ## Purpose
-TBD - created by archiving change guide-openspec-next-actions. Update Purpose after archive.
+El panel SDD que guía el trabajo con OpenSpec en un repositorio: qué sigue, proponer o explorar un cambio, lanzar sesiones, preparar el commit, marcar tareas y archivar, siempre a partir de la evidencia del repositorio y con la persona decidiendo.
 
 ## Requirements
 

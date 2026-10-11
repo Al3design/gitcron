@@ -1,7 +1,7 @@
 # branch-notice-consolidation Specification
 
 ## Purpose
-TBD - created by archiving change filtro-modelos-llm-y-aviso-rama. Update Purpose after archive.
+El aviso sobre la rama del cambio vive en el contenedor de avisos de la pantalla, en un solo lugar, en vez de repartirse en mensajes sueltos.
 ## Requirements
 ### Requirement: Consolidación del aviso de rama en el contenedor de avisos
 El aviso de discrepancia de rama de un cambio activo SHALL renderizarse dentro del contenedor agrupador de AVISOS de la vista central (`noticesGroup`) compartiendo su estructura visual.

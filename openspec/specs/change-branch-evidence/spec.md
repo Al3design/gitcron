@@ -1,7 +1,7 @@
 # change-branch-evidence Specification
 
 ## Purpose
-TBD - created by archiving change declare-change-branch. Update Purpose after archive.
+Que la relación entre un cambio de OpenSpec y su rama se vea: el panel avisa si el cambio abierto no está en su rama, crear la rama dice de qué base sale, y no se crea con cambios sin confirmar.
 ## Requirements
 ### Requirement: El panel declara cuando el cambio abierto no está en su rama
 El panel SHALL declarar que el cambio abierto no se está trabajando en `change/<slug>`, nombrando la rama

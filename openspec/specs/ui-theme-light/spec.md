@@ -1,7 +1,7 @@
 # ui-theme-light Specification
 
 ## Purpose
-TBD - created by archiving change reemplazar-tema-claro-invertido. Update Purpose after archive.
+El tema claro, y cualquier tema, declara sus valores en vez de derivarlos de un filtro, y todos los temas pasan la verificación de contraste AA.
 
 ## Requirements
 

@@ -1,7 +1,7 @@
 # ui-color-source Specification
 
 ## Purpose
-TBD - created by archiving change unificar-paleta-carbon-soul. Update Purpose after archive.
+Que todo color salga de la paleta declarada, con acentos de la misma familia que los fondos, y que una prueba automática lo verifique.
 ## Requirements
 ### Requirement: Todo color de la aplicación SHALL provenir de la paleta declarada
 

@@ -1,7 +1,7 @@
 # openspec-artifact-authoring Specification
 
 ## Purpose
-TBD - created by archiving change gestionar-ciclo-openspec-desde-gitcron. Update Purpose after archive.
+Escribir los artefactos de un cambio de OpenSpec desde GitCron: lo que propone un agente se confirma por bloque antes de guardarse, las plantillas salen del CLI, lo editado queda sin confirmar en Git y lo archivado no se edita.
 
 ## Requirements
 

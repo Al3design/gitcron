@@ -1,7 +1,7 @@
 # git-failure-language Specification
 
 ## Purpose
-TBD - created by archiving change recover-from-push-failures. Update Purpose after archive.
+Explicar en el idioma de la aplicación los fallos de Git que se reconocen, y ofrecer la salida para que la ejecute la persona.
 ## Requirements
 ### Requirement: Un fallo reconocido se explica en el idioma de la aplicación
 Cuando una operación de Git falle con un error que la aplicación reconoce, SHALL mostrar qué pasó en el

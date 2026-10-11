@@ -1,7 +1,7 @@
 # pipeline-openspec-engine Specification
 
 ## Purpose
-TBD - created by archiving change actualizar-integracion-openspec-1-8. Update Purpose after archive.
+Cómo GitCron detecta, diagnostica y usa el motor de OpenSpec: versión y procedencia, configuración e integración como fuentes separadas, instrucciones que vienen del motor y herramientas configuradas leídas del motor que responde en el repositorio.
 
 ## Requirements
 

@@ -1,7 +1,7 @@
 # graph-viewport-interaction Specification
 
 ## Purpose
-TBD - created by archiving change coalesce-graph-viewport-updates. Update Purpose after archive.
+Que mover y ampliar el grafo responda bien: actualizaciones acotadas a un cuadro, zoom encadenado sin pasos perdidos, reencuadre puntual con precedencia y sin perder la última posición al soltar.
 ## Requirements
 ### Requirement: Actualizaciones de encuadre acotadas a un cuadro
 El encuadre SHALL aplicarse como mucho una vez por cuadro de animación durante un gesto continuo de

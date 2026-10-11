@@ -30,7 +30,6 @@
 //
 //   --desde <ref>                  compara contra <ref> en vez de HEAD (p. ej. `--desde main`
 //                                  para todo el change, o `--desde HEAD~2` después de commitear)
-//   --change <id>                  change a validar (por omisión: el de la rama change/<id>)
 //
 // El orden no es arbitrario: `pnpm build` va antes que `pnpm test` porque una prueba
 // (font-size-as-color) lee de out/; y test corre dos veces porque los intermitentes
@@ -61,7 +60,6 @@ const ES_CATALOGO_TEXTOS = (f) => f === 'lib/i18n.ts' || f.startsWith('lib/i18n/
 /** Pruebas que recorren los archivos de estilos por ruta (paleta, sintaxis, escala, tamaños). */
 const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
 const PRUEBAS_TEXTOS = ['lib/__tests__/i18n-claves-usadas.test.ts', 'components/pipeline/__tests__/pipeline-i18n.test.ts'];
-const changeArg = args.includes('--change') ? args[args.indexOf('--change') + 1] : null;
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
 
 const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g');
@@ -148,13 +146,6 @@ function archivosTocados() {
   return [...new Set([...modificados, ...nuevos])].filter((f) => f.trim() !== '');
 }
 
-function changeDeLaRama() {
-  if (changeArg) return changeArg;
-  const rama = git('rev-parse --abbrev-ref HEAD');
-  const m = rama.match(/^change\/(.+)$/);
-  return m ? m[1] : null;
-}
-
 /** Cifras útiles para el renglón, sin volcar la salida entera. */
 function extraerResumen(nombre, salida) {
   if (nombre.startsWith('test')) {
@@ -184,7 +175,7 @@ function extraerResumen(nombre, salida) {
     return pruebas ? `${pruebas[1]} pruebas pasaron` : 'pruebas pasaron';
   }
   if (nombre === 'openspec validate') {
-    return salida.match(/is valid/) ? 'is valid' : '';
+    return salida.match(/Totals: \d+ passed, \d+ failed \(\d+ items\)/)?.[0] ?? '';
   }
   return 'sin problemas';
 }
@@ -401,7 +392,6 @@ function main() {
   const inicioTotal = Date.now();
   const tocados = archivosTocados();
   const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f));
-  const change = changeDeLaRama();
   // Para `vitest related`: código y estilos que siguen existiendo (un archivo
   // borrado no tiene pruebas que dependan de él).
   const tocadosCodigoTodos = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
@@ -470,10 +460,13 @@ function main() {
       motivoSalto: 'ningún .ts/.tsx tocado',
     },
     {
+      // Todas las specs y changes, no sólo el de la rama: dos segundos. Hasta el
+      // 2026-10-11 validaba sólo el change y 28 specs llevaban meses con el
+      // propósito «TBD» que deja `openspec archive` al crear una capacidad nueva.
+      // Si vuelve a aparecer, se escribe el propósito real en la spec principal.
       nombre: 'openspec validate',
-      comando: `pnpm exec openspec validate ${change} --strict`,
-      cuando: change !== null,
-      motivoSalto: 'la rama no es change/<id>; usar --change',
+      comando: 'pnpm exec openspec validate --all --strict',
+      cuando: true,
     },
     {
       // Código muerto, complejidad y duplicación que agregó lo tocado (no lo que ya

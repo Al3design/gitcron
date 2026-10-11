@@ -1,7 +1,7 @@
 # model-selection-allowlist Specification
 
 ## Purpose
-TBD - created by archiving change filtro-modelos-llm-y-aviso-rama. Update Purpose after archive.
+Qué modelos se ofrecen para redactar, con un criterio único de inclusión, y un mensaje que diga qué hacer cuando el servidor rechaza el pedido con un 400.
 ## Requirements
 ### Requirement: Criterio unificado de inclusión positiva para modelos de redacción
 El selector de modelos para redacción con IA SHALL aceptar exclusivamente modelos cuyo tipo sea explícitamente `'llm'`, descartando por omisión modelos de tipo `'embedding'` o cualquier tipo desconocido.

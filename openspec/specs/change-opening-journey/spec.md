@@ -1,7 +1,7 @@
 # change-opening-journey Specification
 
 ## Purpose
-TBD - created by archiving change recorrido-de-artefactos-openspec. Update Purpose after archive.
+Abrir un cambio nuevo como un recorrido de pasos que muestra lo que el motor de OpenSpec contesta en cada uno.
 
 ## Requirements
 

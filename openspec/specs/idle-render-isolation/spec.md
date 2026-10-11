@@ -1,7 +1,7 @@
 # idle-render-isolation Specification
 
 ## Purpose
-TBD - created by archiving change reduce-idle-rerenders. Update Purpose after archive.
+Que la aplicación en reposo no se vuelva a dibujar: el store no avisa si nada cambió, la raíz se suscribe sólo a lo que usa y cada optimización se justifica con un mecanismo real.
 ## Requirements
 ### Requirement: El store no notifica sin cambios
 El store SHALL NOT emitir una nueva referencia de `openRepos` ni notificar a sus

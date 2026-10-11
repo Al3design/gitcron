@@ -1,7 +1,7 @@
 # openspec-artifact-graph Specification
 
 ## Purpose
-TBD - created by archiving change recorrido-de-artefactos-openspec. Update Purpose after archive.
+Mostrar el grafo de artefactos de un cambio tal como lo devuelve el motor, y avisar qué se sobrescribiría antes de disparar la operación de un artefacto.
 
 ## Requirements
 

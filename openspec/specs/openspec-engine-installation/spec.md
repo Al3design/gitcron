@@ -1,7 +1,7 @@
 # openspec-engine-installation Specification
 
 ## Purpose
-TBD - created by archiving change gestionar-ciclo-openspec-desde-gitcron. Update Purpose after archive.
+Instalar, actualizar y volver atrás el motor de OpenSpec, en el repositorio o en el sistema, como elección explícita, con un gestor de paquetes no interactivo y el estado vuelto a medir desde el disco.
 
 ## Requirements
 

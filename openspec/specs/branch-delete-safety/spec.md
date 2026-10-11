@@ -1,7 +1,7 @@
 # branch-delete-safety Specification
 
 ## Purpose
-TBD - created by archiving change safe-branch-delete. Update Purpose after archive.
+Borrar una rama sin llevarse por delante lo que no corresponde: nunca la rama por defecto del remoto, sólo con un upstream que existe, con el nombre remoto a la vista en la confirmación y resolviendo antes el worktree que la tenga abierta.
 ## Requirements
 ### Requirement: El borrado remoto no apunta a la rama por defecto del remoto
 
