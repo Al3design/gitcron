@@ -40,6 +40,7 @@ Tu ventana es chica. Leé **solo** los archivos y rangos de «Leer». Nada de re
 - Guardá la salida de cada intento en `tmp/reportes/<tanda>-verificacion-intento-N.md`: el verde no borra el fallo anterior.
 - **Trampas** (`!!`): cada aviso se corrige o se explica en «Dudas»; no se esconde.
 - **Errores heredados** de eslint (los que ya estaban en la base) no son de tu tanda: no los arregles salvo que el prompt lo pida.
+- Si Fallow marca **«export sin uso»** en algo que el prompt pide exportar y que se conecta en una tarea posterior, cubrilo con una prueba que lo use y anotalo en «Dudas». No lo dejes sin exportar ni lo conectes por tu cuenta.
 - Si el prompt pide capturas, seguí sus pasos y copiá tal cual la salida de `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`.
 
 ## 5. Reporte
