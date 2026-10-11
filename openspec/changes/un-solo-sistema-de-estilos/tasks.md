@@ -18,4 +18,5 @@
 
 ## 4. Cierre
 
-- [ ] 4.1 **Orquestador/auditor:** Medir de nuevo bloques repetidos, líneas de CSS y nota de Fallow, y verificación completa. **Comprobación:** Números de antes y después en el reporte; `pnpm verificar --completa` en verde.
+- [x] 4.1 **Orquestador/auditor:** Medir de nuevo bloques repetidos, líneas de CSS y nota de Fallow, y verificación completa. **Comprobación:** Números de antes y después en el reporte; `pnpm verificar --completa` en verde.
+  - 2026-10-11: bloques repetidos de 36 a 30; CSS del proyecto de 10108 a 9892 líneas (OpenSpecDashboard.module.css de 4853 a 4593); Fallow 76 (B) antes y después. `pnpm verificar --completa`: build:electron, e2e (5), tsc, openspec y Fallow en verde; una prueba de electron/ (pipeline-runtime-start) cortó por tiempo y EPERM bajo carga y sola pasa 12 de 12.
