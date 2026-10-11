@@ -67,35 +67,63 @@ const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEA
 const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g');
 
 /**
- * Errores de eslint que ya estaban antes de cualquier tanda y nadie pidió
- * arreglar. Se restan del conteo; si uno desaparece o se corre de línea, se
- * actualiza acá con causa. Medidos el 2026-09-21.
+ * Errores de eslint que la tanda agregó. Los que ya estaban en la base se
+ * restan: por archivo y por regla, se cuentan los errores de la versión de la
+ * base (`git show <base>:archivo` pasado por stdin) y sólo el excedente es
+ * nuevo. Así una línea corrida no los vuelve nuevos. Antes era una lista a mano
+ * de archivo y línea que había que corregir cada vez que algo se corría
+ * (2026-09-21 a 2026-10-10); el 2026-10-11 dos entradas ya apuntaban a errores
+ * arreglados.
  */
-const ESLINT_PREEXISTENTES = [
-  { archivo: 'components/pipeline/sdd/useEngineStatus.ts', linea: 42 }, // el mismo error de OpenSpecDashboard.tsx (setState al cambiar de repo), mudado en modularizar-03; ahí lo habían tapado con eslint-disable
-  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 175 }, // corrido de 162 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 135 en 07)
-  { archivo: 'components/pipeline/OpenSpecInspector.tsx', linea: 231 }, // corrido de 218 en modelos-en-casa 27: import de PipelineSessionResume y formatSessionOption (antes de 191 en 07)
-  { archivo: 'components/cartography/CartoAskBox.tsx', linea: 65 }, // preexistente (linea 63 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
-  { archivo: 'components/cartography/CartoNodeDetail.tsx', linea: 60 }, // preexistente (linea 58 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
-  { archivo: 'components/cartography/CartoPanoramaHeader.tsx', linea: 42 }, // preexistente (linea 24 en becb354) expuesto al agregar AiUseLine y AiSentDetails en tanda 14
-];
+function erroresEslintNuevos(archivos) {
+  const nuevos = [];
+  let heredados = 0;
+  for (const archivo of archivos) {
+    const actual = erroresEslint(`pnpm exec eslint -f json "${archivo}"`);
+    const enBase = actual.length > 0 && correr(`git cat-file -e ${base}:"${archivo}"`).status === 0
+      ? erroresEslint(`git show ${base}:"${archivo}" | pnpm exec eslint -f json --stdin --stdin-filename "${archivo}"`)
+      : [];
+    const resto = restarHeredados(actual, enBase);
+    heredados += actual.length - resto.length;
+    nuevos.push(...resto.map((e) => ({ archivo, ...e })));
+  }
+  return { nuevos, heredados };
+}
 
-/** Errores de eslint de la salida, menos los preexistentes. */
-function erroresEslintNuevos(salida) {
-  const errores = [];
+/** Errores (no avisos) de una corrida de eslint en formato json, con su regla y línea. */
+function erroresEslint(comando) {
+  let resultados = [];
+  try {
+    resultados = JSON.parse(correr(comando).salida.trim().split(/\r?\n/).find((l) => l.startsWith('[')) ?? '[]');
+  } catch {
+    resultados = []; // salida ilegible: en la base cuenta como «sin heredados», o sea todo nuevo
+  }
+  return resultados.flatMap((r) => r.messages.filter((m) => m.severity === 2).map((m) => ({ regla: m.ruleId ?? 'sintaxis', linea: m.line })));
+}
+
+/** Los errores de `actual` que exceden, regla por regla, a los que ya había en la base. */
+function restarHeredados(actual, enBase) {
+  const cupo = {};
+  for (const e of enBase) cupo[e.regla] = (cupo[e.regla] ?? 0) + 1;
+  return actual.filter((e) => {
+    if (!cupo[e.regla]) return true;
+    cupo[e.regla] -= 1;
+    return false;
+  });
+}
+
+/** Archivos con errores en la salida de eslint (formato stylish). */
+function archivosConErrores(salida) {
+  const archivos = new Set();
   let archivoActual = null;
   for (const linea of salida.split(/\r?\n/)) {
-    const cabecera = linea.match(/^([A-Za-z]:\\|\/)?\S+\.(ts|tsx|mjs|js)$/);
-    if (cabecera) {
+    if (/^([A-Za-z]:\\|\/)?\S+\.(ts|tsx|mjs|js)$/.test(linea)) {
       archivoActual = linea.trim().replace(/\\/g, '/').replace(/^.*?gitCronos\//, '');
       continue;
     }
-    const error = linea.match(/^\s+(\d+):\d+\s+error\s/);
-    if (error && archivoActual) errores.push({ archivo: archivoActual, linea: Number(error[1]) });
+    if (archivoActual && /^\s+\d+:\d+\s+error\s/.test(linea)) archivos.add(archivoActual);
   }
-  return errores.filter(
-    (e) => !ESLINT_PREEXISTENTES.some((p) => p.archivo === e.archivo && p.linea === e.linea),
-  );
+  return [...archivos];
 }
 
 function correr(comando) {
@@ -242,6 +270,35 @@ function trampas() {
     if (/catch\s*(\([^)]*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(texto)) {
       avisos.push(`${archivo}: catch vacío agregado`);
     }
+    // Estilos fuera de los módulos CSS (regla de openspec/config.yaml). Medido en
+    // estilos-02: `className="w-full"` en cuatro lugares y un `style={{ flexBasis }}`.
+    if (archivo.endsWith('.tsx')) {
+      const literales = texto.match(/className="[^"]+"/g) ?? [];
+      if (literales.length > 0) {
+        avisos.push(`${archivo}: className con texto literal (${literales.slice(0, 3).join(', ')}) → los estilos van en el módulo CSS del componente (\`className={styles.x}\`)`);
+      }
+      if (/style=\{\{/.test(texto)) {
+        avisos.push(`${archivo}: estilo en línea (style={{…}}) → pasarlo al módulo CSS; sólo se admite un valor que se calcula al dibujar`);
+      }
+    }
+  }
+
+  // Clases que el componente usa y su módulo no define: dan `undefined` sin
+  // ningún error. Medido en estilos-02: `styles.offer` quedó después de borrar `.offer`.
+  for (const archivo of tocados.filter((f) => f.endsWith('.tsx') && existsSync(f))) {
+    const codigo = readFileSync(archivo, 'utf8');
+    const modulo = codigo.match(/import\s+styles\s+from\s+['"](\.{1,2}\/[^'"]+\.module\.css)['"]/)?.[1];
+    if (!modulo) continue;
+    const rutaModulo = `${archivo.replace(/[^/]+$/, '')}${modulo}`.replace(/\/\.\//g, '/');
+    const normalizada = rutaModulo.split('/').reduce((acc, parte) => (parte === '..' ? acc.slice(0, -1) : [...acc, parte]), []).join('/');
+    if (!existsSync(normalizada)) continue;
+    const css = readFileSync(normalizada, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const definidas = new Set([...css.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
+    const usadas = new Set([...codigo.matchAll(/styles\.([A-Za-z_]\w*)|styles\[['"]([\w-]+)['"]\]/g)].map((m) => m[1] ?? m[2]));
+    const faltan = [...usadas].filter((c) => !definidas.has(c));
+    if (faltan.length > 0) {
+      avisos.push(`${archivo}: usa ${faltan.map((c) => `styles.${c}`).join(', ')} y ${normalizada} no las define → borrar la referencia o definir la clase en ese módulo`);
+    }
   }
 
   // Pruebas que se ablandan para pasar.
@@ -296,6 +353,44 @@ function trampas() {
     }
   }
   return avisos;
+}
+
+/**
+ * Cuánta auditoría pide la tanda, según lo que tocó. Los niveles y qué hace el
+ * auditor en cada uno están en openspec/config.yaml; acá sólo se calculan, para
+ * no decidirlo a ojo en cada tanda. Ante la duda, sube.
+ */
+function nivelDeRiesgo(tocados, avisos) {
+  const SENSIBLE = /^(electron|scripts|\.github)\/|^lib\/(git|db|sqlite|persist|secure|security|ipc)|preload|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig\.json|next\.config\.[a-z]+)$/;
+  const sensibles = tocados.filter((f) => SENSIBLE.test(f));
+  const alto = [
+    sensibles.length > 0 && `toca ${listaCorta(sensibles)}`,
+    avisos.length > 0 && `${avisos.length} aviso(s) de trampas`,
+  ].filter(Boolean);
+  if (alto.length > 0) return { nivel: 'alto', motivos: alto };
+  const logica = archivosConLogica(tocados);
+  if (logica.length > 0) return { nivel: 'medio', motivos: [`lógica en ${listaCorta(logica)}`] };
+  return { nivel: 'bajo', motivos: ['sólo estilos, marcado, textos, documentos o pruebas'] };
+}
+
+function listaCorta(archivos) {
+  return `${archivos.slice(0, 3).join(', ')}${archivos.length > 3 ? '…' : ''}`;
+}
+
+/**
+ * Lógica tocada: un .ts/.mjs de producción, o en un .tsx líneas cambiadas que no
+ * son marcado, clases ni imports (estado, efectos, condiciones, funciones).
+ */
+function archivosConLogica(tocados) {
+  const LOGICA = /\b(useState|useEffect|useMemo|useCallback|useRef|if\s*\(|await|return\s+[^(<]|function|=>|switch|throw|new\s+[A-Z])\b|\?\?|&&\s*[a-z]/;
+  const codigo = tocados.filter((f) => /\.(ts|tsx|mjs|js)$/.test(f) && !ES_PRUEBA.test(f) && !ES_CATALOGO_TEXTOS(f));
+  return codigo.filter((archivo) => {
+    if (!archivo.endsWith('.tsx')) return true;
+    return diffAgregado(archivo).split(/\r?\n/)
+      .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l))
+      .map((l) => l.slice(1).trim())
+      .some((l) => l !== '' && !/^(import\s|\/\/|\/?\*|\{\/\*)/.test(l) && LOGICA.test(l));
+  });
 }
 
 function main() {
@@ -400,17 +495,21 @@ function main() {
     const { salida, status } = correr(chequeo.comando);
     const segundos = ((Date.now() - inicio) / 1000).toFixed(1);
     registro.push(`\n===== ${chequeo.nombre} (${chequeo.comando}) — exit ${status} =====\n${salida}`);
-    // eslint: los preexistentes se restan; falla sólo con errores nuevos.
+    // eslint: los heredados de la base se restan; falla sólo con errores nuevos.
     if (chequeo.nombre === 'eslint' && status !== 0) {
-      const nuevos = erroresEslintNuevos(salida);
-      if (nuevos.length === 0) {
-        const total = (salida.match(/^\s+\d+:\d+\s+error\s/gm) ?? []).length;
-        renglones.push(`OK ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  ${total} preexistente(s), 0 nuevos`);
+      const { nuevos, heredados } = erroresEslintNuevos(archivosConErrores(salida));
+      if (nuevos.length === 0 && heredados > 0) {
+        renglones.push(`OK ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  ${heredados} heredado(s) de ${base}, 0 nuevos (no son de esta tanda: no se arreglan salvo que el prompt lo pida)`);
         continue;
       }
       fallidos.push(chequeo.nombre);
-      renglones.push(`XX ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  ${nuevos.length} error(es) nuevos`);
-      for (const e of nuevos) renglones.push(`    ${e.archivo}:${e.linea}`);
+      if (nuevos.length === 0) {
+        renglones.push(`XX ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  exit ${status}`);
+        renglones.push(ultimasLineas(salida, 25).replace(/^/gm, '    '));
+        continue;
+      }
+      renglones.push(`XX ${chequeo.nombre.padEnd(18)} ${segundos.padStart(6)} s  ${nuevos.length} error(es) nuevos${heredados ? `, ${heredados} heredado(s)` : ''}`);
+      for (const e of nuevos) renglones.push(`    ${e.archivo}:${e.linea} ${e.regla}`);
       continue;
     }
     if (status === 0) {
@@ -437,6 +536,9 @@ function main() {
   renglones.push('');
   renglones.push(avisos.length === 0 ? 'trampas: ninguna detectada' : `trampas (${avisos.length}):`);
   for (const aviso of avisos) renglones.push(`  !! ${aviso}`);
+  if (avisos.length > 0) renglones.push('  Cada aviso se corrige o se explica en «Dudas» del reporte; no se esconde.');
+  const riesgo = nivelDeRiesgo(tocados, avisos);
+  renglones.push(`riesgo: ${riesgo.nivel} — ${riesgo.motivos.join('; ')} (qué audita cada nivel: openspec/config.yaml)`);
 
   writeFileSync('tmp/verificacion.log', registro.join('\n'), 'utf8');
   const total = ((Date.now() - inicioTotal) / 1000).toFixed(0);

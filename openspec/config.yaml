@@ -126,10 +126,47 @@ operations:
         real corrían en cada cierre. Gastaron la cuota del ejecutor sin hacer avanzar el
         producto.
       - >-
-        Dejar un reporte breve en tmp/reportes/<change>-<tanda>.md con base Git, alcance,
-        archivos modificados, comprobaciones ejecutadas y resultados, ruta del log y
-        pendientes. El log del verificador está en tmp/verificacion.log. La auditoría
-        contrasta ese reporte con el checkout; marcar tareas sólo por su evidencia.
+        El protocolo de la IA ejecutora —qué trae el prompt, no explorar, cómo se verifica
+        y el formato del reporte en tmp/reportes/<tanda>.md— vive en AGENTS.md, que las
+        herramientas de agentes cargan solas sin importar el modelo. Los archivos de
+        .opencode/agents/ y tools/dsh/ sólo agregan permisos y lo propio de cada
+        herramienta. El prompt de una tanda trae sólo lo de esa tanda, en las seis partes
+        que enumera AGENTS.md, y no repite reglas de AGENTS.md ni de este archivo: hasta el
+        2026-10-10 cada prompt reescribía a mano las mismas reglas. La auditoría contrasta
+        el reporte con el checkout; las tareas se marcan sólo por su evidencia.
+      - >-
+        Arnés de la ejecutora. Lo que guía antes de actuar es AGENTS.md, este archivo y el
+        prompt; lo que avisa después son los sensores: `pnpm verificar` (pruebas, tsc,
+        eslint, Fallow, trampas y el nivel de riesgo), el comparador de capturas y las e2e.
+        Los sensores que corre la computadora son rápidos y deterministas y van en cada
+        tanda; los que juzgan con IA (revisor local, auditoría línea por línea) son lentos
+        y caros, y se reservan para el riesgo alto. Cuando la auditoría encuentra algo que
+        ya pasó o que va a volver a pasar, se pregunta en este orden si lo puede atrapar un
+        sensor de la computadora (se agrega a scripts/verificar.mjs, con el mensaje que
+        dice cómo corregirlo), y si no, una guía en AGENTS.md o acá. Nunca como texto
+        repetido en los prompts. Medido en estilos-02: una clase de Tailwind, un estilo en
+        línea y una referencia a una clase borrada los encontró el auditor leyendo; desde
+        el 2026-10-11 los avisa verificar.
+      - >-
+        `pnpm verificar` termina con el riesgo de la tanda, calculado por lo que tocó, y el
+        auditor no lo decide a ojo. Bajo (sólo estilos, marcado, textos, documentos o
+        pruebas): la salida del verificador en verde, el comparador de capturas y una
+        lectura rápida del diff productivo; sin revisor. Medio (lógica en el renderer):
+        además el diff productivo entero y los consumidores de lo que cambió de firma.
+        Alto (electron/, scripts/, git, persistencia, dependencias, o cualquier aviso de
+        trampas): además lectura línea por línea, revisor local si el prompt lo trae, el
+        recorrido en e2e y `pnpm verificar --completa`. Ante la duda, se sube un nivel;
+        bajarlo exige una causa escrita en el reporte de auditoría.
+      - >-
+        El tamaño de una tanda sale de la ventana de contexto de la ejecutora, no del
+        modelo de turno: el prompt más lo que manda a leer ocupan como mucho un tercio de
+        la ventana (unas 40.000 fichas para una de 120.000; una línea de código cuenta
+        unas 12). El resto es para razonar, para las salidas de las herramientas y para la
+        corrección. Si no entra, se parte la tanda. Con un servidor de una sola
+        conversación en caché (Strata), cada cambio de agente relee todo el contexto: una
+        tanda delega la verificación una vez por intento y el revisor sólo en riesgo alto.
+        Al cerrar cada cambio, la tarea de cierre mide la deriva: `node tmp/css-repetidos.cjs`,
+        `pnpm exec fallow health --score` y `pnpm verificar --completa`.
       - >-
         Esta rutina se mantiene aquí. EXECUTION.md contiene la secuencia del producto;
         los execution.md describen dependencias y referencias por tarea. Propuestas,
