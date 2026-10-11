@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "ejecutor",
+  "model": "strata-casa/qwen3.8-flash-next-iq3_s"
+}
