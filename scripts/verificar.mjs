@@ -202,7 +202,13 @@ function capturasViejas(tocados) {
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   const carpeta = carpetas[0];
   if (!carpeta) return [];
-  const capturas = readdirSync(carpeta).filter((f) => f.endsWith('.png')).map((f) => `${carpeta}/${f}`);
+  // Las de la carpeta y las de `despues/`, que son las que dicen mostrar el código final. Medido
+  // en retomar-09: las de `despues/` eran de 11:20 y el código siguió cambiando hasta 11:28.
+  const despues = `${carpeta}/despues`;
+  const capturas = [
+    ...readdirSync(carpeta).filter((f) => f.endsWith('.png')).map((f) => `${carpeta}/${f}`),
+    ...(existsSync(despues) ? readdirSync(despues).filter((f) => f.endsWith('.png')).map((f) => `${despues}/${f}`) : []),
+  ];
   const codigo = tocados.filter((f) => /.(tsx?|css)$/.test(f) && !/__tests__|.test./.test(f) && existsSync(f));
   if (capturas.length === 0 || codigo.length === 0) return [];
   const ultimoCodigo = Math.max(...codigo.map((f) => statSync(f).mtimeMs));
