@@ -33,6 +33,8 @@ import type {
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
+  AssistSendArgs,
+  AssistSendResult,
 } from './assist-context';
 
 interface GitResult<T = unknown> {
@@ -492,6 +494,8 @@ interface ElectronAPI {
   };
   /** Conversaciones con la IA por repositorio (retomar 2.1 y 2.2). */
   assistConversations?: {
+    send(args: AssistSendArgs): Promise<GitResult<AssistSendResult>>;
+    cancel(args: { requestId: string }): Promise<GitResult<{ cancelled: boolean }>>;
     list(args: { repoPath: string; limit?: number; offset?: number }): Promise<GitResult<AssistConversationSummary[]>>;
     get(args: { repoPath: string; conversationId: string }): Promise<GitResult<AssistConversationDetail | null>>;
     delete(args: { repoPath: string; conversationId: string }): Promise<GitResult<{ deleted: boolean }>>;

@@ -9,9 +9,15 @@ import {
   getConversation,
   listConversations,
 } from '../db/assist-conversations';
+import {
+  cancelAssistMessage,
+  sendAssistMessage,
+} from '../assist/assist-send';
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
+  AssistSendArgs,
+  AssistSendResult,
 } from '../../types/assist-context';
 import { authorizedRepoRoot } from './authorized-repos';
 import { errMsg } from './shared';
@@ -32,6 +38,33 @@ function assertAuthorizedRepo(repoPath: unknown): string {
 }
 
 export function registerAssistConversationHandlers(): void {
+  ipcMain.handle(
+    'assist:send',
+    async (_e, args: AssistSendArgs): Promise<Result<AssistSendResult>> => {
+      try {
+        const result = await sendAssistMessage(args);
+        return ok(result);
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'assist:cancel',
+    async (_e, args: { requestId: string }): Promise<Result<{ cancelled: boolean }>> => {
+      try {
+        if (!args || typeof args.requestId !== 'string' || !args.requestId.trim()) {
+          throw new Error('Se requiere un identificador de pedido no vacío.');
+        }
+        const cancelled = cancelAssistMessage(args.requestId);
+        return ok({ cancelled });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
   ipcMain.handle(
     'assist-conversation:list',
     async (

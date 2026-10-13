@@ -10,6 +10,8 @@ import { registerAssistConversationHandlers } from '../ipc/assist-conversations'
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
+  AssistSendArgs,
+  AssistSendResult,
 } from '../../types/assist-context';
 
 type Handler = (_event: unknown, ...args: unknown[]) => unknown;
@@ -116,5 +118,43 @@ describe('Assist Conversations IPC handlers', () => {
     expect(getRes.success).toBe(true);
     expect(getRes.data).not.toBeNull();
     expect(getRes.data!.conversation.id).toBe(convB.id);
+  });
+
+  it('assist:send con repo no autorizado devuelve success: true y data.status === "failed"', async () => {
+    const sendHandler = ipc.handlers.get('assist:send');
+    expect(sendHandler).toBeDefined();
+
+    const args: AssistSendArgs = {
+      requestId: 'req-unauthorized-1',
+      repoPath: path.join(tempBase, 'no-autorizado'),
+      conversationId: null,
+      question: '¿Qué hace este repo?',
+      selection: { kind: 'none' },
+      viewId: 'history',
+    };
+
+    const res = (await sendHandler!(null, args)) as {
+      success: boolean;
+      data: AssistSendResult;
+    };
+
+    expect(res.success).toBe(true);
+    expect(res.data.status).toBe('failed');
+    if (res.data.status === 'failed') {
+      expect(res.data.reason).toBe('repo-not-authorized');
+    }
+  });
+
+  it('assist:cancel de un id desconocido devuelve success: true y { cancelled: false }', async () => {
+    const cancelHandler = ipc.handlers.get('assist:cancel');
+    expect(cancelHandler).toBeDefined();
+
+    const res = (await cancelHandler!(null, { requestId: 'req-desconocido-999' })) as {
+      success: boolean;
+      data: { cancelled: boolean };
+    };
+
+    expect(res.success).toBe(true);
+    expect(res.data).toEqual({ cancelled: false });
   });
 });

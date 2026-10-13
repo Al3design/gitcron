@@ -63,6 +63,8 @@ export function getUseLabelKey(use: AiUse): string {
       return 'aiConfig.useOpenspec';
     case 'gitcron-temporal':
       return 'aiConfig.useTemporal';
+    case 'gitcron-assist':
+      return 'aiConfig.useAssist';
     case 'gitcron-sdd':
       return 'aiConfig.useSdd';
     default:

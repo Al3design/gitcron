@@ -51,3 +51,28 @@ export interface AssistConversationDetail {
   conversation: AssistConversationSummary;
   messages: AssistMessage[];
 }
+
+export interface AssistSendArgs {
+  repoPath: string;
+  /** Lo pone la pantalla (un UUID); sirve para cancelar ese pedido. */
+  requestId: string;
+  /** `null` para empezar una conversación nueva. */
+  conversationId: string | null;
+  viewId: string | null;
+  question: string;
+  /** La selección de la vista; el proceso principal la valida. */
+  selection: unknown;
+}
+
+export type AssistSendResult =
+  | { status: 'answered'; conversationId: string; question: AssistMessage; answer: AssistMessage }
+  | { status: 'cancelled'; conversationId: string }
+  | { status: 'discarded'; conversationId: string }
+  | {
+      status: 'failed';
+      conversationId: string | null;
+      reason: string;
+      message: string;
+      /** Otros proveedores que declaran el mismo modelo, como en los demás usos. */
+      alternatives: { providerId: string; providerName: string }[];
+    };

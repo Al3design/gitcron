@@ -333,6 +333,7 @@ export function usesChoosingProvider(providerId: string, loaded: LoadedGitCronCo
     'gitcron-cartography',
     'gitcron-openspec-analysis',
     'gitcron-temporal',
+    'gitcron-assist',
   ];
   for (const use of textUses) {
     const agentModel = loaded.config?.agent?.[use]?.model;
@@ -532,6 +533,7 @@ export function registerAiConfigHandlers(): void {
         'gitcron-cartography',
         'gitcron-openspec-analysis',
         'gitcron-temporal',
+        'gitcron-assist',
         'gitcron-sdd',
       ];
       const uses = allAiUses.map((use) => {

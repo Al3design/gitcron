@@ -365,6 +365,10 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ai-use-history:link-commit', args),
   },
   assistConversations: {
+    send: (args: import('../types/assist-context').AssistSendArgs) =>
+      ipcRenderer.invoke('assist:send', args),
+    cancel: (args: { requestId: string }) =>
+      ipcRenderer.invoke('assist:cancel', args),
     list: (args: { repoPath: string; limit?: number; offset?: number }) =>
       ipcRenderer.invoke('assist-conversation:list', args),
     get: (args: { repoPath: string; conversationId: string }) =>
