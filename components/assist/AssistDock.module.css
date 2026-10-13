@@ -32,7 +32,7 @@
 }
 
 .resizer:hover .resizerThumb {
-  background-color: var(--color-secondary);
+  background-color: var(--color-ai);
 }
 
 .tabBar {
@@ -72,8 +72,8 @@
 }
 
 .activeTab {
-  color: var(--color-secondary);
-  border-bottom-color: var(--color-secondary);
+  color: var(--color-ai);
+  border-bottom-color: var(--color-ai);
   font-weight: 600;
 }
 
@@ -127,19 +127,26 @@
   gap: var(--space-2);
   min-height: 44px;
   padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-ai);
   border-radius: var(--radius-full);
   background-color: var(--color-bg-surface);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   font-size: var(--font-size-xs);
   font-weight: 600;
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
+.handle svg {
+  color: var(--color-ai);
+}
+
 .handle:hover {
   color: var(--color-text-primary);
-  border-color: var(--color-secondary);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-bg-overlay), var(--color-bg-overlay)) padding-box,
+    var(--ai-gradient) border-box;
 }
 
 .handle:focus-visible,

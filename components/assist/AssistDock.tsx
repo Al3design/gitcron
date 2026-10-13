@@ -118,7 +118,7 @@ export function AssistDock({ repoPath, assistViewId }: AssistDockProps): React.J
         </div>
       )}
 
-      <div className={styles.tabBar} role="tablist" aria-label={t('assist.title')}>
+      <div className={`${styles.tabBar} ai-surface-header`} role="tablist" aria-label={t('assist.title')}>
         <div className={styles.tabs}>
           {registeredTabs.map((tab) => {
             const isSelected = tab.id === activeTabId;

@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
 import { assistContributions } from '@/lib/assist/assist-registry';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
 import { AssistChat } from '../AssistChat';
 import type {
   AssistConversationDetail,
@@ -451,5 +452,68 @@ describe('AssistChat component', () => {
     } finally {
       unregister();
     }
+  });
+
+  it('10. registrar con useAssistContribution la vista graph con un commit viejo, enviar pregunta y comprobar que send recibe ese sha y la burbuja muestra «Sobre: commit …».', async () => {
+    const api = mountApi();
+    let resolveSend: (val: unknown) => void = () => {};
+    const sendPromise = new Promise((resolve) => {
+      resolveSend = resolve;
+    });
+    api.send.mockReturnValueOnce(sendPromise);
+
+    const olderCommitSha = '9876543210abcdef9876543210abcdef98765432';
+
+    function TestContainer() {
+      useAssistContribution('graph', () => ({
+        selection: { kind: 'commit', sha: olderCommitSha },
+        actions: [
+          {
+            id: 'explain-commit',
+            labelKey: 'assist.ask.explainCommit',
+            scope: 'consult',
+            available: true,
+            requiresConfirmation: false,
+          },
+        ],
+      }));
+
+      return <AssistChat repoPath="/repo/a" viewId="graph" />;
+    }
+
+    render(<TestContainer />);
+
+    const textarea = screen.getByPlaceholderText('Preguntá sobre este repositorio…');
+    fireEvent.change(textarea, { target: { value: '¿Qué cambió acá?' } });
+
+    const sendBtn = screen.getByRole('button', { name: 'Enviar' });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(api.send).toHaveBeenCalledTimes(1);
+    });
+
+    const sendCallArgs = api.send.mock.calls[0][0] as AssistSendArgs;
+    expect(sendCallArgs.selection).toEqual({
+      kind: 'commit',
+      sha: olderCommitSha,
+    });
+
+    expect(screen.getByText(`Sobre: commit ${olderCommitSha}`)).toBeTruthy();
+
+    resolveSend({
+      success: true,
+      data: {
+        status: 'answered',
+        conversationId: 'conv-new-1',
+        question: {
+          id: 'q1',
+          text: '¿Qué cambió acá?',
+          role: 'user',
+          references: [{ selection: { kind: 'commit', sha: olderCommitSha }, headSha: null, status: 'ok' }],
+        },
+        answer: { id: 'a1', text: 'Respuesta', role: 'assistant', references: [] },
+      },
+    });
   });
 });

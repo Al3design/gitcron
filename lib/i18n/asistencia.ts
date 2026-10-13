@@ -33,6 +33,12 @@ export const es: Record<string, string> = {
   'assist.dockClose': 'Cerrar panel de asistencia',
   'assist.tabChat': 'Chat',
   'assist.dockResize': 'Cambiar tamaño del panel de asistencia',
+  'assist.ask.explainCommit': '¿Qué hizo este commit y por qué?',
+  'assist.ask.commitRisk': '¿Qué podría romper este commit?',
+  'assist.ask.branchState': '¿En qué estado está esta rama?',
+  'assist.ask.taskRemaining': '¿Qué falta para terminar esta tarea?',
+  'assist.ask.changeStatus': '¿En qué quedó este cambio y qué sigue?',
+  'assist.ask.sddOverview': '¿Qué cambios están en curso y cuál conviene seguir?',
 };
 
 export const en: Record<string, string> = {
@@ -68,6 +74,12 @@ export const en: Record<string, string> = {
   'assist.dockClose': 'Close assistance panel',
   'assist.tabChat': 'Chat',
   'assist.dockResize': 'Resize assistance panel',
+  'assist.ask.explainCommit': 'What did this commit do and why?',
+  'assist.ask.commitRisk': 'What could this commit break?',
+  'assist.ask.branchState': 'What is the state of this branch?',
+  'assist.ask.taskRemaining': 'What is left to complete this task?',
+  'assist.ask.changeStatus': 'Where did this change leave off and what comes next?',
+  'assist.ask.sddOverview': 'Which changes are in progress and which one should be continued?',
 };
 
 export const zh: Record<string, string> = {
@@ -103,4 +115,10 @@ export const zh: Record<string, string> = {
   'assist.dockClose': '关闭助手面板',
   'assist.tabChat': '聊天',
   'assist.dockResize': '调整助手面板大小',
+  'assist.ask.explainCommit': '这个提交做了什么以及为什么？',
+  'assist.ask.commitRisk': '这个提交可能会破坏什么？',
+  'assist.ask.branchState': '这个分支当前处于什么状态？',
+  'assist.ask.taskRemaining': '完成此任务还需做什么？',
+  'assist.ask.changeStatus': '这个变更进展如何，接下来做什么？',
+  'assist.ask.sddOverview': '当前有哪些进行中的变更，建议先跟进哪个？',
 };

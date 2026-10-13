@@ -513,7 +513,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
               return (
                 <div
                   key={msg.id}
-                  className={isUser ? styles.userBubble : styles.assistantBubble}
+                  className={isUser ? styles.userBubble : `${styles.assistantBubble} ai-surface`}
                   data-role={msg.role}
                 >
                   <div className={styles.bubbleHeader}>
@@ -546,7 +546,9 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
 
           {isThinking && (
             <div className={styles.thinkingRow}>
-              <Text variant="secondary-xs">{t('assist.thinking')}</Text>
+              <Text variant="secondary-xs">
+                <span className={'ai-thinking-text'}>{t('assist.thinking')}</span>
+              </Text>
               <button
                 type="button"
                 className={styles.cancelBtn}

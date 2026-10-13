@@ -41,6 +41,8 @@ import { useGitStore } from '@/lib/git-store';
 import { changeIdFromBranch } from '@/lib/change-branch';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { useT } from '@/hooks/use-translation';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
+import { sddContribution } from '@/lib/assist/view-contributors';
 import type { RuntimeProjection } from '@/types/pipeline';
 import type { DetailTab } from './PipelineDetails';
 import { useReducedMotion } from 'motion/react';
@@ -814,6 +816,10 @@ export function OpenSpecDashboard({
     activityCount: visibleActivity.length > 0 ? visibleActivity.length : null,
     runtimeActive,
   });
+
+  useAssistContribution('sdd', () =>
+    sddContribution(selectedChange?.changeId ?? null, highlightedTaskId)
+  );
 
   /**
    * Abre un artefacto en la columna central.

@@ -28,6 +28,8 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore, type Commit, type GitFile } from '@/lib/git-store';
 import { PipelineWorkspace } from '@/components/pipeline/PipelineWorkspace';
 import { cn } from '@/lib/utils';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
+import { graphContribution } from '@/lib/assist/view-contributors';
 import type { SpeculativeBranch } from '@/types/temporal-agent';
 import type { BlameLine, FileHistoryEntry, PullRequestDiffData, PullRequestEntry } from '@/types/electron';
 
@@ -412,6 +414,10 @@ function GraphTabView({ tabViews, graphView }: { tabViews: TabViewsProps; graphV
   const branchTracking = useGitStore((s) => s.branchTracking);
   const currentBranch = tabViews.currentBranch;
   const modifiedFiles = tabViews.modifiedFiles;
+
+  useAssistContribution('graph', () =>
+    graphContribution(useGitStore.getState().getActiveRepo()?.selectedCommit ?? null)
+  );
 
   return (
     <div data-testid="graph-tab-container" className="flex-1 flex flex-col relative min-h-0 bg-bg-base overflow-hidden">
