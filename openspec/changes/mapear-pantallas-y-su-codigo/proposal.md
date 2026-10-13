@@ -6,6 +6,10 @@ Cartografía ofrece grupos técnicos, relaciones y consultas con citas, pero el 
 
 ## What Changes
 
+- Decisión de Alejandro (2026-10-13): Cartografía, como está, no le sirve. El objetivo es que una persona sin conocimientos de programación entienda el proyecto entero: cuadros por pantalla que dicen **qué hace cada una** en lenguaje llano y **qué archivos la forman**.
+- Quitar la columna derecha de Cartografía donde estaba el chat: la conversación con la IA pasa al panel de Centauro (retomar, tareas 2.4 y 2.6) y Cartografía publica ahí su selección y sus herramientas.
+- Rediseñar toda la estética de Cartografía respetando la estética general y los tokens de `@theme` (módulos CSS, piezas compartidas de components/ui).
+
 - Agregar catálogo de pantallas y funcionalidades con nombre legible y evidencia de descubrimiento.
 - Mostrar componentes, archivos compartidos, estilos, datos y conexiones relevantes al seleccionar una pantalla.
 - Conservar mapa técnico e impacto como profundización y pasar selección a la asistencia compartida.

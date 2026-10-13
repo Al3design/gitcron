@@ -53,3 +53,15 @@ Cambios de HEAD o archivos SHALL invalidar resultados afectados; el análisis SH
 #### Scenario: Cancelar
 - **WHEN** se cancela la lectura de un repo grande
 - **THEN** se conserva el último resultado con su antigüedad y no se declara cobertura completa
+
+### Requirement: Cada pantalla se explica en lenguaje llano
+
+Cartografía SHALL presentar cada pantalla o función como un cuadro que dice qué hace, en lenguaje llano, y qué archivos la forman, para que alguien que no programa entienda el proyecto. Una descripción sugerida por IA SHALL marcarse como sugerida y citar los archivos en que se basa; una descripción manual SHALL reemplazarla.
+
+#### Scenario: Descripción sugerida
+- **WHEN** la descripción de una pantalla la escribió la IA
+- **THEN** el cuadro la marca como sugerida y nombra los archivos en que se basa
+
+#### Scenario: Sin chat propio
+- **WHEN** la persona quiere preguntar sobre una pantalla
+- **THEN** lo hace en el panel de asistencia compartido, que recibe la selección de Cartografía; Cartografía no muestra una columna de conversación propia
