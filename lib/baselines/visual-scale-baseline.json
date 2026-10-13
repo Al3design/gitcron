@@ -11,10 +11,9 @@
   "exento": {
     "components/ChronometricGraph.tsx": {
       "100px": 4,
-      "10px": 34,
+      "10px": 31,
       "9px": 22,
       "120px": 1,
-      "1px": 3,
       "12px": 2,
       "11px": 4,
       "8px": 7,

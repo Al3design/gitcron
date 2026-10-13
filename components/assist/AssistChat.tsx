@@ -20,13 +20,14 @@ import type {
   AssistSendResult,
   ContextSelection,
 } from '@/types/assist-context';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import styles from './AssistChat.module.css';
 
 export interface AssistChatProps {
   /** El repo abierto (`useGitStore((s) => s.repoPath)` lo pasa quien lo monta). */
   repoPath: string | null;
   /** La vista activa; con ella se lee la contribución del registro. */
-  viewId: string;
+  viewId?: string;
 }
 
 function formatTarget(
@@ -149,8 +150,10 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Element {
+export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): React.JSX.Element {
   const t = useT();
+
+  const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
 
   const [conversations, setConversations] = useState<AssistConversationSummary[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -173,7 +176,6 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
     setAlternativesNotice(null);
   }
 
-  const selectedPerRepoRef = useRef<Map<string, string | null>>(new Map());
   const currentRepoPathRef = useRef<string | null>(repoPath);
   const currentConvIdRef = useRef<string | null>(selectedConvId);
 
@@ -224,7 +226,8 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
     const api = window.api?.assistConversations;
     if (!api) return;
     let alive = true;
-    const rememberedId = selectedPerRepoRef.current.get(repoPath) ?? null;
+    // Se lee al cambiar de repo, sin suscribirse: elegir una conversación no tiene que recargar la lista.
+    const rememberedId = useAssistDockStore.getState().conversationByRepo[repoPath] || null;
     const fail = (message: string) => {
       if (alive) setNotice(t('assist.failed', { message }));
     };
@@ -253,7 +256,7 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
   const handleSelectConversation = (convId: string) => {
     if (!repoPath) return;
     setSelectedConvId(convId);
-    selectedPerRepoRef.current.set(repoPath, convId);
+    rememberConversation(repoPath, convId);
     setNotice(null);
     setAlternativesNotice(null);
     loadConversation(repoPath, convId);
@@ -263,7 +266,7 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
   const handleNewConversation = () => {
     if (!repoPath) return;
     setSelectedConvId(null);
-    selectedPerRepoRef.current.set(repoPath, null);
+    rememberConversation(repoPath, '');
     setMessages([]);
     setNotice(null);
     setAlternativesNotice(null);
@@ -281,7 +284,7 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
       if (res?.success && res.data?.deleted) {
         if (selectedConvId === convId) {
           setSelectedConvId(null);
-          selectedPerRepoRef.current.set(repoPath, null);
+          rememberConversation(repoPath, '');
           setMessages([]);
         }
         await refreshList(repoPath);
@@ -304,7 +307,7 @@ export function AssistChat({ repoPath, viewId }: AssistChatProps): React.JSX.Ele
     targetConvId: string | null,
   ): SendResultHandlers => ({
     onAnswered: async (finalConvId) => {
-      selectedPerRepoRef.current.set(targetRepo, finalConvId);
+      rememberConversation(targetRepo, finalConvId);
       setSelectedConvId(finalConvId);
       await Promise.all([
         loadConversation(targetRepo, finalConvId),

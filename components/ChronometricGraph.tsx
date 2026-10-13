@@ -46,6 +46,7 @@ import type { Lang } from '@/lib/i18n';
 import { CopyButton } from './CopyButton';
 import { PredictionDetail } from './temporal/PredictionDetail';
 import { AgentDashboard } from './temporal/AgentDashboard';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { Calendar, GitCommit, ZoomIn, ZoomOut, RotateCcw, Activity, Layers, Compass, Crosshair, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
 
 const OUTCOME_COLOR: Record<string, string> = {
@@ -644,114 +645,54 @@ export function ChronometricGraph({
   // Centauro mode controls the future-branch reader; hudExpanded controls the panel body.
   const centauroReaderActive = useGitStore((state) => state.centauroReaderActive);
   const setCentauroReaderActive = useGitStore((state) => state.setCentauroReaderActive);
-  const [hudExpanded, setHudExpanded] = useState(false);
+  const dockOpen = useAssistDockStore((s) => s.open);
+  const setDockOpen = useAssistDockStore((s) => s.setOpen);
+  const dockHeight = useAssistDockStore((s) => s.height);
+  const activeTabId = useAssistDockStore((s) => s.activeTabId);
+  const setActiveTab = useAssistDockStore((s) => s.setActiveTab);
+  const registerTabs = useAssistDockStore((s) => s.registerTabs);
+  const slot = useAssistDockStore((s) => s.slot);
 
-  // Which tab is active inside the expanded Centauro panel.
-  const [centauroTab, setCentauroTab] = useState<'report' | 'history' | 'stats'>('report');
-
-  // Centauro panel resizable height (in px). Persisted in localStorage.
-  const [centauroHeight, setCentauroHeight] = useState(320);
-  const [isCentauroDragging, setIsCentauroDragging] = useState(false);
-  const centauroDragRef = useRef<{
-    startY: number;
-    startH: number;
-  } | null>(null);
-  const centauroTabBarRef = useRef<HTMLDivElement | null>(null);
   const centauroBodyRef = useRef<HTMLDivElement | null>(null);
-  const lastCentauroAutoFitSignatureRef = useRef<string | null>(null);
 
-  const setHudPanelExpanded = useCallback((expanded: boolean) => {
-    setHudExpanded(expanded);
-    try {
-      localStorage.setItem(HUD_EXPANDED_STORAGE_KEY, String(expanded));
-    } catch {
-      /* ignore storage failures */
-    }
-  }, []);
-
-  // Dynamic helper to find the top of the sidebars
-  const getSidebarTop = useCallback(() => {
-    if (typeof document === 'undefined') return 104;
-    const el = document.querySelector('aside');
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      return rect.top;
-    }
-    return 104;
-  }, []);
-
-  // Dynamic helper to calculate the maximum allowed height for the centauro content block
-  // so that the top edge of the HUD aligns perfectly with the top edge of the sidebars.
-  const getMaxCentauroHeight = useCallback(() => {
-    if (typeof document === 'undefined') return 320;
-    
-    // 1. Get bottom boundary of the graph container or viewport
-    const containerEl = document.getElementById('chronometric-container');
-    const containerBottom = Math.max(
-      window.innerHeight,
-      containerEl ? containerEl.getBoundingClientRect().bottom : 0,
-    );
-    
-    // 2. Get the top coordinate of the sidebars
-    const sidebarTop = getSidebarTop();
-    
-    // 3. Get the height of the HUD toolbar (default to 41px if not yet rendered)
-    const toolbarEl = document.querySelector('.hud-toolbar');
-    const toolbarHeight = toolbarEl ? toolbarEl.getBoundingClientRect().height : 41;
-    
-    // 4. Calculate maximum height for the glassy block (centauroHeight)
-    const maxH = containerBottom - CENTAURO_BOTTOM_INSET_PX - sidebarTop - toolbarHeight - 2;
-    
-    return Math.max(120, maxH);
-  }, [getSidebarTop]);
-
-  // Hydrate height from localStorage on mount.
   useEffect(() => {
-    try {
-      const savedExpanded = localStorage.getItem(HUD_EXPANDED_STORAGE_KEY);
-      if (savedExpanded === 'true' || savedExpanded === 'false') {
-        setHudExpanded(savedExpanded === 'true');
-      }
-      const saved = localStorage.getItem('gitcron:centauroHeightPx');
-      if (saved) {
-        const h = parseInt(saved, 10);
-        const maxH = getMaxCentauroHeight();
-        if (h >= 120 && h <= maxH) {
-          setCentauroHeight(h);
-        } else if (h > maxH) {
-          setCentauroHeight(maxH);
-        }
-      }
-    } catch { /* ignore corrupt value */ }
-  }, [getMaxCentauroHeight]);
+    const unregister = registerTabs([
+      { id: 'centauro-report', labelKey: 'centauro.tabReport' },
+      { id: 'centauro-history', labelKey: 'centauro.tabHistory' },
+      { id: 'centauro-stats', labelKey: 'centauro.tabStats' },
+    ]);
+    return unregister;
+  }, [registerTabs]);
 
-  const onCentauroResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsCentauroDragging(true);
-    centauroDragRef.current = {
-      startY: e.clientY,
-      startH: centauroHeight,
-    };
-    const onMove = (ev: MouseEvent) => {
-      if (!centauroDragRef.current) return;
-      // Dragging UP (delta Y is startY - currentY) = taller
-      const deltaPx = centauroDragRef.current.startY - ev.clientY;
-      const targetH = centauroDragRef.current.startH + deltaPx;
-      // Clamp against useful area
-      const maxH = getMaxCentauroHeight();
-      const newH = Math.max(120, Math.min(maxH, targetH));
-      setCentauroHeight(newH);
-      localStorage.setItem('gitcron:centauroHeightPx', String(newH));
-    };
-    const onUp = () => {
-      setIsCentauroDragging(false);
-      centauroDragRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [centauroHeight, getMaxCentauroHeight]);
+  const isCentauroActive =
+    activeTabId === 'centauro-report' ||
+    activeTabId === 'centauro-history' ||
+    activeTabId === 'centauro-stats';
+
+  const centauroTab: 'report' | 'history' | 'stats' =
+    activeTabId === 'centauro-history'
+      ? 'history'
+      : activeTabId === 'centauro-stats'
+      ? 'stats'
+      : 'report';
+
+  const setCentauroTab = useCallback(
+    (tab: 'report' | 'history' | 'stats') => {
+      setActiveTab(`centauro-${tab}`);
+    },
+    [setActiveTab],
+  );
+
+  const isCentauroOpen = dockOpen && isCentauroActive;
+
+  const toggleCentauro = useCallback(() => {
+    if (isCentauroOpen) {
+      setDockOpen(false);
+    } else {
+      setDockOpen(true);
+      setActiveTab('centauro-report');
+    }
+  }, [isCentauroOpen, setDockOpen, setActiveTab]);
 
   // Capa 2a — per-branch decisions (accepted / rejected / deferred).
   // Keyed by branch message (title), which is the stable identity across sessions.
@@ -1001,16 +942,10 @@ export function ChronometricGraph({
   );
 
   const handleSelectSpeculative = (id: string) => {
-    // Restore height if switching branches or opening another branch while in preview
-    if (materializeIdea && previousCentauroHeight !== null) {
-      setCentauroHeight(previousCentauroHeight);
-      localStorage.setItem('gitcron:centauroHeightPx', String(previousCentauroHeight));
-      setPreviousCentauroHeight(null);
-    }
     setSelectedSpeculativeId(id);
     setCentauroReaderActive(true);
-    setHudPanelExpanded(true);
-    setCentauroTab('report');
+    setDockOpen(true);
+    setActiveTab('centauro-report');
     setMaterializeIdea(null);
     setMaterializeResult(null);
     setMaterializeError(null);
@@ -1027,17 +962,6 @@ export function ChronometricGraph({
   const [restoreBranchLoading, setRestoreBranchLoading] = useState(false);
   const [restoreBranchError, setRestoreBranchError] = useState<string | null>(null);
   const [restoreBranchSuccess, setRestoreBranchSuccess] = useState<string | null>(null);
-  const [previousCentauroHeight, setPreviousCentauroHeight] = useState<number | null>(null);
-
-  // Automatically clamp height on window resize so HUD top never crosses sidebar top
-  useEffect(() => {
-    const handleResize = () => {
-      const maxH = getMaxCentauroHeight();
-      setCentauroHeight((prev) => Math.min(prev, maxH));
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [getMaxCentauroHeight]);
 
   // The exact plan the user is shown and confirms. Same builder main uses.
   const materializePlan = useMemo(
@@ -1053,121 +977,22 @@ export function ChronometricGraph({
     setRestoreBranchSuccess(null);
   }, [selectedMaterializedRef, selectedSpeculativeId]);
 
-  const isTallMode = centauroHeight >= 480;
+  const isTallMode = dockHeight >= 480;
   const isMaterializationMode = Boolean(materializeIdea && materializePlan);
   const useTallMaterializationLayout = isTallMode || isMaterializationMode;
   const isLivePredictionDetailMode = Boolean(selectedLivePredictionDetail) && !isMaterializationMode;
-
-  const centauroContentSignature = useMemo(() => [
-    hudExpanded ? 'open' : 'closed',
-    centauroReaderActive ? 'centauro-on' : 'centauro-off',
-    showSpeculative ? 'futures-on' : 'futures-off',
-    centauroTab,
-    predictionHistoryLoading ? 'history-loading' : 'history-ready',
-    predictionHistory.map((entry) => `${entry.run.id}:${entry.branches.length}`).join(','),
-    selectedHistoryDetail?.branch.id ?? 'history-list',
-    selectedSpeculativeId ?? 'no-speculative',
-    selectedCommit?.hash ?? 'no-commit',
-    materializeIdea?.id ?? 'no-materialize-idea',
-    materializeResult?.branchName ?? 'no-materialize-result',
-    materializeError ?? 'no-materialize-error',
-    selectedBranchDecision?.outcome ?? 'no-branch-decision',
-    selectedMaterializedRef ?? 'no-materialized-ref',
-    selectedMaterializedSourceTag ?? 'no-materialized-source-tag',
-    selectedMaterializedBranchExists ? 'materialized-ref-active' : 'materialized-ref-missing',
-    restoreBranchLoading ? 'restore-loading' : 'restore-idle',
-    restoreBranchError ?? 'no-restore-error',
-    restoreBranchSuccess ?? 'no-restore-success',
-    useTallMaterializationLayout ? 'tall-materialize' : 'compact-materialize',
-    String(allDecisions.length),
-  ].join('|'), [
-    hudExpanded,
-    centauroReaderActive,
-    showSpeculative,
-    centauroTab,
-    predictionHistoryLoading,
-    predictionHistory,
-    selectedHistoryDetail?.branch.id,
-    selectedSpeculativeId,
-    selectedCommit?.hash,
-    materializeIdea?.id,
-    materializeResult?.branchName,
-    materializeError,
-    selectedBranchDecision?.outcome,
-    selectedMaterializedRef,
-    selectedMaterializedSourceTag,
-    selectedMaterializedBranchExists,
-    restoreBranchLoading,
-    restoreBranchError,
-    restoreBranchSuccess,
-    useTallMaterializationLayout,
-    allDecisions.length,
-  ]);
-
-  useLayoutEffect(() => {
-    if (!hudExpanded || isCentauroDragging) return;
-    if (centauroTab === 'history' && predictionHistoryLoading) return;
-    if (lastCentauroAutoFitSignatureRef.current === centauroContentSignature) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      const tabBarHeight = centauroTabBarRef.current?.getBoundingClientRect().height ?? 0;
-      const body = centauroBodyRef.current;
-      if (!body) return;
-      const bodyContent = body.firstElementChild instanceof HTMLElement ? body.firstElementChild : null;
-
-      const maxH = getMaxCentauroHeight();
-      const bodyContentHeight = bodyContent
-        ? Math.max(bodyContent.scrollHeight, bodyContent.getBoundingClientRect().height)
-        : body.scrollHeight;
-      const contentHeight = tabBarHeight + bodyContentHeight + 2;
-      const minReadableHeight = isMaterializationMode ? 680 : 120;
-      const desiredHeight = Math.max(minReadableHeight, Math.ceil(contentHeight));
-      const nextHeight = Math.max(120, Math.min(maxH, desiredHeight));
-
-      setCentauroHeight((prev) => {
-        if (Math.abs(prev - nextHeight) < 2) return prev;
-        return nextHeight;
-      });
-      try {
-        localStorage.setItem('gitcron:centauroHeightPx', String(nextHeight));
-      } catch {
-        /* ignore storage failures */
-      }
-      lastCentauroAutoFitSignatureRef.current = centauroContentSignature;
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [
-    centauroContentSignature,
-    hudExpanded,
-    centauroTab,
-    getMaxCentauroHeight,
-    isCentauroDragging,
-    isMaterializationMode,
-    predictionHistoryLoading,
-  ]);
-
-  useEffect(() => {
-    if (!hudExpanded) {
-      lastCentauroAutoFitSignatureRef.current = null;
-    }
-  }, [hudExpanded]);
 
   function toggleCentauroMode(): void {
     const next = !centauroReaderActive;
     setCentauroReaderActive(next);
     if (next) {
-      setHudPanelExpanded(true);
-      setCentauroTab('report');
+      setDockOpen(true);
+      setActiveTab('centauro-report');
     } else {
       setSelectedSpeculativeId(null);
       cancelMaterialize();
-      setCentauroTab('report');
+      setActiveTab('centauro-report');
     }
-  }
-
-  function toggleHudExpanded(): void {
-    setHudPanelExpanded(!hudExpanded);
   }
 
   function openMaterializeConfirm() {
@@ -1175,14 +1000,6 @@ export function ChronometricGraph({
     if (selectedBranchIsMaterialized) return;
     const b = selectedSpeculativeBranch;
     if (!b) return;
-
-    // Backup height and auto-expand to widescreen content height clamped below lateral panels
-    setPreviousCentauroHeight(centauroHeight);
-    const maxH = getMaxCentauroHeight();
-    lastCentauroAutoFitSignatureRef.current = null;
-    const targetH = Math.min(Math.max(centauroHeight, 680), maxH);
-    setCentauroHeight(targetH);
-    localStorage.setItem('gitcron:centauroHeightPx', String(targetH));
 
     setMaterializeResult(null);
     setMaterializeError(null);
@@ -1201,18 +1018,13 @@ export function ChronometricGraph({
     setMaterializeIdea(null);
     setMaterializeResult(null);
     setMaterializeError(null);
-    if (previousCentauroHeight !== null) {
-      setCentauroHeight(previousCentauroHeight);
-      localStorage.setItem('gitcron:centauroHeightPx', String(previousCentauroHeight));
-      setPreviousCentauroHeight(null);
-    }
   }
 
   function selectGraphCommit(commit: Commit, options?: CommitSelectOptions): void {
     setSelectedSpeculativeId(null);
     cancelMaterialize();
-    setCentauroTab('report');
-    setHudPanelExpanded(true);
+    setActiveTab('centauro-report');
+    setDockOpen(true);
     onSelect(commit, options);
   }
 
@@ -3336,133 +3148,52 @@ export function ChronometricGraph({
         </button>
         <button
           type="button"
-          onClick={toggleHudExpanded}
+          onClick={toggleCentauro}
           aria-label={t('canvas.openCentauro')}
           title={t('canvas.openCentauro')}
-          aria-expanded={hudExpanded}
-          aria-pressed={hudExpanded}
+          aria-expanded={isCentauroOpen}
+          aria-pressed={isCentauroOpen}
           className={cn(
             "h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl bg-bg-surface text-text-secondary shadow-lg flex items-center justify-center transition-colors",
             "hover:bg-text-primary/10 hover:text-secondary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
-            hudExpanded && "text-secondary bg-secondary/15"
+            isCentauroOpen && "text-secondary bg-secondary/15"
           )}
         >
           <Compass size={18} />
         </button>
       </div>
 
-      {/* Bottom dock — Centauro reader panel (when expanded) */}
-      {hudExpanded && (
-        <div
-          className="absolute z-20 pointer-events-none flex justify-center bottom-0"
-          style={{
-            left: hudLeftInset,
-            right: hudRightInset,
-            transition: 'left 0.3s ease, right 0.3s ease',
-          }}
-        >
-          <div
-            className="pointer-events-auto select-none relative w-full"
-            style={{ width: 'min(840px, calc(100% - 8px))' }}
-          >
-            {/* Resize handle */}
-            <div
-              onMouseDown={onCentauroResizeStart}
-              className="absolute -top-1.5 left-0 right-0 h-3 cursor-row-resize z-30 group flex items-center justify-center"
-              title={t('sidebar.resizeHandle')}
-            >
-              <div className="w-12 h-1 rounded-full bg-border-subtle group-hover:bg-secondary transition-colors" />
-            </div>
-
-            <div
-              style={{
-                boxShadow:
-                  '0 -20px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 32px rgba(163, 241, 133, 0.1)',
-              }}
-              className="rounded-t-2xl bg-bg-surface border-t border-x border-border-subtle/30 overflow-hidden"
-            >
-              <div
-                className="overflow-hidden"
-                style={{
-                  height: `${centauroHeight}px`,
-                }}
+      {/* Centauro reader panel portaled into AssistDock slot */}
+      {slot && isCentauroActive && createPortal(
+        <div className={cn("h-full flex flex-col overflow-hidden bg-bg-surface text-text-primary")}>
+          {onToggleSpeculative && (
+            <div className={cn("flex items-center justify-end px-4 py-1.5 border-b border-border-subtle/20 shrink-0")}>
+              <button
+                type="button"
+                onClick={onToggleSpeculative}
+                title={t('canvas.speculativeBranches')}
+                aria-label={t('canvas.speculativeBranches')}
+                className={cn(
+                  "px-2.5 py-1 flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase rounded-lg transition-colors min-h-[32px]",
+                  showSpeculative
+                    ? "bg-secondary/15 text-secondary"
+                    : "text-text-secondary hover:text-text-primary hover:bg-text-primary/10"
+                )}
               >
-                <div className="flex flex-col rounded-t-xl h-full" style={{ maxHeight: `${centauroHeight}px` }}>
-                  {/* Tab bar */}
-                  <div ref={centauroTabBarRef} className="flex items-center justify-between px-4 h-10 border-b border-border-subtle/20 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setCentauroTab('report')}
-                        className={cn(
-                          'px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase cursor-pointer transition-colors border-b-2 -mb-[1px]',
-                          centauroTab === 'report'
-                            ? 'text-secondary border-secondary'
-                            : 'text-text-secondary border-transparent hover:text-text-primary',
-                        )}
-                      >
-                        {t('centauro.tabReport')}
-                      </button>
-                      <button
-                        onClick={openHistoryTab}
-                        className={cn(
-                          'px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase cursor-pointer transition-colors border-b-2 -mb-[1px]',
-                          centauroTab === 'history'
-                            ? 'text-secondary border-secondary'
-                            : 'text-text-secondary border-transparent hover:text-text-primary',
-                        )}
-                      >
-                        {t('centauro.tabHistory')}
-                      </button>
-                      <button
-                        onClick={() => setCentauroTab('stats')}
-                        className={cn(
-                          'px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase cursor-pointer transition-colors border-b-2 -mb-[1px]',
-                          centauroTab === 'stats'
-                            ? 'text-secondary border-secondary'
-                            : 'text-text-secondary border-transparent hover:text-text-primary',
-                        )}
-                      >
-                        {t('centauro.tabStats')}
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {onToggleSpeculative && (
-                        <button
-                          type="button"
-                          onClick={onToggleSpeculative}
-                          title={t('canvas.speculativeBranches')}
-                          aria-label={t('canvas.speculativeBranches')}
-                          className={cn(
-                            "px-2.5 py-1 flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase rounded-lg transition-colors min-h-[32px]",
-                            showSpeculative
-                              ? "bg-secondary/15 text-secondary"
-                              : "text-text-secondary hover:text-text-primary hover:bg-text-primary/10"
-                          )}
-                        >
-                          <Layers size={13} />
-                          <span>{t('canvas.speculativeBranches')}</span>
-                          <span className="text-[9px] font-mono">
-                            {showSpeculative ? t('centauro.futurosOn') : t('centauro.futurosOff')}
-                          </span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={toggleHudExpanded}
-                        title={t('centauro.collapsePanel')}
-                        aria-label={t('centauro.collapsePanel')}
-                        className="h-8 w-8 min-h-[32px] min-w-[32px] rounded-lg text-text-secondary hover:text-text-primary hover:bg-text-primary/10 flex items-center justify-center transition-colors"
-                      >
-                        <ChevronDown size={16} />
-                      </button>
-                    </div>
-                  </div>
+                <Layers size={13} />
+                <span>{t('canvas.speculativeBranches')}</span>
+                <span className={cn("text-[9px] font-mono")}>
+                  {showSpeculative ? t('centauro.futurosOn') : t('centauro.futurosOff')}
+                </span>
+              </button>
+            </div>
+          )}
 
-                {/* Tab content */}
-                <div ref={centauroBodyRef} className={cn(
-                  "flex-1",
-                  isMaterializationMode && useTallMaterializationLayout ? "overflow-hidden flex flex-col" : "overflow-y-auto"
-                )}>
+          {/* Tab content */}
+          <div ref={centauroBodyRef} className={cn(
+            "flex-1",
+            isMaterializationMode && useTallMaterializationLayout ? "overflow-hidden flex flex-col" : "overflow-y-auto"
+          )}>
                   {centauroTab === 'report' ? (
                     <div className={cn(
                       "py-3 font-mono",
@@ -3872,12 +3603,9 @@ export function ChronometricGraph({
                     )
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      )}
+              </div>,
+              slot
+            )}
     </div>
   );
 }

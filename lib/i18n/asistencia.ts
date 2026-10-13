@@ -29,6 +29,10 @@ export const es: Record<string, string> = {
   'assist.target.task': 'tarea {{taskId}} de {{changeId}}',
   'assist.target.temporal': 'idea del Agente Temporal',
   'assist.target.carto': 'pieza del mapa {{nodeId}}',
+  'assist.dockOpen': 'Abrir panel de asistencia',
+  'assist.dockClose': 'Cerrar panel de asistencia',
+  'assist.tabChat': 'Chat',
+  'assist.dockResize': 'Cambiar tamaño del panel de asistencia',
 };
 
 export const en: Record<string, string> = {
@@ -60,6 +64,10 @@ export const en: Record<string, string> = {
   'assist.target.task': 'task {{taskId}} of {{changeId}}',
   'assist.target.temporal': 'Temporal Agent idea',
   'assist.target.carto': 'map piece {{nodeId}}',
+  'assist.dockOpen': 'Open assistance panel',
+  'assist.dockClose': 'Close assistance panel',
+  'assist.tabChat': 'Chat',
+  'assist.dockResize': 'Resize assistance panel',
 };
 
 export const zh: Record<string, string> = {
@@ -91,4 +99,8 @@ export const zh: Record<string, string> = {
   'assist.target.task': '变更 {{changeId}} 的任务 {{taskId}}',
   'assist.target.temporal': '时序智能体创意',
   'assist.target.carto': '地图节点 {{nodeId}}',
+  'assist.dockOpen': '打开助手面板',
+  'assist.dockClose': '关闭助手面板',
+  'assist.tabChat': '聊天',
+  'assist.dockResize': '调整助手面板大小',
 };
