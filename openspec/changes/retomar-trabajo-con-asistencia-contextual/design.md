@@ -31,6 +31,8 @@ Usar identidad repo de main junto a checkout/worktree, HEAD, rama y selección d
 
 Una conversación y un resumen pertenecen a un `checkoutId`: dos worktrees del mismo repo tienen conversaciones separadas, y `repoKey` sólo sirve para ofrecer lo del repo hermano, nunca para mezclarlo en silencio. El renderer no manda rutas sueltas: manda la ruta del repo abierto (`activeRepoPath`), y main la resuelve y la autoriza como hoy.
 
+En SQLite (tareas 2.1 y 2.2) la conversación se guarda por la **ruta canónica del checkout** (`checkout_path`), que es la misma identidad que `checkoutId` —uno por ruta canónica— sin depender de que el SDD haya creado antes la fila de `pipeline_repo` (decisión del orquestador, 2026-10-13). Es la misma clave que usa `ai_use_record.repo_path`.
+
 **Selección discriminada.** Cada vista aporta como mucho una referencia, desde el estado que ya tiene, sin store nuevo:
 
 | `kind` | Campos | Fuente actual |

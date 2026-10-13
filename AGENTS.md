@@ -9,7 +9,7 @@ Las reglas del proyecto (stack, estilos, ramas) están en la sección `context` 
 El orquestador ya leyó el código. El prompt (pegado, o la ruta `tmp/prompts/<tanda>.md`) trae siempre estas partes:
 
 1. **Encabezado:** cambio, tanda, rama y base Git.
-2. **Leer:** lista cerrada de archivos, con los rangos de líneas.
+2. **Leer:** lista cerrada de archivos, con los rangos de líneas. Si la tanda es para una ejecutora de ventana grande, el prompt puede declararla **abierta** y nombrar las carpetas o archivos modelo que se pueden leer enteros; aun así, nada fuera de lo nombrado.
 3. **Qué se hace:** el objetivo, y las firmas, tipos, imports y el esqueleto ya resueltos, con las reglas de negocio decididas.
 4. **Criterios de aceptación.**
 5. **Comprobación:** el comando exacto (por omisión `pnpm verificar`) y, si hay pantallas, qué capturas sacar.
@@ -19,7 +19,7 @@ Si a tu prompt le falta una de estas partes y no podés seguir sin ella, no la i
 
 ## 2. No explores
 
-Tu ventana es chica. Leé **solo** los archivos y rangos de «Leer». Nada de recorrer carpetas ni de buscar con grep o glob «para ubicarte», salvo que el prompt dé la búsqueda exacta. Si te falta algo, pará (punto 1): la IA local que sale a buscar entra en bucle (en otro proyecto repitió la misma búsqueda 246 veces sin escribir nada). Para leer algo de `tmp/` usá la ruta directa: grep y glob no ven `tmp/` porque está en `.gitignore`.
+Tu ventana es chica (o el prompt te la trata como chica). Leé **solo** los archivos y rangos de «Leer», o lo que nombra una tanda abierta. Nada de recorrer carpetas ni de buscar con grep o glob «para ubicarte», salvo que el prompt dé la búsqueda exacta. Si te falta algo, pará (punto 1): la IA local que sale a buscar entra en bucle (en otro proyecto repitió la misma búsqueda 246 veces sin escribir nada). Para leer algo de `tmp/` usá la ruta directa: grep y glob no ven `tmp/` porque está en `.gitignore`.
 
 ## 3. Reglas permanentes
 
