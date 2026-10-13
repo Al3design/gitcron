@@ -4591,3 +4591,22 @@ summary.centerBlock {
 .completedStamps .changeStamp:not(:first-child) {
   margin-left: 0;
 }
+
+/* «Dónde quedaste» (retomar 3.2): cuándo se leyó y aviso de relectura pendiente. */
+.resumeReadAt {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.resumePending {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xs);
+}
+
+.whereYouLeftOffContainer[data-stale='true'] .whereYouLeftOffRowsList {
+  opacity: 0.6;
+}

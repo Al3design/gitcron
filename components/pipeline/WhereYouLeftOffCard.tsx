@@ -12,11 +12,14 @@ import {
 } from 'lucide-react';
 import type { ChangeLastCommit, TaskEvidence } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
+import { headShaOf } from '@/lib/assist/view-contributors';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Stack, Row, PlainList } from '@/components/ui';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from './pipeline-view-state';
-import { deriveResumeCard } from './resume-card';
+import { deriveResumeCard, formatRelativeTime } from './resume-card';
+import { compareFreshness, stampSources, type ResumeSourcesStamp } from './resume-freshness';
 import styles from './OpenSpecDashboard.module.css';
 
 export interface WhereYouLeftOffCardProps {
@@ -148,6 +151,21 @@ export function WhereYouLeftOffCard({
     t,
   ]);
 
+  const readAt = usePipelineStore((s) => s.snapshot?.openSpec?.observedAt ?? null);
+  const commits = useGitStore((s) => s.commits);
+  const currentBranch = useGitStore((s) => s.currentBranch);
+  const modifiedPaths = Array.isArray(gitFiles) ? gitFiles.map((f) => f.path) : [];
+  const nowStamp = stampSources(readAt, headShaOf(commits ?? [], currentBranch ?? ''), modifiedPaths, changeId ?? '');
+
+  // Lo que había al leer: se toma de nuevo cada vez que llega una lectura nueva o cambia el cambio
+  // (ajuste de estado durante el render, sin un efecto que dispare otro render).
+  const readKey = `${readAt ?? ''}\u0000${changeId ?? ''}`;
+  const [stampAtRead, setStampAtRead] = useState<{ key: string; stamp: ResumeSourcesStamp } | null>(null);
+  if (stampAtRead?.key !== readKey) {
+    setStampAtRead({ key: readKey, stamp: nowStamp });
+  }
+  const freshness = compareFreshness(stampAtRead?.key === readKey ? stampAtRead.stamp : null, nowStamp);
+
   if (!cardData) return null;
 
   const { objective, whatYouWereDoing, currentWork, remainingWork, archivedNotice, rows } = cardData;
@@ -157,6 +175,7 @@ export function WhereYouLeftOffCard({
       className={styles.whereYouLeftOffContainer}
       aria-label={t('pipeline.resumeCard.title')}
       data-testid="where-you-left-off-card"
+      data-stale={freshness.state === 'pending' ? 'true' : undefined}
     >
       <div className={styles.whereYouLeftOffHeader}>
         <Row gap="2">
@@ -168,7 +187,17 @@ export function WhereYouLeftOffCard({
             {archivedNotice}
           </span>
         )}
+        {readAt && (
+          <span className={styles.resumeReadAt} data-testid="resume-read-at">
+            {t('pipeline.resumeCard.readAt', { timeAgo: formatRelativeTime(readAt, undefined, lang) })}
+          </span>
+        )}
       </div>
+      {freshness.state === 'pending' && (
+        <p className={styles.resumePending} role="status" data-testid="resume-pending">
+          {t(freshness.reason === 'checkout' ? 'pipeline.resumeCard.pendingCheckout' : 'pipeline.resumeCard.pendingSources')}
+        </p>
+      )}
 
       <dl className={styles.whereYouLeftOffRowsList}>
         {/* Renglón: Objetivo */}
