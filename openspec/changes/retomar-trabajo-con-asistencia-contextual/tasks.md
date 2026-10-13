@@ -18,6 +18,8 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [x] 2.6 **IA local:** Conectar contexto de Cartografía y Centauro al mismo shell. **Comprobación:** Nodo/idea seleccionado viaja como referencia; navegación conserva conversación y explicita cambio de alcance.
 - [ ] 2.7 **IA local:** Conectar Configuración y acciones de ejecución mediante contratos existentes. **Comprobación:** Acciones usan disponibilidad real y confirmaciones existentes; consulta persistida no promete resume del proceso.
 
+- [ ] 2.8 **IA local:** Rehacer el cuadro de texto del chat como el de Claude escritorio: empieza en una línea y crece con el texto; abajo a la derecha el modelo y el nivel de razonamiento, y enviar o detener; abajo a la izquierda lo de la pantalla (qué tenés elegido, quitarlo, y el menú «+»); las preguntas sugeridas arriba del cuadro cuando la conversación está vacía; y vista previa del Markdown como en Tareas de SDD (decisión de Alejandro, 2026-10-13). **Comprobación:** Capturas en grafo, SDD y Cartografía; el cuadro crece y vuelve a una línea al enviar; el modelo y el nivel se eligen sin salir del chat y se guardan en el uso .
+
 ## 3. Retomar y orientación
 
 - [x] 3.1 **IA local:** Construir resumen determinista del cambio con objetivo, evidencia y próximo paso. **Comprobación:** Funciona sin IA; distingue documentos presentes, tareas marcadas, pruebas verificadas y commit.
