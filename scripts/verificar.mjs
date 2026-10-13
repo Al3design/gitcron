@@ -211,6 +211,10 @@ function capturasViejas(tocados) {
   ];
   const codigo = tocados.filter((f) => /.(tsx?|css)$/.test(f) && !/__tests__|.test./.test(f) && existsSync(f));
   if (capturas.length === 0 || codigo.length === 0) return [];
+  // Si la captura más nueva es anterior al último commit, la carpeta es de una tanda ya cerrada
+  // y no de la que se verifica. Medido en retomar-12 (sin capturas): avisaba por las de retomar-11.
+  const ultimoCommitMs = Number(git(`log -1 --format=%ct ${base}`)) * 1000;
+  if (Math.max(...capturas.map((f) => statSync(f).mtimeMs)) < ultimoCommitMs) return [];
   const ultimoCodigo = Math.max(...codigo.map((f) => statSync(f).mtimeMs));
   const viejas = capturas.filter((f) => statSync(f).mtimeMs < ultimoCodigo);
   return viejas.length > 0 ? [`${carpeta}: ${viejas.length} captura(s) anteriores al último cambio de código`] : [];
