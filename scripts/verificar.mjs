@@ -261,6 +261,11 @@ function trampas() {
     if (/catch\s*(\([^)]*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(texto)) {
       avisos.push(`${archivo}: catch vacío agregado`);
     }
+    // Lo mismo con otra cara. Medido en retomar-08: `.catch(() => undefined)` y un `catch`
+    // con sólo «// Ignorar fallos» dejaban la lista vacía sin decir que había fallado.
+    if (/\.catch\(\s*\(\s*\)\s*=>\s*(undefined|null|void 0)\s*\)|catch\s*(\([^)]*\))?\s*\{\s*(\/\/[^\n]*\s*)+\}/.test(texto)) {
+      avisos.push(`${archivo}: error tragado (.catch(() => undefined) o catch con sólo un comentario) → avisarlo, o explicar en «Dudas» por qué se ignora`);
+    }
     // Estilos fuera de los módulos CSS (regla de openspec/config.yaml). Medido en
     // estilos-02: `className="w-full"` en cuatro lugares y un `style={{ flexBasis }}`.
     if (archivo.endsWith('.tsx')) {
