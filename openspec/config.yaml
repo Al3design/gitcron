@@ -28,6 +28,14 @@ context: |
   En modularizar-sdd, una regla así se mudó sola y las fechas de un cambio archivado se
   separaron 16 px.
 
+  Lo que es de IA se distingue a la vista con su propio color: el violeta `--color-ai` y
+  el degradé multicolor `--ai-gradient` (violeta, azul, verde agua y rosa) de app/globals.css,
+  nunca el verde de Git (`--color-secondary`) ni el azul de las acciones comunes. Para eso
+  hay piezas globales listas: `.ai-thinking-text` (el brillo de «pensando», en un `<span>`
+  propio), `.ai-surface` (superficie con marco en degradé), `.ai-surface-header` (encabezado
+  de un panel de IA) y `.ai-gradient-text` (títulos y marcas en degradé). Se usan esas, no
+  copias en un módulo (decisión de Alejandro, D20 de modelos-en-casa, recordada el 2026-10-13).
+
   Nada se cita por número. Se escribe lo que la regla dice, o no se escribe. Una referencia
   como «conforme al invariante 12» deja de significar algo en el momento en que ese documento
   se mueve o se borra, y no hay forma de darse cuenta: nada falla. El mismo día se encontraron
