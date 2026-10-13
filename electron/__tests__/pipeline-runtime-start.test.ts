@@ -29,6 +29,7 @@ import { authorizedRepoStore } from '../ipc/authorized-repos';
 import { registerPipelineRuntimeHandlers } from '../ipc/pipeline-runtime';
 import { resetGitCronConfigCacheForTesting } from '../ai/config/gitcron-config';
 import { setUseConfigPathForTesting } from '../ai/use-resolution';
+import { removeTempDir } from '@/test-utils/temp-dir';
 
 const key = (modelRef: string, effort: string | null = null) => JSON.stringify([modelRef, effort]);
 
@@ -86,7 +87,8 @@ describe('pipeline:runtime:start (tarea 5.1)', () => {
     fetchOpenCodeModelList.mockReset();
     resetGitCronConfigCacheForTesting();
     authorizedRepoStore.clear();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Con reintento: bajo carga, Windows tarda en soltar la carpeta y un rmSync directo daba EPERM (2026-10-11 y 2026-10-13).
+    removeTempDir(tempDir);
   });
 
   it('con codex/gpt-5.6-sol y nivel high, el hub recibe codex, ese modelo y ese nivel aunque la pantalla mande otro runtime u otro requestedModel', async () => {
