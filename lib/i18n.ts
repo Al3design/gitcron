@@ -15,6 +15,7 @@ import * as graph from './i18n/graph';
 import * as ajustes from './i18n/ajustes';
 import * as cartografia from './i18n/cartografia';
 import * as comunes from './i18n/comunes';
+import * as asistencia from './i18n/asistencia';
 
 export type Lang = 'es' | 'en' | 'zh';
 
@@ -32,6 +33,7 @@ const es: Dict = {
   ...graph.es,
   ...ajustes.es,
   ...cartografia.es,
+  ...asistencia.es,
 };
 
 const en: Dict = {
@@ -40,6 +42,7 @@ const en: Dict = {
   ...graph.en,
   ...ajustes.en,
   ...cartografia.en,
+  ...asistencia.en,
 };
 
 const zh: Dict = {
@@ -48,6 +51,7 @@ const zh: Dict = {
   ...graph.zh,
   ...ajustes.zh,
   ...cartografia.zh,
+  ...asistencia.zh,
 };
 
 const dicts: Record<Lang, Dict> = { es, en, zh };
