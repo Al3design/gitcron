@@ -13,21 +13,8 @@ import * as path from 'node:path';
 import { simpleGit } from 'simple-git';
 import { authorizedRepoRoot, isContainedWithin } from '../ipc/authorized-repos';
 import { withRepoLock } from '../git/repo-queue';
-
-/** Lo que la persona tiene seleccionado en una vista, con el HEAD en el que lo tomó. */
-export type ContextSelection =
-  | { kind: 'none' }
-  | { kind: 'commit'; sha: string }
-  | { kind: 'file'; path: string; at: 'worktree' | string; takenAtHead: string }
-  | { kind: 'change'; changeId: string; taskId?: string }
-  | { kind: 'temporal-idea'; runId: string; branchId: string }
-  | { kind: 'carto-node'; nodeId: string; takenAtHead: string };
-
-export interface CheckoutHead {
-  sha: string;
-  /** `null` con HEAD separado. */
-  branch: string | null;
-}
+import type { CheckoutHead, ContextSelection } from '../../types/assist-context';
+export type { CheckoutHead, ContextSelection } from '../../types/assist-context';
 
 export type ContextResolution =
   | { status: 'ok'; checkoutPath: string; head: CheckoutHead; selection: ContextSelection }
