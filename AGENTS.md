@@ -63,7 +63,7 @@ el resumen de pnpm verificar tal cual (con la línea de riesgo) y la salida del 
 dudas y decisiones; nada más
 ```
 
-Corregí cada ✗ antes de entregar. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
+Corregí cada ✗ antes de entregar. Cada ✓ dice **dónde** se ve: `archivo:línea`, el nombre de la prueba o la captura (por ejemplo «✓ recuerda el alto — `lib/assist/assist-dock-store.ts:52`, prueba «recuerda en el disco…»»). Un ✓ sin dónde no cuenta. Medido en retomar-09 y retomar-10: el reporte afirmaba persistencia que no estaba y una captura de SDD que era del grafo. Las capturas se sacan después del último cambio de código y se miran antes de describirlas. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
 
 ## 6. Revisión (solo si el prompt trae «Revisión»)
 
