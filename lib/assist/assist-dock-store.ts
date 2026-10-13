@@ -3,6 +3,8 @@
 
 import { create } from 'zustand';
 
+import type { TemporalIdeaRef } from './view-contributors';
+
 export interface AssistDockTab {
   id: string;
   labelKey: string;
@@ -15,6 +17,7 @@ export interface AssistDockState {
   registeredTabs: AssistDockTab[];
   slot: HTMLElement | null;
   conversationByRepo: Record<string, string>;
+  temporalIdea: TemporalIdeaRef | null;
 
   setOpen: (open: boolean) => void;
   toggle: () => void;
@@ -23,6 +26,7 @@ export interface AssistDockState {
   registerTabs: (tabs: AssistDockTab[]) => () => void;
   setSlot: (el: HTMLElement | null) => void;
   rememberConversation: (repoPath: string, conversationId: string) => void;
+  setTemporalIdea: (idea: TemporalIdeaRef | null) => void;
 }
 
 const DEFAULT_TAB: AssistDockTab = { id: 'chat', labelKey: 'assist.tabChat' };
@@ -123,4 +127,7 @@ export const useAssistDockStore = create<AssistDockState>((set) => ({
         [repoPath]: conversationId,
       },
     })),
+
+  temporalIdea: null,
+  setTemporalIdea: (temporalIdea) => set({ temporalIdea }),
 }));

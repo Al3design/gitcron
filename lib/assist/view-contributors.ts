@@ -3,9 +3,13 @@ import type { AssistAction } from './view-contributions';
 import type { ContextSelection } from '@/types/assist-context';
 
 const SHA_REGEX = /^[0-9a-fA-F]{7,40}$/;
-// Las mismas formas que valida el proceso principal (electron/assist/context-reference.ts).
 const CHANGE_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
 const TASK_ID_REGEX = /^\d+(\.\d+)*$/;
+
+export interface TemporalIdeaRef {
+  runId: string;
+  branchId: string;
+}
 
 function createConsultAction(id: string, labelKey: string): AssistAction {
   return {
@@ -17,9 +21,51 @@ function createConsultAction(id: string, labelKey: string): AssistAction {
   };
 }
 
+/** El sha del HEAD según la lista del grafo: el commit cuyos refs nombran HEAD o la rama actual; si no hay, el primero; `null` si no hay commits. Misma regla que `headCommitNode` de ChronometricGraph. */
+export function headShaOf(
+  commits: Pick<Commit, 'hash' | 'refs'>[],
+  currentBranch: string,
+): string | null {
+  if (!commits || commits.length === 0) return null;
+  const active = commits.find((c) => {
+    if (!c.refs) return false;
+    return c.refs.some(
+      (r) => r === 'HEAD' || r === currentBranch || r === `refs/heads/${currentBranch}`,
+    );
+  });
+  return active ? active.hash : commits[0]?.hash ?? null;
+}
+
+function isValidIdea(idea: TemporalIdeaRef | null | undefined): idea is TemporalIdeaRef {
+  if (!idea) return false;
+  const { runId, branchId } = idea;
+  if (!runId || typeof runId !== 'string' || runId.trim() === '' || runId.length > 200) {
+    return false;
+  }
+  if (!branchId || typeof branchId !== 'string' || branchId.trim() === '' || branchId.length > 200) {
+    return false;
+  }
+  return true;
+}
+
 export function graphContribution(
   selectedCommit: Pick<Commit, 'hash'> | null,
+  temporalIdea?: TemporalIdeaRef | null,
 ): { selection: ContextSelection; actions: AssistAction[] } {
+  if (isValidIdea(temporalIdea)) {
+    return {
+      selection: {
+        kind: 'temporal-idea',
+        runId: temporalIdea.runId,
+        branchId: temporalIdea.branchId,
+      },
+      actions: [
+        createConsultAction('idea-explain', 'assist.ask.ideaExplain'),
+        createConsultAction('idea-vs-now', 'assist.ask.ideaVsNow'),
+      ],
+    };
+  }
+
   if (selectedCommit?.hash && SHA_REGEX.test(selectedCommit.hash)) {
     return {
       selection: {
@@ -37,6 +83,39 @@ export function graphContribution(
     selection: { kind: 'none' },
     actions: [
       createConsultAction('branch-state', 'assist.ask.branchState'),
+    ],
+  };
+}
+
+export function cartoContribution(
+  nodeId: string | null,
+  takenAtHead: string | null,
+): { selection: ContextSelection; actions: AssistAction[] } {
+  if (
+    nodeId &&
+    nodeId.trim() !== '' &&
+    // El mismo tope que valida el proceso principal: uno más largo haría fallar la pregunta entera.
+    nodeId.length <= 200 &&
+    takenAtHead &&
+    SHA_REGEX.test(takenAtHead)
+  ) {
+    return {
+      selection: {
+        kind: 'carto-node',
+        nodeId,
+        takenAtHead,
+      },
+      actions: [
+        createConsultAction('node-explain', 'assist.ask.nodeExplain'),
+        createConsultAction('node-impact', 'assist.ask.nodeImpact'),
+      ],
+    };
+  }
+
+  return {
+    selection: { kind: 'none' },
+    actions: [
+      createConsultAction('carto-overview', 'assist.ask.cartoOverview'),
     ],
   };
 }

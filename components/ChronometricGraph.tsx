@@ -652,6 +652,7 @@ export function ChronometricGraph({
   const setActiveTab = useAssistDockStore((s) => s.setActiveTab);
   const registerTabs = useAssistDockStore((s) => s.registerTabs);
   const slot = useAssistDockStore((s) => s.slot);
+  const setTemporalIdea = useAssistDockStore((s) => s.setTemporalIdea);
 
   const centauroBodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -976,6 +977,27 @@ export function ChronometricGraph({
     setRestoreBranchError(null);
     setRestoreBranchSuccess(null);
   }, [selectedMaterializedRef, selectedSpeculativeId]);
+
+  useEffect(() => {
+    if (!selectedSpeculativeId) {
+      setTemporalIdea(null);
+      return;
+    }
+    const entry = predictionHistory.find((e) =>
+      e.branches.some((b) => b.branch.id === selectedSpeculativeId),
+    );
+    if (entry) {
+      setTemporalIdea({ runId: entry.run.id, branchId: selectedSpeculativeId });
+    } else {
+      setTemporalIdea(null);
+    }
+  }, [selectedSpeculativeId, predictionHistory, setTemporalIdea]);
+
+  useEffect(() => {
+    return () => {
+      setTemporalIdea(null);
+    };
+  }, [setTemporalIdea]);
 
   const isTallMode = dockHeight >= 480;
   const isMaterializationMode = Boolean(materializeIdea && materializePlan);

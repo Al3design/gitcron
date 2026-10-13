@@ -6,7 +6,7 @@
 //
 // Tokens: usa exclusivamente el bloque `--carto-*` de globals.css.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Map,
@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useCartoLayout } from '@/hooks/use-carto-layout';
+import { useGitStore } from '@/lib/git-store';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
+import { cartoContribution, headShaOf } from '@/lib/assist/view-contributors';
 import type { CartoGraphStatus, CartoNode } from '@/lib/carto-types';
 import { CartoNodeDetail } from './CartoNodeDetail';
 import { CartoAskBox } from './CartoAskBox';
@@ -42,6 +45,22 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // Símbolo elegido dentro del archivo → su explicación IA + impacto. Al cambiar
   // de archivo se limpia (los símbolos son de otro archivo).
   const [selectedNode, setSelectedNode] = useState<CartoNode | null>(null);
+  const selectedAtHeadRef = useRef<string | null>(null);
+
+  const handleSelectNode = useCallback((node: CartoNode | null) => {
+    setSelectedNode(node);
+    if (node) {
+      const gitState = useGitStore.getState();
+      selectedAtHeadRef.current = headShaOf(gitState.commits, gitState.currentBranch);
+    } else {
+      selectedAtHeadRef.current = null;
+    }
+  }, []);
+
+  // El viewId es el que calcula app/page.tsx para Cartografía: 'carto'.
+  useAssistContribution('carto', () =>
+    cartoContribution(selectedNode?.id ?? null, selectedAtHeadRef.current)
+  );
   // Estado del índice del repo (idle/indexing/ready/error), gobernado por main.
   const [graphStatus, setGraphStatus] = useState<CartoGraphStatus | null>(null);
   // Se incrementa cuando el watch re-sincroniza: fuerza refetch de relaciones.
@@ -87,7 +106,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // indexe en background (no bloquea el renderer). Nos suscribimos al progreso y
   // al re-sync del watch para mantener fresco el estado y las relaciones.
   useEffect(() => {
-    setSelectedNode(null);
+    handleSelectNode(null);
     setGraphStatus(null);
     if (!repoPath) return;
 
@@ -211,9 +230,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                     status={graphStatus}
                     refreshKey={graphRefresh}
                     selectedNodeId={selectedNode?.id ?? null}
-                    onSelectNode={(node) => {
-                      setSelectedNode(node);
-                    }}
+                    onSelectNode={handleSelectNode}
                   />
                 </div>
                 {selectedNode && (
@@ -234,7 +251,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                         node={selectedNode}
                         aiEnabled={aiEnabled}
                         technicalOpenDefault
-                        onBack={() => setSelectedNode(null)}
+                        onBack={() => handleSelectNode(null)}
                       />
                     </div>
                   </>
@@ -257,7 +274,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
               <span className="pointer-events-none absolute left-1/2 top-1/2 h-8 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-carto-accent/40 group-hover:bg-carto-accent" />
             </div>
             <div style={{ width: chatW }} className="min-w-0 shrink-0 border-l border-carto-accent/15">
-              <CartoAskBox repoPath={repoPath} onSelectNode={setSelectedNode} />
+              <CartoAskBox repoPath={repoPath} onSelectNode={handleSelectNode} />
             </div>
           </>
         )}

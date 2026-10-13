@@ -15,7 +15,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [x] 2.3 **IA local:** Agregar envío cancelable usando la gestión de proveedor/modelo de modelos-en-casa, presupuesto y descarte de resultados obsoletos. **Comprobación:** Cancelación, proveedor caído y cambio de selección no anexan respuesta al destino incorrecto; no envía el repo completo y cambiar de vista conserva la política compartida sin crear ajustes independientes.
 - [x] 2.4 **IA local:** Integrar panel de conversación con alcance visible, fuentes y recuperación sin reejecución. **Comprobación:** Cerrar/reabrir recupera texto sin ejecutar herramientas ni iniciar proceso runtime.
 - [x] 2.5 **IA local:** Conectar contexto de Graph y SDD al shell de asistencia. **Comprobación:** Pregunta sobre commit histórico o tarea seleccionada cita ese destino, no HEAD por defecto.
-- [ ] 2.6 **IA local:** Conectar contexto de Cartografía y Centauro al mismo shell. **Comprobación:** Nodo/idea seleccionado viaja como referencia; navegación conserva conversación y explicita cambio de alcance.
+- [x] 2.6 **IA local:** Conectar contexto de Cartografía y Centauro al mismo shell. **Comprobación:** Nodo/idea seleccionado viaja como referencia; navegación conserva conversación y explicita cambio de alcance.
 - [ ] 2.7 **IA local:** Conectar Configuración y acciones de ejecución mediante contratos existentes. **Comprobación:** Acciones usan disponibilidad real y confirmaciones existentes; consulta persistida no promete resume del proceso.
 
 ## 3. Retomar y orientación

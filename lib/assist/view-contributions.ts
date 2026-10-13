@@ -33,6 +33,10 @@ export interface ContributionRegistry {
   contributionFor(viewId: string): ViewContribution;
   /** Las vistas registradas, en el orden en que se registraron. */
   registeredViews(): string[];
+  /** Avisa a quien escucha que alguna vista cambió lo que tiene elegido. */
+  notify(): void;
+  /** Escucha esos avisos. Devuelve la baja. */
+  subscribe(listener: () => void): () => void;
 }
 
 function isValidAction(action: AssistAction): boolean {
@@ -75,15 +79,35 @@ function fallbackContribution(viewId: string): ViewContribution {
 
 export function createContributionRegistry(): ContributionRegistry {
   const contributors = new Map<string, ViewContributor>();
+  const listeners = new Set<() => void>();
+
+  function notify(): void {
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.warn('Error en oyente de assistContributions:', error);
+      }
+    }
+  }
+
+  function subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }
 
   function register(viewId: string, contributor: ViewContributor): () => void {
     if (viewId.trim() === '') {
       throw new Error('viewId vacío');
     }
     contributors.set(viewId, contributor);
+    notify();
     return () => {
       if (contributors.get(viewId) === contributor) {
         contributors.delete(viewId);
+        notify();
       }
     };
   }
@@ -113,5 +137,7 @@ export function createContributionRegistry(): ContributionRegistry {
     register,
     contributionFor,
     registeredViews,
+    notify,
+    subscribe,
   };
 }

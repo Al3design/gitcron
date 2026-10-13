@@ -176,4 +176,54 @@ describe('createContributionRegistry', () => {
 
     expect(registry.registeredViews()).toEqual(['graph', 'sdd']);
   });
+
+  it('subscribe recibe el aviso de notify, de register y de la baja', () => {
+    const registry = createContributionRegistry();
+    let calls = 0;
+    const unsub = registry.subscribe(() => {
+      calls++;
+    });
+
+    registry.notify();
+    expect(calls).toBe(1);
+
+    const unreg = registry.register('graph', graphContributor);
+    expect(calls).toBe(2);
+
+    unreg();
+    expect(calls).toBe(3);
+
+    unsub();
+  });
+
+  it('un oyente que tira no impide avisar a otro', () => {
+    const registry = createContributionRegistry();
+    let secondCalled = false;
+
+    registry.subscribe(() => {
+      throw new Error('oyente con error');
+    });
+
+    registry.subscribe(() => {
+      secondCalled = true;
+    });
+
+    registry.notify();
+    expect(secondCalled).toBe(true);
+  });
+
+  it('la baja de subscribe deja de avisar', () => {
+    const registry = createContributionRegistry();
+    let calls = 0;
+    const unsub = registry.subscribe(() => {
+      calls++;
+    });
+
+    registry.notify();
+    expect(calls).toBe(1);
+
+    unsub();
+    registry.notify();
+    expect(calls).toBe(1);
+  });
 });

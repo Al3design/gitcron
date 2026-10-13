@@ -39,6 +39,13 @@ export const es: Record<string, string> = {
   'assist.ask.taskRemaining': '¿Qué falta para terminar esta tarea?',
   'assist.ask.changeStatus': '¿En qué quedó este cambio y qué sigue?',
   'assist.ask.sddOverview': '¿Qué cambios están en curso y cuál conviene seguir?',
+  'assist.scope': 'Vas a preguntar sobre: {{target}}',
+  'assist.scopeNone': 'No hay nada elegido en esta pantalla: la pregunta va sobre el repositorio.',
+  'assist.ask.ideaExplain': '¿Qué propone esta idea y qué tan probable es?',
+  'assist.ask.ideaVsNow': '¿Qué cambiaría respecto de lo que hay hoy?',
+  'assist.ask.nodeExplain': '¿Qué hace esta pieza y quién la usa?',
+  'assist.ask.nodeImpact': '¿Qué se rompe si la cambio?',
+  'assist.ask.cartoOverview': '¿Cómo está organizado este proyecto?',
 };
 
 export const en: Record<string, string> = {
@@ -80,6 +87,13 @@ export const en: Record<string, string> = {
   'assist.ask.taskRemaining': 'What is left to complete this task?',
   'assist.ask.changeStatus': 'Where did this change leave off and what comes next?',
   'assist.ask.sddOverview': 'Which changes are in progress and which one should be continued?',
+  'assist.scope': 'You are asking about: {{target}}',
+  'assist.scopeNone': 'Nothing is selected on this screen: the question will be about the repository.',
+  'assist.ask.ideaExplain': 'What does this idea propose and how likely is it?',
+  'assist.ask.ideaVsNow': 'What would change compared to what exists today?',
+  'assist.ask.nodeExplain': 'What does this piece do and who uses it?',
+  'assist.ask.nodeImpact': 'What breaks if I change it?',
+  'assist.ask.cartoOverview': 'How is this project organized?',
 };
 
 export const zh: Record<string, string> = {
@@ -121,4 +135,11 @@ export const zh: Record<string, string> = {
   'assist.ask.taskRemaining': '完成此任务还需做什么？',
   'assist.ask.changeStatus': '这个变更进展如何，接下来做什么？',
   'assist.ask.sddOverview': '当前有哪些进行中的变更，建议先跟进哪个？',
+  'assist.scope': '你将询问关于：{{target}}',
+  'assist.scopeNone': '当前屏幕未选中任何内容：问题将针对整个仓库。',
+  'assist.ask.ideaExplain': '这个想法提出了什么，可行性如何？',
+  'assist.ask.ideaVsNow': '与现有内容相比会有哪些变化？',
+  'assist.ask.nodeExplain': '这个节点的作用是什么，谁在使用它？',
+  'assist.ask.nodeImpact': '如果修改它会破坏什么？',
+  'assist.ask.cartoOverview': '这个项目是如何组织的？',
 };

@@ -441,3 +441,27 @@
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
+
+.scopeLine {
+  display: flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  transition: color 200ms ease, background-color 200ms ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeLineChanged {
+  color: var(--color-ai);
+  font-weight: 500;
+}
+
+.scopeText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

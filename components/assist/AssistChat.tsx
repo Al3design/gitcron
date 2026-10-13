@@ -30,41 +30,52 @@ export interface AssistChatProps {
   viewId?: string;
 }
 
-function formatTarget(
-  ref: AssistMessageReference,
+function formatSelectionTarget(
+  sel: ContextSelection,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): string {
-  const sel = ref.selection;
-  let target = '';
   switch (sel.kind) {
     case 'commit':
-      target = t('assist.target.commit', { sha: sel.sha });
-      break;
+      return t('assist.target.commit', { sha: sel.sha.slice(0, 7) }); // corto, como en el resto de la app
     case 'file':
-      target = t('assist.target.file', { path: sel.path });
-      break;
+      return t('assist.target.file', { path: sel.path });
     case 'change':
       if (sel.taskId) {
-        target = t('assist.target.task', { taskId: sel.taskId, changeId: sel.changeId });
-      } else {
-        target = t('assist.target.change', { changeId: sel.changeId });
+        return t('assist.target.task', { taskId: sel.taskId, changeId: sel.changeId });
       }
-      break;
+      return t('assist.target.change', { changeId: sel.changeId });
     case 'temporal-idea':
-      target = t('assist.target.temporal');
-      break;
+      return t('assist.target.temporal');
     case 'carto-node':
-      target = t('assist.target.carto', { nodeId: sel.nodeId });
-      break;
+      return t('assist.target.carto', { nodeId: sel.nodeId });
     case 'none':
     default:
       return '';
   }
+}
+
+function formatTarget(
+  ref: AssistMessageReference,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  const target = formatSelectionTarget(ref.selection, t);
+  if (!target) return '';
   let label = t('assist.about', { target });
   if (ref.status === 'stale') {
     label += ` ${t('assist.stale')}`;
   }
   return label;
+}
+
+function formatScopeText(
+  selection: ContextSelection,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (selection.kind === 'none') {
+    return t('assist.scopeNone');
+  }
+  const target = formatSelectionTarget(selection, t);
+  return t('assist.scope', { target });
 }
 
 function createOptimisticMessage(
@@ -404,6 +415,33 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     }
   };
 
+  const [, setContributionVersion] = useState(0);
+
+  useEffect(() => {
+    return assistContributions.subscribe(() => {
+      setContributionVersion((v) => v + 1);
+    });
+  }, []);
+
+  const contribution = assistContributions.contributionFor(viewId);
+  const consultActions = contribution.actions.filter(
+    (a) => a.scope === 'consult' && a.available,
+  );
+
+  const currentSelection = contribution.selection;
+  const currentTargetKey = JSON.stringify(currentSelection);
+  const [shownTargetKey, setShownTargetKey] = useState(currentTargetKey);
+  const [shownMessageCount, setShownMessageCount] = useState(messages.length);
+  const [targetHighlight, setTargetHighlight] = useState(false);
+  if (shownTargetKey !== currentTargetKey) {
+    setShownTargetKey(currentTargetKey);
+    setTargetHighlight(messages.length > 0);
+  }
+  if (shownMessageCount !== messages.length) {
+    setShownMessageCount(messages.length);
+    setTargetHighlight(false);
+  }
+
   if (!repoPath) {
     return (
       <div className={styles.container}>
@@ -413,11 +451,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
       </div>
     );
   }
-
-  const contribution = assistContributions.contributionFor(viewId);
-  const consultActions = contribution.actions.filter(
-    (a) => a.scope === 'consult' && a.available,
-  );
 
   // «Pensando…» y la pregunta provisional sólo en el repo y la conversación de donde salió.
   const isThinking = pending !== null && pending.repo === repoPath && pending.convId === selectedConvId;
@@ -571,6 +604,14 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
 
         {/* Cuadro de texto y envío */}
         <div className={styles.inputSection}>
+          <div
+            className={`${styles.scopeLine} ${targetHighlight ? styles.scopeLineChanged : ''}`}
+            aria-live="polite"
+          >
+            <span className={styles.scopeText}>
+              {formatScopeText(currentSelection, t)}
+            </span>
+          </div>
           <div className={styles.inputRow}>
             <textarea
               className={styles.textarea}

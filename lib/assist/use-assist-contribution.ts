@@ -17,4 +17,9 @@ export function useAssistContribution(
   useEffect(() => {
     return assistContributions.register(viewId, () => readRef.current());
   }, [viewId]);
+
+  const key = JSON.stringify(read().selection);
+  useEffect(() => {
+    assistContributions.notify();
+  }, [key]);
 }

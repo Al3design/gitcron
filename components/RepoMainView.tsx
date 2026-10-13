@@ -30,6 +30,7 @@ import { PipelineWorkspace } from '@/components/pipeline/PipelineWorkspace';
 import { cn } from '@/lib/utils';
 import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
 import { graphContribution } from '@/lib/assist/view-contributors';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import type { SpeculativeBranch } from '@/types/temporal-agent';
 import type { BlameLine, FileHistoryEntry, PullRequestDiffData, PullRequestEntry } from '@/types/electron';
 
@@ -415,8 +416,14 @@ function GraphTabView({ tabViews, graphView }: { tabViews: TabViewsProps; graphV
   const currentBranch = tabViews.currentBranch;
   const modifiedFiles = tabViews.modifiedFiles;
 
+  // Se escucha la idea de Centauro (no sólo se lee): así esta vista se redibuja al elegir
+  // una, y el chat se entera y actualiza «Vas a preguntar sobre…».
+  const temporalIdea = useAssistDockStore((s) => s.temporalIdea);
   useAssistContribution('graph', () =>
-    graphContribution(useGitStore.getState().getActiveRepo()?.selectedCommit ?? null)
+    graphContribution(
+      useGitStore.getState().getActiveRepo()?.selectedCommit ?? null,
+      temporalIdea,
+    )
   );
 
   return (

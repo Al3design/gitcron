@@ -100,4 +100,20 @@ describe('useAssistDockStore', () => {
     expect(useAssistDockStore.getState().conversationByRepo['/repo/a']).toBe('conv-1');
     expect(useAssistDockStore.getState().conversationByRepo['/repo/b']).toBe('conv-2');
   });
+
+  it('setTemporalIdea fija la idea en memoria y no la guarda en disco', () => {
+    localStorage.clear();
+    expect(useAssistDockStore.getState().temporalIdea).toBeNull();
+
+    useAssistDockStore.getState().setTemporalIdea({ runId: 'run-1', branchId: 'br-1' });
+    expect(useAssistDockStore.getState().temporalIdea).toEqual({ runId: 'run-1', branchId: 'br-1' });
+
+    // No se guarda en localStorage
+    expect(localStorage.getItem('gitcron:temporalIdea')).toBeNull();
+    expect(localStorage.getItem('gitcron:assistTemporalIdea')).toBeNull();
+    expect(localStorage.length).toBe(0);
+
+    useAssistDockStore.getState().setTemporalIdea(null);
+    expect(useAssistDockStore.getState().temporalIdea).toBeNull();
+  });
 });

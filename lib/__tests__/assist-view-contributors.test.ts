@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { graphContribution, sddContribution } from '../assist/view-contributors';
+import {
+  cartoContribution,
+  graphContribution,
+  headShaOf,
+  sddContribution,
+} from '../assist/view-contributors';
 import type { Commit } from '../git-store';
 
 describe('assist-view-contributors', () => {
@@ -113,6 +118,9 @@ describe('assist-view-contributors', () => {
     const contributions = [
       graphContribution({ hash: 'abcdef123456' }),
       graphContribution(null),
+      graphContribution({ hash: 'abcdef123456' }, { runId: 'run-1', branchId: 'br-1' }),
+      cartoContribution('node-1', 'abcdef123456'),
+      cartoContribution(null, null),
       sddContribution('test-change', '1.1'),
       sddContribution('test-change', null),
       sddContribution(null, null),
@@ -125,5 +133,83 @@ describe('assist-view-contributors', () => {
         expect(action.requiresConfirmation).toBe(false);
       }
     }
+  });
+
+  it('7. headShaOf: por HEAD, por rama actual, el primero si no hay, null sin commits', () => {
+    const commitsWithHead: Pick<Commit, 'hash' | 'refs'>[] = [
+      { hash: '1111111', refs: ['feature'] },
+      { hash: '2222222', refs: ['HEAD', 'main'] },
+      { hash: '3333333', refs: [] },
+    ];
+    expect(headShaOf(commitsWithHead, 'main')).toBe('2222222');
+
+    const commitsWithBranch: Pick<Commit, 'hash' | 'refs'>[] = [
+      { hash: '1111111', refs: ['other'] },
+      { hash: '2222222', refs: ['feature-branch'] },
+    ];
+    expect(headShaOf(commitsWithBranch, 'feature-branch')).toBe('2222222');
+
+    const commitsWithoutMatchingRefs: Pick<Commit, 'hash' | 'refs'>[] = [
+      { hash: 'first-sha', refs: [] },
+      { hash: 'second-sha', refs: [] },
+    ];
+    expect(headShaOf(commitsWithoutMatchingRefs, 'main')).toBe('first-sha');
+
+    expect(headShaOf([], 'main')).toBeNull();
+  });
+
+  it('8. grafo con idea (tiene prioridad sobre el commit) y con idea de forma inválida (vuelve al commit)', () => {
+    const commit = { hash: '1234567890abcdef' };
+    const validIdea = { runId: 'run-uuid-1', branchId: 'branch-uuid-2' };
+
+    const withIdea = graphContribution(commit, validIdea);
+    expect(withIdea.selection).toEqual({
+      kind: 'temporal-idea',
+      runId: 'run-uuid-1',
+      branchId: 'branch-uuid-2',
+    });
+    expect(withIdea.actions.map((a) => a.id)).toEqual(['idea-explain', 'idea-vs-now']);
+
+    // Idea con runId vacío o inválido vuelve al commit
+    const invalidIdeaEmpty = graphContribution(commit, { runId: '', branchId: 'valid-branch' });
+    expect(invalidIdeaEmpty.selection).toEqual({
+      kind: 'commit',
+      sha: '1234567890abcdef',
+    });
+
+    // Idea con runId demasiado largo (> 200 caracteres) vuelve al commit
+    const tooLongId = 'a'.repeat(201);
+    const invalidIdeaLong = graphContribution(commit, { runId: tooLongId, branchId: 'valid-branch' });
+    expect(invalidIdeaLong.selection).toEqual({
+      kind: 'commit',
+      sha: '1234567890abcdef',
+    });
+  });
+
+  it('9. Cartografía con pieza y HEAD, sin pieza, y con HEAD inválido', () => {
+    const validHead = '1234567890abcdef';
+
+    // Con pieza y HEAD válido
+    const withNode = cartoContribution('node-auth-login', validHead);
+    expect(withNode.selection).toEqual({
+      kind: 'carto-node',
+      nodeId: 'node-auth-login',
+      takenAtHead: validHead,
+    });
+    expect(withNode.actions.map((a) => a.id)).toEqual(['node-explain', 'node-impact']);
+
+    // Sin pieza
+    const noNode = cartoContribution(null, validHead);
+    expect(noNode.selection).toEqual({ kind: 'none' });
+    expect(noNode.actions.map((a) => a.id)).toEqual(['carto-overview']);
+
+    // Con HEAD inválido (demasiado corto o no hex)
+    const invalidHead = cartoContribution('node-auth-login', 'bad-sha');
+    expect(invalidHead.selection).toEqual({ kind: 'none' });
+    expect(invalidHead.actions.map((a) => a.id)).toEqual(['carto-overview']);
+
+    // Un identificador de más de 200 caracteres no se manda: el proceso principal lo rechazaría
+    expect(cartoContribution('x'.repeat(201), validHead).selection).toEqual({ kind: 'none' });
+    expect(cartoContribution('x'.repeat(200), validHead).selection.kind).toBe('carto-node');
   });
 });
