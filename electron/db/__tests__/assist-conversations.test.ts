@@ -1,0 +1,274 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { DatabaseSync } from 'node:sqlite';
+import { openTemporalAgentDatabase, runMigrations } from '../connection';
+import { authorizedRepoStore } from '../../ipc/authorized-repos';
+import {
+  appendMessage,
+  createConversation,
+  deleteConversation,
+  getConversation,
+  listConversations,
+  sanitizeAssistText,
+} from '../assist-conversations';
+import type { AssistMessageReference } from '../../../types/assist-context';
+
+describe('Assist Conversations DB module', () => {
+  let db: DatabaseSync;
+  let tempBase: string;
+  let repoA: string;
+  let repoB: string;
+
+  beforeEach(() => {
+    db = openTemporalAgentDatabase(':memory:');
+    tempBase = fs.mkdtempSync(path.join(os.tmpdir(), 'assist-test-'));
+    const rawA = path.join(tempBase, 'repo-alpha');
+    const rawB = path.join(tempBase, 'repo-beta');
+    fs.mkdirSync(path.join(rawA, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(rawB, '.git'), { recursive: true });
+
+    authorizedRepoStore.clear();
+    repoA = authorizedRepoStore.authorizeRepo(rawA)!;
+    repoB = authorizedRepoStore.authorizeRepo(rawB)!;
+  });
+
+  afterEach(() => {
+    authorizedRepoStore.clear();
+    db.close();
+    try {
+      fs.rmSync(tempBase, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  it('la migración 8 crea las tres tablas y correr runMigrations dos veces es idempotente', () => {
+    const tables = db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type='table' AND name IN ('assist_conversation', 'assist_message', 'assist_message_reference')
+    `).all() as { name: string }[];
+    const names = tables.map(t => t.name).sort();
+    expect(names).toEqual(['assist_conversation', 'assist_message', 'assist_message_reference'].sort());
+
+    expect(() => runMigrations(db)).not.toThrow();
+  });
+
+  it('crea conversación en A, agrega pregunta y respuesta con referencia y las lee en orden', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Consulta sobre refactor' }, { db });
+    expect(conv.id).toBeDefined();
+    expect(conv.messageCount).toBe(0);
+
+    const ref: AssistMessageReference = {
+      selection: { kind: 'commit', sha: '1234567890abcdef' },
+      headSha: '1234567890abcdef',
+      status: 'ok',
+    };
+
+    const msg1 = appendMessage({
+      checkoutPath: repoA,
+      conversationId: conv.id,
+      role: 'user',
+      text: '¿Qué hace este commit?',
+      references: [ref],
+    }, { db });
+
+    const msg2 = appendMessage({
+      checkoutPath: repoA,
+      conversationId: conv.id,
+      role: 'assistant',
+      text: 'Este commit modifica el pipeline.',
+      providerName: 'lmstudio',
+      modelId: 'qwen-2.5',
+    }, { db });
+
+    expect(msg1.seq).toBe(1);
+    expect(msg2.seq).toBe(2);
+
+    const detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail).not.toBeNull();
+    expect(detail!.conversation.id).toBe(conv.id);
+    expect(detail!.conversation.messageCount).toBe(2);
+    expect(detail!.messages).toHaveLength(2);
+    expect(detail!.messages[0].id).toBe(msg1.id);
+    expect(detail!.messages[0].seq).toBe(1);
+    expect(detail!.messages[0].references).toEqual([ref]);
+    expect(detail!.messages[1].id).toBe(msg2.id);
+    expect(detail!.messages[1].seq).toBe(2);
+    expect(detail!.messages[1].modelId).toBe('qwen-2.5');
+    expect(detail!.messages[1].providerName).toBe('lmstudio');
+  });
+
+  it('reabrir la base conserva los mensajes en disco', () => {
+    const diskDbPath = path.join(tempBase, 'test-disk.db');
+    let diskDb = openTemporalAgentDatabase(diskDbPath);
+
+    const conv = createConversation({ checkoutPath: repoA, title: 'Persistencia durable' }, { db: diskDb });
+    appendMessage({
+      checkoutPath: repoA,
+      conversationId: conv.id,
+      role: 'user',
+      text: 'Mensaje persistido',
+    }, { db: diskDb });
+
+    diskDb.close();
+
+    diskDb = openTemporalAgentDatabase(diskDbPath);
+    const detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db: diskDb });
+    expect(detail).not.toBeNull();
+    expect(detail!.conversation.title).toBe('Persistencia durable');
+    expect(detail!.messages).toHaveLength(1);
+    expect(detail!.messages[0].text).toBe('Mensaje persistido');
+
+    diskDb.close();
+  });
+
+  it('sanitizeAssistText quita <think> multilínea y redacta secretos sk-, ghp-, Bearer y token url sin guardarlos', () => {
+    const rawText = `
+      <think>
+        pensamiento privado
+        multilínea
+      </think>
+      Pregunta con sk-12345678901234567890123 y token ghp_abcdefghijklmnopqrstuvwxyz12
+      y cabecera Bearer my-secret-token-value-20-chars y url https://x-access-token:secret-token-in-url@github.com
+    `;
+
+    const sanitized = sanitizeAssistText(rawText);
+    expect(sanitized).not.toContain('pensamiento privado');
+    expect(sanitized).not.toContain('<think>');
+    expect(sanitized).not.toContain('sk-12345678901234567890123');
+    expect(sanitized).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz12');
+    expect(sanitized).not.toContain('my-secret-token-value-20-chars');
+    expect(sanitized).not.toContain('secret-token-in-url');
+    expect(sanitized).toContain('[REDACTADO]');
+
+    const conv = createConversation({ checkoutPath: repoA, title: 'Prueba secretos' }, { db });
+    const msg = appendMessage({
+      checkoutPath: repoA,
+      conversationId: conv.id,
+      role: 'user',
+      text: rawText,
+    }, { db });
+
+    const row = db.prepare('SELECT text FROM assist_message WHERE id = ?').get(msg.id) as { text: string };
+    expect(row.text).toBe(sanitized);
+    expect(row.text).not.toContain('pensamiento privado');
+    expect(row.text).not.toContain('sk-12345678901234567890123');
+    expect(row.text).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz12');
+    expect(row.text).not.toContain('my-secret-token-value-20-chars');
+    expect(row.text).not.toContain('secret-token-in-url');
+  });
+
+  it('desde B getConversation devuelve null, listConversations no la incluye y deleteConversation devuelve false', () => {
+    const convA = createConversation({ checkoutPath: repoA, title: 'Conversación en A' }, { db });
+    appendMessage({
+      checkoutPath: repoA,
+      conversationId: convA.id,
+      role: 'user',
+      text: 'Pregunta en repo A',
+    }, { db });
+
+    expect(getConversation({ checkoutPath: repoB, conversationId: convA.id }, { db })).toBeNull();
+
+    const listB = listConversations({ checkoutPath: repoB }, { db });
+    expect(listB.some(c => c.id === convA.id)).toBe(false);
+
+    const deleted = deleteConversation({ checkoutPath: repoB, conversationId: convA.id }, { db });
+    expect(deleted).toBe(false);
+
+    const detailA = getConversation({ checkoutPath: repoA, conversationId: convA.id }, { db });
+    expect(detailA).not.toBeNull();
+    expect(detailA!.conversation.id).toBe(convA.id);
+  });
+
+  it('appendMessage a conversación de A pasando checkoutPath de B tira y no inserta nada', () => {
+    const convA = createConversation({ checkoutPath: repoA, title: 'Conversación de A' }, { db });
+
+    expect(() => {
+      appendMessage({
+        checkoutPath: repoB,
+        conversationId: convA.id,
+        role: 'user',
+        text: 'Intento de anexar desde B',
+      }, { db });
+    }).toThrow('La conversación no es de este repositorio.');
+
+    const countRow = db.prepare('SELECT COUNT(*) as count FROM assist_message WHERE conversation_id = ?').get(convA.id) as { count: number };
+    expect(countRow.count).toBe(0);
+  });
+
+  it('borrar una conversación de A borra sus mensajes y referencias y deja intactas otras conversaciones y branch_decision', () => {
+    db.prepare(`
+      INSERT INTO prediction_run (
+        id, repo_path, device_id, provider, context_scope, web_trends, generated_at, created_at
+      ) VALUES ('run-1', ?, 'dev-1', 'prov', 'scope', 0, '2026-10-13T00:00:00Z', '2026-10-13T00:00:00Z')
+    `).run(repoA);
+    db.prepare(`
+      INSERT INTO speculative_branch (
+        id, run_id, message, rationale, type, confidence
+      ) VALUES ('branch-1', 'run-1', 'msg', 'rat', 'type', 0.9)
+    `).run();
+    db.prepare(`
+      INSERT INTO branch_decision (
+        id, branch_id, device_id, decision, decided_at
+      ) VALUES ('decision-1', 'branch-1', 'dev-1', 'accepted', '2026-10-13T00:00:00Z')
+    `).run();
+
+    const convA1 = createConversation({ checkoutPath: repoA, title: 'A1 para borrar' }, { db });
+    const convA2 = createConversation({ checkoutPath: repoA, title: 'A2 para conservar' }, { db });
+    const convB = createConversation({ checkoutPath: repoB, title: 'B1 para conservar' }, { db });
+
+    const msgA1 = appendMessage({
+      checkoutPath: repoA,
+      conversationId: convA1.id,
+      role: 'user',
+      text: 'msg A1',
+      references: [{ selection: { kind: 'none' }, headSha: null, status: 'ok' }],
+    }, { db });
+    appendMessage({
+      checkoutPath: repoA,
+      conversationId: convA2.id,
+      role: 'user',
+      text: 'msg A2',
+    }, { db });
+    appendMessage({
+      checkoutPath: repoB,
+      conversationId: convB.id,
+      role: 'user',
+      text: 'msg B',
+    }, { db });
+
+    const deleted = deleteConversation({ checkoutPath: repoA, conversationId: convA1.id }, { db });
+    expect(deleted).toBe(true);
+
+    expect(getConversation({ checkoutPath: repoA, conversationId: convA1.id }, { db })).toBeNull();
+    const msgCheck = db.prepare('SELECT COUNT(*) as count FROM assist_message WHERE id = ?').get(msgA1.id) as { count: number };
+    expect(msgCheck.count).toBe(0);
+    const refCheck = db.prepare('SELECT COUNT(*) as count FROM assist_message_reference WHERE message_id = ?').get(msgA1.id) as { count: number };
+    expect(refCheck.count).toBe(0);
+
+    expect(getConversation({ checkoutPath: repoA, conversationId: convA2.id }, { db })).not.toBeNull();
+    expect(getConversation({ checkoutPath: repoB, conversationId: convB.id }, { db })).not.toBeNull();
+    const decisionCheck = db.prepare('SELECT COUNT(*) as count FROM branch_decision WHERE id = ?').get('decision-1') as { count: number };
+    expect(decisionCheck.count).toBe(1);
+  });
+
+  it('un mensaje que queda vacío después de sanear tira Mensaje vacío.', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Test vacío' }, { db });
+    expect(() => {
+      appendMessage({
+        checkoutPath: repoA,
+        conversationId: conv.id,
+        role: 'user',
+        text: '   <think>solo razonamiento privado</think>   ',
+      }, { db });
+    }).toThrow('Mensaje vacío.');
+  });
+
+  it('listConversations ignora un limit u offset que no es número (llegan del renderer)', () => {
+    createConversation({ checkoutPath: repoA, title: 'Una' }, { db });
+    const bad = { checkoutPath: repoA, limit: 'abc' as unknown as number, offset: Number.NaN };
+    expect(listConversations(bad, { db })).toHaveLength(1);
+  });
+});

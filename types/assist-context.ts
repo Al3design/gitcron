@@ -17,3 +17,37 @@ export interface CheckoutHead {
   /** `null` con HEAD separado. */
   branch: string | null;
 }
+
+export type AssistMessageRole = 'user' | 'assistant';
+
+/** Una referencia de contexto usada en un mensaje, ya validada en main. */
+export interface AssistMessageReference {
+  selection: ContextSelection;
+  headSha: string | null;
+  status: 'ok' | 'stale';
+}
+
+export interface AssistMessage {
+  id: string;
+  seq: number;
+  role: AssistMessageRole;
+  text: string;
+  providerName: string | null;
+  modelId: string | null;
+  createdAt: string;
+  references: AssistMessageReference[];
+}
+
+export interface AssistConversationSummary {
+  id: string;
+  title: string;
+  viewId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface AssistConversationDetail {
+  conversation: AssistConversationSummary;
+  messages: AssistMessage[];
+}

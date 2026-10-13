@@ -3,7 +3,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 7;
+export const LATEST_SCHEMA_VERSION = 8;
 
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
@@ -14,6 +14,9 @@ export const PIPELINE_EVENT_TABLE = 'pipeline_event';
 export const PIPELINE_CURSOR_TABLE = 'pipeline_cursor';
 export const PIPELINE_RUNTIME_SESSION_TABLE = 'pipeline_runtime_session';
 export const AI_USE_RECORD_TABLE = 'ai_use_record';
+export const ASSIST_CONVERSATION_TABLE = 'assist_conversation';
+export const ASSIST_MESSAGE_TABLE = 'assist_message';
+export const ASSIST_MESSAGE_REFERENCE_TABLE = 'assist_message_reference';
 
 export const TEMPORAL_AGENT_INDEXES = [
   'idx_run_repo',
@@ -222,6 +225,38 @@ const CREATE_AI_USE_RECORD_INDEXES = [
   'CREATE INDEX idx_ai_use_record_repo_started ON ai_use_record(repo_path, started_at DESC);',
 ];
 
+const CREATE_ASSIST_TABLES = [
+  `CREATE TABLE assist_conversation (
+  id            TEXT PRIMARY KEY,
+  checkout_path TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  view_id       TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+) STRICT;`,
+  `CREATE INDEX idx_assist_conversation_checkout_updated
+  ON assist_conversation(checkout_path, updated_at DESC);`,
+  `CREATE TABLE assist_message (
+  id              TEXT    PRIMARY KEY,
+  conversation_id TEXT    NOT NULL,
+  seq             INTEGER NOT NULL,
+  role            TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
+  text            TEXT    NOT NULL,
+  provider_name   TEXT,
+  model_id        TEXT,
+  created_at      TEXT    NOT NULL,
+  UNIQUE (conversation_id, seq)
+) STRICT;`,
+  `CREATE TABLE assist_message_reference (
+  message_id     TEXT    NOT NULL,
+  ord            INTEGER NOT NULL,
+  selection_json TEXT    NOT NULL,
+  head_sha       TEXT,
+  status         TEXT    NOT NULL CHECK (status IN ('ok', 'stale')),
+  PRIMARY KEY (message_id, ord)
+) STRICT;`,
+];
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -275,5 +310,12 @@ export const MIGRATIONS: Migration[] = [
       CREATE_AI_USE_RECORD_TABLE,
       ...CREATE_AI_USE_RECORD_INDEXES,
     ],
+  },
+  {
+    // Conversaciones con la IA por repositorio (tareas 2.1 y 2.2 de retomar).
+    // Guarda el historial de preguntas, respuestas, modelos y referencias de
+    // contexto saneadas por ruta canónica de checkout, sin secretos ni razonamiento.
+    version: 8,
+    statements: CREATE_ASSIST_TABLES,
   },
 ];

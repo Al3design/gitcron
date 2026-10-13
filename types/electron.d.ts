@@ -30,6 +30,10 @@ import type {
   CartoAskResult,
   CartoPanoramaResult,
 } from './carto-ai';
+import type {
+  AssistConversationDetail,
+  AssistConversationSummary,
+} from './assist-context';
 
 interface GitResult<T = unknown> {
   success: boolean;
@@ -485,6 +489,12 @@ interface ElectronAPI {
     get(args: { repoPath: string; id: string }): Promise<GitResult<AiUseHistoryDetail | null>>;
     clear(args: { repoPath: string }): Promise<GitResult<{ cleared: number }>>;
     linkCommit(args: { repoPath: string; recordId: string; commitHash: string; edited: boolean }): Promise<GitResult<{ linked: boolean }>>;
+  };
+  /** Conversaciones con la IA por repositorio (retomar 2.1 y 2.2). */
+  assistConversations?: {
+    list(args: { repoPath: string; limit?: number; offset?: number }): Promise<GitResult<AssistConversationSummary[]>>;
+    get(args: { repoPath: string; conversationId: string }): Promise<GitResult<AssistConversationDetail | null>>;
+    delete(args: { repoPath: string; conversationId: string }): Promise<GitResult<{ deleted: boolean }>>;
   };
   /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve

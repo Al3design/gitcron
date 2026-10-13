@@ -364,6 +364,14 @@ contextBridge.exposeInMainWorld('api', {
     linkCommit: (args: { repoPath: string; recordId: string; commitHash: string; edited: boolean }) =>
       ipcRenderer.invoke('ai-use-history:link-commit', args),
   },
+  assistConversations: {
+    list: (args: { repoPath: string; limit?: number; offset?: number }) =>
+      ipcRenderer.invoke('assist-conversation:list', args),
+    get: (args: { repoPath: string; conversationId: string }) =>
+      ipcRenderer.invoke('assist-conversation:get', args),
+    delete: (args: { repoPath: string; conversationId: string }) =>
+      ipcRenderer.invoke('assist-conversation:delete', args),
+  },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),
     status: (repoPath: string) => ipcRenderer.invoke('carto:graph-status', repoPath),
