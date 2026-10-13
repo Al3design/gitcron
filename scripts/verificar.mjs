@@ -310,6 +310,8 @@ function trampas() {
     }
   }
 
+  avisos.push(...pruebasQueNoCorren(tocados));
+
   // Capturas de la tanda más viejas que el código que dicen mostrar. Medido el
   // 2026-10-09: una captura de las 18:30 se entregó como evidencia de código que
   // siguió cambiando hasta las 19:04.
@@ -344,6 +346,21 @@ function trampas() {
     }
   }
   return avisos;
+}
+
+/**
+ * Pruebas tocadas que Vitest no corre porque su carpeta no está en el `include`
+ * de vitest.config.ts: todo da verde y nadie se entera. Medido en retomar-07:
+ * electron/assist/__tests__ no estaba incluida y la ejecutora lo vio de casualidad.
+ */
+function pruebasQueNoCorren(tocados) {
+  const pruebas = tocados.filter((f) => /\.test\.tsx?$/.test(f) && !/\.e2e\./.test(f) && existsSync(f));
+  if (pruebas.length === 0) return [];
+  const { salida } = correr(`pnpm exec vitest list --filesOnly ${pruebas.map((f) => `"${f}"`).join(' ')}`);
+  const listadas = new Set(salida.split(/\r?\n/).map((l) => l.trim().replace(/\\/g, '/')));
+  return pruebas
+    .filter((f) => !listadas.has(f))
+    .map((f) => `${f}: Vitest no corre esta prueba → sumar su carpeta al \`include\` de vitest.config.ts`);
 }
 
 /**
