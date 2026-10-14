@@ -83,24 +83,42 @@
   gap: var(--space-2);
 }
 
+/* El área para tocar sigue siendo de 44 px (regla de accesibilidad del proyecto),
+   pero el fondo al pasar el mouse se dibuja en 32 px, como los demás botones de ícono. */
 .toggleBtn {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
   padding: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
   border: none;
+  background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
+}
+
+.toggleBtn::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  transition: background-color 0.15s ease;
 }
 
 .toggleBtn:hover {
   color: var(--color-text-primary);
-  background-color: var(--color-bg-base);
+}
+
+.toggleBtn:hover::before {
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+.toggleBtn > svg {
+  position: relative;
 }
 
 .body {
@@ -113,12 +131,21 @@
   display: block;
 }
 
-/* Cerrado: una manija chica centrada al pie, sin ocupar el ancho de la vista. */
+/* Cerrado: la manija flota centrada al pie del área central, al nivel de los botones
+   del lienzo (que están a 16 px del borde); así la vista llega hasta abajo. */
 .handleRow {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  z-index: 40;
   display: flex;
   justify-content: center;
-  flex-shrink: 0;
-  padding: var(--space-1) 0;
+  pointer-events: none;
+}
+
+.handleRow > * {
+  pointer-events: auto;
 }
 
 .handle {

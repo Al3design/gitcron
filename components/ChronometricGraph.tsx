@@ -645,7 +645,6 @@ export function ChronometricGraph({
   // Centauro mode controls the future-branch reader; hudExpanded controls the panel body.
   const centauroReaderActive = useGitStore((state) => state.centauroReaderActive);
   const setCentauroReaderActive = useGitStore((state) => state.setCentauroReaderActive);
-  const dockOpen = useAssistDockStore((s) => s.open);
   const setDockOpen = useAssistDockStore((s) => s.setOpen);
   const dockHeight = useAssistDockStore((s) => s.height);
   const activeTabId = useAssistDockStore((s) => s.activeTabId);
@@ -683,17 +682,6 @@ export function ChronometricGraph({
     },
     [setActiveTab],
   );
-
-  const isCentauroOpen = dockOpen && isCentauroActive;
-
-  const toggleCentauro = useCallback(() => {
-    if (isCentauroOpen) {
-      setDockOpen(false);
-    } else {
-      setDockOpen(true);
-      setActiveTab('centauro-report');
-    }
-  }, [isCentauroOpen, setDockOpen, setActiveTab]);
 
   // Capa 2a — per-branch decisions (accepted / rejected / deferred).
   // Keyed by branch message (title), which is the stable identity across sessions.
@@ -3167,21 +3155,6 @@ export function ChronometricGraph({
           className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl bg-bg-surface text-text-secondary shadow-lg flex items-center justify-center transition-colors hover:bg-text-primary/10 hover:text-secondary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
         >
           <RotateCcw size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={toggleCentauro}
-          aria-label={t('canvas.openCentauro')}
-          title={t('canvas.openCentauro')}
-          aria-expanded={isCentauroOpen}
-          aria-pressed={isCentauroOpen}
-          className={cn(
-            "h-11 w-11 min-h-[44px] min-w-[44px] rounded-xl bg-bg-surface text-text-secondary shadow-lg flex items-center justify-center transition-colors",
-            "hover:bg-text-primary/10 hover:text-secondary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2",
-            isCentauroOpen && "text-secondary bg-secondary/15"
-          )}
-        >
-          <Compass size={18} />
         </button>
       </div>
 
