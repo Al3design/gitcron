@@ -32,7 +32,6 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 16rem;
   flex-shrink: 0;
   background-color: var(--color-bg-surface);
   border-right: 1px solid var(--color-border-subtle);
@@ -464,4 +463,68 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Barra de arriba de la conversación: el botón de mostrar u ocultar la lista. */
+.chatToolbar {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.listToggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.listToggle::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: var(--radius-lg);
+  transition: background-color 0.15s ease;
+}
+
+.listToggle:hover {
+  color: var(--color-text-primary);
+}
+
+.listToggle:hover::before,
+.listToggle[aria-pressed='true']::before {
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+.listToggle > svg {
+  position: relative;
+}
+
+.listToggle:focus-visible,
+.listResizer:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Borde arrastrable entre la lista y la conversación. */
+.listResizer {
+  flex-shrink: 0;
+  width: 6px;
+  margin-left: calc(var(--space-1) * -0.75);
+  margin-right: calc(var(--space-1) * -0.75);
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  z-index: 1;
+}
+
+.listResizer:hover {
+  background: color-mix(in srgb, var(--color-ai) 40%, transparent);
 }

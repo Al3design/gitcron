@@ -13,6 +13,10 @@ export interface AssistDockTab {
 export interface AssistDockState {
   open: boolean;
   height: number;
+  /** Si la columna de conversaciones del chat está a la vista. */
+  chatListOpen: boolean;
+  /** Ancho de esa columna, en píxeles. */
+  chatListWidth: number;
   activeTabId: string;
   registeredTabs: AssistDockTab[];
   slot: HTMLElement | null;
@@ -22,6 +26,8 @@ export interface AssistDockState {
   setOpen: (open: boolean) => void;
   toggle: () => void;
   setHeight: (height: number) => void;
+  setChatListOpen: (open: boolean) => void;
+  setChatListWidth: (px: number) => void;
   setActiveTab: (id: string) => void;
   registerTabs: (tabs: AssistDockTab[]) => () => void;
   setSlot: (el: HTMLElement | null) => void;
@@ -59,6 +65,22 @@ function writeStored(key: string, value: string): void {
   }
 }
 
+const CHAT_LIST_OPEN_KEY = 'gitcron:assistChatListOpen';
+const CHAT_LIST_WIDTH_KEY = 'gitcron:assistChatListWidthPx';
+/** La columna de conversaciones entre 180 y 480 px; 256 la primera vez. */
+export const ASSIST_CHAT_LIST_MIN = 180;
+export const ASSIST_CHAT_LIST_MAX = 480;
+const CHAT_LIST_DEFAULT = 256;
+
+function clampChatListWidth(px: number): number {
+  return Math.min(ASSIST_CHAT_LIST_MAX, Math.max(ASSIST_CHAT_LIST_MIN, Math.round(px)));
+}
+
+function initialChatListWidth(): number {
+  const value = Number(readStored(CHAT_LIST_WIDTH_KEY));
+  return Number.isFinite(value) && value > 0 ? clampChatListWidth(value) : CHAT_LIST_DEFAULT;
+}
+
 function initialHeight(): number {
   for (const key of [HEIGHT_KEY, CENTAURO_HEIGHT_KEY]) {
     const value = Number(readStored(key));
@@ -70,6 +92,8 @@ function initialHeight(): number {
 export const useAssistDockStore = create<AssistDockState>((set) => ({
   open: readStored(OPEN_KEY) === 'true',
   height: initialHeight(),
+  chatListOpen: readStored(CHAT_LIST_OPEN_KEY) !== 'false',
+  chatListWidth: initialChatListWidth(),
   activeTabId: 'chat',
   registeredTabs: [DEFAULT_TAB],
   slot: null,
@@ -89,6 +113,17 @@ export const useAssistDockStore = create<AssistDockState>((set) => ({
     const next = clampHeight(height);
     writeStored(HEIGHT_KEY, String(next));
     set({ height: next });
+  },
+
+  setChatListOpen: (chatListOpen) => {
+    writeStored(CHAT_LIST_OPEN_KEY, String(chatListOpen));
+    set({ chatListOpen });
+  },
+
+  setChatListWidth: (px) => {
+    const chatListWidth = clampChatListWidth(px);
+    writeStored(CHAT_LIST_WIDTH_KEY, String(chatListWidth));
+    set({ chatListWidth });
   },
 
   // Una pestaña que no existe (de una vista que ya no está) no se elige.

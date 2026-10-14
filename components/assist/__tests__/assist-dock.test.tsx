@@ -79,7 +79,7 @@ describe('AssistDock component', () => {
     useAssistDockStore.setState({ open: true });
     render(<AssistDock repoPath="/repo/test" />);
 
-    const resizer = screen.getByRole('separator');
+    const resizer = screen.getByRole('separator', { name: 'Cambiar tamaño del panel de asistencia' });
     expect(resizer.getAttribute('aria-orientation')).toBe('horizontal');
     expect(resizer.getAttribute('aria-label')).toBe('Cambiar tamaño del panel de asistencia');
 

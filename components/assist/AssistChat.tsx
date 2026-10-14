@@ -7,6 +7,7 @@
 // conversación activa, visualizador de Markdown, opciones de modelo y acciones del contexto.
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { PanelLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { assistContributions } from '@/lib/assist/assist-registry';
 import { AiUseLine } from '@/components/ai/AiUseLine';
@@ -20,7 +21,11 @@ import type {
   AssistSendResult,
   ContextSelection,
 } from '@/types/assist-context';
-import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
+import {
+  ASSIST_CHAT_LIST_MAX,
+  ASSIST_CHAT_LIST_MIN,
+  useAssistDockStore,
+} from '@/lib/assist/assist-dock-store';
 import styles from './AssistChat.module.css';
 
 export interface AssistChatProps {
@@ -165,6 +170,30 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const t = useT();
 
   const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
+  const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
+  const chatListWidth = useAssistDockStore((s) => s.chatListWidth);
+  const setChatListOpen = useAssistDockStore((s) => s.setChatListOpen);
+  const setChatListWidth = useAssistDockStore((s) => s.setChatListWidth);
+
+  // Arrastrar el borde de la columna cambia su ancho (como los paneles laterales).
+  const startListResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = chatListWidth;
+    const onMove = (ev: PointerEvent) => setChatListWidth(startWidth + (ev.clientX - startX));
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // Con el teclado: flechas de a 16 px.
+  const onListResizeKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') setChatListWidth(chatListWidth - 16);
+    if (event.key === 'ArrowRight') setChatListWidth(chatListWidth + 16);
+  };
 
   const [conversations, setConversations] = useState<AssistConversationSummary[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -459,77 +488,105 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   return (
     <div className={styles.container}>
       {/* Columna izquierda: lista de conversaciones */}
-      <aside className={styles.sidebar}>
-        <button
-          type="button"
-          className={styles.newButton}
-          onClick={handleNewConversation}
-        >
-          {t('assist.newConversation')}
-        </button>
+      {chatListOpen && (
+        <>
+          <aside className={styles.sidebar} style={{ width: chatListWidth }}>
+            <button
+              type="button"
+              className={styles.newButton}
+              onClick={handleNewConversation}
+            >
+              {t('assist.newConversation')}
+            </button>
 
-        {conversations.length === 0 ? (
-          <div className={styles.emptyList}>{t('assist.empty')}</div>
-        ) : (
-          <ul className={styles.conversationList}>
-            {conversations.map((c) => {
-              const isSelected = selectedConvId === c.id;
-              const isDeleting = deletingId === c.id;
+            {conversations.length === 0 ? (
+              <div className={styles.emptyList}>{t('assist.empty')}</div>
+            ) : (
+              <ul className={styles.conversationList}>
+                {conversations.map((c) => {
+                  const isSelected = selectedConvId === c.id;
+                  const isDeleting = deletingId === c.id;
 
-              return (
-                <li
-                  key={c.id}
-                  className={styles.conversationItem}
-                  aria-current={isSelected ? 'true' : undefined}
-                >
-                  <button
-                    type="button"
-                    className={styles.conversationSelectBtn}
-                    onClick={() => handleSelectConversation(c.id)}
-                    title={c.title}
-                  >
-                    <span className={styles.conversationTitle}>{c.title}</span>
-                  </button>
-
-                  {isDeleting ? (
-                    <div className={styles.confirmBox}>
-                      <span className={styles.confirmPrompt}>
-                        {t('assist.deleteConfirm')}
-                      </span>
-                      <button
-                        type="button"
-                        className={styles.confirmYesBtn}
-                        onClick={() => handleDeleteConfirm(c.id)}
-                      >
-                        {t('assist.deleteYes')}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.confirmNoBtn}
-                        onClick={() => setDeletingId(null)}
-                      >
-                        {t('assist.deleteNo')}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.deleteBtn}
-                      onClick={() => setDeletingId(c.id)}
-                      title={t('assist.delete')}
+                  return (
+                    <li
+                      key={c.id}
+                      className={styles.conversationItem}
+                      aria-current={isSelected ? 'true' : undefined}
                     >
-                      {t('assist.delete')}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </aside>
+                      <button
+                        type="button"
+                        className={styles.conversationSelectBtn}
+                        onClick={() => handleSelectConversation(c.id)}
+                        title={c.title}
+                      >
+                        <span className={styles.conversationTitle}>{c.title}</span>
+                      </button>
+
+                      {isDeleting ? (
+                        <div className={styles.confirmBox}>
+                          <span className={styles.confirmPrompt}>
+                            {t('assist.deleteConfirm')}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.confirmYesBtn}
+                            onClick={() => handleDeleteConfirm(c.id)}
+                          >
+                            {t('assist.deleteYes')}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.confirmNoBtn}
+                            onClick={() => setDeletingId(null)}
+                          >
+                            {t('assist.deleteNo')}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.deleteBtn}
+                          onClick={() => setDeletingId(c.id)}
+                          title={t('assist.delete')}
+                        >
+                          {t('assist.delete')}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </aside>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('assist.listResize')}
+            aria-valuemin={ASSIST_CHAT_LIST_MIN}
+            aria-valuemax={ASSIST_CHAT_LIST_MAX}
+            aria-valuenow={chatListWidth}
+            tabIndex={0}
+            className={styles.listResizer}
+            onPointerDown={startListResize}
+            onKeyDown={onListResizeKey}
+          />
+        </>
+      )}
 
       {/* Columna derecha: conversación activa */}
       <main className={styles.chatArea}>
+        <div className={styles.chatToolbar}>
+          <button
+            type="button"
+            className={styles.listToggle}
+            aria-pressed={chatListOpen}
+            aria-label={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
+            title={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
+            onClick={() => setChatListOpen(!chatListOpen)}
+          >
+            <PanelLeft size={16} aria-hidden="true" />
+          </button>
+        </div>
         <div className={styles.messagesContainer}>
           {displayedMessages.length === 0 ? (
             <div className={styles.emptyConversation}>

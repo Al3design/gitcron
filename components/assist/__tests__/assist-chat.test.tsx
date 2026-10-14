@@ -12,6 +12,7 @@ import type {
   AssistConversationSummary,
   AssistSendArgs,
 } from '@/types/assist-context';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 
 const ORIGINAL_API = (globalThis as { window?: { api?: unknown } }).window?.api;
 
@@ -629,5 +630,34 @@ describe('AssistChat component', () => {
     } finally {
       unregister();
     }
+  });
+
+  it('el botón oculta las conversaciones y las vuelve a mostrar', async () => {
+    useAssistDockStore.setState({ chatListOpen: true, chatListWidth: 256 });
+    mountApi();
+    render(<AssistChat repoPath="/repo/a" />);
+
+    expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
+
+    const hideBtn = screen.getByRole('button', { name: 'Ocultar las conversaciones' });
+    fireEvent.click(hideBtn);
+
+    expect(screen.queryByRole('button', { name: 'Nueva conversación' })).toBeNull();
+
+    const showBtn = screen.getByRole('button', { name: 'Mostrar las conversaciones' });
+    fireEvent.click(showBtn);
+
+    expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
+  });
+
+  it('con el foco en el borde, ArrowRight sube el ancho del store en 16', async () => {
+    useAssistDockStore.setState({ chatListOpen: true, chatListWidth: 256 });
+    mountApi();
+    render(<AssistChat repoPath="/repo/a" />);
+
+    const resizer = screen.getByRole('separator', { name: /cambiar el ancho/ });
+    fireEvent.keyDown(resizer, { key: 'ArrowRight' });
+
+    expect(useAssistDockStore.getState().chatListWidth).toBe(272);
   });
 });

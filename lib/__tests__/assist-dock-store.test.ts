@@ -8,6 +8,8 @@ describe('useAssistDockStore', () => {
     useAssistDockStore.setState({
       open: false,
       height: 320,
+      chatListOpen: true,
+      chatListWidth: 256,
       activeTabId: 'chat',
       registeredTabs: [{ id: 'chat', labelKey: 'assist.tabChat' }],
       slot: null,
@@ -115,5 +117,35 @@ describe('useAssistDockStore', () => {
 
     useAssistDockStore.getState().setTemporalIdea(null);
     expect(useAssistDockStore.getState().temporalIdea).toBeNull();
+  });
+
+  it('el ancho queda entre 180 y 480 y se guarda en localStorage con gitcron:assistChatListWidthPx', () => {
+    localStorage.clear();
+    useAssistDockStore.getState().setChatListWidth(100);
+    expect(useAssistDockStore.getState().chatListWidth).toBe(180);
+    expect(localStorage.getItem('gitcron:assistChatListWidthPx')).toBe('180');
+
+    useAssistDockStore.getState().setChatListWidth(600);
+    expect(useAssistDockStore.getState().chatListWidth).toBe(480);
+    expect(localStorage.getItem('gitcron:assistChatListWidthPx')).toBe('480');
+
+    useAssistDockStore.getState().setChatListWidth(300);
+    expect(useAssistDockStore.getState().chatListWidth).toBe(300);
+    expect(localStorage.getItem('gitcron:assistChatListWidthPx')).toBe('300');
+  });
+
+  it('setChatListOpen(false) se guarda como false y el valor inicial sin nada guardado es true', async () => {
+    localStorage.clear();
+    vi.resetModules();
+    const mod = await import('../assist/assist-dock-store');
+    expect(mod.useAssistDockStore.getState().chatListOpen).toBe(true);
+
+    mod.useAssistDockStore.getState().setChatListOpen(false);
+    expect(mod.useAssistDockStore.getState().chatListOpen).toBe(false);
+    expect(localStorage.getItem('gitcron:assistChatListOpen')).toBe('false');
+
+    mod.useAssistDockStore.getState().setChatListOpen(true);
+    expect(mod.useAssistDockStore.getState().chatListOpen).toBe(true);
+    expect(localStorage.getItem('gitcron:assistChatListOpen')).toBe('true');
   });
 });
