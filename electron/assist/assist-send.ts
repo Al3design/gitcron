@@ -20,6 +20,7 @@ import {
 import type {
   AssistMessage,
   AssistMessageReference,
+  AssistMessageUsage,
   AssistSendArgs,
   AssistSendResult,
   ContextSelection,
@@ -237,6 +238,7 @@ function recordAnswer(
   modelId: string,
   questionMessage: AssistMessage,
   deps: AssistSendDeps,
+  usage?: AssistMessageUsage | null,
 ): AssistSendResult {
   const currentConv = getConversation({ checkoutPath: root, conversationId }, deps.db);
   if (!currentConv) {
@@ -257,6 +259,7 @@ function recordAnswer(
       text: resultText,
       providerName,
       modelId,
+      usage,
     },
     deps.db,
   );
@@ -363,6 +366,7 @@ export async function sendAssistMessage(
 
   try {
     const modelConfig = deps.resolveModel(root);
+    const startTime = Date.now();
     const result = await deps.runText(modelConfig, {
       system,
       user,
@@ -370,12 +374,25 @@ export async function sendAssistMessage(
       timeoutMs: 120_000,
       repoPath: root,
     });
+    const durationMs = Date.now() - startTime;
 
     if (controller.signal.aborted) {
       return { status: 'cancelled', conversationId };
     }
 
-    return recordAnswer(root, conversationId, modelConfig, result.text, result.modelId, questionMessage, deps);
+    const contextLength =
+      modelConfig.status === 'resolved' ? (modelConfig.resolved.contextLength ?? null) : null;
+
+    const usage: AssistMessageUsage = {
+      promptTokens: result.usage?.promptTokens ?? null,
+      cachedPromptTokens: result.usage?.cachedPromptTokens ?? null,
+      completionTokens: result.usage?.completionTokens ?? null,
+      reasoningTokens: result.usage?.reasoningTokens ?? null,
+      durationMs,
+      contextLength,
+    };
+
+    return recordAnswer(root, conversationId, modelConfig, result.text, result.modelId, questionMessage, deps, usage);
   } catch (error) {
     return handleModelError(error, conversationId, controller);
   } finally {

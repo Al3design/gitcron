@@ -229,7 +229,7 @@ describe('AssistChat component', () => {
     });
 
     expect(await screen.findByText('Funciona paso a paso con dobles.')).toBeTruthy();
-    expect(screen.getByText('LM Studio · qwen-2.5')).toBeTruthy();
+    expect(screen.getByText(/LM Studio · qwen-2.5/)).toBeTruthy();
   });
 
   it('4. cancelar llama a cancel con el mismo requestId que send, y al volver cancelled muestra el aviso', async () => {
@@ -722,5 +722,82 @@ describe('AssistChat component', () => {
     fireEvent.keyDown(resizer, { key: 'ArrowRight' });
 
     expect(useAssistDockStore.getState().chatListWidth).toBe(272);
+  });
+
+  it('17. una respuesta con uso muestra «… de entrada» y «% del contexto», y el total aparece al pie', async () => {
+    const api = mountApi();
+    const convs: AssistConversationSummary[] = [
+      { id: 'conv-usage', title: 'Con uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2 },
+    ];
+    api.list.mockResolvedValueOnce({ success: true, data: convs });
+
+    const detail: AssistConversationDetail = {
+      conversation: convs[0],
+      messages: [
+        { id: 'm1', seq: 1, role: 'user', text: 'pregunta', providerName: null, modelId: null, createdAt: '2026-10-14T10:00:00Z', references: [], usage: null },
+        {
+          id: 'm2',
+          seq: 2,
+          role: 'assistant',
+          text: 'respuesta con uso',
+          providerName: 'LM Studio',
+          modelId: 'qwen-2.5',
+          createdAt: '2026-10-14T10:01:00Z',
+          references: [],
+          usage: {
+            promptTokens: 500,
+            cachedPromptTokens: 200,
+            completionTokens: 150,
+            reasoningTokens: 30,
+            durationMs: 2000,
+            contextLength: 50000,
+          },
+        },
+      ],
+    };
+    api.get.mockResolvedValueOnce({ success: true, data: detail });
+
+    render(<AssistChat repoPath="/repo/a" />);
+
+    const item = await screen.findByText('Con uso');
+    fireEvent.click(item);
+
+    expect((await screen.findAllByText(/500 de entrada/)).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/% del contexto/)).toBeTruthy();
+    expect(screen.getByText(/Total de la conversación:/)).toBeTruthy();
+  });
+
+  it('18. una respuesta sin uso muestra «Sin datos de uso del servidor»', async () => {
+    const api = mountApi();
+    const convs: AssistConversationSummary[] = [
+      { id: 'conv-no-usage', title: 'Sin uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2 },
+    ];
+    api.list.mockResolvedValueOnce({ success: true, data: convs });
+
+    const detail: AssistConversationDetail = {
+      conversation: convs[0],
+      messages: [
+        { id: 'm1', seq: 1, role: 'user', text: 'pregunta', providerName: null, modelId: null, createdAt: '2026-10-14T10:00:00Z', references: [], usage: null },
+        {
+          id: 'm2',
+          seq: 2,
+          role: 'assistant',
+          text: 'respuesta sin datos de uso',
+          providerName: 'LM Studio',
+          modelId: 'qwen-2.5',
+          createdAt: '2026-10-14T10:01:00Z',
+          references: [],
+          usage: null,
+        },
+      ],
+    };
+    api.get.mockResolvedValueOnce({ success: true, data: detail });
+
+    render(<AssistChat repoPath="/repo/a" />);
+
+    const item = await screen.findByText('Sin uso');
+    fireEvent.click(item);
+
+    expect((await screen.findAllByText(/Sin datos de uso del servidor/)).length).toBeGreaterThanOrEqual(1);
   });
 });

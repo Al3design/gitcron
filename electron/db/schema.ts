@@ -3,7 +3,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 8;
+export const LATEST_SCHEMA_VERSION = 9;
 
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
@@ -317,5 +317,18 @@ export const MIGRATIONS: Migration[] = [
     // contexto saneadas por ruta canónica de checkout, sin secretos ni razonamiento.
     version: 8,
     statements: CREATE_ASSIST_TABLES,
+  },
+  {
+    // El uso de cada respuesta de asistencia contextual (tarea 2.9).
+    // Registra fichas de entrada, caché, salida, razonamiento, duración y contexto del modelo.
+    version: 9,
+    statements: [
+      'ALTER TABLE assist_message ADD COLUMN prompt_tokens INTEGER;',
+      'ALTER TABLE assist_message ADD COLUMN cached_prompt_tokens INTEGER;',
+      'ALTER TABLE assist_message ADD COLUMN completion_tokens INTEGER;',
+      'ALTER TABLE assist_message ADD COLUMN reasoning_tokens INTEGER;',
+      'ALTER TABLE assist_message ADD COLUMN duration_ms INTEGER;',
+      'ALTER TABLE assist_message ADD COLUMN context_length INTEGER;',
+    ],
   },
 ];

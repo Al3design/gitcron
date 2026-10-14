@@ -276,7 +276,7 @@ describe('Temporal Agent SQLite schema', () => {
     });
   });
 
-  it('upgrades an existing database from version 6 to 8 preserving all data', () => {
+  it('upgrades an existing database from version 6 to 9 preserving all data', () => {
     withDb((db) => {
       const runId = insertRun(db);
       const branchId = insertBranch(db, runId);
@@ -292,6 +292,15 @@ describe('Temporal Agent SQLite schema', () => {
       const tables = sqliteNames(db, 'table');
       expect(tables).toContain(AI_USE_RECORD_TABLE);
       expect(tables).toContain(ASSIST_CONVERSATION_TABLE);
+
+      // Verify columns added in migration 9
+      const columns = tableColumns(db, ASSIST_MESSAGE_TABLE).map((c) => c.name);
+      expect(columns).toContain('prompt_tokens');
+      expect(columns).toContain('cached_prompt_tokens');
+      expect(columns).toContain('completion_tokens');
+      expect(columns).toContain('reasoning_tokens');
+      expect(columns).toContain('duration_ms');
+      expect(columns).toContain('context_length');
 
       // Verify data from v6 was preserved
       const runRow = db.prepare('SELECT id FROM prediction_run WHERE id = ?').get(runId) as { id: string };

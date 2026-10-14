@@ -12,6 +12,7 @@ import type {
   AssistMessage,
   AssistMessageReference,
   AssistMessageRole,
+  AssistMessageUsage,
 } from '../../types/assist-context';
 import { currentDatabase, getDatabase } from './connection';
 import {
@@ -89,6 +90,7 @@ export function appendMessage(
     providerName?: string | null;
     modelId?: string | null;
     references?: AssistMessageReference[];
+    usage?: AssistMessageUsage | null;
   },
   options: AssistDbOptions = {},
 ): AssistMessage {
@@ -120,12 +122,35 @@ export function appendMessage(
     const now = new Date().toISOString();
     const providerName = args.providerName ?? null;
     const modelId = args.modelId ?? null;
+    const usage = args.usage ?? null;
+    const promptTokens = usage?.promptTokens ?? null;
+    const cachedPromptTokens = usage?.cachedPromptTokens ?? null;
+    const completionTokens = usage?.completionTokens ?? null;
+    const reasoningTokens = usage?.reasoningTokens ?? null;
+    const durationMs = usage?.durationMs ?? null;
+    const contextLength = usage?.contextLength ?? null;
 
     db.prepare(`
       INSERT INTO ${ASSIST_MESSAGE_TABLE} (
-        id, conversation_id, seq, role, text, provider_name, model_id, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(messageId, args.conversationId, seq, args.role, sanitizedText, providerName, modelId, now);
+        id, conversation_id, seq, role, text, provider_name, model_id, created_at,
+        prompt_tokens, cached_prompt_tokens, completion_tokens, reasoning_tokens, duration_ms, context_length
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      messageId,
+      args.conversationId,
+      seq,
+      args.role,
+      sanitizedText,
+      providerName,
+      modelId,
+      now,
+      promptTokens,
+      cachedPromptTokens,
+      completionTokens,
+      reasoningTokens,
+      durationMs,
+      contextLength,
+    );
 
     const insertRefStmt = db.prepare(`
       INSERT INTO ${ASSIST_MESSAGE_REFERENCE_TABLE} (
@@ -162,6 +187,7 @@ export function appendMessage(
       modelId,
       createdAt: now,
       references: references.map(r => ({ ...r })),
+      usage: usage ? { ...usage } : null,
     };
   } catch (error) {
     db.exec('ROLLBACK');
@@ -227,6 +253,12 @@ interface RawMessageRow {
   provider_name: string | null;
   model_id: string | null;
   created_at: string;
+  prompt_tokens: number | null;
+  cached_prompt_tokens: number | null;
+  completion_tokens: number | null;
+  reasoning_tokens: number | null;
+  duration_ms: number | null;
+  context_length: number | null;
 }
 
 interface RawReferenceRow {
@@ -235,6 +267,30 @@ interface RawReferenceRow {
   selection_json: string;
   head_sha: string | null;
   status: 'ok' | 'stale';
+}
+
+function parseUsageFromRow(msg: RawMessageRow): AssistMessageUsage | null {
+  const values = [
+    msg.prompt_tokens,
+    msg.cached_prompt_tokens,
+    msg.completion_tokens,
+    msg.reasoning_tokens,
+    msg.duration_ms,
+    msg.context_length,
+  ];
+  if (values.every((v) => v === null)) {
+    return null;
+  }
+
+  const toNum = (v: number | null) => (v !== null ? Number(v) : null);
+  return {
+    promptTokens: toNum(msg.prompt_tokens),
+    cachedPromptTokens: toNum(msg.cached_prompt_tokens),
+    completionTokens: toNum(msg.completion_tokens),
+    reasoningTokens: toNum(msg.reasoning_tokens),
+    durationMs: toNum(msg.duration_ms),
+    contextLength: toNum(msg.context_length),
+  };
 }
 
 export function getConversation(
@@ -260,7 +316,9 @@ export function getConversation(
   }
 
   const rawMessages = db.prepare(`
-    SELECT id, seq, role, text, provider_name, model_id, created_at
+    SELECT
+      id, seq, role, text, provider_name, model_id, created_at,
+      prompt_tokens, cached_prompt_tokens, completion_tokens, reasoning_tokens, duration_ms, context_length
     FROM ${ASSIST_MESSAGE_TABLE}
     WHERE conversation_id = ?
     ORDER BY seq ASC
@@ -297,6 +355,7 @@ export function getConversation(
     modelId: msg.model_id,
     createdAt: msg.created_at,
     references: refsByMessage.get(msg.id) ?? [],
+    usage: parseUsageFromRow(msg),
   }));
 
   return {

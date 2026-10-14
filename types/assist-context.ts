@@ -27,6 +27,17 @@ export interface AssistMessageReference {
   status: 'ok' | 'stale';
 }
 
+/** El uso de una respuesta, tal como lo devolvió el servidor. Un null es «sin datos», nunca cero. */
+export interface AssistMessageUsage {
+  promptTokens: number | null;
+  cachedPromptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+  durationMs: number | null;
+  /** El `limit.context` del modelo; null si no lo declara. */
+  contextLength: number | null;
+}
+
 export interface AssistMessage {
   id: string;
   seq: number;
@@ -36,6 +47,7 @@ export interface AssistMessage {
   modelId: string | null;
   createdAt: string;
   references: AssistMessageReference[];
+  usage?: AssistMessageUsage | null;
 }
 
 export interface AssistConversationSummary {

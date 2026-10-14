@@ -9,7 +9,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
+import { useGitStore } from '@/lib/git-store';
 import { assistContributions } from '@/lib/assist/assist-registry';
+import { formatUsageLine, sumUsage } from '@/lib/assist/usage-format';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
 import { Text } from '@/components/ui';
 import { AssistComposer } from './AssistComposer';
@@ -88,6 +90,7 @@ function createOptimisticMessage(
     createdAt: new Date().toISOString(),
     references:
       selection.kind !== 'none' ? [{ selection, headSha: null, status: 'ok' }] : [],
+    usage: null,
   };
 }
 
@@ -157,6 +160,8 @@ function errorText(err: unknown): string {
 
 export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): React.JSX.Element {
   const t = useT();
+  const language = useGitStore((s) => s.language);
+  const locale = language || 'es';
 
   const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
   const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
@@ -642,13 +647,20 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
                   ) : (
                     <>
                       <MarkdownViewer content={msg.text} />
-                      {(msg.providerName || msg.modelId) && (
-                        <div className={styles.modelBadge}>
-                          <Text variant="secondary-xs">
-                            {[msg.providerName, msg.modelId].filter(Boolean).join(' · ')}
-                          </Text>
-                        </div>
-                      )}
+                      {(() => {
+                        const modelText = [msg.providerName, msg.modelId].filter(Boolean).join(' · ');
+                        const usageLine = formatUsageLine(msg.createdAt, msg.usage ?? null, t, locale);
+                        const usageDetail =
+                          usageLine.parts.length > 0
+                            ? usageLine.parts.join(' · ')
+                            : t('assist.usage.none');
+                        const line = [modelText, usageLine.when, usageDetail].filter(Boolean).join(' · ');
+                        return (
+                          <div className={styles.usageLine}>
+                            <Text variant="secondary-xs">{line}</Text>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
@@ -679,6 +691,34 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
               )}
             </div>
           )}
+
+          {/* Totales de la conversación si hay al menos una respuesta */}
+          {displayedMessages.some((m) => m.role === 'assistant') && (() => {
+            const assistantUsages = displayedMessages
+              .filter((m) => m.role === 'assistant')
+              .map((m) => m.usage ?? null);
+            const total = sumUsage(assistantUsages);
+            const numFmt = new Intl.NumberFormat(locale);
+            const totalParts: string[] = [];
+            if (total.promptTokens !== null) {
+              totalParts.push(t('assist.usage.in', { n: numFmt.format(total.promptTokens) }));
+            }
+            if (total.completionTokens !== null) {
+              totalParts.push(t('assist.usage.out', { n: numFmt.format(total.completionTokens) }));
+            }
+            if (total.reasoningTokens !== null) {
+              totalParts.push(t('assist.usage.reasoning', { n: numFmt.format(total.reasoningTokens) }));
+            }
+            if (total.durationMs !== null) {
+              totalParts.push(t('assist.usage.time', { s: (total.durationMs / 1000).toFixed(1) }));
+            }
+            const partsString = totalParts.length > 0 ? totalParts.join(' · ') : t('assist.usage.none');
+            return (
+              <div className={styles.conversationTotal}>
+                <Text variant="secondary-xs">{t('assist.usage.total', { parts: partsString })}</Text>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sugerencias arriba del cuadro cuando la conversación está vacía */}

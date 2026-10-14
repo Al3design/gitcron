@@ -306,9 +306,15 @@
   color: var(--color-text-secondary);
 }
 
-.modelBadge {
+.usageLine {
   margin-top: var(--space-2);
-  font-size: var(--font-size-2xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.conversationTotal {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
 
@@ -368,22 +374,31 @@
 }
 
 .suggestionBtn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
+  height: 28px;
+  min-height: 28px;
   padding: var(--space-1) var(--space-3);
-  background-color: var(--color-bg-surface);
-  color: var(--color-ai);
-  border: 1px solid var(--color-ai);
-  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   cursor: pointer;
+  box-sizing: border-box;
+}
+
+.suggestionBtn::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
 }
 
 .suggestionBtn:hover {
-  background-color: var(--color-bg-overlay);
+  color: var(--color-ai);
+  border-color: var(--color-ai);
 }
 
 .suggestionBtn:focus-visible {

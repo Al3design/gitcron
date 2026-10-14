@@ -56,6 +56,15 @@ export const es: Record<string, string> = {
   'assist.write': 'Volver a escribir',
   'assist.chooseModel': 'Elegir modelo',
   'assist.stop': 'Detener',
+  'assist.usage.in': '{{n}} de entrada',
+  'assist.usage.inCached': '{{n}} de entrada ({{cached}} de caché)',
+  'assist.usage.out': '{{n}} de salida',
+  'assist.usage.reasoning': '{{n}} de razonamiento',
+  'assist.usage.time': '{{s}} s',
+  'assist.usage.speed': '{{n}} fichas/s',
+  'assist.usage.context': '{{pct}} % del contexto ({{used}} de {{limit}})',
+  'assist.usage.none': 'Sin datos de uso del servidor',
+  'assist.usage.total': 'Total de la conversación: {{parts}}',
 };
 
 export const en: Record<string, string> = {
@@ -114,6 +123,15 @@ export const en: Record<string, string> = {
   'assist.write': 'Back to write',
   'assist.chooseModel': 'Choose model',
   'assist.stop': 'Stop',
+  'assist.usage.in': '{{n}} input tokens',
+  'assist.usage.inCached': '{{n}} input tokens ({{cached}} cached)',
+  'assist.usage.out': '{{n}} output tokens',
+  'assist.usage.reasoning': '{{n}} reasoning tokens',
+  'assist.usage.time': '{{s}}s',
+  'assist.usage.speed': '{{n}} tokens/s',
+  'assist.usage.context': '{{pct}}% of context ({{used}} of {{limit}})',
+  'assist.usage.none': 'No usage data from server',
+  'assist.usage.total': 'Conversation total: {{parts}}',
 };
 
 export const zh: Record<string, string> = {
@@ -172,4 +190,13 @@ export const zh: Record<string, string> = {
   'assist.write': '返回编辑',
   'assist.chooseModel': '选择模型',
   'assist.stop': '停止',
+  'assist.usage.in': '{{n}} 输入 token',
+  'assist.usage.inCached': '{{n}} 输入 token（{{cached}} 缓存）',
+  'assist.usage.out': '{{n}} 输出 token',
+  'assist.usage.reasoning': '{{n}} 推理 token',
+  'assist.usage.time': '{{s}} 秒',
+  'assist.usage.speed': '{{n}} token/秒',
+  'assist.usage.context': '占上下文 {{pct}}%（{{used}} / {{limit}}）',
+  'assist.usage.none': '无服务器使用数据',
+  'assist.usage.total': '对话总计：{{parts}}',
 };

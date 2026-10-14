@@ -582,4 +582,97 @@ describe('assist-send module', () => {
     const r2 = await sendAssistMessage({ repoPath: repoA, requestId: 'req-rota', conversationId: null, viewId: null, question: 'hola', selection: { kind: 'none' } }, broken);
     expect(r2.status).toBe('failed');
   });
+
+  it('la respuesta guarda durationMs (>= 0), las fichas del usage simulado y contextLength del modelo resuelto', async () => {
+    const deps = createMockDeps({
+      resolveModel: () => ({
+        status: 'resolved',
+        use: 'gitcron-assist',
+        resolved: {
+          providerId: 'lmstudio',
+          providerName: 'LM Studio',
+          modelId: 'qwen-2.5',
+          kind: 'openai-compatible',
+          destination: 'this-machine',
+          sourceFile: 'gitcron.json',
+          available: true,
+          contextLength: 64000,
+          provenance: { sourceFile: 'gitcron.json', model: 'qwen-2.5', options: {}, headers: {} },
+        },
+        alternatives: [],
+      }),
+      runText: async () => ({
+        text: 'Respuesta con uso medido.',
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 350,
+          cachedPromptTokens: 120,
+          completionTokens: 200,
+          reasoningTokens: 60,
+        },
+        label: 'LM Studio · qwen-2.5',
+        providerId: 'lmstudio',
+        modelId: 'qwen-2.5',
+      }),
+    });
+
+    const res = await sendAssistMessage(
+      { repoPath: repoA, requestId: 'req-usage-1', conversationId: null, viewId: 'graph', question: 'medir', selection: { kind: 'none' } },
+      deps,
+    );
+
+    expect(res.status).toBe('answered');
+    if (res.status !== 'answered') return;
+    expect(res.answer.usage).not.toBeNull();
+    expect(res.answer.usage!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(res.answer.usage!.contextLength).toBe(64000);
+    expect(res.answer.usage!.promptTokens).toBe(350);
+    expect(res.answer.usage!.cachedPromptTokens).toBe(120);
+    expect(res.answer.usage!.completionTokens).toBe(200);
+    expect(res.answer.usage!.reasoningTokens).toBe(60);
+  });
+
+  it('con usage: null del servidor, las fichas quedan null pero durationMs y contextLength se guardan', async () => {
+    const deps = createMockDeps({
+      resolveModel: () => ({
+        status: 'resolved',
+        use: 'gitcron-assist',
+        resolved: {
+          providerId: 'lmstudio',
+          providerName: 'LM Studio',
+          modelId: 'qwen-2.5',
+          kind: 'openai-compatible',
+          destination: 'this-machine',
+          sourceFile: 'gitcron.json',
+          available: true,
+          contextLength: 128000,
+          provenance: { sourceFile: 'gitcron.json', model: 'qwen-2.5', options: {}, headers: {} },
+        },
+        alternatives: [],
+      }),
+      runText: async () => ({
+        text: 'Respuesta sin usage del servidor.',
+        finishReason: 'stop',
+        usage: null,
+        label: 'LM Studio · qwen-2.5',
+        providerId: 'lmstudio',
+        modelId: 'qwen-2.5',
+      }),
+    });
+
+    const res = await sendAssistMessage(
+      { repoPath: repoA, requestId: 'req-usage-null', conversationId: null, viewId: 'graph', question: 'sin fichas', selection: { kind: 'none' } },
+      deps,
+    );
+
+    expect(res.status).toBe('answered');
+    if (res.status !== 'answered') return;
+    expect(res.answer.usage).not.toBeNull();
+    expect(res.answer.usage!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(res.answer.usage!.contextLength).toBe(128000);
+    expect(res.answer.usage!.promptTokens).toBeNull();
+    expect(res.answer.usage!.cachedPromptTokens).toBeNull();
+    expect(res.answer.usage!.completionTokens).toBeNull();
+    expect(res.answer.usage!.reasoningTokens).toBeNull();
+  });
 });

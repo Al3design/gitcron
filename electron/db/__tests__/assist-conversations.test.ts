@@ -271,4 +271,72 @@ describe('Assist Conversations DB module', () => {
     const bad = { checkoutPath: repoA, limit: 'abc' as unknown as number, offset: Number.NaN };
     expect(listConversations(bad, { db })).toHaveLength(1);
   });
+
+  it('la migración 9 corre dos veces sin fallar (idempotente)', () => {
+    expect(() => runMigrations(db)).not.toThrow();
+  });
+
+  it('una respuesta con usage lo conserva al reabrir la base (archivo temporal)', () => {
+    const dbPath = path.join(tempBase, 'test-assist-disk.sqlite');
+    let diskDb = openTemporalAgentDatabase(dbPath);
+    try {
+      const conv = createConversation({ checkoutPath: repoA, title: 'Test usage persistente' }, { db: diskDb });
+      appendMessage(
+        {
+          checkoutPath: repoA,
+          conversationId: conv.id,
+          role: 'assistant',
+          text: 'Respuesta con uso de fichas.',
+          usage: {
+            promptTokens: 120,
+            cachedPromptTokens: 40,
+            completionTokens: 80,
+            reasoningTokens: 25,
+            durationMs: 1500,
+            contextLength: 32000,
+          },
+        },
+        { db: diskDb },
+      );
+    } finally {
+      diskDb.close();
+    }
+
+    // Reabrir la base desde el archivo temporal
+    diskDb = openTemporalAgentDatabase(dbPath);
+    try {
+      const convs = listConversations({ checkoutPath: repoA }, { db: diskDb });
+      expect(convs).toHaveLength(1);
+      const detail = getConversation({ checkoutPath: repoA, conversationId: convs[0].id }, { db: diskDb });
+      expect(detail).not.toBeNull();
+      expect(detail!.messages).toHaveLength(1);
+      expect(detail!.messages[0].usage).toEqual({
+        promptTokens: 120,
+        cachedPromptTokens: 40,
+        completionTokens: 80,
+        reasoningTokens: 25,
+        durationMs: 1500,
+        contextLength: 32000,
+      });
+    } finally {
+      diskDb.close();
+    }
+  });
+
+  it('una respuesta sin usage vuelve usage: null', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Test sin usage' }, { db });
+    appendMessage(
+      {
+        checkoutPath: repoA,
+        conversationId: conv.id,
+        role: 'assistant',
+        text: 'Respuesta clásica sin datos de uso.',
+      },
+      { db },
+    );
+
+    const detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail).not.toBeNull();
+    expect(detail!.messages[0].usage).toBeNull();
+  });
 });
