@@ -53,7 +53,7 @@
 .sidebarHeader {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  width: 100%;
 }
 
 .newButton {
@@ -61,6 +61,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-height: 44px;
   padding: 0 var(--space-3);
   background: transparent;
@@ -132,6 +133,7 @@
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
   min-height: 44px;
   padding: 0 var(--space-2);
   border: none;
@@ -156,79 +158,89 @@
   white-space: nowrap;
 }
 
-.deleteBtn {
-  display: inline-flex;
+.conversationActions {
+  display: none;
   align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-surface);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
-.deleteBtn:hover {
-  color: var(--color-error);
+.conversationItem:hover .conversationActions,
+.conversationItem:focus-within .conversationActions {
+  display: flex;
 }
 
-.deleteBtn:focus-visible {
+.taskActionBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.taskActionBtn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+
+.taskActionBtn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-surface);
+  border-color: var(--color-border-subtle);
+}
+
+.taskActionBtn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
 
-.confirmBox {
+.rowMenuPopover {
+  position: fixed;
+  transform: translateX(-100%);
+  z-index: 9999;
+  min-width: 10rem;
+  background-color: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  box-sizing: border-box;
+}
+
+.rowMenuItem {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.confirmPrompt {
-  font-size: var(--font-size-2xs);
-  color: var(--color-text-secondary);
-}
-
-.confirmYesBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-overlay);
-  color: var(--color-error);
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
   font-size: var(--font-size-xs);
+  text-align: left;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
-.confirmYesBtn:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
-}
-
-.confirmNoBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
+.rowMenuItem:hover {
   background-color: var(--color-bg-surface);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
 }
 
-.confirmNoBtn:focus-visible {
+.rowMenuItem:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -346,16 +358,6 @@
   outline-offset: var(--focus-offset);
 }
 
-.noticeAlert {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-overlay);
-  border: 1px solid var(--color-border-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
 .suggestionsSection {
   display: flex;
   flex-direction: column;
@@ -406,49 +408,6 @@
   outline-offset: var(--focus-offset);
 }
 
-/* Barra de arriba de la conversación: el botón de mostrar u ocultar la lista. */
-.chatToolbar {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-}
-
-.listToggle {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.listToggle::before {
-  content: '';
-  position: absolute;
-  inset: 6px;
-  border-radius: var(--radius-lg);
-  transition: background-color 0.15s ease;
-}
-
-.listToggle:hover {
-  color: var(--color-text-primary);
-}
-
-.listToggle:hover::before,
-.listToggle[aria-pressed='true']::before {
-  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
-}
-
-.listToggle > svg {
-  position: relative;
-}
-
-.listToggle:focus-visible,
 .listResizer:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;

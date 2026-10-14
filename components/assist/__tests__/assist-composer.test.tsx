@@ -250,7 +250,7 @@ describe('AssistComposer component', () => {
       alternatives: [],
     });
 
-    render(
+    const { container } = render(
       <AssistComposer
         value=""
         onChange={vi.fn()}
@@ -271,8 +271,11 @@ describe('AssistComposer component', () => {
     expect(modelBtn.textContent).toContain('qwen-2.5');
     expect(modelBtn.textContent).toContain('Medio');
 
-    // Abre el selector
+    // Abre el selector en document.body (portal)
     fireEvent.click(modelBtn);
-    expect(screen.getByRole('dialog')).toBeTruthy();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeTruthy();
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(container.contains(dialog)).toBe(false);
   });
 });

@@ -1,9 +1,10 @@
-// Repositorio y conversaciones de prueba en el perfil aislado. No usa cuentas ni motores reales.
+// Repositorio y conversaciones de prueba (del pipeline y del chat de asistencia) en el perfil aislado. No usa cuentas ni motores reales.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { openTemporalAgentDatabase, temporalAgentDatabasePath } from '../electron/db/connection';
 import { PipelineRepository } from '../electron/pipeline/pipeline-repository';
+import { appendMessage, createConversation } from '../electron/db/assist-conversations';
 
 export function seedResumeFixture(homeDir: string): Record<string, string> {
   const repoPath = path.join(homeDir, 'resume-repo');
@@ -28,6 +29,15 @@ export function seedResumeFixture(homeDir: string): Record<string, string> {
       controlCapabilities: [], droppedActivity: 0, diagnostics: [],
       runtimeSessionId: 'conversation-27', requestedModel: 'gemini-3.8-flash-low', reasoningEffort: 'high', continuesSessionId: null,
     });
+    // Conversaciones del chat de asistencia: sin un modelo no se crean desde la pantalla.
+    for (const [title, question, answer] of [
+      ['Qué falta en retomar', '¿Qué falta para cerrar el cambio?', 'Faltan la **2.7** y la **3.3**.'],
+      ['Por qué falla el build', '¿Por qué falla el build?', 'Porque corre encima de otro build.'],
+    ]) {
+      const conversation = createConversation({ checkoutPath: canonical, title, viewId: 'graph' }, { db });
+      appendMessage({ checkoutPath: canonical, conversationId: conversation.id, role: 'user', text: question }, { db });
+      appendMessage({ checkoutPath: canonical, conversationId: conversation.id, role: 'assistant', text: answer, providerName: 'Prueba', modelId: 'modelo-de-prueba' }, { db });
+    }
   } finally { db.close(); }
   const bin = path.join(homeDir, 'fixture-bin');
   fs.mkdirSync(bin);

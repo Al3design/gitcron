@@ -10,14 +10,17 @@
   flex-shrink: 0;
   box-sizing: border-box;
   z-index: 30;
+  overflow: hidden;
   animation: assist-dock-open 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @keyframes assist-dock-open {
   from {
-    clip-path: inset(calc(100% - 52px) calc(50% - 120px) 16px calc(50% - 120px) round 999px);
+    max-height: 52px;
+    clip-path: inset(0 calc(50% - 120px) 0 calc(50% - 120px) round 999px);
   }
   to {
+    max-height: 100vh;
     clip-path: inset(0 0 0 0 round var(--radius-lg) var(--radius-lg) 0 0);
   }
 }
@@ -97,6 +100,48 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.listToggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.listToggle::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.listToggle::before {
+  content: '';
+  position: absolute;
+  inset: 4px 2px;
+  border-radius: var(--radius-md);
+  transition: background-color 0.15s ease;
+}
+
+.listToggle:hover {
+  color: var(--color-text-primary);
+}
+
+.listToggle:hover::before,
+.listToggle[aria-pressed='true']::before {
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+}
+
+.listToggle > svg {
+  position: relative;
 }
 
 /* El área para tocar sigue siendo de 44 px (regla de accesibilidad del proyecto),
@@ -195,7 +240,8 @@
 .handle:focus-visible,
 .toggleBtn:focus-visible,
 .tab:focus-visible,
-.resizer:focus-visible {
+.resizer:focus-visible,
+.listToggle:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }

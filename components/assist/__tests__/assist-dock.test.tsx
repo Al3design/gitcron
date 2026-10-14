@@ -111,4 +111,31 @@ describe('AssistDock component', () => {
     expect(useAssistDockStore.getState().activeTabId).toBe('centauro-stats');
     expect(useAssistDockStore.getState().open).toBe(true);
   });
+
+  it('7. el botón de barra lateral está en la barra de pestañas con Chat activo y conmuta chatListOpen', () => {
+    useAssistDockStore.setState({ open: true, activeTabId: 'chat', chatListOpen: true });
+    render(<AssistDock repoPath="/repo/test" />);
+
+    const toggleBtn = screen.getByRole('button', { name: 'Ocultar las conversaciones' });
+    expect(toggleBtn).toBeTruthy();
+
+    fireEvent.click(toggleBtn);
+    expect(useAssistDockStore.getState().chatListOpen).toBe(false);
+  });
+
+  it('8. el botón de barra lateral no se muestra cuando una pestaña de Centauro está activa', () => {
+    useAssistDockStore.setState({
+      open: true,
+      registeredTabs: [
+        { id: 'chat', labelKey: 'assist.tabChat' },
+        { id: 'centauro-report', labelKey: 'centauro.tabReport' },
+      ],
+      activeTabId: 'centauro-report',
+      chatListOpen: true,
+    });
+
+    render(<AssistDock repoPath="/repo/test" />);
+
+    expect(screen.queryByRole('button', { name: /conversaciones/ })).toBeNull();
+  });
 });

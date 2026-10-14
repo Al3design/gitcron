@@ -6,6 +6,7 @@
 // abajo a la derecha modelo como texto, vista previa y enviar/detener.
 
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUp, ChevronDown, Eye, PenLine, Plus, Square, X } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
@@ -54,11 +55,46 @@ export function AssistComposer({
   const [modelStatus, setModelStatus] = useState<AiUseStatus | null>(null);
   const [version, setVersion] = useState(0);
 
+  const [modelPickerCoords, setModelPickerCoords] = useState<{ bottom: number; right: number; maxHeight: number }>({
+    bottom: 0,
+    right: 0,
+    maxHeight: 400,
+  });
+  const [menuCoords, setMenuCoords] = useState<{ bottom: number; left: number }>({
+    bottom: 0,
+    left: 0,
+  });
+
   const menuRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const toggleModelPicker = () => {
+    if (!showModelPicker && modelBtnRef.current) {
+      const rect = modelBtnRef.current.getBoundingClientRect();
+      const bottom = Math.max(8, window.innerHeight - rect.top + 6);
+      const right = Math.max(8, window.innerWidth - rect.right);
+      const maxHeight = Math.max(200, rect.top - 16);
+      setModelPickerCoords({ bottom, right, maxHeight });
+      setShowModelPicker(true);
+    } else {
+      setShowModelPicker(false);
+    }
+  };
+
+  const toggleMenu = () => {
+    if (!menuOpen && menuBtnRef.current) {
+      const rect = menuBtnRef.current.getBoundingClientRect();
+      const bottom = Math.max(8, window.innerHeight - rect.top + 6);
+      const left = Math.max(8, rect.left);
+      setMenuCoords({ bottom, left });
+      setMenuOpen(true);
+    } else {
+      setMenuOpen(false);
+    }
+  };
 
   // Consulta el modelo asignado a gitcron-assist y escucha cambios de config
   useEffect(() => {
@@ -184,29 +220,41 @@ export function AssistComposer({
               aria-expanded={menuOpen}
               aria-label={t('assist.menu')}
               title={t('assist.menu')}
-              onClick={() => setMenuOpen(!menuOpen)}
+              onClick={toggleMenu}
             >
               <Plus size={16} aria-hidden="true" />
             </button>
 
-            {menuOpen && (
-              <div ref={menuRef} className={styles.menuPopover} role="menu">
-                {menuItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitem"
-                    className={styles.menuItem}
-                    onClick={() => {
-                      item.onSelect();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            {menuOpen && typeof document !== 'undefined' && (() => {
+              const menuStyle: React.CSSProperties = {
+                bottom: menuCoords.bottom,
+                left: menuCoords.left,
+              };
+              return createPortal(
+                <div
+                  ref={menuRef}
+                  className={styles.menuPopover}
+                  role="menu"
+                  style={menuStyle}
+                >
+                  {menuItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => {
+                        item.onSelect();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              );
+            })()}
           </div>
 
           {targetLabel ? (
@@ -247,7 +295,7 @@ export function AssistComposer({
               ref={modelBtnRef}
               type="button"
               className={styles.modelBtn}
-              onClick={() => setShowModelPicker(!showModelPicker)}
+              onClick={toggleModelPicker}
               aria-haspopup="dialog"
               aria-expanded={showModelPicker}
             >
@@ -267,21 +315,30 @@ export function AssistComposer({
               <ChevronDown size={14} className={styles.modelChevron} aria-hidden="true" />
             </button>
 
-            {showModelPicker && (
-              <div
-                ref={modelPickerRef}
-                className={styles.modelPickerPopover}
-                role="dialog"
-                aria-label={t('assist.chooseModel')}
-              >
-                <AiModelPicker
-                  use="gitcron-assist"
-                  repoPath={repoPath}
-                  onClose={() => setShowModelPicker(false)}
-                  onSaved={handleSavedModel}
-                />
-              </div>
-            )}
+            {showModelPicker && typeof document !== 'undefined' && (() => {
+              const modelPickerStyle: React.CSSProperties = {
+                bottom: modelPickerCoords.bottom,
+                right: modelPickerCoords.right,
+                maxHeight: modelPickerCoords.maxHeight,
+              };
+              return createPortal(
+                <div
+                  ref={modelPickerRef}
+                  className={styles.modelPickerPopover}
+                  role="dialog"
+                  aria-label={t('assist.chooseModel')}
+                  style={modelPickerStyle}
+                >
+                  <AiModelPicker
+                    use="gitcron-assist"
+                    repoPath={repoPath}
+                    onClose={() => setShowModelPicker(false)}
+                    onSaved={handleSavedModel}
+                  />
+                </div>,
+                document.body,
+              );
+            })()}
           </div>
 
           <button

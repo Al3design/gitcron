@@ -4,7 +4,7 @@
 // Dock inferior común de asistencia (chat + pestañas contextuales).
 
 import React, { useEffect, useCallback, useRef } from 'react';
-import { ChevronDown, MessageSquare } from 'lucide-react';
+import { ChevronDown, MessageSquare, PanelLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { AssistChat } from './AssistChat';
@@ -22,10 +22,12 @@ export function AssistDock({ repoPath, assistViewId }: AssistDockProps): React.J
   const height = useAssistDockStore((s) => s.height);
   const activeTabId = useAssistDockStore((s) => s.activeTabId);
   const registeredTabs = useAssistDockStore((s) => s.registeredTabs);
+  const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
   const setOpen = useAssistDockStore((s) => s.setOpen);
   const setActiveTab = useAssistDockStore((s) => s.setActiveTab);
   const setHeight = useAssistDockStore((s) => s.setHeight);
   const setSlot = useAssistDockStore((s) => s.setSlot);
+  const setChatListOpen = useAssistDockStore((s) => s.setChatListOpen);
 
   const dockRef = useRef<HTMLElement | null>(null);
 
@@ -120,6 +122,18 @@ export function AssistDock({ repoPath, assistViewId }: AssistDockProps): React.J
 
       <div className={`${styles.tabBar} ai-surface-header`} role="tablist" aria-label={t('assist.title')}>
         <div className={styles.tabs}>
+          {activeTabId === 'chat' && (
+            <button
+              type="button"
+              className={styles.listToggle}
+              aria-pressed={chatListOpen}
+              aria-label={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
+              title={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
+              onClick={() => setChatListOpen(!chatListOpen)}
+            >
+              <PanelLeft size={16} aria-hidden="true" />
+            </button>
+          )}
           {registeredTabs.map((tab) => {
             const isSelected = tab.id === activeTabId;
             return (

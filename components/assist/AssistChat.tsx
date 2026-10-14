@@ -7,12 +7,14 @@
 // conversación activa, visualizador de Markdown, opciones de modelo y acciones del contexto.
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { PanelLeft } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { assistContributions } from '@/lib/assist/assist-registry';
 import { formatUsageLine, sumUsage } from '@/lib/assist/usage-format';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
+import { TaskConfirmToast } from '@/components/pipeline/TaskConfirmToast';
 import { Text } from '@/components/ui';
 import { AssistComposer } from './AssistComposer';
 import type {
@@ -139,7 +141,7 @@ async function processSendResponse(
   currentConvId: string | null,
   handlers: SendResultHandlers,
   refreshList: (repo: string) => Promise<unknown>,
-  setNotice: (msg: string) => void,
+  setError: (msg: string) => void,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): Promise<void> {
   if (currentRepo !== targetRepo) return;
@@ -148,7 +150,7 @@ async function processSendResponse(
     return;
   }
   if (!res || !res.success || !res.data) {
-    setNotice(t('assist.failed', { message: res?.error ?? 'Error desconocido' }));
+    setError(t('assist.failed', { message: res?.error ?? 'Error desconocido' }));
     return;
   }
   await dispatchSendResult(res.data, handlers);
@@ -162,6 +164,8 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const t = useT();
   const language = useGitStore((s) => s.language);
   const locale = language || 'es';
+  const setError = useGitStore((s) => s.setError);
+  const setSuccess = useGitStore((s) => s.setSuccess);
 
   const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
   const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
@@ -195,19 +199,31 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const [question, setQuestion] = useState('');
   // El pedido en curso, con el repo y la conversación de donde salió: sólo ahí se muestra.
   const [pending, setPending] = useState<PendingRequest | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [alternativesNotice, setAlternativesNotice] = useState<string | null>(null);
+  const [confirmDeleteConv, setConfirmDeleteConv] = useState<AssistConversationSummary | null>(null);
+  const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Al cambiar de repo, ni la lista, ni los mensajes, ni los avisos del anterior quedan a la vista
+  useEffect(() => {
+    if (!openMenuConvId) return;
+    const handleClick = () => setOpenMenuConvId(null);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenMenuConvId(null);
+    };
+    window.addEventListener('click', handleClick);
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      window.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [openMenuConvId]);
+
+  // Al cambiar de repo, ni la lista ni los mensajes del anterior quedan a la vista
   // (ajuste de estado durante el render, sin un efecto que dispare otro render).
   const [shownRepo, setShownRepo] = useState<string | null>(repoPath);
   if (shownRepo !== repoPath) {
     setShownRepo(repoPath);
     setConversations([]);
     setMessages([]);
-    setNotice(null);
-    setAlternativesNotice(null);
   }
 
   const currentRepoPathRef = useRef<string | null>(repoPath);
@@ -230,12 +246,12 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         });
         if (currentRepoPathRef.current !== path) return;
         if (res?.success && res.data) setMessages(res.data.messages);
-        else if (res && !res.success) setNotice(t('assist.failed', { message: res.error ?? '' }));
+        else if (res && !res.success) setError(t('assist.failed', { message: res.error ?? '' }));
       } catch (err) {
-        if (currentRepoPathRef.current === path) setNotice(t('assist.failed', { message: errorText(err) }));
+        if (currentRepoPathRef.current === path) setError(t('assist.failed', { message: errorText(err) }));
       }
     },
-    [t],
+    [t, setError],
   );
 
   const refreshList = useCallback(async (path: string) => {
@@ -246,12 +262,12 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         setConversations(res.data);
         return res.data;
       }
-      if (res && !res.success) setNotice(t('assist.failed', { message: res.error ?? '' }));
+      if (res && !res.success) setError(t('assist.failed', { message: res.error ?? '' }));
     } catch (err) {
-      if (currentRepoPathRef.current === path) setNotice(t('assist.failed', { message: errorText(err) }));
+      if (currentRepoPathRef.current === path) setError(t('assist.failed', { message: errorText(err) }));
     }
     return [];
-  }, [t]);
+  }, [t, setError]);
 
   // Carga inicial y cambio de repo
   useEffect(() => {
@@ -263,7 +279,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     // Se lee al cambiar de repo, sin suscribirse: elegir una conversación no tiene que recargar la lista.
     const rememberedId = useAssistDockStore.getState().conversationByRepo[repoPath] || null;
     const fail = (message: string) => {
-      if (alive) setNotice(t('assist.failed', { message }));
+      if (alive) setError(t('assist.failed', { message }));
     };
     api.list({ repoPath }).then((res) => {
       if (!alive) return;
@@ -284,15 +300,13 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     return () => {
       alive = false;
     };
-  }, [repoPath, t]);
+  }, [repoPath, t, setError]);
 
   // Selección de una conversación
   const handleSelectConversation = (convId: string) => {
     if (!repoPath) return;
     setSelectedConvId(convId);
     rememberConversation(repoPath, convId);
-    setNotice(null);
-    setAlternativesNotice(null);
     loadConversation(repoPath, convId);
   };
 
@@ -302,11 +316,9 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     setSelectedConvId(null);
     rememberConversation(repoPath, '');
     setMessages([]);
-    setNotice(null);
-    setAlternativesNotice(null);
   };
 
-  // Confirmar o descartar borrado
+  // Confirmar borrado
   const handleDeleteConfirm = async (convId: string) => {
     if (!repoPath) return;
     try {
@@ -314,7 +326,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         repoPath,
         conversationId: convId,
       });
-      if (res && !res.success) setNotice(t('assist.failed', { message: res.error ?? '' }));
+      if (res && !res.success) setError(t('assist.failed', { message: res.error ?? '' }));
       if (res?.success && res.data?.deleted) {
         if (selectedConvId === convId) {
           setSelectedConvId(null);
@@ -324,9 +336,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         await refreshList(repoPath);
       }
     } catch (err) {
-      setNotice(t('assist.failed', { message: errorText(err) }));
-    } finally {
-      setDeletingId(null);
+      setError(t('assist.failed', { message: errorText(err) }));
     }
   };
 
@@ -349,19 +359,22 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
       ]);
     },
     onCancelled: async () => {
-      setNotice(t('assist.cancelled'));
+      setSuccess(t('assist.cancelled'));
       if (targetConvId) {
         await loadConversation(targetRepo, targetConvId);
       }
     },
     onDiscarded: () => {
-      setNotice(t('assist.discarded'));
+      setSuccess(t('assist.discarded'));
     },
     onFailed: async (msg, alternatives) => {
-      setNotice(t('assist.failed', { message: msg }));
+      const msgText = t('assist.failed', { message: msg });
       if (alternatives && alternatives.length > 0) {
         const provs = alternatives.map((a) => a.providerName).join(', ');
-        setAlternativesNotice(t('assist.alternatives', { providers: provs }));
+        const altText = t('assist.alternatives', { providers: provs });
+        setError(`${msgText} ${altText}`);
+      } else {
+        setError(msgText);
       }
       if (targetConvId) {
         await loadConversation(targetRepo, targetConvId);
@@ -388,8 +401,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
 
     setPending({ repo: targetRepo, convId: targetConvId, requestId, message: optimisticMsg });
     setQuestion('');
-    setNotice(null);
-    setAlternativesNotice(null);
 
     const args: AssistSendArgs = {
       repoPath: targetRepo,
@@ -410,7 +421,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         currentConvIdRef.current,
         createSendResultHandlers(targetRepo, targetConvId),
         refreshList,
-        setNotice,
+        setError,
         t,
       );
     } catch (err) {
@@ -418,7 +429,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         currentRepoPathRef.current === targetRepo &&
         currentConvIdRef.current === targetConvId
       ) {
-        setNotice(
+        setError(
           t('assist.failed', {
             message: err instanceof Error ? err.message : String(err),
           }),
@@ -503,16 +514,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
             <div className={styles.sidebarHeader}>
               <button
                 type="button"
-                className={styles.listToggle}
-                aria-pressed={chatListOpen}
-                aria-label={t('assist.listHide')}
-                title={t('assist.listHide')}
-                onClick={() => setChatListOpen(false)}
-              >
-                <PanelLeft size={16} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
                 className={styles.newButton}
                 onClick={handleNewConversation}
               >
@@ -526,7 +527,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
               <ul className={styles.conversationList}>
                 {conversations.map((c) => {
                   const isSelected = selectedConvId === c.id;
-                  const isDeleting = deletingId === c.id;
 
                   return (
                     <li
@@ -543,36 +543,34 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
                         <span className={styles.conversationTitle}>{c.title}</span>
                       </button>
 
-                      {isDeleting ? (
-                        <div className={styles.confirmBox}>
-                          <span className={styles.confirmPrompt}>
-                            {t('assist.deleteConfirm')}
-                          </span>
-                          <button
-                            type="button"
-                            className={styles.confirmYesBtn}
-                            onClick={() => handleDeleteConfirm(c.id)}
-                          >
-                            {t('assist.deleteYes')}
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.confirmNoBtn}
-                            onClick={() => setDeletingId(null)}
-                          >
-                            {t('assist.deleteNo')}
-                          </button>
-                        </div>
-                      ) : (
+                      <div className={styles.conversationActions}>
                         <button
                           type="button"
-                          className={styles.deleteBtn}
-                          onClick={() => setDeletingId(c.id)}
+                          className={styles.taskActionBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteConv(c);
+                          }}
                           title={t('assist.delete')}
+                          aria-label={t('assist.delete')}
                         >
-                          {t('assist.delete')}
+                          <Trash2 size={13} aria-hidden="true" />
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          className={styles.taskActionBtn}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setMenuCoords({ x: rect.right, y: rect.bottom + 4 });
+                            setOpenMenuConvId(openMenuConvId === c.id ? null : c.id);
+                          }}
+                          title={t('assist.moreActions')}
+                          aria-label={t('assist.moreActions')}
+                        >
+                          <MoreHorizontal size={14} aria-hidden="true" />
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -594,22 +592,58 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         </>
       )}
 
-      {/* Columna derecha: conversación activa */}
-      <main className={styles.chatArea}>
-        {!chatListOpen && (
-          <div className={styles.chatToolbar}>
+      {/* Menú contextual de tres puntos en fila de conversación */}
+      {openMenuConvId && typeof document !== 'undefined' && (() => {
+        const targetConv = conversations.find((c) => c.id === openMenuConvId);
+        if (!targetConv) return null;
+        const rowMenuStyle: React.CSSProperties = {
+          top: menuCoords.y,
+          left: menuCoords.x,
+        };
+        return createPortal(
+          <div
+            className={styles.rowMenuPopover}
+            role="menu"
+            style={rowMenuStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
-              className={styles.listToggle}
-              aria-pressed={chatListOpen}
-              aria-label={t('assist.listShow')}
-              title={t('assist.listShow')}
-              onClick={() => setChatListOpen(true)}
+              role="menuitem"
+              className={styles.rowMenuItem}
+              onClick={() => {
+                setOpenMenuConvId(null);
+                setConfirmDeleteConv(targetConv);
+              }}
             >
-              <PanelLeft size={16} aria-hidden="true" />
+              <Trash2 size={13} aria-hidden="true" />
+              <span>{t('assist.delete')}</span>
             </button>
-          </div>
-        )}
+          </div>,
+          document.body,
+        );
+      })()}
+
+      {/* Toast de confirmación de borrado */}
+      {confirmDeleteConv && (
+        <TaskConfirmToast
+          title={t('assist.deleteTitle', { title: confirmDeleteConv.title })}
+          description={t('assist.deleteHelp')}
+          confirmLabel={t('assist.deleteYes')}
+          cancelLabel={t('assist.deleteNo')}
+          onConfirm={() => {
+            const conv = confirmDeleteConv;
+            setConfirmDeleteConv(null);
+            void handleDeleteConfirm(conv.id);
+          }}
+          onCancel={() => {
+            setConfirmDeleteConv(null);
+          }}
+        />
+      )}
+
+      {/* Columna derecha: conversación activa */}
+      <main className={styles.chatArea}>
         <div
           className={`${styles.messagesContainer} ${
             displayedMessages.length === 0 ? styles.messagesContainerEmpty : ''
@@ -680,15 +714,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
               >
                 {t('assist.cancel')}
               </button>
-            </div>
-          )}
-
-          {notice && (
-            <div className={styles.noticeAlert} role="alert">
-              <Text variant="secondary-xs">{notice}</Text>
-              {alternativesNotice && (
-                <Text variant="secondary-xs">{alternativesNotice}</Text>
-              )}
             </div>
           )}
 

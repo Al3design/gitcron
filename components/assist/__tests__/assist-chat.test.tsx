@@ -268,13 +268,17 @@ describe('AssistChat component', () => {
       });
     });
 
-    expect(
-      await screen.findByText('Cancelaste la pregunta; quedó guardada sin respuesta.'),
-    ).toBeTruthy();
+    await waitFor(() => {
+      expect(useGitStore.getState().success).toBe(
+        'Cancelaste la pregunta; quedó guardada sin respuesta.',
+      );
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('5. failed con alternativas muestra el mensaje y los proveedores alternativos', async () => {
+  it('5. failed con alternativas llama a setError del store y no dibuja el recuadro noticeAlert', async () => {
     const api = mountApi();
+    useGitStore.setState({ error: null });
     api.send.mockResolvedValueOnce({
       success: true,
       data: {
@@ -292,15 +296,15 @@ describe('AssistChat component', () => {
     fireEvent.change(textarea, { target: { value: 'Pregunta fallida' } });
     fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
 
-    expect(
-      await screen.findByText('No se pudo responder: El proveedor no responde.'),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('El mismo modelo está también en: Ollama'),
-    ).toBeTruthy();
+    await waitFor(() => {
+      expect(useGitStore.getState().error).toBe(
+        'No se pudo responder: El proveedor no responde. El mismo modelo está también en: Ollama',
+      );
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('6. borrar pide confirmación; «No» no llama a delete; «Sí, borrar» lo llama y refresca la lista', async () => {
+  it('6. borrar pide confirmación con TaskConfirmToast; «No» no llama a delete; «Sí, borrar» lo llama y refresca la lista', async () => {
     const api = mountApi();
     const convs: AssistConversationSummary[] = [
       {
@@ -319,19 +323,25 @@ describe('AssistChat component', () => {
     const deleteBtn = await screen.findByTitle('Borrar');
     fireEvent.click(deleteBtn);
 
-    expect(screen.getByText('¿Borrar esta conversación?')).toBeTruthy();
+    expect(screen.getByText('Borrar «Conversación a borrar»')).toBeTruthy();
+    expect(screen.getByText('Se borran sus mensajes. No se puede deshacer.')).toBeTruthy();
 
-    const noBtn = screen.getByText('No');
+    const noBtn = screen.getByRole('button', { name: 'No' });
     fireEvent.click(noBtn);
 
     expect(api.delete).not.toHaveBeenCalled();
-    expect(screen.queryByText('¿Borrar esta conversación?')).toBeNull();
+    expect(screen.queryByText('Borrar «Conversación a borrar»')).toBeNull();
 
-    // Ahora confirmar el borrado
-    const deleteBtnAgain = screen.getByTitle('Borrar');
-    fireEvent.click(deleteBtnAgain);
+    // Ahora desde el menú de tres puntos
+    const moreBtn = screen.getByTitle('Más acciones');
+    fireEvent.click(moreBtn);
 
-    const yesBtn = screen.getByText('Sí, borrar');
+    const menuDeleteBtn = screen.getByRole('menuitem', { name: 'Borrar' });
+    fireEvent.click(menuDeleteBtn);
+
+    expect(screen.getByText('Borrar «Conversación a borrar»')).toBeTruthy();
+
+    const yesBtn = screen.getByRole('button', { name: 'Sí, borrar' });
     fireEvent.click(yesBtn);
 
     await waitFor(() => {
@@ -695,20 +705,24 @@ describe('AssistChat component', () => {
     }
   });
 
-  it('el botón oculta las conversaciones y las vuelve a mostrar', async () => {
+  it('la columna de conversaciones se oculta o muestra según chatListOpen del store', async () => {
     useAssistDockStore.setState({ chatListOpen: true, chatListWidth: 256 });
     mountApi();
-    render(<AssistChat repoPath="/repo/a" />);
+    const { rerender } = render(<AssistChat repoPath="/repo/a" />);
 
     expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
 
-    const hideBtn = screen.getByRole('button', { name: 'Ocultar las conversaciones' });
-    fireEvent.click(hideBtn);
+    act(() => {
+      useAssistDockStore.setState({ chatListOpen: false });
+    });
+    rerender(<AssistChat repoPath="/repo/a" />);
 
     expect(screen.queryByRole('button', { name: 'Nueva conversación' })).toBeNull();
 
-    const showBtn = screen.getByRole('button', { name: 'Mostrar las conversaciones' });
-    fireEvent.click(showBtn);
+    act(() => {
+      useAssistDockStore.setState({ chatListOpen: true });
+    });
+    rerender(<AssistChat repoPath="/repo/a" />);
 
     expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
   });
