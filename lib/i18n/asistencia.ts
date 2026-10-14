@@ -49,6 +49,13 @@ export const es: Record<string, string> = {
   'assist.ask.nodeExplain': '¿Qué hace esta pieza y quién la usa?',
   'assist.ask.nodeImpact': '¿Qué se rompe si la cambio?',
   'assist.ask.cartoOverview': '¿Cómo está organizado este proyecto?',
+  'assist.menu': 'Más opciones',
+  'assist.clearTarget': 'Quitar: preguntar sobre el repositorio',
+  'assist.scopeRepo': 'Sobre el repositorio',
+  'assist.preview': 'Ver con formato',
+  'assist.write': 'Volver a escribir',
+  'assist.chooseModel': 'Elegir modelo',
+  'assist.stop': 'Detener',
 };
 
 export const en: Record<string, string> = {
@@ -100,6 +107,13 @@ export const en: Record<string, string> = {
   'assist.ask.nodeExplain': 'What does this piece do and who uses it?',
   'assist.ask.nodeImpact': 'What breaks if I change it?',
   'assist.ask.cartoOverview': 'How is this project organized?',
+  'assist.menu': 'More options',
+  'assist.clearTarget': 'Remove: ask about repository',
+  'assist.scopeRepo': 'About repository',
+  'assist.preview': 'Preview markdown',
+  'assist.write': 'Back to write',
+  'assist.chooseModel': 'Choose model',
+  'assist.stop': 'Stop',
 };
 
 export const zh: Record<string, string> = {
@@ -151,4 +165,11 @@ export const zh: Record<string, string> = {
   'assist.ask.nodeExplain': '这个节点的作用是什么，谁在使用它？',
   'assist.ask.nodeImpact': '如果修改它会破坏什么？',
   'assist.ask.cartoOverview': '这个项目是如何组织的？',
+  'assist.menu': '更多选项',
+  'assist.clearTarget': '移除：针对代码仓库提问',
+  'assist.scopeRepo': '关于代码仓库',
+  'assist.preview': '预览格式',
+  'assist.write': '返回编辑',
+  'assist.chooseModel': '选择模型',
+  'assist.stop': '停止',
 };

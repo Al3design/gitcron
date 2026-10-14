@@ -27,6 +27,7 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
       'components/ai/AiSentDetails.module.css',
       'components/ai/AiUseLine.module.css',
       'components/assist/AssistChat.module.css',
+      'components/assist/AssistComposer.module.css',
       'components/assist/AssistDock.module.css',
       'components/pipeline/OpenSpecDashboard.module.css',
       'components/pipeline/sdd/SddArchivedChange.module.css',

@@ -10,9 +10,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { assistContributions } from '@/lib/assist/assist-registry';
-import { AiUseLine } from '@/components/ai/AiUseLine';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
-import { Row, Text } from '@/components/ui';
+import { Text } from '@/components/ui';
+import { AssistComposer } from './AssistComposer';
 import type {
   AssistConversationSummary,
   AssistMessage,
@@ -70,17 +70,6 @@ function formatTarget(
     label += ` ${t('assist.stale')}`;
   }
   return label;
-}
-
-function formatScopeText(
-  selection: ContextSelection,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  if (selection.kind === 'none') {
-    return t('assist.scopeNone');
-  }
-  const target = formatSelectionTarget(selection, t);
-  return t('assist.scope', { target });
 }
 
 function createOptimisticMessage(
@@ -384,8 +373,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     const targetConvId = selectedConvId;
     const requestId = crypto.randomUUID();
 
-    const contribution = assistContributions.contributionFor(viewId);
-    const selection = contribution.selection;
+    const selection = effectiveSelection;
     const optimisticMsg = createOptimisticMessage(
       requestId,
       messages.length + 1,
@@ -437,13 +425,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   const [, setContributionVersion] = useState(0);
 
   useEffect(() => {
@@ -462,14 +443,37 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const [shownTargetKey, setShownTargetKey] = useState(currentTargetKey);
   const [shownMessageCount, setShownMessageCount] = useState(messages.length);
   const [targetHighlight, setTargetHighlight] = useState(false);
+  const [ignoredSelectionKey, setIgnoredSelectionKey] = useState<string | null>(null);
+
   if (shownTargetKey !== currentTargetKey) {
     setShownTargetKey(currentTargetKey);
     setTargetHighlight(messages.length > 0);
+    setIgnoredSelectionKey(null);
   }
   if (shownMessageCount !== messages.length) {
     setShownMessageCount(messages.length);
     setTargetHighlight(false);
   }
+
+  const isIgnored = ignoredSelectionKey !== null && ignoredSelectionKey === currentTargetKey;
+  const effectiveSelection: ContextSelection = isIgnored ? { kind: 'none' } : currentSelection;
+  const targetLabel =
+    effectiveSelection.kind !== 'none'
+      ? formatTarget({ selection: effectiveSelection, headSha: null, status: 'ok' }, t)
+      : null;
+
+  const menuItems = [
+    ...consultActions.map((action) => ({
+      id: action.id,
+      label: t(action.labelKey),
+      onSelect: () => setQuestion(t(action.labelKey)),
+    })),
+    {
+      id: 'new-conversation',
+      label: t('assist.newConversation'),
+      onSelect: handleNewConversation,
+    },
+  ];
 
   if (!repoPath) {
     return (
@@ -491,13 +495,25 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
       {chatListOpen && (
         <>
           <aside className={styles.sidebar} style={{ width: chatListWidth }}>
-            <button
-              type="button"
-              className={styles.newButton}
-              onClick={handleNewConversation}
-            >
-              {t('assist.newConversation')}
-            </button>
+            <div className={styles.sidebarHeader}>
+              <button
+                type="button"
+                className={styles.listToggle}
+                aria-pressed={chatListOpen}
+                aria-label={t('assist.listHide')}
+                title={t('assist.listHide')}
+                onClick={() => setChatListOpen(false)}
+              >
+                <PanelLeft size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={styles.newButton}
+                onClick={handleNewConversation}
+              >
+                <span>{t('assist.newConversation')}</span>
+              </button>
+            </div>
 
             {conversations.length === 0 ? (
               <div className={styles.emptyList}>{t('assist.empty')}</div>
@@ -575,19 +591,25 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
 
       {/* Columna derecha: conversación activa */}
       <main className={styles.chatArea}>
-        <div className={styles.chatToolbar}>
-          <button
-            type="button"
-            className={styles.listToggle}
-            aria-pressed={chatListOpen}
-            aria-label={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
-            title={t(chatListOpen ? 'assist.listHide' : 'assist.listShow')}
-            onClick={() => setChatListOpen(!chatListOpen)}
-          >
-            <PanelLeft size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <div className={styles.messagesContainer}>
+        {!chatListOpen && (
+          <div className={styles.chatToolbar}>
+            <button
+              type="button"
+              className={styles.listToggle}
+              aria-pressed={chatListOpen}
+              aria-label={t('assist.listShow')}
+              title={t('assist.listShow')}
+              onClick={() => setChatListOpen(true)}
+            >
+              <PanelLeft size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        <div
+          className={`${styles.messagesContainer} ${
+            displayedMessages.length === 0 ? styles.messagesContainerEmpty : ''
+          }`}
+        >
           {displayedMessages.length === 0 ? (
             <div className={styles.emptyConversation}>
               {t('assist.emptyConversation')}
@@ -659,60 +681,38 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
           )}
         </div>
 
-        {/* Cuadro de texto y envío */}
-        <div className={styles.inputSection}>
-          <div
-            className={`${styles.scopeLine} ${targetHighlight ? styles.scopeLineChanged : ''}`}
-            aria-live="polite"
-          >
-            <span className={styles.scopeText}>
-              {formatScopeText(currentSelection, t)}
-            </span>
+        {/* Sugerencias arriba del cuadro cuando la conversación está vacía */}
+        {displayedMessages.length === 0 && consultActions.length > 0 && (
+          <div className={styles.suggestionsSection}>
+            <span className={styles.suggestionsHeader}>{t('assist.suggestions')}</span>
+            <div className={styles.suggestionsRow}>
+              {consultActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className={styles.suggestionBtn}
+                  onClick={() => setQuestion(t(action.labelKey))}
+                >
+                  {t(action.labelKey)}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className={styles.inputRow}>
-            <textarea
-              className={styles.textarea}
-              placeholder={t('assist.placeholder')}
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isThinking}
-            />
-            <button
-              type="button"
-              className={styles.sendBtn}
-              onClick={handleSend}
-              disabled={pending !== null || !question.trim()}
-            >
-              {t('assist.send')}
-            </button>
-          </div>
+        )}
 
-          {/* Opciones y acciones */}
-          <div className={styles.optionsSection}>
-            <AiUseLine use="gitcron-assist" repoPath={repoPath} />
-
-            {consultActions.length > 0 && (
-              <div className={styles.suggestionsSection}>
-                <span className={styles.suggestionsHeader}>
-                  {t('assist.suggestions')}
-                </span>
-                <Row gap="2" className={styles.suggestionsRow}>
-                  {consultActions.map((action) => (
-                    <button
-                      key={action.id}
-                      type="button"
-                      className={styles.suggestionBtn}
-                      onClick={() => setQuestion(t(action.labelKey))}
-                    >
-                      {t(action.labelKey)}
-                    </button>
-                  ))}
-                </Row>
-              </div>
-            )}
-          </div>
-        </div>
+        <AssistComposer
+          value={question}
+          onChange={setQuestion}
+          onSend={handleSend}
+          thinking={isThinking}
+          onStop={handleCancel}
+          sendDisabled={pending !== null}
+          repoPath={repoPath}
+          targetLabel={targetLabel}
+          targetChanged={targetHighlight}
+          onClearTarget={() => setIgnoredSelectionKey(currentTargetKey)}
+          menuItems={menuItems}
+        />
       </main>
     </div>
   );

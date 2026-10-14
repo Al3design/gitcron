@@ -500,7 +500,7 @@ describe('AssistChat component', () => {
       sha: olderCommitSha,
     });
 
-    expect(screen.getByText(`Sobre: commit ${olderCommitSha.slice(0, 7)}`)).toBeTruthy();
+    expect(screen.getAllByText(`Sobre: commit ${olderCommitSha.slice(0, 7)}`).length).toBeGreaterThanOrEqual(1);
 
     resolveSend({
       success: true,
@@ -518,10 +518,10 @@ describe('AssistChat component', () => {
     });
   });
 
-  it('11. muestra «No hay nada elegido en esta pantalla: la pregunta va sobre el repositorio.» cuando la vista no tiene selección', async () => {
+  it('11. muestra «Sobre el repositorio» cuando la vista no tiene selección', async () => {
     mountApi();
     render(<AssistChat repoPath="/repo/a" viewId="unregistered-view" />);
-    expect(screen.getByText('No hay nada elegido en esta pantalla: la pregunta va sobre el repositorio.')).toBeTruthy();
+    expect(screen.getByText('Sobre el repositorio')).toBeTruthy();
   });
 
   it('12. muestra el alcance correspondiente para commit, carto-node y temporal-idea', async () => {
@@ -534,19 +534,19 @@ describe('AssistChat component', () => {
 
     try {
       render(<AssistChat repoPath="/repo/a" viewId="multi-target-view" />);
-      expect(screen.getByText('Vas a preguntar sobre: commit abcdef1')).toBeTruthy();
+      expect(screen.getByText('Sobre: commit abcdef1')).toBeTruthy();
 
       act(() => {
         currentSelection = { kind: 'carto-node' as const, nodeId: 'sym:App' } as any;
         assistContributions.notify();
       });
-      expect(screen.getByText('Vas a preguntar sobre: pieza del mapa sym:App')).toBeTruthy();
+      expect(screen.getByText('Sobre: pieza del mapa sym:App')).toBeTruthy();
 
       act(() => {
         currentSelection = { kind: 'temporal-idea' as const, branchId: 'b1', runId: 'r1' } as any;
         assistContributions.notify();
       });
-      expect(screen.getByText('Vas a preguntar sobre: idea del Agente Temporal')).toBeTruthy();
+      expect(screen.getByText('Sobre: idea del Agente Temporal')).toBeTruthy();
     } finally {
       unregister();
     }
@@ -562,19 +562,19 @@ describe('AssistChat component', () => {
 
     try {
       render(<AssistChat repoPath="/repo/a" viewId="dynamic-view" />);
-      expect(screen.getByText('Vas a preguntar sobre: commit 1111111')).toBeTruthy();
+      expect(screen.getByText('Sobre: commit 1111111')).toBeTruthy();
 
       act(() => {
         currentSha = '2222222';
         assistContributions.notify();
       });
-      expect(screen.getByText('Vas a preguntar sobre: commit 2222222')).toBeTruthy();
+      expect(screen.getByText('Sobre: commit 2222222')).toBeTruthy();
     } finally {
       unregister();
     }
   });
 
-  it('14. si hay mensajes previos y cambia el target, añade la clase scopeLineChanged', async () => {
+  it('14. si hay mensajes previos y cambia el target, añade la clase targetBadgeChanged', async () => {
     const api = mountApi();
     const convs: AssistConversationSummary[] = [
       {
@@ -617,16 +617,79 @@ describe('AssistChat component', () => {
 
       await screen.findByText('Hola');
 
-      const scopeEl = screen.getByText('Vas a preguntar sobre: commit 1111111').closest('div');
-      expect(scopeEl?.className).not.toMatch(/scopeLineChanged/);
+      const scopeEl = screen.getByText('Sobre: commit 1111111').closest('div');
+      expect(scopeEl?.className).not.toMatch(/targetBadgeChanged/);
 
       act(() => {
         currentSelection = { kind: 'commit', sha: '2222222' };
         assistContributions.notify();
       });
 
-      expect(screen.getByText('Vas a preguntar sobre: commit 2222222')).toBeTruthy();
-      expect(scopeEl?.className).toMatch(/scopeLineChanged/);
+      const updatedScope = screen.getByText('Sobre: commit 2222222').closest('div');
+      expect(updatedScope?.className).toMatch(/targetBadgeChanged/);
+    } finally {
+      unregister();
+    }
+  });
+
+  it('15. con la conversación vacía las sugerencias aparecen arriba del cuadro', async () => {
+    mountApi();
+    const unregister = assistContributions.register('suggestions-top-view', () => ({
+      selection: { kind: 'none' },
+      actions: [
+        {
+          id: 'action-suggest-top',
+          labelKey: 'assist.title',
+          scope: 'consult',
+          available: true,
+          requiresConfirmation: false,
+        },
+      ],
+    }));
+
+    try {
+      render(<AssistChat repoPath="/repo/a" viewId="suggestions-top-view" />);
+      expect(screen.getByText('Para preguntar acá')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Asistente' })).toBeTruthy();
+    } finally {
+      unregister();
+    }
+  });
+
+  it('16. quitar el destino hace que send reciba { kind: "none" }', async () => {
+    const api = mountApi();
+    const olderCommitSha = 'abcdef1234567890abcdef1234567890abcdef12';
+
+    const unregister = assistContributions.register('clear-target-view', () => ({
+      selection: { kind: 'commit', sha: olderCommitSha },
+      actions: [],
+    }));
+
+    try {
+      render(<AssistChat repoPath="/repo/a" viewId="clear-target-view" />);
+
+      expect(screen.getByText(`Sobre: commit ${olderCommitSha.slice(0, 7)}`)).toBeTruthy();
+
+      const clearBtn = screen.getByRole('button', {
+        name: 'Quitar: preguntar sobre el repositorio',
+      });
+      fireEvent.click(clearBtn);
+
+      expect(screen.queryByText(`Sobre: commit ${olderCommitSha.slice(0, 7)}`)).toBeNull();
+      expect(screen.getByText('Sobre el repositorio')).toBeTruthy();
+
+      const textarea = screen.getByPlaceholderText('Preguntá sobre este repositorio…');
+      fireEvent.change(textarea, { target: { value: 'Pregunta general' } });
+
+      const sendBtn = screen.getByRole('button', { name: 'Enviar' });
+      fireEvent.click(sendBtn);
+
+      await waitFor(() => {
+        expect(api.send).toHaveBeenCalledTimes(1);
+      });
+
+      const sendCallArgs = api.send.mock.calls[0][0] as AssistSendArgs;
+      expect(sendCallArgs.selection).toEqual({ kind: 'none' });
     } finally {
       unregister();
     }

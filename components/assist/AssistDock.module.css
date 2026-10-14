@@ -10,6 +10,22 @@
   flex-shrink: 0;
   box-sizing: border-box;
   z-index: 30;
+  animation: assist-dock-open 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes assist-dock-open {
+  from {
+    clip-path: inset(calc(100% - 52px) calc(50% - 120px) 16px calc(50% - 120px) round 999px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round var(--radius-lg) var(--radius-lg) 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock {
+    animation: none;
+  }
 }
 
 .resizer {
