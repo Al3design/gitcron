@@ -70,6 +70,8 @@ Crear resumen determinista utilizable sin IA; narración opcional con citas a ev
 
 ### 6. Decisión de implementación
 
+**Narración opcional del resumen (tarea 3.3, criterio de implementación del orquestador, 2026-10-15).** En «Dónde quedaste», una acción explícita «Explicarme este resumen» pide una explicación breve al modelo compartido de `gitcron-assist`. La explicación se agrega como contenido de IA y no reemplaza los datos ni sus fuentes. El proceso principal lee únicamente propuesta y tareas del cambio elegido, valida el checkout y registra HEAD y huella de esas fuentes; reutiliza los extractores deterministas existentes. Una tarea marcada se describe como tal, no como prueba de implementación ni de verificación. La narración lleva fuentes relativas, fecha y modelo; no abre una conversación ni una ejecución, no incorpora otro ajuste de modelos y no se persiste como verdad del proyecto. Navegar, reabrir o actualizar el resumen no llama al modelo. Se descarta una respuesta si cambió el destino o sus fuentes, y un fallo deja el resumen original utilizable. Los cambios archivados usan sus fuentes archivadas contenidas en el checkout, sin confundirlos con un cambio activo del mismo nombre.
+
 Resume de conversación restaura mensajes; resume del proceso sólo si adaptador lo soporta. Al iniciar otro proceso mostrarlo. Presupuesto de contexto y recuperación selectiva evitan reenviar repo completo; provider/modelo y alcance compartido quedan visibles.
 
 Una consulta sin ejecución puede coexistir con el trabajo del repositorio. Cualquier acción que lance un runtime respeta el límite existente de una ejecución activa por repo y pasa por su controlador; la conversación no abre un segundo proceso para sortear ese límite.
