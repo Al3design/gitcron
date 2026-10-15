@@ -60,6 +60,8 @@ Conversaciones en SQLite versionado y particionado; mensajes, contexto usado, re
 
 Una superficie de asistencia del armazón con entradas desde cualquier vista. Si otra superficie ocupa el lateral se alterna conservando el estado; no agregar columnas simultáneas. El flotante ofrece acciones con razones derivadas del contexto, y la IA recomienda dentro de ese catálogo validado.
 
+**Alternancia de SDD (tarea 3.4, criterio de implementación del orquestador, 2026-10-15).** Se completa el riel existente, sin agregar otro panel: su botón permite recuperar la navegación cuando el inspector fijo está abierto, cerrando ese inspector por el estado real del armazón y conservando cambio, tarea, vista y chat inferior. Cuando se pliega durante la transición, el riel no recibe foco ni interacción. El inspector no presenta una sección de avisos vacía; conserva las decisiones informativas y los errores reales, y el acceso desde «Avisos» sigue abriendo y enfocando la sección correspondiente. La ida y vuelta es explícita y no ejecuta acciones ni envía consultas a IA.
+
 ### 4. Decisión de implementación
 
 Adaptar las operaciones existentes a descriptores con alcance, precondiciones, resultado y confirmación vigente. Revalidar en main al ejecutar; mantener la separación consulta/preparación/ejecución. Los datos de repo y respuestas de modelos son contenido, no autorización.
