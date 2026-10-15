@@ -78,6 +78,9 @@ export function createConversation(
     createdAt: now,
     updatedAt: now,
     messageCount: 0,
+    pinnedAt: null,
+    archivedAt: null,
+    changeId: null,
   };
 }
 
@@ -201,6 +204,9 @@ interface ConversationRow {
   view_id: string | null;
   created_at: string;
   updated_at: string;
+  pinned_at: string | null;
+  archived_at: string | null;
+  change_id: string | null;
   message_count: number;
 }
 
@@ -224,6 +230,18 @@ export function listConversations(
       c.view_id,
       c.created_at,
       c.updated_at,
+      c.pinned_at,
+      c.archived_at,
+      (
+        SELECT json_extract(r.selection_json, '$.changeId')
+        FROM ${ASSIST_MESSAGE_TABLE} m
+        JOIN ${ASSIST_MESSAGE_REFERENCE_TABLE} r ON r.message_id = m.id
+        WHERE m.conversation_id = c.id
+          AND m.role = 'user'
+          AND json_extract(r.selection_json, '$.kind') = 'change'
+        ORDER BY m.seq ASC, r.ord ASC
+        LIMIT 1
+      ) AS change_id,
       COUNT(m.id) AS message_count
     FROM ${ASSIST_CONVERSATION_TABLE} c
     LEFT JOIN ${ASSIST_MESSAGE_TABLE} m ON m.conversation_id = c.id
@@ -242,6 +260,9 @@ export function listConversations(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     messageCount: Number(row.message_count ?? 0),
+    pinnedAt: row.pinned_at ?? null,
+    archivedAt: row.archived_at ?? null,
+    changeId: row.change_id ?? null,
   }));
 }
 
@@ -300,7 +321,7 @@ export function getConversation(
   const db = resolveDatabase(options);
 
   const conv = db.prepare(`
-    SELECT id, title, view_id, created_at, updated_at
+    SELECT id, title, view_id, created_at, updated_at, pinned_at, archived_at
     FROM ${ASSIST_CONVERSATION_TABLE}
     WHERE id = ? AND checkout_path = ?
   `).get(args.conversationId, args.checkoutPath) as {
@@ -309,6 +330,8 @@ export function getConversation(
     view_id: string | null;
     created_at: string;
     updated_at: string;
+    pinned_at: string | null;
+    archived_at: string | null;
   } | undefined;
 
   if (!conv) {
@@ -358,6 +381,17 @@ export function getConversation(
     usage: parseUsageFromRow(msg),
   }));
 
+  let changeId: string | null = null;
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      const changeRef = msg.references.find(r => r.selection.kind === 'change');
+      if (changeRef && changeRef.selection.kind === 'change') {
+        changeId = changeRef.selection.changeId;
+        break;
+      }
+    }
+  }
+
   return {
     conversation: {
       id: conv.id,
@@ -366,6 +400,9 @@ export function getConversation(
       createdAt: conv.created_at,
       updatedAt: conv.updated_at,
       messageCount: messages.length,
+      pinnedAt: conv.pinned_at ?? null,
+      archivedAt: conv.archived_at ?? null,
+      changeId,
     },
     messages,
   };
@@ -408,4 +445,60 @@ export function deleteConversation(
     db.exec('ROLLBACK');
     throw error;
   }
+}
+
+export function setConversationPinned(
+  args: { checkoutPath: string; conversationId: string; pinned: boolean },
+  options: AssistDbOptions = {},
+): boolean {
+  const db = resolveDatabase(options);
+
+  const conv = db.prepare(`
+    SELECT id FROM ${ASSIST_CONVERSATION_TABLE} WHERE id = ? AND checkout_path = ?
+  `).get(args.conversationId, args.checkoutPath) as { id?: string } | undefined;
+
+  if (!conv) {
+    return false;
+  }
+
+  const pinnedAt = args.pinned ? new Date().toISOString() : null;
+  db.prepare(`
+    UPDATE ${ASSIST_CONVERSATION_TABLE}
+    SET pinned_at = ?
+    WHERE id = ?
+  `).run(pinnedAt, args.conversationId);
+
+  return true;
+}
+
+export function setConversationArchived(
+  args: { checkoutPath: string; conversationId: string; archived: boolean },
+  options: AssistDbOptions = {},
+): boolean {
+  const db = resolveDatabase(options);
+
+  const conv = db.prepare(`
+    SELECT id FROM ${ASSIST_CONVERSATION_TABLE} WHERE id = ? AND checkout_path = ?
+  `).get(args.conversationId, args.checkoutPath) as { id?: string } | undefined;
+
+  if (!conv) {
+    return false;
+  }
+
+  if (args.archived) {
+    const archivedAt = new Date().toISOString();
+    db.prepare(`
+      UPDATE ${ASSIST_CONVERSATION_TABLE}
+      SET archived_at = ?, pinned_at = NULL
+      WHERE id = ?
+    `).run(archivedAt, args.conversationId);
+  } else {
+    db.prepare(`
+      UPDATE ${ASSIST_CONVERSATION_TABLE}
+      SET archived_at = NULL
+      WHERE id = ?
+    `).run(args.conversationId);
+  }
+
+  return true;
 }

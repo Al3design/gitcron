@@ -499,6 +499,8 @@ interface ElectronAPI {
     list(args: { repoPath: string; limit?: number; offset?: number }): Promise<GitResult<AssistConversationSummary[]>>;
     get(args: { repoPath: string; conversationId: string }): Promise<GitResult<AssistConversationDetail | null>>;
     delete(args: { repoPath: string; conversationId: string }): Promise<GitResult<{ deleted: boolean }>>;
+    pin(args: { repoPath: string; conversationId: string; pinned: boolean }): Promise<GitResult<{ changed: boolean }>>;
+    archive(args: { repoPath: string; conversationId: string; archived: boolean }): Promise<GitResult<{ changed: boolean }>>;
   };
   /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve

@@ -57,6 +57,12 @@ export interface AssistConversationSummary {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  /** Cuándo se fijó; null si no está fijada. */
+  pinnedAt: string | null;
+  /** Cuándo se archivó; null si no está archivada. */
+  archivedAt: string | null;
+  /** El cambio de SDD de la primera pregunta con un destino `change`; null si ninguna lo tuvo. */
+  changeId: string | null;
 }
 
 export interface AssistConversationDetail {

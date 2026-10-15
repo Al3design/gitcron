@@ -375,6 +375,10 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('assist-conversation:get', args),
     delete: (args: { repoPath: string; conversationId: string }) =>
       ipcRenderer.invoke('assist-conversation:delete', args),
+    pin: (args: { repoPath: string; conversationId: string; pinned: boolean }) =>
+      ipcRenderer.invoke('assist-conversation:pin', args),
+    archive: (args: { repoPath: string; conversationId: string; archived: boolean }) =>
+      ipcRenderer.invoke('assist-conversation:archive', args),
   },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),

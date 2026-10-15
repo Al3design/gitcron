@@ -8,6 +8,8 @@ import {
   deleteConversation,
   getConversation,
   listConversations,
+  setConversationArchived,
+  setConversationPinned,
 } from '../db/assist-conversations';
 import {
   cancelAssistMessage,
@@ -123,6 +125,58 @@ export function registerAssistConversationHandlers(): void {
           conversationId: args.conversationId,
         });
         return ok({ deleted });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'assist-conversation:pin',
+    async (
+      _e,
+      args: { repoPath: string; conversationId: string; pinned: boolean },
+    ): Promise<Result<{ changed: boolean }>> => {
+      try {
+        const checkoutPath = assertAuthorizedRepo(args?.repoPath);
+        if (typeof args?.conversationId !== 'string' || !args.conversationId.trim()) {
+          throw new Error('Se requiere un identificador de conversación no vacío.');
+        }
+        if (typeof args?.pinned !== 'boolean') {
+          throw new Error('Se requiere el estado booleano de fijado.');
+        }
+        const changed = setConversationPinned({
+          checkoutPath,
+          conversationId: args.conversationId,
+          pinned: args.pinned,
+        });
+        return ok({ changed });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'assist-conversation:archive',
+    async (
+      _e,
+      args: { repoPath: string; conversationId: string; archived: boolean },
+    ): Promise<Result<{ changed: boolean }>> => {
+      try {
+        const checkoutPath = assertAuthorizedRepo(args?.repoPath);
+        if (typeof args?.conversationId !== 'string' || !args.conversationId.trim()) {
+          throw new Error('Se requiere un identificador de conversación no vacío.');
+        }
+        if (typeof args?.archived !== 'boolean') {
+          throw new Error('Se requiere el estado booleano de archivado.');
+        }
+        const changed = setConversationArchived({
+          checkoutPath,
+          conversationId: args.conversationId,
+          archived: args.archived,
+        });
+        return ok({ changed });
       } catch (error) {
         return fail(error);
       }

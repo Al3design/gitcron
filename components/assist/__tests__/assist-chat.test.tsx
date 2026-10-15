@@ -20,6 +20,8 @@ interface MockApi {
   list: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
+  pin: ReturnType<typeof vi.fn>;
+  archive: ReturnType<typeof vi.fn>;
   send: ReturnType<typeof vi.fn>;
   cancel: ReturnType<typeof vi.fn>;
   aiUseStatus: ReturnType<typeof vi.fn>;
@@ -29,6 +31,8 @@ function mountApi(): MockApi {
   const list = vi.fn().mockResolvedValue({ success: true, data: [] });
   const get = vi.fn().mockResolvedValue({ success: true, data: null });
   const deleteFn = vi.fn().mockResolvedValue({ success: true, data: { deleted: true } });
+  const pin = vi.fn().mockResolvedValue({ success: true, data: { changed: true } });
+  const archive = vi.fn().mockResolvedValue({ success: true, data: { changed: true } });
   const send = vi.fn().mockResolvedValue({
     success: true,
     data: {
@@ -61,6 +65,8 @@ function mountApi(): MockApi {
         list,
         get,
         delete: deleteFn,
+        pin,
+        archive,
         send,
         cancel,
       },
@@ -74,7 +80,7 @@ function mountApi(): MockApi {
     },
   });
 
-  return { list, get, delete: deleteFn, send, cancel, aiUseStatus };
+  return { list, get, delete: deleteFn, pin, archive, send, cancel, aiUseStatus };
 }
 
 describe('AssistChat component', () => {
@@ -109,6 +115,9 @@ describe('AssistChat component', () => {
         createdAt: '2026-10-13T10:00:00Z',
         updatedAt: '2026-10-13T10:00:00Z',
         messageCount: 2,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
       },
     ];
     api.list.mockResolvedValueOnce({ success: true, data: convs });
@@ -190,6 +199,9 @@ describe('AssistChat component', () => {
         createdAt: '2026-10-13T10:00:00Z',
         updatedAt: '2026-10-13T10:00:00Z',
         messageCount: 2,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
       },
       messages: [
         {
@@ -314,6 +326,9 @@ describe('AssistChat component', () => {
         createdAt: '2026-10-13T10:00:00Z',
         updatedAt: '2026-10-13T10:00:00Z',
         messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
       },
     ];
     api.list.mockResolvedValue({ success: true, data: convs });
@@ -594,6 +609,9 @@ describe('AssistChat component', () => {
         createdAt: '2026-04-10T10:00:00Z',
         updatedAt: '2026-04-10T10:00:00Z',
         messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
       },
     ];
     api.list.mockResolvedValueOnce({ success: true, data: convs });
@@ -741,7 +759,7 @@ describe('AssistChat component', () => {
   it('17. una respuesta con uso muestra «… de entrada» y «% del contexto», y el total aparece al pie', async () => {
     const api = mountApi();
     const convs: AssistConversationSummary[] = [
-      { id: 'conv-usage', title: 'Con uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2 },
+      { id: 'conv-usage', title: 'Con uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2, pinnedAt: null, archivedAt: null, changeId: null },
     ];
     api.list.mockResolvedValueOnce({ success: true, data: convs });
 
@@ -784,7 +802,7 @@ describe('AssistChat component', () => {
   it('18. una respuesta sin uso muestra «Sin datos de uso del servidor»', async () => {
     const api = mountApi();
     const convs: AssistConversationSummary[] = [
-      { id: 'conv-no-usage', title: 'Sin uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2 },
+      { id: 'conv-no-usage', title: 'Sin uso', viewId: 'test', createdAt: '2026-10-14T10:00:00Z', updatedAt: '2026-10-14T10:00:00Z', messageCount: 2, pinnedAt: null, archivedAt: null, changeId: null },
     ];
     api.list.mockResolvedValueOnce({ success: true, data: convs });
 
@@ -813,5 +831,160 @@ describe('AssistChat component', () => {
     fireEvent.click(item);
 
     expect((await screen.findAllByText(/Sin datos de uso del servidor/)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('19. con una lista que tiene los cuatro grupos, se ven los encabezados en orden y las archivadas plegadas (su título no está hasta abrir)', async () => {
+    mountApi();
+    const convs: AssistConversationSummary[] = [
+      {
+        id: 'conv-pinned',
+        title: 'Conversación Fijada',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: '2026-10-14T12:00:00Z',
+        archivedAt: null,
+        changeId: null,
+      },
+      {
+        id: 'conv-change',
+        title: 'Conversación de Cambio',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: 'retomar-trabajo-con-asistencia-contextual',
+      },
+      {
+        id: 'conv-general',
+        title: 'Conversación General',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
+      },
+      {
+        id: 'conv-archived',
+        title: 'Conversación Archivada',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: '2026-10-14T11:00:00Z',
+        changeId: null,
+      },
+    ];
+    window.api!.assistConversations!.list = vi.fn().mockResolvedValue({ success: true, data: convs });
+
+    render(<AssistChat repoPath="/repo/a" />);
+
+    expect(await screen.findByText('Conversación Fijada')).toBeTruthy();
+    expect(screen.getByText('Conversación de Cambio')).toBeTruthy();
+    expect(screen.getByText('Conversación General')).toBeTruthy();
+
+    // Encabezados en orden
+    expect(screen.getByText('Fijadas')).toBeTruthy();
+    expect(screen.getByText('retomar-trabajo-con-asistencia-contextual')).toBeTruthy();
+    expect(screen.getByText('Generales')).toBeTruthy();
+
+    // Archivadas plegadas: botón presente con cantidad, título de la conversación no está en DOM
+    const archiveToggle = screen.getByRole('button', { name: /Archivadas \(1\)/i });
+    expect(archiveToggle).toBeTruthy();
+    expect(archiveToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Conversación Archivada')).toBeNull();
+
+    // Abrir archivadas
+    fireEvent.click(archiveToggle);
+    expect(archiveToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(await screen.findByText('Conversación Archivada')).toBeTruthy();
+  });
+
+  it('20. el menú ofrece «Desfijar» en una fijada y «Fijar» en una que no', async () => {
+    mountApi();
+    const convs: AssistConversationSummary[] = [
+      {
+        id: 'conv-pinned',
+        title: 'Conversación Fijada',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: '2026-10-14T12:00:00Z',
+        archivedAt: null,
+        changeId: null,
+      },
+      {
+        id: 'conv-normal',
+        title: 'Conversación Normal',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
+      },
+    ];
+    window.api!.assistConversations!.list = vi.fn().mockResolvedValue({ success: true, data: convs });
+
+    render(<AssistChat repoPath="/repo/a" />);
+
+    await screen.findByText('Conversación Fijada');
+
+    const moreButtons = screen.getAllByTitle('Más acciones');
+    // Primer botón de más acciones corresponde a la fijada
+    fireEvent.click(moreButtons[0]);
+    expect(screen.getByRole('menuitem', { name: 'Desfijar' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Fijar' })).toBeNull();
+
+    // Segundo botón de más acciones corresponde a la normal
+    fireEvent.click(moreButtons[1]);
+    expect(screen.getByRole('menuitem', { name: 'Fijar' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Desfijar' })).toBeNull();
+  });
+
+  it('21. elegir «Archivar» llama a archive con archived: true y recarga la lista', async () => {
+    const api = mountApi();
+    const convs: AssistConversationSummary[] = [
+      {
+        id: 'conv-to-archive',
+        title: 'Conversación Para Archivar',
+        viewId: 'test',
+        createdAt: '2026-10-14T10:00:00Z',
+        updatedAt: '2026-10-14T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
+      },
+    ];
+    api.list.mockResolvedValue({ success: true, data: convs });
+
+    render(<AssistChat repoPath="/repo/a" />);
+
+    await screen.findByText('Conversación Para Archivar');
+
+    const moreBtn = screen.getByTitle('Más acciones');
+    fireEvent.click(moreBtn);
+
+    const archiveItem = screen.getByRole('menuitem', { name: 'Archivar' });
+    fireEvent.click(archiveItem);
+
+    await waitFor(() => {
+      expect(api.archive).toHaveBeenCalledWith({
+        repoPath: '/repo/a',
+        conversationId: 'conv-to-archive',
+        archived: true,
+      });
+      // list llamado inicialmente y luego para refrescar
+      expect(api.list.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 });

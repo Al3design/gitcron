@@ -12,6 +12,8 @@ import {
   getConversation,
   listConversations,
   sanitizeAssistText,
+  setConversationArchived,
+  setConversationPinned,
 } from '../assist-conversations';
 import type { AssistMessageReference } from '../../../types/assist-context';
 
@@ -338,5 +340,174 @@ describe('Assist Conversations DB module', () => {
     const detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
     expect(detail).not.toBeNull();
     expect(detail!.messages[0].usage).toBeNull();
+  });
+
+  it('la migración 10 corre dos veces sin fallar', () => {
+    expect(() => runMigrations(db)).not.toThrow();
+  });
+
+  it('fijar, archivar y desarchivar se conservan al reabrir la base (archivo temporal)', () => {
+    const dbPath = path.join(tempBase, 'test-pin-archive-disk.sqlite');
+    let diskDb = openTemporalAgentDatabase(dbPath);
+    let conv1Id: string;
+    let conv2Id: string;
+    let conv3Id: string;
+
+    try {
+      const conv1 = createConversation({ checkoutPath: repoA, title: 'Conversación fijada' }, { db: diskDb });
+      const conv2 = createConversation({ checkoutPath: repoA, title: 'Conversación archivada' }, { db: diskDb });
+      const conv3 = createConversation({ checkoutPath: repoA, title: 'Conversación desarchivada' }, { db: diskDb });
+      conv1Id = conv1.id;
+      conv2Id = conv2.id;
+      conv3Id = conv3.id;
+
+      setConversationPinned({ checkoutPath: repoA, conversationId: conv1Id, pinned: true }, { db: diskDb });
+      setConversationArchived({ checkoutPath: repoA, conversationId: conv2Id, archived: true }, { db: diskDb });
+      setConversationArchived({ checkoutPath: repoA, conversationId: conv3Id, archived: true }, { db: diskDb });
+      setConversationArchived({ checkoutPath: repoA, conversationId: conv3Id, archived: false }, { db: diskDb });
+    } finally {
+      diskDb.close();
+    }
+
+    diskDb = openTemporalAgentDatabase(dbPath);
+    try {
+      const list = listConversations({ checkoutPath: repoA }, { db: diskDb });
+      const c1 = list.find((c) => c.id === conv1Id);
+      const c2 = list.find((c) => c.id === conv2Id);
+      const c3 = list.find((c) => c.id === conv3Id);
+
+      expect(c1).toBeDefined();
+      expect(c1!.pinnedAt).not.toBeNull();
+      expect(c1!.archivedAt).toBeNull();
+
+      expect(c2).toBeDefined();
+      expect(c2!.pinnedAt).toBeNull();
+      expect(c2!.archivedAt).not.toBeNull();
+
+      expect(c3).toBeDefined();
+      expect(c3!.pinnedAt).toBeNull();
+      expect(c3!.archivedAt).toBeNull();
+
+      const d1 = getConversation({ checkoutPath: repoA, conversationId: conv1Id }, { db: diskDb });
+      expect(d1!.conversation.pinnedAt).not.toBeNull();
+      expect(d1!.conversation.archivedAt).toBeNull();
+
+      const d2 = getConversation({ checkoutPath: repoA, conversationId: conv2Id }, { db: diskDb });
+      expect(d2!.conversation.pinnedAt).toBeNull();
+      expect(d2!.conversation.archivedAt).not.toBeNull();
+
+      const d3 = getConversation({ checkoutPath: repoA, conversationId: conv3Id }, { db: diskDb });
+      expect(d3!.conversation.pinnedAt).toBeNull();
+      expect(d3!.conversation.archivedAt).toBeNull();
+    } finally {
+      diskDb.close();
+    }
+  });
+
+  it('archivar borra pinned_at', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Fijar luego archivar' }, { db });
+    setConversationPinned({ checkoutPath: repoA, conversationId: conv.id, pinned: true }, { db });
+
+    let detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail!.conversation.pinnedAt).not.toBeNull();
+    expect(detail!.conversation.archivedAt).toBeNull();
+
+    setConversationArchived({ checkoutPath: repoA, conversationId: conv.id, archived: true }, { db });
+
+    detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail!.conversation.pinnedAt).toBeNull();
+    expect(detail!.conversation.archivedAt).not.toBeNull();
+  });
+
+  it('fijar o archivar una conversación de otro checkoutPath devuelve false y no la toca', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Conversación en repo A' }, { db });
+
+    const pinOther = setConversationPinned({ checkoutPath: repoB, conversationId: conv.id, pinned: true }, { db });
+    expect(pinOther).toBe(false);
+
+    let detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail!.conversation.pinnedAt).toBeNull();
+
+    const archiveOther = setConversationArchived({ checkoutPath: repoB, conversationId: conv.id, archived: true }, { db });
+    expect(archiveOther).toBe(false);
+
+    detail = getConversation({ checkoutPath: repoA, conversationId: conv.id }, { db });
+    expect(detail!.conversation.archivedAt).toBeNull();
+  });
+
+  it('changeId sale de la primera pregunta con destino change (con una pregunta anterior sin destino y una posterior con otro cambio, gana la primera con cambio); sin destino change, null', () => {
+    const convNoChange = createConversation({ checkoutPath: repoA, title: 'Sin change' }, { db });
+    appendMessage(
+      {
+        checkoutPath: repoA,
+        conversationId: convNoChange.id,
+        role: 'user',
+        text: 'Pregunta sobre commit',
+        references: [{ selection: { kind: 'commit', sha: '1234567' }, headSha: null, status: 'ok' }],
+      },
+      { db },
+    );
+
+    const listNoChange = listConversations({ checkoutPath: repoA }, { db });
+    expect(listNoChange.find((c) => c.id === convNoChange.id)!.changeId).toBeNull();
+    const detailNoChange = getConversation({ checkoutPath: repoA, conversationId: convNoChange.id }, { db });
+    expect(detailNoChange!.conversation.changeId).toBeNull();
+
+    const convMulti = createConversation({ checkoutPath: repoA, title: 'Con cambios múltiples' }, { db });
+    // 1. Pregunta anterior sin destino change
+    appendMessage(
+      {
+        checkoutPath: repoA,
+        conversationId: convMulti.id,
+        role: 'user',
+        text: 'Pregunta sin cambio',
+        references: [{ selection: { kind: 'none' }, headSha: null, status: 'ok' }],
+      },
+      { db },
+    );
+    // 2. Primera pregunta con destino change
+    appendMessage(
+      {
+        checkoutPath: repoA,
+        conversationId: convMulti.id,
+        role: 'user',
+        text: 'Primera pregunta sobre cambio A',
+        references: [
+          { selection: { kind: 'change', changeId: 'cambio-primero' }, headSha: null, status: 'ok' },
+        ],
+      },
+      { db },
+    );
+    // 3. Pregunta posterior con otro cambio
+    appendMessage(
+      {
+        checkoutPath: repoA,
+        conversationId: convMulti.id,
+        role: 'user',
+        text: 'Segunda pregunta sobre cambio B',
+        references: [
+          { selection: { kind: 'change', changeId: 'cambio-segundo' }, headSha: null, status: 'ok' },
+        ],
+      },
+      { db },
+    );
+
+    const listMulti = listConversations({ checkoutPath: repoA }, { db });
+    expect(listMulti.find((c) => c.id === convMulti.id)!.changeId).toBe('cambio-primero');
+    const detailMulti = getConversation({ checkoutPath: repoA, conversationId: convMulti.id }, { db });
+    expect(detailMulti!.conversation.changeId).toBe('cambio-primero');
+  });
+
+  it('updated_at no cambia al fijar', () => {
+    const conv = createConversation({ checkoutPath: repoA, title: 'Test no cambia updated_at' }, { db });
+    const rowBefore = db.prepare('SELECT updated_at FROM assist_conversation WHERE id = ?').get(conv.id) as { updated_at: string };
+
+    setConversationPinned({ checkoutPath: repoA, conversationId: conv.id, pinned: true }, { db });
+    const rowAfterPin = db.prepare('SELECT updated_at FROM assist_conversation WHERE id = ?').get(conv.id) as { updated_at: string };
+    expect(rowAfterPin.updated_at).toBe(rowBefore.updated_at);
+
+    setConversationArchived({ checkoutPath: repoA, conversationId: conv.id, archived: true }, { db });
+    const rowAfterArchive = db.prepare('SELECT updated_at FROM assist_conversation WHERE id = ?').get(conv.id) as { updated_at: string };
+    expect(rowAfterArchive.updated_at).toBe(rowBefore.updated_at);
   });
 });

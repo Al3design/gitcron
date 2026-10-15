@@ -3,7 +3,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 9;
+export const LATEST_SCHEMA_VERSION = 10;
 
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
@@ -329,6 +329,15 @@ export const MIGRATIONS: Migration[] = [
       'ALTER TABLE assist_message ADD COLUMN reasoning_tokens INTEGER;',
       'ALTER TABLE assist_message ADD COLUMN duration_ms INTEGER;',
       'ALTER TABLE assist_message ADD COLUMN context_length INTEGER;',
+    ],
+  },
+  {
+    // Fijar y archivar conversaciones con la IA (tarea 2.11).
+    // Permite ordenar conversaciones fijadas y plegar las archivadas.
+    version: 10,
+    statements: [
+      'ALTER TABLE assist_conversation ADD COLUMN pinned_at TEXT;',
+      'ALTER TABLE assist_conversation ADD COLUMN archived_at TEXT;',
     ],
   },
 ];

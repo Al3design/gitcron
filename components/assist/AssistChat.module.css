@@ -104,6 +104,57 @@
   text-align: center;
 }
 
+.sidebarGroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.groupHeader {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.archivedToggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.archivedToggleBtn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-overlay);
+}
+
+.archivedToggleBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
 .conversationList {
   display: flex;
   flex-direction: column;
@@ -166,7 +217,8 @@
 }
 
 .conversationItem:hover .conversationActions,
-.conversationItem:focus-within .conversationActions {
+.conversationItem:focus-within .conversationActions,
+.conversationItem.menuOpen .conversationActions {
   display: flex;
 }
 

@@ -6,13 +6,23 @@
 // Columna izquierda con las conversaciones del repositorio; columna derecha con la
 // conversación activa, visualizador de Markdown, opciones de modelo y acciones del contexto.
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { assistContributions } from '@/lib/assist/assist-registry';
 import { formatUsageLine, sumUsage } from '@/lib/assist/usage-format';
+import { groupConversations } from '@/lib/assist/conversation-groups';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
 import { TaskConfirmToast } from '@/components/pipeline/TaskConfirmToast';
 import { Text } from '@/components/ui';
@@ -202,6 +212,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<AssistConversationSummary | null>(null);
   const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
   useEffect(() => {
     if (!openMenuConvId) return;
@@ -333,6 +344,44 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
           rememberConversation(repoPath, '');
           setMessages([]);
         }
+        await refreshList(repoPath);
+      }
+    } catch (err) {
+      setError(t('assist.failed', { message: errorText(err) }));
+    }
+  };
+
+  const handlePin = async (conv: AssistConversationSummary, pinned: boolean) => {
+    if (!repoPath) return;
+    setOpenMenuConvId(null);
+    try {
+      const res = await window.api?.assistConversations?.pin({
+        repoPath,
+        conversationId: conv.id,
+        pinned,
+      });
+      if (res && !res.success) {
+        setError(t('assist.failed', { message: res.error ?? '' }));
+      } else {
+        await refreshList(repoPath);
+      }
+    } catch (err) {
+      setError(t('assist.failed', { message: errorText(err) }));
+    }
+  };
+
+  const handleArchive = async (conv: AssistConversationSummary, archived: boolean) => {
+    if (!repoPath) return;
+    setOpenMenuConvId(null);
+    try {
+      const res = await window.api?.assistConversations?.archive({
+        repoPath,
+        conversationId: conv.id,
+        archived,
+      });
+      if (res && !res.success) {
+        setError(t('assist.failed', { message: res.error ?? '' }));
+      } else {
         await refreshList(repoPath);
       }
     } catch (err) {
@@ -491,6 +540,9 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     },
   ];
 
+  const groups = useMemo(() => groupConversations(conversations), [conversations]);
+  const targetMenuConv = openMenuConvId ? conversations.find((c) => c.id === openMenuConvId) ?? null : null;
+
   if (!repoPath) {
     return (
       <div className={styles.container}>
@@ -505,12 +557,65 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   const isThinking = pending !== null && pending.repo === repoPath && pending.convId === selectedConvId;
   const displayedMessages = isThinking && pending ? [...messages, pending.message] : messages;
 
+  const renderConversationItem = (c: AssistConversationSummary) => {
+    const isSelected = selectedConvId === c.id;
+
+    return (
+      <li
+        key={c.id}
+        className={`${styles.conversationItem} ${openMenuConvId === c.id ? styles.menuOpen : ''}`}
+        aria-current={isSelected ? 'true' : undefined}
+      >
+        <button
+          type="button"
+          className={styles.conversationSelectBtn}
+          onClick={() => handleSelectConversation(c.id)}
+          title={c.title}
+        >
+          <span className={styles.conversationTitle}>{c.title}</span>
+        </button>
+
+        <div className={styles.conversationActions}>
+          <button
+            type="button"
+            className={styles.taskActionBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfirmDeleteConv(c);
+            }}
+            title={t('assist.delete')}
+            aria-label={t('assist.delete')}
+          >
+            <Trash2 size={13} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={styles.taskActionBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              setMenuCoords({ x: rect.right, y: rect.bottom + 4 });
+              setOpenMenuConvId(openMenuConvId === c.id ? null : c.id);
+            }}
+            title={t('assist.moreActions')}
+            aria-label={t('assist.moreActions')}
+          >
+            <MoreHorizontal size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </li>
+    );
+  };
+
+  const sidebarStyle: React.CSSProperties = { width: chatListWidth };
+  const popoverStyle: React.CSSProperties = { top: menuCoords.y, left: menuCoords.x };
+
   return (
     <div className={styles.container}>
       {/* Columna izquierda: lista de conversaciones */}
       {chatListOpen && (
         <>
-          <aside className={styles.sidebar} style={{ width: chatListWidth }}>
+          <aside className={styles.sidebar} style={sidebarStyle}>
             <div className={styles.sidebarHeader}>
               <button
                 type="button"
@@ -524,57 +629,56 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
             {conversations.length === 0 ? (
               <div className={styles.emptyList}>{t('assist.empty')}</div>
             ) : (
-              <ul className={styles.conversationList}>
-                {conversations.map((c) => {
-                  const isSelected = selectedConvId === c.id;
-
-                  return (
-                    <li
-                      key={c.id}
-                      className={styles.conversationItem}
-                      aria-current={isSelected ? 'true' : undefined}
+              <div className={styles.sidebarGroups}>
+                {groups.pinned.length > 0 && (
+                  <div className={styles.groupSection}>
+                    <div className={styles.groupHeader}>{t('assist.group.pinned')}</div>
+                    <ul className={styles.conversationList}>
+                      {groups.pinned.map(renderConversationItem)}
+                    </ul>
+                  </div>
+                )}
+                {groups.byChange.map((cg) => (
+                  <div key={cg.changeId} className={styles.groupSection}>
+                    <div className={styles.groupHeader}>{cg.changeId}</div>
+                    <ul className={styles.conversationList}>
+                      {cg.items.map(renderConversationItem)}
+                    </ul>
+                  </div>
+                ))}
+                {groups.general.length > 0 && (
+                  <div className={styles.groupSection}>
+                    {(groups.pinned.length > 0 || groups.byChange.length > 0) && (
+                      <div className={styles.groupHeader}>{t('assist.group.general')}</div>
+                    )}
+                    <ul className={styles.conversationList}>
+                      {groups.general.map(renderConversationItem)}
+                    </ul>
+                  </div>
+                )}
+                {groups.archived.length > 0 && (
+                  <div className={styles.groupSection}>
+                    <button
+                      type="button"
+                      className={styles.archivedToggleBtn}
+                      onClick={() => setArchivedOpen((open) => !open)}
+                      aria-expanded={archivedOpen}
                     >
-                      <button
-                        type="button"
-                        className={styles.conversationSelectBtn}
-                        onClick={() => handleSelectConversation(c.id)}
-                        title={c.title}
-                      >
-                        <span className={styles.conversationTitle}>{c.title}</span>
-                      </button>
-
-                      <div className={styles.conversationActions}>
-                        <button
-                          type="button"
-                          className={styles.taskActionBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDeleteConv(c);
-                          }}
-                          title={t('assist.delete')}
-                          aria-label={t('assist.delete')}
-                        >
-                          <Trash2 size={13} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.taskActionBtn}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            setMenuCoords({ x: rect.right, y: rect.bottom + 4 });
-                            setOpenMenuConvId(openMenuConvId === c.id ? null : c.id);
-                          }}
-                          title={t('assist.moreActions')}
-                          aria-label={t('assist.moreActions')}
-                        >
-                          <MoreHorizontal size={14} aria-hidden="true" />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      <span>{t('assist.group.archived', { n: groups.archived.length })}</span>
+                      {archivedOpen ? (
+                        <ChevronDown size={14} aria-hidden="true" />
+                      ) : (
+                        <ChevronRight size={14} aria-hidden="true" />
+                      )}
+                    </button>
+                    {archivedOpen && (
+                      <ul className={styles.conversationList}>
+                        {groups.archived.map(renderConversationItem)}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </aside>
           <div
@@ -593,36 +697,56 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
       )}
 
       {/* Menú contextual de tres puntos en fila de conversación */}
-      {openMenuConvId && typeof document !== 'undefined' && (() => {
-        const targetConv = conversations.find((c) => c.id === openMenuConvId);
-        if (!targetConv) return null;
-        const rowMenuStyle: React.CSSProperties = {
-          top: menuCoords.y,
-          left: menuCoords.x,
-        };
-        return createPortal(
-          <div
-            className={styles.rowMenuPopover}
-            role="menu"
-            style={rowMenuStyle}
-            onClick={(e) => e.stopPropagation()}
-          >
+      {targetMenuConv && typeof document !== 'undefined' && createPortal(
+        <div
+          className={styles.rowMenuPopover}
+          role="menu"
+          style={popoverStyle}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {!targetMenuConv.archivedAt && (
             <button
               type="button"
               role="menuitem"
               className={styles.rowMenuItem}
-              onClick={() => {
-                setOpenMenuConvId(null);
-                setConfirmDeleteConv(targetConv);
-              }}
+              onClick={() => void handlePin(targetMenuConv, !targetMenuConv.pinnedAt)}
             >
-              <Trash2 size={13} aria-hidden="true" />
-              <span>{t('assist.delete')}</span>
+              {targetMenuConv.pinnedAt ? (
+                <PinOff size={13} aria-hidden="true" />
+              ) : (
+                <Pin size={13} aria-hidden="true" />
+              )}
+              <span>{targetMenuConv.pinnedAt ? t('assist.unpin') : t('assist.pin')}</span>
             </button>
-          </div>,
-          document.body,
-        );
-      })()}
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.rowMenuItem}
+            onClick={() => void handleArchive(targetMenuConv, !targetMenuConv.archivedAt)}
+          >
+            {targetMenuConv.archivedAt ? (
+              <ArchiveRestore size={13} aria-hidden="true" />
+            ) : (
+              <Archive size={13} aria-hidden="true" />
+            )}
+            <span>{targetMenuConv.archivedAt ? t('assist.unarchive') : t('assist.archive')}</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.rowMenuItem}
+            onClick={() => {
+              setOpenMenuConvId(null);
+              setConfirmDeleteConv(targetMenuConv);
+            }}
+          >
+            <Trash2 size={13} aria-hidden="true" />
+            <span>{t('assist.delete')}</span>
+          </button>
+        </div>,
+        document.body,
+      )}
 
       {/* Toast de confirmación de borrado */}
       {confirmDeleteConv && (
