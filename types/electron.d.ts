@@ -501,6 +501,7 @@ interface ElectronAPI {
     delete(args: { repoPath: string; conversationId: string }): Promise<GitResult<{ deleted: boolean }>>;
     pin(args: { repoPath: string; conversationId: string; pinned: boolean }): Promise<GitResult<{ changed: boolean }>>;
     archive(args: { repoPath: string; conversationId: string; archived: boolean }): Promise<GitResult<{ changed: boolean }>>;
+    narrateResume(args: import('./resume-narration').ResumeNarrationArgs): Promise<GitResult<import('./resume-narration').ResumeNarrationResult>>;
   };
   /**
    * Cartografía Fase 3: motor CodeGraph embebido (local, solo lectura). Devuelve

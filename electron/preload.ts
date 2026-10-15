@@ -379,6 +379,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('assist-conversation:pin', args),
     archive: (args: { repoPath: string; conversationId: string; archived: boolean }) =>
       ipcRenderer.invoke('assist-conversation:archive', args),
+    narrateResume: (args: import('../types/resume-narration').ResumeNarrationArgs) =>
+      ipcRenderer.invoke('assist:narrate-resume', args),
   },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),

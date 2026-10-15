@@ -15,12 +15,17 @@ import {
   cancelAssistMessage,
   sendAssistMessage,
 } from '../assist/assist-send';
+import { narrateResume } from '../assist/resume-narration';
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
   AssistSendArgs,
   AssistSendResult,
 } from '../../types/assist-context';
+import type {
+  ResumeNarrationArgs,
+  ResumeNarrationResult,
+} from '../../types/resume-narration';
 import { authorizedRepoRoot } from './authorized-repos';
 import { errMsg } from './shared';
 
@@ -177,6 +182,19 @@ export function registerAssistConversationHandlers(): void {
           archived: args.archived,
         });
         return ok({ changed });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'assist:narrate-resume',
+    async (_e, args: ResumeNarrationArgs): Promise<Result<ResumeNarrationResult>> => {
+      try {
+        assertAuthorizedRepo(args?.repoPath);
+        const result = await narrateResume(args);
+        return ok(result);
       } catch (error) {
         return fail(error);
       }

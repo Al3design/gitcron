@@ -55,14 +55,16 @@ describe('Assist Conversations IPC handlers', () => {
     }
   });
 
-  it('un repoPath no autorizado devuelve success: false en los tres canales', async () => {
+  it('un repoPath no autorizado devuelve success: false en los canales protegidos', async () => {
     const listHandler = ipc.handlers.get('assist-conversation:list');
     const getHandler = ipc.handlers.get('assist-conversation:get');
     const deleteHandler = ipc.handlers.get('assist-conversation:delete');
+    const narrateHandler = ipc.handlers.get('assist:narrate-resume');
 
     expect(listHandler).toBeDefined();
     expect(getHandler).toBeDefined();
     expect(deleteHandler).toBeDefined();
+    expect(narrateHandler).toBeDefined();
 
     const unauthorized = path.join(tempBase, 'repo-ajeno');
 
@@ -83,6 +85,15 @@ describe('Assist Conversations IPC handlers', () => {
     };
     expect(deleteRes.success).toBe(false);
     expect(deleteRes.error).toContain('IPC Security Error');
+
+    const narrateRes = (await narrateHandler!(null, {
+      repoPath: unauthorized,
+      changeId: 'mi-cambio',
+      archivedAt: null,
+      language: 'es',
+    })) as { success: boolean; error?: string };
+    expect(narrateRes.success).toBe(false);
+    expect(narrateRes.error).toContain('IPC Security Error');
   });
 
   it('con el repo autorizado list devuelve conversaciones del repo y delete de una ajena devuelve { deleted: false }', async () => {
@@ -156,5 +167,22 @@ describe('Assist Conversations IPC handlers', () => {
 
     expect(res.success).toBe(true);
     expect(res.data).toEqual({ cancelled: false });
+  });
+
+  it('assist:narrate-resume con repo autorizado invoca el servicio y devuelve Result', async () => {
+    const narrateHandler = ipc.handlers.get('assist:narrate-resume');
+    expect(narrateHandler).toBeDefined();
+
+    const res = (await narrateHandler!(null, {
+      repoPath: repoA,
+      changeId: 'cambio-inexistente',
+      archivedAt: null,
+      language: 'es',
+    })) as { success: boolean; data?: { status: string; message: string } };
+
+    expect(res.success).toBe(true);
+    expect(res.data).toBeDefined();
+    // Como los archivos no existen, devuelve unavailable
+    expect(res.data!.status).toBe('unavailable');
   });
 });

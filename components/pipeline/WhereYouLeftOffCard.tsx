@@ -17,10 +17,21 @@ import { headShaOf } from '@/lib/assist/view-contributors';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Stack, Row, PlainList } from '@/components/ui';
+import type { ResumeNarrationArgs } from '@/types/resume-narration';
+import { ResumeNarration } from './ResumeNarration';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from './pipeline-view-state';
 import { deriveResumeCard, formatRelativeTime } from './resume-card';
 import { compareFreshness, stampSources, type ResumeSourcesStamp } from './resume-freshness';
 import styles from './OpenSpecDashboard.module.css';
+
+function stableHash(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
 
 export interface WhereYouLeftOffCardProps {
   repoPath?: string | null;
@@ -169,6 +180,25 @@ export function WhereYouLeftOffCard({
   if (!cardData) return null;
 
   const { objective, whatYouWereDoing, currentWork, remainingWork, archivedNotice, rows } = cardData;
+
+  const proposalRaw = selectedChange?.artifacts?.proposal ?? selectedArchive?.artifacts?.proposal ?? '';
+  const tasksRawText = selectedChange?.artifacts?.tasks ?? selectedArchive?.artifacts?.tasks ?? '';
+  const textFingerprint = stableHash(`${proposalRaw}\0${tasksRawText}`);
+  const headSha = headShaOf(commits ?? [], currentBranch ?? '') ?? '';
+  const isArchived = Boolean(selectedArchive);
+  const archivedAt = selectedArchive?.archivedAt ?? null;
+
+  const narrationSourceKey = `${repoPath ?? ''}\0${changeId ?? ''}\0${isArchived ? archivedAt ?? 'archived' : 'active'}\0${lang}\0${readAt ?? ''}\0${headSha}\0${textFingerprint}`;
+  const narrationDisabled = freshness.state === 'pending' || !repoPath || !changeId;
+  const narrationLanguage: 'es' | 'en' | 'zh' =
+    lang === 'zh' ? 'zh' : lang === 'en' ? 'en' : 'es';
+
+  const narrationArgs: ResumeNarrationArgs = {
+    repoPath: repoPath ?? '',
+    changeId: changeId ?? '',
+    archivedAt,
+    language: narrationLanguage,
+  };
 
   return (
     <section
@@ -388,6 +418,12 @@ export function WhereYouLeftOffCard({
           {rows.nextStep.text}
         </dd>
       </dl>
+
+      <ResumeNarration
+        args={narrationArgs}
+        sourceKey={narrationSourceKey}
+        disabled={narrationDisabled}
+      />
     </section>
   );
 }

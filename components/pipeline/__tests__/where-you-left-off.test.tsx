@@ -367,6 +367,29 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       expect(pedidos).toEqual(['cambio-a', 'cambio-b']);
       delete (window as unknown as { api?: unknown }).api;
     });
+
+    it('muestra el botón «Explicarme este resumen» al pie de la tarjeta sin consultar al modelo', () => {
+      const mockNarrate = vi.fn();
+      (window as unknown as { api?: unknown }).api = {
+        assistConversations: {
+          narrateResume: mockNarrate,
+        },
+      };
+
+      render(
+        <WhereYouLeftOffCard
+          repoPath="/test/repo"
+          selectedChange={mockChange}
+          nextTask={sampleTasks[3]}
+        />,
+      );
+
+      expect(screen.getByTestId('resume-narration')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Explicarme este resumen/i })).toBeTruthy();
+      expect(mockNarrate).not.toHaveBeenCalled();
+
+      delete (window as unknown as { api?: unknown }).api;
+    });
   });
 
   describe('Lista interactiva de tareas con títulos legibles (Tarea 3.5)', () => {
