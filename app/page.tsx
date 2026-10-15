@@ -1725,6 +1725,10 @@ export default function GitCronPage() {
             <AssistDock
               repoPath={repoPath}
               assistViewId={assistViewId}
+              onOpenAiSettings={() => {
+                setSelectedSettingsSection('aiModels');
+                handleViewChange('settings');
+              }}
             />
           )}
         </main>

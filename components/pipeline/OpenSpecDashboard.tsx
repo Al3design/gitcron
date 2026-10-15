@@ -75,6 +75,7 @@ import {
   deriveArchiveAvailability,
   derivePipelineNextAction,
   hasDiffEvidence,
+  nextActionAssistActions,
   resolveTaskLabel,
   resolveTaskText,
   type EngineInstructionInput,
@@ -817,10 +818,6 @@ export function OpenSpecDashboard({
     runtimeActive,
   });
 
-  useAssistContribution('sdd', () =>
-    sddContribution(selectedChange?.changeId ?? null, highlightedTaskId)
-  );
-
   /**
    * Abre un artefacto en la columna central.
    *
@@ -1018,6 +1015,17 @@ export function OpenSpecDashboard({
         break;
     }
   };
+
+  useAssistContribution('sdd', () => {
+    const base = sddContribution(selectedChange?.changeId ?? null, highlightedTaskId);
+    return {
+      selection: base.selection,
+      actions: [
+        ...base.actions,
+        ...nextActionAssistActions([primaryAction, secondaryAction], fixtureActive, handleIntent),
+      ],
+    };
+  });
 
   // Una sesión nueva pasa a estar seleccionada mientras corre: si la persona
   // estaba mirando una sesión vieja, quedarse ahí escondería la que arranca.

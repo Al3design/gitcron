@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { translate } from '@/lib/i18n';
 import type { RuntimeProjection } from '@/types/pipeline';
 import type { OpenSpecChangeSummary } from '../pipeline-view-state';
@@ -11,8 +11,11 @@ import {
   derivePipelineNextAction,
   hasDiffEvidence,
   isValidChangeSlug,
+  nextActionAssistActions,
   resolveTaskLabel,
   resolveTaskText,
+  type PipelineActionIntent,
+  type PipelineNextActionButton,
   type PipelineNextActionInput,
 } from '../pipeline-next-action';
 
@@ -539,5 +542,70 @@ describe('isValidChangeSlug', () => {
     for (const value of ['Bad_Name', 'has spaces', 'UPPER', 'trailing-', 'a--b', 'acento-ñ', '']) {
       expect(isValidChangeSlug(value)).toBe(false);
     }
+  });
+});
+
+describe('nextActionAssistActions', () => {
+  it('botón ejecutable con fixtureActive → no disponible con el motivo', () => {
+    const onIntent = vi.fn();
+    const btn: PipelineNextActionButton = {
+      intent: { kind: 'start-archive', changeId: 'demo-change' },
+      labelKey: 'pipeline.next.readyToArchive.action',
+      executable: true,
+    };
+    const actions = nextActionAssistActions([btn], true, onIntent);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].id).toBe('next-start-archive');
+    expect(actions[0].available).toBe(false);
+    expect(actions[0].unavailableReasonKey).toBe('assist.action.fixture');
+    expect(actions[0].scope).toBe('execute');
+    expect(actions[0].requiresConfirmation).toBe(true);
+  });
+
+  it('sin fixture → disponible y run llama a onIntent con el mismo intent', () => {
+    const onIntent = vi.fn();
+    const intent: PipelineActionIntent = { kind: 'start-apply', changeId: 'c1', taskId: '2.7' };
+    const btn: PipelineNextActionButton = {
+      intent,
+      labelKey: 'pipeline.next.task.action',
+      labelParams: { task: '2.7' },
+      executable: true,
+    };
+    const actions = nextActionAssistActions([btn], false, onIntent);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].id).toBe('next-start-apply-2.7');
+    expect(actions[0].available).toBe(true);
+    expect(actions[0].unavailableReasonKey).toBeUndefined();
+    expect(actions[0].labelParams).toEqual({ task: '2.7' });
+    actions[0].run?.();
+    expect(onIntent).toHaveBeenCalledTimes(1);
+    expect(onIntent).toHaveBeenCalledWith(intent);
+  });
+
+  it('botón no ejecutable → scope: "prepare"', () => {
+    const onIntent = vi.fn();
+    const btn: PipelineNextActionButton = {
+      intent: { kind: 'view-diff' },
+      labelKey: 'pipeline.next.readyToArchive.diff',
+      executable: false,
+    };
+    const actions = nextActionAssistActions([btn], false, onIntent);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].id).toBe('next-view-diff');
+    expect(actions[0].scope).toBe('prepare');
+    expect(actions[0].available).toBe(true);
+    expect(actions[0].requiresConfirmation).toBe(false);
+  });
+
+  it('nulos se ignoran', () => {
+    const onIntent = vi.fn();
+    const btn: PipelineNextActionButton = {
+      intent: { kind: 'open-propose-flow' },
+      labelKey: 'pipeline.next.noActive.propose',
+      executable: false,
+    };
+    const actions = nextActionAssistActions([null, btn, null], false, onIntent);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].id).toBe('next-open-propose-flow');
   });
 });

@@ -75,6 +75,8 @@ export const es: Record<string, string> = {
   'assist.usage.context': '{{pct}} % del contexto ({{used}} de {{limit}})',
   'assist.usage.none': 'Sin datos de uso del servidor',
   'assist.usage.total': 'Total de la conversación: {{parts}}',
+  'assist.openAiSettings': 'Motores y modelos',
+  'assist.action.fixture': 'Hay datos de vista previa en pantalla',
 };
 
 export const en: Record<string, string> = {
@@ -152,6 +154,8 @@ export const en: Record<string, string> = {
   'assist.usage.context': '{{pct}}% of context ({{used}} of {{limit}})',
   'assist.usage.none': 'No usage data from server',
   'assist.usage.total': 'Conversation total: {{parts}}',
+  'assist.openAiSettings': 'Engines and models',
+  'assist.action.fixture': 'Preview fixture data on screen',
 };
 
 export const zh: Record<string, string> = {
@@ -229,4 +233,6 @@ export const zh: Record<string, string> = {
   'assist.usage.context': '占上下文 {{pct}}%（{{used}} / {{limit}}）',
   'assist.usage.none': '无服务器使用数据',
   'assist.usage.total': '对话总计：{{parts}}',
+  'assist.openAiSettings': '引擎与模型',
+  'assist.action.fixture': '屏幕上正在显示预览数据',
 };

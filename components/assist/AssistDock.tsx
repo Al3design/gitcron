@@ -13,9 +13,14 @@ import styles from './AssistDock.module.css';
 export interface AssistDockProps {
   repoPath: string;
   assistViewId?: string;
+  onOpenAiSettings?: () => void;
 }
 
-export function AssistDock({ repoPath, assistViewId }: AssistDockProps): React.JSX.Element {
+export function AssistDock({
+  repoPath,
+  assistViewId,
+  onOpenAiSettings,
+}: AssistDockProps): React.JSX.Element {
   const t = useT();
 
   const open = useAssistDockStore((s) => s.open);
@@ -178,7 +183,11 @@ export function AssistDock({ repoPath, assistViewId }: AssistDockProps): React.J
             aria-labelledby="assist-dock-tab-chat"
             className={styles.panel}
           >
-            <AssistChat repoPath={repoPath} viewId={assistViewId ?? 'graph'} />
+            <AssistChat
+              repoPath={repoPath}
+              viewId={assistViewId ?? 'graph'}
+              onOpenAiSettings={onOpenAiSettings}
+            />
           </div>
         ) : (
           <div

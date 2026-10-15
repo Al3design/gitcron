@@ -30,8 +30,18 @@ export interface AssistComposerProps {
   targetChanged: boolean;
   /** Quitar el destino: la próxima pregunta va sobre el repositorio. */
   onClearTarget(): void;
-  /** Lo que va en el menú «+»: las acciones consult de la vista y «Nueva conversación». */
-  menuItems: { id: string; label: string; onSelect(): void }[];
+  /** Lo que va en el menú «+»: las acciones consult, do y app. */
+  menuItems: AssistComposerMenuItem[];
+}
+
+export interface AssistComposerMenuItem {
+  id: string;
+  label: string;
+  onSelect(): void;
+  disabled?: boolean;
+  hint?: string;
+  section: 'ask' | 'do' | 'app';
+  icon?: React.ReactNode;
 }
 
 export function AssistComposer({
@@ -230,6 +240,15 @@ export function AssistComposer({
                 bottom: menuCoords.bottom,
                 left: menuCoords.left,
               };
+              const askItems = menuItems.filter((i) => i.section === 'ask');
+              const doItems = menuItems.filter((i) => i.section === 'do');
+              const appItems = menuItems.filter((i) => i.section === 'app');
+              const orderedSections = [
+                { key: 'ask', items: askItems },
+                { key: 'do', items: doItems },
+                { key: 'app', items: appItems },
+              ].filter((s) => s.items.length > 0);
+
               return createPortal(
                 <div
                   ref={menuRef}
@@ -237,19 +256,38 @@ export function AssistComposer({
                   role="menu"
                   style={menuStyle}
                 >
-                  {menuItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        item.onSelect();
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {item.label}
-                    </button>
+                  {orderedSections.map((sec, idx) => (
+                    <React.Fragment key={sec.key}>
+                      {idx > 0 && <div className={styles.menuDivider} role="separator" />}
+                      <div className={styles.menuSection} data-section={sec.key}>
+                        {sec.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            role="menuitem"
+                            className={`${styles.menuItem} ${item.disabled ? styles.menuItemDisabled : ''}`}
+                            aria-disabled={item.disabled ? 'true' : undefined}
+                            onClick={() => {
+                              if (item.disabled) return;
+                              item.onSelect();
+                              setMenuOpen(false);
+                            }}
+                          >
+                            {item.icon && (
+                              <span className={styles.menuItemIcon} aria-hidden="true">
+                                {item.icon}
+                              </span>
+                            )}
+                            <div className={styles.menuItemContent}>
+                              <span className={styles.menuItemLabel}>{item.label}</span>
+                              {item.hint && (
+                                <span className={styles.menuItemHint}>{item.hint}</span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </React.Fragment>
                   ))}
                 </div>,
                 document.body,

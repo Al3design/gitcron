@@ -21,6 +21,9 @@ describe('createContributionRegistry', () => {
     ],
   });
 
+  const markTaskRun = () => {};
+  const launchRun = () => {};
+
   const sddContributor: ViewContributor = () => ({
     selection: { kind: 'change', changeId: 'retomar', taskId: '1.3' },
     actions: [
@@ -30,6 +33,7 @@ describe('createContributionRegistry', () => {
         scope: 'execute' as AssistActionScope,
         available: true,
         requiresConfirmation: true,
+        run: markTaskRun,
       },
       {
         id: 'launch-session',
@@ -38,6 +42,7 @@ describe('createContributionRegistry', () => {
         available: false,
         unavailableReasonKey: 'assist.sessionActive',
         requiresConfirmation: true,
+        run: launchRun,
       },
     ],
   });
@@ -73,6 +78,7 @@ describe('createContributionRegistry', () => {
           scope: 'execute',
           available: true,
           requiresConfirmation: true,
+          run: markTaskRun,
         },
         {
           id: 'launch-session',
@@ -81,6 +87,7 @@ describe('createContributionRegistry', () => {
           available: false,
           unavailableReasonKey: 'assist.sessionActive',
           requiresConfirmation: true,
+          run: launchRun,
         },
       ],
     });
@@ -132,24 +139,43 @@ describe('createContributionRegistry', () => {
 
   it('normalizeActions descarta id vacío, descarta no disponible sin motivo y conserva primer id duplicado', () => {
     const registry = createContributionRegistry();
+    const runFn = () => {};
     registry.register('test-view', () => ({
       selection: { kind: 'none' },
       actions: [
         { id: 'first', labelKey: 'a.first', scope: 'consult', available: true, requiresConfirmation: false },
-        { id: 'first', labelKey: 'a.first.dup', scope: 'execute', available: true, requiresConfirmation: true },
+        { id: 'first', labelKey: 'a.first.dup', scope: 'execute', available: true, requiresConfirmation: true, run: runFn },
         { id: '', labelKey: 'a.empty', scope: 'consult', available: true, requiresConfirmation: false },
         { id: '   ', labelKey: 'a.whitespace', scope: 'consult', available: true, requiresConfirmation: false },
-        { id: 'unavail-no-reason', labelKey: 'a.noReason', scope: 'prepare', available: false, requiresConfirmation: false },
-        { id: 'unavail-empty-reason', labelKey: 'a.emptyReason', scope: 'prepare', available: false, unavailableReasonKey: '   ', requiresConfirmation: false },
-        { id: 'unavail-with-reason', labelKey: 'a.withReason', scope: 'prepare', available: false, unavailableReasonKey: 'reason.valid', requiresConfirmation: false },
+        { id: 'unavail-no-reason', labelKey: 'a.noReason', scope: 'prepare', available: false, requiresConfirmation: false, run: runFn },
+        { id: 'unavail-empty-reason', labelKey: 'a.emptyReason', scope: 'prepare', available: false, unavailableReasonKey: '   ', requiresConfirmation: false, run: runFn },
+        { id: 'unavail-with-reason', labelKey: 'a.withReason', scope: 'prepare', available: false, unavailableReasonKey: 'reason.valid', requiresConfirmation: false, run: runFn },
       ],
     }));
 
     const contribution = registry.contributionFor('test-view');
     expect(contribution.actions).toEqual([
       { id: 'first', labelKey: 'a.first', scope: 'consult', available: true, requiresConfirmation: false },
-      { id: 'unavail-with-reason', labelKey: 'a.withReason', scope: 'prepare', available: false, unavailableReasonKey: 'reason.valid', requiresConfirmation: false },
+      { id: 'unavail-with-reason', labelKey: 'a.withReason', scope: 'prepare', available: false, unavailableReasonKey: 'reason.valid', requiresConfirmation: false, run: runFn },
     ]);
+  });
+
+  it('una acción execute o prepare sin run se descarta; con run se conserva y su run es la misma función', () => {
+    const registry = createContributionRegistry();
+    const customRun = () => {};
+    registry.register('actions-test', () => ({
+      selection: { kind: 'none' },
+      actions: [
+        { id: 'exec-no-run', labelKey: 'a.execNoRun', scope: 'execute', available: true, requiresConfirmation: true },
+        { id: 'prep-no-run', labelKey: 'a.prepNoRun', scope: 'prepare', available: true, requiresConfirmation: false },
+        { id: 'exec-with-run', labelKey: 'a.execWithRun', scope: 'execute', available: true, requiresConfirmation: true, run: customRun },
+      ],
+    }));
+
+    const contribution = registry.contributionFor('actions-test');
+    expect(contribution.actions).toHaveLength(1);
+    expect(contribution.actions[0].id).toBe('exec-with-run');
+    expect(contribution.actions[0].run).toBe(customRun);
   });
 
   it('las acciones devueltas son copias y modificarlas no altera llamadas subsiguientes', () => {

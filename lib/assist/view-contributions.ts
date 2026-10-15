@@ -8,6 +8,8 @@ export interface AssistAction {
   id: string;
   /** Clave de traducción del rótulo (no el texto). */
   labelKey: string;
+  /** Parámetros del rótulo, como los de `t(key, params)`. */
+  labelParams?: Record<string, string | number>;
   scope: AssistActionScope;
   /** Si hoy se puede usar. */
   available: boolean;
@@ -15,6 +17,11 @@ export interface AssistAction {
   unavailableReasonKey?: string;
   /** Si al ejecutarla se pide la confirmación que ya existe para esa operación. */
   requiresConfirmation: boolean;
+  /**
+   * Qué hace al elegirla, en la pantalla (nunca en el proceso principal). Obligatorio para
+   * `prepare` y `execute`: es el mismo manejador del botón de la vista, con su confirmación.
+   */
+  run?: () => void;
 }
 
 export interface ViewContribution {
@@ -47,6 +54,9 @@ function isValidAction(action: AssistAction): boolean {
     if (!action.unavailableReasonKey || action.unavailableReasonKey.trim() === '') {
       return false;
     }
+  }
+  if ((action.scope === 'prepare' || action.scope === 'execute') && typeof action.run !== 'function') {
+    return false;
   }
   return true;
 }

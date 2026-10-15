@@ -18,7 +18,16 @@ export function useAssistContribution(
     return assistContributions.register(viewId, () => readRef.current());
   }, [viewId]);
 
-  const key = JSON.stringify(read().selection);
+  const current = read();
+  const key = JSON.stringify({
+    selection: current.selection,
+    actions: (current.actions ?? []).map(({ id, available, labelKey, labelParams }) => ({
+      id,
+      available,
+      labelKey,
+      labelParams,
+    })),
+  });
   useEffect(() => {
     assistContributions.notify();
   }, [key]);

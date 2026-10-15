@@ -170,8 +170,8 @@ describe('AssistComposer component', () => {
     mountApi();
     const onSelectAction = vi.fn();
     const menuItems = [
-      { id: 'item-1', label: '¿Qué hizo este commit?', onSelect: onSelectAction },
-      { id: 'item-2', label: 'Nueva conversación', onSelect: vi.fn() },
+      { id: 'item-1', label: '¿Qué hizo este commit?', onSelect: onSelectAction, section: 'ask' as const },
+      { id: 'item-2', label: 'Nueva conversación', onSelect: vi.fn(), section: 'app' as const },
     ];
 
     render(
@@ -202,6 +202,66 @@ describe('AssistComposer component', () => {
     // Escape lo cierra
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('el menú muestra los tres bloques en orden; un ítem deshabilitado no llama a onSelect y muestra su motivo', () => {
+    mountApi();
+    const onSelectAsk = vi.fn();
+    const onSelectDo = vi.fn();
+    const onSelectDisabled = vi.fn();
+    const onSelectApp = vi.fn();
+
+    const menuItems = [
+      { id: 'app-item', label: 'Nueva conversación', onSelect: onSelectApp, section: 'app' as const },
+      { id: 'ask-item', label: 'Preguntar algo', onSelect: onSelectAsk, section: 'ask' as const },
+      { id: 'do-item', label: 'Ejecutar paso', onSelect: onSelectDo, section: 'do' as const },
+      {
+        id: 'do-disabled',
+        label: 'Acción bloqueada',
+        disabled: true,
+        hint: 'No disponible por fixture',
+        onSelect: onSelectDisabled,
+        section: 'do' as const,
+      },
+    ];
+
+    render(
+      <AssistComposer
+        value=""
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        thinking={false}
+        onStop={vi.fn()}
+        sendDisabled={false}
+        repoPath="/repo"
+        targetLabel={null}
+        targetChanged={false}
+        onClearTarget={vi.fn()}
+        menuItems={menuItems}
+      />,
+    );
+
+    const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
+    fireEvent.click(menuBtn);
+
+    const menuitems = screen.getAllByRole('menuitem');
+    // El orden debe ser ask -> do -> app
+    expect(menuitems[0].textContent).toContain('Preguntar algo');
+    expect(menuitems[1].textContent).toContain('Ejecutar paso');
+    expect(menuitems[2].textContent).toContain('Acción bloqueada');
+    expect(menuitems[3].textContent).toContain('Nueva conversación');
+
+    // Motivo del ítem deshabilitado
+    expect(screen.getByText('No disponible por fixture')).toBeTruthy();
+
+    const disabledBtn = screen.getByRole('menuitem', { name: /Acción bloqueada/ });
+    expect(disabledBtn.getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.click(disabledBtn);
+    expect(onSelectDisabled).not.toHaveBeenCalled();
+
+    // El menú sigue abierto al hacer clic en un deshabilitado
+    expect(screen.getByRole('menu')).toBeTruthy();
   });
 
   it('la vista previa muestra el Markdown y vuelve a escribir', () => {

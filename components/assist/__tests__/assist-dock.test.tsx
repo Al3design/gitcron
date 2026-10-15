@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useGitStore } from '@/lib/git-store';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { AssistDock } from '../AssistDock';
@@ -137,5 +137,21 @@ describe('AssistDock component', () => {
     render(<AssistDock repoPath="/repo/test" />);
 
     expect(screen.queryByRole('button', { name: /conversaciones/ })).toBeNull();
+  });
+
+  it('9. onOpenAiSettings llega al chat', () => {
+    useAssistDockStore.setState({ open: true, activeTabId: 'chat' });
+    const onOpenAiSettings = vi.fn();
+
+    render(<AssistDock repoPath="/repo/test" onOpenAiSettings={onOpenAiSettings} />);
+
+    const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
+    fireEvent.click(menuBtn);
+
+    const settingsItem = screen.getByRole('menuitem', { name: 'Motores y modelos' });
+    expect(settingsItem).toBeTruthy();
+
+    fireEvent.click(settingsItem);
+    expect(onOpenAiSettings).toHaveBeenCalledTimes(1);
   });
 });

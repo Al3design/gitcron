@@ -126,6 +126,16 @@
   user-select: none;
 }
 
+.groupHeaderChange {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
 .archivedToggleBtn {
   display: flex;
   align-items: center;

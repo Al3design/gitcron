@@ -16,17 +16,20 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  Play,
   Trash2,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { assistContributions } from '@/lib/assist/assist-registry';
+import type { AssistAction } from '@/lib/assist/view-contributions';
 import { formatUsageLine, sumUsage } from '@/lib/assist/usage-format';
 import { groupConversations } from '@/lib/assist/conversation-groups';
+import { changeTitle } from '@/lib/assist/change-title';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
 import { TaskConfirmToast } from '@/components/pipeline/TaskConfirmToast';
 import { Text } from '@/components/ui';
-import { AssistComposer } from './AssistComposer';
+import { AssistComposer, type AssistComposerMenuItem } from './AssistComposer';
 import type {
   AssistConversationSummary,
   AssistMessage,
@@ -47,6 +50,8 @@ export interface AssistChatProps {
   repoPath: string | null;
   /** La vista activa; con ella se lee la contribución del registro. */
   viewId?: string;
+  /** Abre la sección de motores y modelos en Ajustes. */
+  onOpenAiSettings?: () => void;
 }
 
 function formatSelectionTarget(
@@ -170,20 +175,149 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): React.JSX.Element {
-  const t = useT();
-  const language = useGitStore((s) => s.language);
-  const locale = language || 'es';
-  const setError = useGitStore((s) => s.setError);
-  const setSuccess = useGitStore((s) => s.setSuccess);
+interface ConversationListItemProps {
+  conv: AssistConversationSummary;
+  isSelected: boolean;
+  isMenuOpen: boolean;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  onSelect: (id: string) => void;
+  onOpenMenu: (id: string, rect: DOMRect) => void;
+  onRequestDelete: (conv: AssistConversationSummary) => void;
+}
 
-  const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
-  const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
-  const chatListWidth = useAssistDockStore((s) => s.chatListWidth);
-  const setChatListOpen = useAssistDockStore((s) => s.setChatListOpen);
-  const setChatListWidth = useAssistDockStore((s) => s.setChatListWidth);
+function ConversationListItem({
+  conv,
+  isSelected,
+  isMenuOpen,
+  t,
+  onSelect,
+  onOpenMenu,
+  onRequestDelete,
+}: ConversationListItemProps): React.JSX.Element {
+  return (
+    <li
+      className={`${styles.conversationItem} ${isMenuOpen ? styles.menuOpen : ''}`}
+      aria-current={isSelected ? 'true' : undefined}
+    >
+      <button
+        type="button"
+        className={styles.conversationSelectBtn}
+        onClick={() => onSelect(conv.id)}
+        title={conv.title}
+      >
+        <span className={styles.conversationTitle}>{conv.title}</span>
+      </button>
 
-  // Arrastrar el borde de la columna cambia su ancho (como los paneles laterales).
+      <div className={styles.conversationActions}>
+        <button
+          type="button"
+          className={styles.taskActionBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestDelete(conv);
+          }}
+          title={t('assist.delete')}
+          aria-label={t('assist.delete')}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={styles.taskActionBtn}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenMenu(conv.id, e.currentTarget.getBoundingClientRect());
+          }}
+          title={t('assist.moreActions')}
+          aria-label={t('assist.moreActions')}
+        >
+          <MoreHorizontal size={14} aria-hidden="true" />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function buildComposerMenuItems(
+  consultActions: AssistAction[],
+  doActions: AssistAction[],
+  handleNewConversation: () => void,
+  onOpenAiSettings: (() => void) | undefined,
+  setQuestion: (q: string) => void,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): AssistComposerMenuItem[] {
+  const askItems: AssistComposerMenuItem[] = consultActions.map((action) => ({
+    id: action.id,
+    label: t(action.labelKey, action.labelParams),
+    onSelect: () => setQuestion(t(action.labelKey, action.labelParams)),
+    section: 'ask',
+  }));
+
+  const doItems: AssistComposerMenuItem[] = doActions.map((action) => ({
+    id: action.id,
+    label: t(action.labelKey, action.labelParams),
+    disabled: !action.available,
+    hint: !action.available && action.unavailableReasonKey ? t(action.unavailableReasonKey) : undefined,
+    section: 'do',
+    icon: action.scope === 'execute' ? <Play size={13} fill="currentColor" aria-hidden="true" /> : undefined,
+    onSelect: () => {
+      if (action.available && action.run) {
+        action.run();
+      }
+    },
+  }));
+
+  const appItems: AssistComposerMenuItem[] = [
+    {
+      id: 'new-conversation',
+      label: t('assist.newConversation'),
+      onSelect: handleNewConversation,
+      section: 'app',
+    },
+  ];
+
+  if (onOpenAiSettings) {
+    appItems.push({
+      id: 'open-ai-settings',
+      label: t('assist.openAiSettings'),
+      onSelect: onOpenAiSettings,
+      section: 'app',
+    });
+  }
+
+  return [...askItems, ...doItems, ...appItems];
+}
+
+function formatConversationTotal(
+  displayedMessages: AssistMessage[],
+  locale: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string | null {
+  const assistantMsgs = displayedMessages.filter((m) => m.role === 'assistant');
+  if (assistantMsgs.length === 0) return null;
+  const assistantUsages = assistantMsgs.map((m) => m.usage ?? null);
+  const total = sumUsage(assistantUsages);
+  const numFmt = new Intl.NumberFormat(locale);
+  const totalParts: string[] = [];
+  if (total.promptTokens !== null) {
+    totalParts.push(t('assist.usage.in', { n: numFmt.format(total.promptTokens) }));
+  }
+  if (total.completionTokens !== null) {
+    totalParts.push(t('assist.usage.out', { n: numFmt.format(total.completionTokens) }));
+  }
+  if (total.reasoningTokens !== null) {
+    totalParts.push(t('assist.usage.reasoning', { n: numFmt.format(total.reasoningTokens) }));
+  }
+  if (total.durationMs !== null) {
+    totalParts.push(t('assist.usage.time', { s: (total.durationMs / 1000).toFixed(1) }));
+  }
+  return totalParts.length > 0 ? totalParts.join(' · ') : t('assist.usage.none');
+}
+
+function useChatListResizer(
+  chatListWidth: number,
+  setChatListWidth: (w: number) => void,
+) {
   const startListResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -197,11 +331,399 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     window.addEventListener('pointerup', onUp);
   };
 
-  // Con el teclado: flechas de a 16 px.
   const onListResizeKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft') setChatListWidth(chatListWidth - 16);
     if (event.key === 'ArrowRight') setChatListWidth(chatListWidth + 16);
   };
+
+  return { startListResize, onListResizeKey };
+}
+
+interface SendResultContext {
+  targetRepo: string;
+  targetConvId: string | null;
+  rememberConversation: (repo: string, convId: string) => void;
+  setSelectedConvId: (id: string | null) => void;
+  loadConversation: (repo: string, convId: string) => Promise<void>;
+  refreshList: (repo: string) => Promise<unknown>;
+  setSuccess: (msg: string) => void;
+  setError: (msg: string) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function createSendResultHandlers({
+  targetRepo,
+  targetConvId,
+  rememberConversation,
+  setSelectedConvId,
+  loadConversation,
+  refreshList,
+  setSuccess,
+  setError,
+  t,
+}: SendResultContext): SendResultHandlers {
+  return {
+    onAnswered: async (finalConvId) => {
+      rememberConversation(targetRepo, finalConvId);
+      setSelectedConvId(finalConvId);
+      await Promise.all([
+        loadConversation(targetRepo, finalConvId),
+        refreshList(targetRepo),
+      ]);
+    },
+    onCancelled: async () => {
+      setSuccess(t('assist.cancelled'));
+      if (targetConvId) {
+        await loadConversation(targetRepo, targetConvId);
+      }
+    },
+    onDiscarded: () => {
+      setSuccess(t('assist.discarded'));
+    },
+    onFailed: async (msg, alternatives) => {
+      const msgText = t('assist.failed', { message: msg });
+      if (alternatives && alternatives.length > 0) {
+        const provs = alternatives.map((a) => a.providerName).join(', ');
+        const altText = t('assist.alternatives', { providers: provs });
+        setError(`${msgText} ${altText}`);
+      } else {
+        setError(msgText);
+      }
+      if (targetConvId) {
+        await loadConversation(targetRepo, targetConvId);
+      }
+    },
+  };
+}
+
+async function updateConversationPinOrArchive(
+  action: 'pin' | 'archive',
+  repoPath: string,
+  conv: AssistConversationSummary,
+  value: boolean,
+  refreshList: (repo: string) => Promise<unknown>,
+  setError: (msg: string) => void,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): Promise<void> {
+  try {
+    const api = window.api?.assistConversations;
+    const res = action === 'pin'
+      ? await api?.pin({ repoPath, conversationId: conv.id, pinned: value })
+      : await api?.archive({ repoPath, conversationId: conv.id, archived: value });
+    if (res && !res.success) {
+      setError(t('assist.failed', { message: res.error ?? '' }));
+    } else {
+      await refreshList(repoPath);
+    }
+  } catch (err) {
+    setError(t('assist.failed', { message: errorText(err) }));
+  }
+}
+
+interface ChatMessageBubbleProps {
+  msg: AssistMessage;
+  locale: string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function ChatMessageBubble({ msg, locale, t }: ChatMessageBubbleProps): React.JSX.Element {
+  const isUser = msg.role === 'user';
+  const targetDesc =
+    isUser && msg.references && msg.references.length > 0
+      ? formatTarget(msg.references[0], t)
+      : '';
+
+  return (
+    <div
+      className={isUser ? styles.userBubble : `${styles.assistantBubble} ai-surface`}
+      data-role={msg.role}
+    >
+      <div className={styles.bubbleHeader}>
+        <Text variant="secondary-xs" className={styles.authorName}>
+          {isUser ? t('assist.you') : t('assist.assistant')}
+        </Text>
+        {targetDesc && <span className={styles.referenceBadge}>{targetDesc}</span>}
+      </div>
+
+      {isUser ? (
+        <div>{msg.text}</div>
+      ) : (
+        <>
+          <MarkdownViewer content={msg.text} />
+          {(() => {
+            const modelText = [msg.providerName, msg.modelId].filter(Boolean).join(' · ');
+            const usageLine = formatUsageLine(msg.createdAt, msg.usage ?? null, t, locale);
+            const usageDetail =
+              usageLine.parts.length > 0 ? usageLine.parts.join(' · ') : t('assist.usage.none');
+            const line = [modelText, usageLine.when, usageDetail].filter(Boolean).join(' · ');
+            return (
+              <div className={styles.usageLine}>
+                <Text variant="secondary-xs">{line}</Text>
+              </div>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
+function useTargetSelection(
+  selection: ContextSelection,
+  messageCount: number,
+  t: (key: string, params?: Record<string, string | number>) => string,
+) {
+  const currentTargetKey = JSON.stringify(selection);
+  const [shownTargetKey, setShownTargetKey] = useState(currentTargetKey);
+  const [shownMessageCount, setShownMessageCount] = useState(messageCount);
+  const [targetHighlight, setTargetHighlight] = useState(false);
+  const [ignoredSelectionKey, setIgnoredSelectionKey] = useState<string | null>(null);
+
+  if (shownTargetKey !== currentTargetKey) {
+    setShownTargetKey(currentTargetKey);
+    setTargetHighlight(messageCount > 0);
+    setIgnoredSelectionKey(null);
+  }
+  if (shownMessageCount !== messageCount) {
+    setShownMessageCount(messageCount);
+    setTargetHighlight(false);
+  }
+
+  const isIgnored = ignoredSelectionKey !== null && ignoredSelectionKey === currentTargetKey;
+  const effectiveSelection: ContextSelection = isIgnored ? { kind: 'none' } : selection;
+  const targetLabel =
+    effectiveSelection.kind !== 'none'
+      ? formatTarget({ selection: effectiveSelection, headSha: null, status: 'ok' }, t)
+      : null;
+
+  return {
+    effectiveSelection,
+    targetLabel,
+    targetHighlight,
+    currentTargetKey,
+    clearTarget: () => setIgnoredSelectionKey(currentTargetKey),
+  };
+}
+
+interface ChatSidebarProps {
+  chatListWidth: number;
+  conversations: AssistConversationSummary[];
+  selectedConvId: string | null;
+  openMenuConvId: string | null;
+  archivedOpen: boolean;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  onNewConversation: () => void;
+  onSelectConversation: (id: string) => void;
+  onOpenMenu: (id: string, rect: DOMRect) => void;
+  onRequestDelete: (conv: AssistConversationSummary) => void;
+  onToggleArchived: () => void;
+  startListResize: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onListResizeKey: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+}
+
+function ChatSidebar({
+  chatListWidth,
+  conversations,
+  selectedConvId,
+  openMenuConvId,
+  archivedOpen,
+  t,
+  onNewConversation,
+  onSelectConversation,
+  onOpenMenu,
+  onRequestDelete,
+  onToggleArchived,
+  startListResize,
+  onListResizeKey,
+}: ChatSidebarProps): React.JSX.Element {
+  const groups = useMemo(() => groupConversations(conversations), [conversations]);
+  const sidebarStyle: React.CSSProperties = { width: chatListWidth };
+
+  const renderConversationItem = (c: AssistConversationSummary) => (
+    <ConversationListItem
+      key={c.id}
+      conv={c}
+      isSelected={selectedConvId === c.id}
+      isMenuOpen={openMenuConvId === c.id}
+      t={t}
+      onSelect={onSelectConversation}
+      onOpenMenu={onOpenMenu}
+      onRequestDelete={onRequestDelete}
+    />
+  );
+
+  return (
+    <>
+      <aside className={styles.sidebar} style={sidebarStyle}>
+        <div className={styles.sidebarHeader}>
+          <button
+            type="button"
+            className={styles.newButton}
+            onClick={onNewConversation}
+          >
+            <span>{t('assist.newConversation')}</span>
+          </button>
+        </div>
+
+        {conversations.length === 0 ? (
+          <div className={styles.emptyList}>{t('assist.empty')}</div>
+        ) : (
+          <div className={styles.sidebarGroups}>
+            {groups.pinned.length > 0 && (
+              <div className={styles.groupSection}>
+                <div className={styles.groupHeader}>{t('assist.group.pinned')}</div>
+                <ul className={styles.conversationList}>
+                  {groups.pinned.map(renderConversationItem)}
+                </ul>
+              </div>
+            )}
+            {groups.byChange.map((cg) => (
+              <div key={cg.changeId} className={styles.groupSection}>
+                <div className={styles.groupHeaderChange} title={cg.changeId}>
+                  {changeTitle(cg.changeId)}
+                </div>
+                <ul className={styles.conversationList}>
+                  {cg.items.map(renderConversationItem)}
+                </ul>
+              </div>
+            ))}
+            {groups.general.length > 0 && (
+              <div className={styles.groupSection}>
+                {(groups.pinned.length > 0 || groups.byChange.length > 0) && (
+                  <div className={styles.groupHeader}>{t('assist.group.general')}</div>
+                )}
+                <ul className={styles.conversationList}>
+                  {groups.general.map(renderConversationItem)}
+                </ul>
+              </div>
+            )}
+            {groups.archived.length > 0 && (
+              <div className={styles.groupSection}>
+                <button
+                  type="button"
+                  className={styles.archivedToggleBtn}
+                  onClick={onToggleArchived}
+                  aria-expanded={archivedOpen}
+                >
+                  <span>{t('assist.group.archived', { n: groups.archived.length })}</span>
+                  {archivedOpen ? (
+                    <ChevronDown size={14} aria-hidden="true" />
+                  ) : (
+                    <ChevronRight size={14} aria-hidden="true" />
+                  )}
+                </button>
+                {archivedOpen && (
+                  <ul className={styles.conversationList}>
+                    {groups.archived.map(renderConversationItem)}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </aside>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t('assist.listResize')}
+        aria-valuemin={ASSIST_CHAT_LIST_MIN}
+        aria-valuemax={ASSIST_CHAT_LIST_MAX}
+        aria-valuenow={chatListWidth}
+        tabIndex={0}
+        className={styles.listResizer}
+        onPointerDown={startListResize}
+        onKeyDown={onListResizeKey}
+      />
+    </>
+  );
+}
+
+interface ConversationRowMenuProps {
+  conv: AssistConversationSummary | null;
+  coords: { x: number; y: number };
+  t: (key: string, params?: Record<string, string | number>) => string;
+  onPin: (conv: AssistConversationSummary, pin: boolean) => void;
+  onArchive: (conv: AssistConversationSummary, archive: boolean) => void;
+  onDelete: (conv: AssistConversationSummary) => void;
+}
+
+function ConversationRowMenu({
+  conv,
+  coords,
+  t,
+  onPin,
+  onArchive,
+  onDelete,
+}: ConversationRowMenuProps): React.JSX.Element | null {
+  if (!conv || typeof document === 'undefined') return null;
+  const popoverStyle: React.CSSProperties = { top: coords.y, left: coords.x };
+  return createPortal(
+    <div
+      className={styles.rowMenuPopover}
+      role="menu"
+      style={popoverStyle}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {!conv.archivedAt && (
+        <button
+          type="button"
+          role="menuitem"
+          className={styles.rowMenuItem}
+          onClick={() => onPin(conv, !conv.pinnedAt)}
+        >
+          {conv.pinnedAt ? (
+            <PinOff size={13} aria-hidden="true" />
+          ) : (
+            <Pin size={13} aria-hidden="true" />
+          )}
+          <span>{conv.pinnedAt ? t('assist.unpin') : t('assist.pin')}</span>
+        </button>
+      )}
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.rowMenuItem}
+        onClick={() => onArchive(conv, !conv.archivedAt)}
+      >
+        {conv.archivedAt ? (
+          <ArchiveRestore size={13} aria-hidden="true" />
+        ) : (
+          <Archive size={13} aria-hidden="true" />
+        )}
+        <span>{conv.archivedAt ? t('assist.unarchive') : t('assist.archive')}</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className={styles.rowMenuItem}
+        onClick={() => onDelete(conv)}
+      >
+        <Trash2 size={13} aria-hidden="true" />
+        <span>{t('assist.delete')}</span>
+      </button>
+    </div>,
+    document.body,
+  );
+}
+
+export function AssistChat({
+  repoPath,
+  viewId = 'graph',
+  onOpenAiSettings,
+}: AssistChatProps): React.JSX.Element {
+  const t = useT();
+  const language = useGitStore((s) => s.language);
+  const locale = language || 'es';
+  const setError = useGitStore((s) => s.setError);
+  const setSuccess = useGitStore((s) => s.setSuccess);
+
+  const rememberConversation = useAssistDockStore((s) => s.rememberConversation);
+  const chatListOpen = useAssistDockStore((s) => s.chatListOpen);
+  const chatListWidth = useAssistDockStore((s) => s.chatListWidth);
+  const setChatListOpen = useAssistDockStore((s) => s.setChatListOpen);
+  const setChatListWidth = useAssistDockStore((s) => s.setChatListWidth);
+
+  const { startListResize, onListResizeKey } = useChatListResizer(chatListWidth, setChatListWidth);
 
   const [conversations, setConversations] = useState<AssistConversationSummary[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -351,42 +873,16 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     }
   };
 
-  const handlePin = async (conv: AssistConversationSummary, pinned: boolean) => {
+  const handlePin = (conv: AssistConversationSummary, pinned: boolean) => {
     if (!repoPath) return;
     setOpenMenuConvId(null);
-    try {
-      const res = await window.api?.assistConversations?.pin({
-        repoPath,
-        conversationId: conv.id,
-        pinned,
-      });
-      if (res && !res.success) {
-        setError(t('assist.failed', { message: res.error ?? '' }));
-      } else {
-        await refreshList(repoPath);
-      }
-    } catch (err) {
-      setError(t('assist.failed', { message: errorText(err) }));
-    }
+    void updateConversationPinOrArchive('pin', repoPath, conv, pinned, refreshList, setError, t);
   };
 
-  const handleArchive = async (conv: AssistConversationSummary, archived: boolean) => {
+  const handleArchive = (conv: AssistConversationSummary, archived: boolean) => {
     if (!repoPath) return;
     setOpenMenuConvId(null);
-    try {
-      const res = await window.api?.assistConversations?.archive({
-        repoPath,
-        conversationId: conv.id,
-        archived,
-      });
-      if (res && !res.success) {
-        setError(t('assist.failed', { message: res.error ?? '' }));
-      } else {
-        await refreshList(repoPath);
-      }
-    } catch (err) {
-      setError(t('assist.failed', { message: errorText(err) }));
-    }
+    void updateConversationPinOrArchive('archive', repoPath, conv, archived, refreshList, setError, t);
   };
 
   // Cancelar pedido activo
@@ -394,42 +890,6 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
     if (!pending) return;
     await window.api?.assistConversations?.cancel({ requestId: pending.requestId });
   };
-
-  const createSendResultHandlers = (
-    targetRepo: string,
-    targetConvId: string | null,
-  ): SendResultHandlers => ({
-    onAnswered: async (finalConvId) => {
-      rememberConversation(targetRepo, finalConvId);
-      setSelectedConvId(finalConvId);
-      await Promise.all([
-        loadConversation(targetRepo, finalConvId),
-        refreshList(targetRepo),
-      ]);
-    },
-    onCancelled: async () => {
-      setSuccess(t('assist.cancelled'));
-      if (targetConvId) {
-        await loadConversation(targetRepo, targetConvId);
-      }
-    },
-    onDiscarded: () => {
-      setSuccess(t('assist.discarded'));
-    },
-    onFailed: async (msg, alternatives) => {
-      const msgText = t('assist.failed', { message: msg });
-      if (alternatives && alternatives.length > 0) {
-        const provs = alternatives.map((a) => a.providerName).join(', ');
-        const altText = t('assist.alternatives', { providers: provs });
-        setError(`${msgText} ${altText}`);
-      } else {
-        setError(msgText);
-      }
-      if (targetConvId) {
-        await loadConversation(targetRepo, targetConvId);
-      }
-    },
-  });
 
   // Enviar pregunta
   const handleSend = async () => {
@@ -468,7 +928,17 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
         targetConvId,
         currentRepoPathRef.current,
         currentConvIdRef.current,
-        createSendResultHandlers(targetRepo, targetConvId),
+        createSendResultHandlers({
+          targetRepo,
+          targetConvId,
+          rememberConversation,
+          setSelectedConvId,
+          loadConversation,
+          refreshList,
+          setSuccess,
+          setError,
+          t,
+        }),
         refreshList,
         setError,
         t,
@@ -504,43 +974,30 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   );
 
   const currentSelection = contribution.selection;
-  const currentTargetKey = JSON.stringify(currentSelection);
-  const [shownTargetKey, setShownTargetKey] = useState(currentTargetKey);
-  const [shownMessageCount, setShownMessageCount] = useState(messages.length);
-  const [targetHighlight, setTargetHighlight] = useState(false);
-  const [ignoredSelectionKey, setIgnoredSelectionKey] = useState<string | null>(null);
+  const {
+    effectiveSelection,
+    targetLabel,
+    targetHighlight,
+    clearTarget,
+  } = useTargetSelection(currentSelection, messages.length, t);
 
-  if (shownTargetKey !== currentTargetKey) {
-    setShownTargetKey(currentTargetKey);
-    setTargetHighlight(messages.length > 0);
-    setIgnoredSelectionKey(null);
-  }
-  if (shownMessageCount !== messages.length) {
-    setShownMessageCount(messages.length);
-    setTargetHighlight(false);
-  }
+  const doActions = contribution.actions.filter(
+    (a) => a.scope === 'prepare' || a.scope === 'execute',
+  );
 
-  const isIgnored = ignoredSelectionKey !== null && ignoredSelectionKey === currentTargetKey;
-  const effectiveSelection: ContextSelection = isIgnored ? { kind: 'none' } : currentSelection;
-  const targetLabel =
-    effectiveSelection.kind !== 'none'
-      ? formatTarget({ selection: effectiveSelection, headSha: null, status: 'ok' }, t)
-      : null;
+  const menuItems = useMemo(
+    () =>
+      buildComposerMenuItems(
+        consultActions,
+        doActions,
+        handleNewConversation,
+        onOpenAiSettings,
+        setQuestion,
+        t,
+      ),
+    [consultActions, doActions, onOpenAiSettings, t],
+  );
 
-  const menuItems = [
-    ...consultActions.map((action) => ({
-      id: action.id,
-      label: t(action.labelKey),
-      onSelect: () => setQuestion(t(action.labelKey)),
-    })),
-    {
-      id: 'new-conversation',
-      label: t('assist.newConversation'),
-      onSelect: handleNewConversation,
-    },
-  ];
-
-  const groups = useMemo(() => groupConversations(conversations), [conversations]);
   const targetMenuConv = openMenuConvId ? conversations.find((c) => c.id === openMenuConvId) ?? null : null;
 
   if (!repoPath) {
@@ -556,197 +1013,42 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
   // «Pensando…» y la pregunta provisional sólo en el repo y la conversación de donde salió.
   const isThinking = pending !== null && pending.repo === repoPath && pending.convId === selectedConvId;
   const displayedMessages = isThinking && pending ? [...messages, pending.message] : messages;
-
-  const renderConversationItem = (c: AssistConversationSummary) => {
-    const isSelected = selectedConvId === c.id;
-
-    return (
-      <li
-        key={c.id}
-        className={`${styles.conversationItem} ${openMenuConvId === c.id ? styles.menuOpen : ''}`}
-        aria-current={isSelected ? 'true' : undefined}
-      >
-        <button
-          type="button"
-          className={styles.conversationSelectBtn}
-          onClick={() => handleSelectConversation(c.id)}
-          title={c.title}
-        >
-          <span className={styles.conversationTitle}>{c.title}</span>
-        </button>
-
-        <div className={styles.conversationActions}>
-          <button
-            type="button"
-            className={styles.taskActionBtn}
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmDeleteConv(c);
-            }}
-            title={t('assist.delete')}
-            aria-label={t('assist.delete')}
-          >
-            <Trash2 size={13} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className={styles.taskActionBtn}
-            onClick={(e) => {
-              e.stopPropagation();
-              const rect = e.currentTarget.getBoundingClientRect();
-              setMenuCoords({ x: rect.right, y: rect.bottom + 4 });
-              setOpenMenuConvId(openMenuConvId === c.id ? null : c.id);
-            }}
-            title={t('assist.moreActions')}
-            aria-label={t('assist.moreActions')}
-          >
-            <MoreHorizontal size={14} aria-hidden="true" />
-          </button>
-        </div>
-      </li>
-    );
-  };
-
-  const sidebarStyle: React.CSSProperties = { width: chatListWidth };
-  const popoverStyle: React.CSSProperties = { top: menuCoords.y, left: menuCoords.x };
+  const conversationTotal = formatConversationTotal(displayedMessages, locale, t);
 
   return (
     <div className={styles.container}>
-      {/* Columna izquierda: lista de conversaciones */}
       {chatListOpen && (
-        <>
-          <aside className={styles.sidebar} style={sidebarStyle}>
-            <div className={styles.sidebarHeader}>
-              <button
-                type="button"
-                className={styles.newButton}
-                onClick={handleNewConversation}
-              >
-                <span>{t('assist.newConversation')}</span>
-              </button>
-            </div>
-
-            {conversations.length === 0 ? (
-              <div className={styles.emptyList}>{t('assist.empty')}</div>
-            ) : (
-              <div className={styles.sidebarGroups}>
-                {groups.pinned.length > 0 && (
-                  <div className={styles.groupSection}>
-                    <div className={styles.groupHeader}>{t('assist.group.pinned')}</div>
-                    <ul className={styles.conversationList}>
-                      {groups.pinned.map(renderConversationItem)}
-                    </ul>
-                  </div>
-                )}
-                {groups.byChange.map((cg) => (
-                  <div key={cg.changeId} className={styles.groupSection}>
-                    <div className={styles.groupHeader}>{cg.changeId}</div>
-                    <ul className={styles.conversationList}>
-                      {cg.items.map(renderConversationItem)}
-                    </ul>
-                  </div>
-                ))}
-                {groups.general.length > 0 && (
-                  <div className={styles.groupSection}>
-                    {(groups.pinned.length > 0 || groups.byChange.length > 0) && (
-                      <div className={styles.groupHeader}>{t('assist.group.general')}</div>
-                    )}
-                    <ul className={styles.conversationList}>
-                      {groups.general.map(renderConversationItem)}
-                    </ul>
-                  </div>
-                )}
-                {groups.archived.length > 0 && (
-                  <div className={styles.groupSection}>
-                    <button
-                      type="button"
-                      className={styles.archivedToggleBtn}
-                      onClick={() => setArchivedOpen((open) => !open)}
-                      aria-expanded={archivedOpen}
-                    >
-                      <span>{t('assist.group.archived', { n: groups.archived.length })}</span>
-                      {archivedOpen ? (
-                        <ChevronDown size={14} aria-hidden="true" />
-                      ) : (
-                        <ChevronRight size={14} aria-hidden="true" />
-                      )}
-                    </button>
-                    {archivedOpen && (
-                      <ul className={styles.conversationList}>
-                        {groups.archived.map(renderConversationItem)}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </aside>
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={t('assist.listResize')}
-            aria-valuemin={ASSIST_CHAT_LIST_MIN}
-            aria-valuemax={ASSIST_CHAT_LIST_MAX}
-            aria-valuenow={chatListWidth}
-            tabIndex={0}
-            className={styles.listResizer}
-            onPointerDown={startListResize}
-            onKeyDown={onListResizeKey}
-          />
-        </>
+        <ChatSidebar
+          chatListWidth={chatListWidth}
+          conversations={conversations}
+          selectedConvId={selectedConvId}
+          openMenuConvId={openMenuConvId}
+          archivedOpen={archivedOpen}
+          t={t}
+          onNewConversation={handleNewConversation}
+          onSelectConversation={handleSelectConversation}
+          onOpenMenu={(id, rect) => {
+            setMenuCoords({ x: rect.right, y: rect.bottom + 4 });
+            setOpenMenuConvId(openMenuConvId === id ? null : id);
+          }}
+          onRequestDelete={setConfirmDeleteConv}
+          onToggleArchived={() => setArchivedOpen((open) => !open)}
+          startListResize={startListResize}
+          onListResizeKey={onListResizeKey}
+        />
       )}
 
-      {/* Menú contextual de tres puntos en fila de conversación */}
-      {targetMenuConv && typeof document !== 'undefined' && createPortal(
-        <div
-          className={styles.rowMenuPopover}
-          role="menu"
-          style={popoverStyle}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!targetMenuConv.archivedAt && (
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.rowMenuItem}
-              onClick={() => void handlePin(targetMenuConv, !targetMenuConv.pinnedAt)}
-            >
-              {targetMenuConv.pinnedAt ? (
-                <PinOff size={13} aria-hidden="true" />
-              ) : (
-                <Pin size={13} aria-hidden="true" />
-              )}
-              <span>{targetMenuConv.pinnedAt ? t('assist.unpin') : t('assist.pin')}</span>
-            </button>
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.rowMenuItem}
-            onClick={() => void handleArchive(targetMenuConv, !targetMenuConv.archivedAt)}
-          >
-            {targetMenuConv.archivedAt ? (
-              <ArchiveRestore size={13} aria-hidden="true" />
-            ) : (
-              <Archive size={13} aria-hidden="true" />
-            )}
-            <span>{targetMenuConv.archivedAt ? t('assist.unarchive') : t('assist.archive')}</span>
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.rowMenuItem}
-            onClick={() => {
-              setOpenMenuConvId(null);
-              setConfirmDeleteConv(targetMenuConv);
-            }}
-          >
-            <Trash2 size={13} aria-hidden="true" />
-            <span>{t('assist.delete')}</span>
-          </button>
-        </div>,
-        document.body,
-      )}
+      <ConversationRowMenu
+        conv={targetMenuConv}
+        coords={menuCoords}
+        t={t}
+        onPin={handlePin}
+        onArchive={handleArchive}
+        onDelete={(conv) => {
+          setOpenMenuConvId(null);
+          setConfirmDeleteConv(conv);
+        }}
+      />
 
       {/* Toast de confirmación de borrado */}
       {confirmDeleteConv && (
@@ -778,52 +1080,9 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
               {t('assist.emptyConversation')}
             </div>
           ) : (
-            displayedMessages.map((msg) => {
-              const isUser = msg.role === 'user';
-              const targetDesc =
-                isUser && msg.references && msg.references.length > 0
-                  ? formatTarget(msg.references[0], t)
-                  : '';
-
-              return (
-                <div
-                  key={msg.id}
-                  className={isUser ? styles.userBubble : `${styles.assistantBubble} ai-surface`}
-                  data-role={msg.role}
-                >
-                  <div className={styles.bubbleHeader}>
-                    <Text variant="secondary-xs" className={styles.authorName}>
-                      {isUser ? t('assist.you') : t('assist.assistant')}
-                    </Text>
-                    {targetDesc && (
-                      <span className={styles.referenceBadge}>{targetDesc}</span>
-                    )}
-                  </div>
-
-                  {isUser ? (
-                    <div>{msg.text}</div>
-                  ) : (
-                    <>
-                      <MarkdownViewer content={msg.text} />
-                      {(() => {
-                        const modelText = [msg.providerName, msg.modelId].filter(Boolean).join(' · ');
-                        const usageLine = formatUsageLine(msg.createdAt, msg.usage ?? null, t, locale);
-                        const usageDetail =
-                          usageLine.parts.length > 0
-                            ? usageLine.parts.join(' · ')
-                            : t('assist.usage.none');
-                        const line = [modelText, usageLine.when, usageDetail].filter(Boolean).join(' · ');
-                        return (
-                          <div className={styles.usageLine}>
-                            <Text variant="secondary-xs">{line}</Text>
-                          </div>
-                        );
-                      })()}
-                    </>
-                  )}
-                </div>
-              );
-            })
+            displayedMessages.map((msg) => (
+              <ChatMessageBubble key={msg.id} msg={msg} locale={locale} t={t} />
+            ))
           )}
 
           {isThinking && (
@@ -842,32 +1101,13 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
           )}
 
           {/* Totales de la conversación si hay al menos una respuesta */}
-          {displayedMessages.some((m) => m.role === 'assistant') && (() => {
-            const assistantUsages = displayedMessages
-              .filter((m) => m.role === 'assistant')
-              .map((m) => m.usage ?? null);
-            const total = sumUsage(assistantUsages);
-            const numFmt = new Intl.NumberFormat(locale);
-            const totalParts: string[] = [];
-            if (total.promptTokens !== null) {
-              totalParts.push(t('assist.usage.in', { n: numFmt.format(total.promptTokens) }));
-            }
-            if (total.completionTokens !== null) {
-              totalParts.push(t('assist.usage.out', { n: numFmt.format(total.completionTokens) }));
-            }
-            if (total.reasoningTokens !== null) {
-              totalParts.push(t('assist.usage.reasoning', { n: numFmt.format(total.reasoningTokens) }));
-            }
-            if (total.durationMs !== null) {
-              totalParts.push(t('assist.usage.time', { s: (total.durationMs / 1000).toFixed(1) }));
-            }
-            const partsString = totalParts.length > 0 ? totalParts.join(' · ') : t('assist.usage.none');
-            return (
-              <div className={styles.conversationTotal}>
-                <Text variant="secondary-xs">{t('assist.usage.total', { parts: partsString })}</Text>
-              </div>
-            );
-          })()}
+          {conversationTotal && (
+            <div className={styles.conversationTotal}>
+              <Text variant="secondary-xs">
+                {t('assist.usage.total', { parts: conversationTotal })}
+              </Text>
+            </div>
+          )}
         </div>
 
         {/* Sugerencias arriba del cuadro cuando la conversación está vacía */}
@@ -899,7 +1139,7 @@ export function AssistChat({ repoPath, viewId = 'graph' }: AssistChatProps): Rea
           repoPath={repoPath}
           targetLabel={targetLabel}
           targetChanged={targetHighlight}
-          onClearTarget={() => setIgnoredSelectionKey(currentTargetKey)}
+          onClearTarget={clearTarget}
           menuItems={menuItems}
         />
       </main>

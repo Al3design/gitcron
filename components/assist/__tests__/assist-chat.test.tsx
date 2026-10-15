@@ -451,6 +451,7 @@ describe('AssistChat component', () => {
           scope: 'execute',
           available: true,
           requiresConfirmation: true,
+          run: () => {},
         },
       ],
     }));
@@ -891,7 +892,9 @@ describe('AssistChat component', () => {
 
     // Encabezados en orden
     expect(screen.getByText('Fijadas')).toBeTruthy();
-    expect(screen.getByText('retomar-trabajo-con-asistencia-contextual')).toBeTruthy();
+    const changeHeader = screen.getByText('Retomar trabajo con asistencia contextual');
+    expect(changeHeader).toBeTruthy();
+    expect(changeHeader.getAttribute('title')).toBe('retomar-trabajo-con-asistencia-contextual');
     expect(screen.getByText('Generales')).toBeTruthy();
 
     // Archivadas plegadas: botón presente con cantidad, título de la conversación no está en DOM
@@ -986,5 +989,140 @@ describe('AssistChat component', () => {
       // list llamado inicialmente y luego para refrescar
       expect(api.list.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it('22. con una contribución que tiene una acción execute disponible, elegirla en el menú llama a su run una vez; una no disponible no la llama', async () => {
+    mountApi();
+    const availableRun = vi.fn();
+    const unavailableRun = vi.fn();
+
+    const unregister = assistContributions.register('action-run-view', () => ({
+      selection: { kind: 'none' },
+      actions: [
+        {
+          id: 'step-available',
+          labelKey: 'assist.send',
+          scope: 'execute',
+          available: true,
+          requiresConfirmation: true,
+          run: availableRun,
+        },
+        {
+          id: 'step-unavailable',
+          labelKey: 'assist.cancel',
+          scope: 'execute',
+          available: false,
+          unavailableReasonKey: 'assist.action.fixture',
+          requiresConfirmation: true,
+          run: unavailableRun,
+        },
+      ],
+    }));
+
+    try {
+      render(<AssistChat repoPath="/repo/a" viewId="action-run-view" />);
+
+      const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
+      fireEvent.click(menuBtn);
+
+      const availableItem = screen.getByRole('menuitem', { name: /Enviar/ });
+      fireEvent.click(availableItem);
+      expect(availableRun).toHaveBeenCalledTimes(1);
+
+      // Reabrir menú para probar el deshabilitado
+      fireEvent.click(menuBtn);
+      const unavailableItem = screen.getByRole('menuitem', { name: /Cancelar/ });
+      expect(unavailableItem.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(unavailableItem);
+      expect(unavailableRun).not.toHaveBeenCalled();
+    } finally {
+      unregister();
+    }
+  });
+
+  it('23. cargar una conversación no llama a ningún run', async () => {
+    const api = mountApi();
+    const actionRun = vi.fn();
+
+    const convs: AssistConversationSummary[] = [
+      {
+        id: 'conv-test-run',
+        title: 'Conversación existente',
+        viewId: 'test-run-view',
+        createdAt: '2026-10-15T10:00:00Z',
+        updatedAt: '2026-10-15T10:00:00Z',
+        messageCount: 1,
+        pinnedAt: null,
+        archivedAt: null,
+        changeId: null,
+      },
+    ];
+    api.list.mockResolvedValueOnce({ success: true, data: convs });
+    api.get.mockResolvedValueOnce({
+      success: true,
+      data: {
+        conversation: convs[0],
+        messages: [
+          {
+            id: 'm1',
+            seq: 1,
+            role: 'user',
+            text: 'hola',
+            providerName: null,
+            modelId: null,
+            createdAt: '2026-10-15T10:00:00Z',
+            references: [],
+            usage: null,
+          },
+        ],
+      },
+    });
+
+    const unregister = assistContributions.register('test-run-view', () => ({
+      selection: { kind: 'none' },
+      actions: [
+        {
+          id: 'step-exec',
+          labelKey: 'assist.send',
+          scope: 'execute',
+          available: true,
+          requiresConfirmation: true,
+          run: actionRun,
+        },
+      ],
+    }));
+
+    try {
+      render(<AssistChat repoPath="/repo/a" viewId="test-run-view" />);
+      const item = await screen.findByText('Conversación existente');
+      fireEvent.click(item);
+      await screen.findByText('hola');
+
+      expect(actionRun).not.toHaveBeenCalled();
+    } finally {
+      unregister();
+    }
+  });
+
+  it('24. con onOpenAiSettings, el ítem «Motores y modelos» la llama', () => {
+    mountApi();
+    const onOpenAiSettings = vi.fn();
+
+    render(
+      <AssistChat
+        repoPath="/repo/a"
+        viewId="test-view"
+        onOpenAiSettings={onOpenAiSettings}
+      />,
+    );
+
+    const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
+    fireEvent.click(menuBtn);
+
+    const settingsItem = screen.getByRole('menuitem', { name: 'Motores y modelos' });
+    expect(settingsItem).toBeTruthy();
+
+    fireEvent.click(settingsItem);
+    expect(onOpenAiSettings).toHaveBeenCalledTimes(1);
   });
 });
