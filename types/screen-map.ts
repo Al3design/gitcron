@@ -40,6 +40,8 @@ export interface ScreenFileLink {
 export interface ScreenDescription {
   text: string;
   source: 'manual' | 'ai';
+  /** Nombre corto sugerido en lenguaje llano (hasta 40 caracteres). */
+  suggestedName?: string;
   /** Para `ai`: los archivos en que se basó. Una sugerencia sin citas no se muestra. */
   citedFiles: string[];
   /** Para `ai`: modelo y fecha, como el resto de las respuestas de IA de la app. */

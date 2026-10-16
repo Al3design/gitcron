@@ -10,7 +10,8 @@ export type ContextSelection =
   | { kind: 'file'; path: string; at: 'worktree' | string; takenAtHead: string }
   | { kind: 'change'; changeId: string; taskId?: string }
   | { kind: 'temporal-idea'; runId: string; branchId: string }
-  | { kind: 'carto-node'; nodeId: string; takenAtHead: string };
+  | { kind: 'carto-node'; nodeId: string; takenAtHead: string }
+  | { kind: 'carto-screen'; screenId: string; screenName: string; takenAtHead: string };
 
 export interface CheckoutHead {
   sha: string;

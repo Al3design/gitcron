@@ -6,10 +6,12 @@
 
 import * as path from 'node:path';
 import { authorizedRepoRoot } from '../ipc/authorized-repos';
+import { getCachedScreenMap } from '../ipc/carto-screens';
 import { resolveContextReference } from './context-reference';
 import { resolveForUse } from '../ai/use-resolution';
 import { runTextUse, TextUseError } from '../ai/text-use';
 import type { ResolvedModelFor } from '../ai/config/resolve-model-for';
+import type { ScreenMap } from '../../types/screen-map';
 import {
   appendMessage,
   createConversation,
@@ -32,6 +34,7 @@ export interface AssistSendDeps {
   resolveModel(repoPath: string): ResolvedModelFor;
   runText: typeof runTextUse;
   db?: AssistDbOptions;
+  getCachedScreenMap?: (repoPath: string) => ScreenMap | null;
 }
 
 export const defaultAssistSendDeps: AssistSendDeps = {
@@ -39,6 +42,7 @@ export const defaultAssistSendDeps: AssistSendDeps = {
   resolveContext: resolveContextReference,
   resolveModel: (repoPath) => resolveForUse('gitcron-assist', repoPath),
   runText: runTextUse,
+  getCachedScreenMap: (repoPath) => getCachedScreenMap(repoPath),
 };
 
 /** El tope de caracteres del contexto de conversación que se manda. */
@@ -76,7 +80,13 @@ function validateArgs(args: AssistSendArgs): string | null {
   return null;
 }
 
-function describeSelection(selection: ContextSelection, status: string, reason?: string): string {
+function describeSelection(
+  selection: ContextSelection,
+  status: string,
+  reason?: string,
+  root?: string,
+  deps?: AssistSendDeps,
+): string {
   let desc = '';
   switch (selection.kind) {
     case 'none':
@@ -97,6 +107,19 @@ function describeSelection(selection: ContextSelection, status: string, reason?:
     case 'carto-node':
       desc = `Nodo de cartografía seleccionado: ${selection.nodeId}`;
       break;
+    case 'carto-screen': {
+      desc = `Pantalla de la app seleccionada: «${selection.screenName}» (${selection.screenId})`;
+      const screenMap = root && deps?.getCachedScreenMap ? deps.getCachedScreenMap(root) : null;
+      if (screenMap) {
+        const screen = screenMap.screens.find((s) => s.id === selection.screenId);
+        if (screen && screen.files && screen.files.length > 0) {
+          const files = screen.files.slice(0, 40);
+          const fileLines = files.map((f) => `  - [${f.role}] ${f.path}${f.shared ? ' (compartido)' : ''}`);
+          desc += `\nArchivos de la pantalla:\n${fileLines.join('\n')}`;
+        }
+      }
+      break;
+    }
   }
   if (status === 'stale' && reason) {
     desc += ` (obsoleta: ${reason})`;
@@ -128,13 +151,14 @@ function buildPrompts(
   reason: string | undefined,
   previousMessages: AssistMessage[],
   question: string,
+  deps?: AssistSendDeps,
 ): { system: string; user: string } {
   const system =
     'Sos el asistente de GitCron para este repositorio. Respondés en el idioma de la pregunta. No ejecutás nada ni modificás el repositorio (solo explicás y proponés). Si la referencia de contexto está obsoleta, mencionalo explícitamente.';
 
   const branchLabel = head.branch ?? 'HEAD separado';
   // Sólo el nombre del repo: la ruta del disco de la persona no le sirve al modelo y puede ser un servicio externo.
-  const header = `Repositorio: ${path.basename(root)} · Rama: ${branchLabel} · HEAD: ${head.sha}\n${describeSelection(selection, status, reason)}`;
+  const header = `Repositorio: ${path.basename(root)} · Rama: ${branchLabel} · HEAD: ${head.sha}\n${describeSelection(selection, status, reason, root, deps)}`;
   const historyText = previousMessages.length > 0 ? formatHistory(previousMessages, ASSIST_HISTORY_CHAR_BUDGET) : '';
   const user = [header, historyText, `Pregunta: ${question}`].filter(Boolean).join('\n\n');
 
@@ -359,6 +383,7 @@ export async function sendAssistMessage(
     staleReason,
     previousMessages,
     trimmedQuestion,
+    deps,
   );
 
   const controller = new AbortController();

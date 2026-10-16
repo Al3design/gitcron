@@ -675,4 +675,80 @@ describe('assist-send module', () => {
     expect(res.answer.usage!.completionTokens).toBeNull();
     expect(res.answer.usage!.reasoningTokens).toBeNull();
   });
+
+  it('formatea referencia carto-screen con nombre y lista de hasta 40 archivos si el mapa está en caché', async () => {
+    let capturedReq: TextUseRequest | null = null;
+    const deps = createMockDeps({
+      resolveContext: async () => ({
+        status: 'ok',
+        checkoutPath: repoA,
+        head: { sha: '1234567890abcdef', branch: 'main' },
+        selection: {
+          kind: 'carto-screen',
+          screenId: 'screen-dashboard',
+          screenName: 'Panel principal',
+          takenAtHead: '1234567890abcdef',
+        },
+      }),
+      getCachedScreenMap: () => ({
+        repoPath: repoA,
+        headSha: '1234567890abcdef',
+        detectors: ['next-app-router'],
+        screens: [
+          {
+            id: 'screen-dashboard',
+            kind: 'route',
+            name: 'Panel principal',
+            locator: '/dashboard',
+            declaredIn: 'app/dashboard/page.tsx',
+            description: null,
+            files: [
+              { path: 'app/dashboard/page.tsx', role: 'screen', provenance: 'static', shared: false },
+              { path: 'components/Header.tsx', role: 'component', provenance: 'static', shared: true },
+            ],
+          },
+        ],
+        coverage: { state: 'complete' },
+        readAt: '2026-10-16T12:00:00Z',
+      }),
+      runText: async (_model, req) => {
+        capturedReq = req;
+        return {
+          text: 'Explicación de la pantalla.',
+          finishReason: 'stop',
+          usage: null,
+          label: 'LM Studio · qwen-2.5',
+          providerId: 'lmstudio',
+          modelId: 'qwen-2.5',
+        };
+      },
+    });
+
+    const res = await sendAssistMessage(
+      {
+        repoPath: repoA,
+        requestId: 'req-screen-1',
+        conversationId: null,
+        viewId: 'cartography',
+        question: '¿Qué hace esta pantalla?',
+        selection: {
+          kind: 'carto-screen',
+          screenId: 'screen-dashboard',
+          screenName: 'Panel principal',
+          takenAtHead: '1234567890abcdef',
+        },
+      },
+      deps,
+    );
+
+    expect(res.status).toBe('answered');
+    expect(capturedReq).not.toBeNull();
+    // El destino va en el pedido del usuario (como los demás destinos), con el nombre y los archivos.
+    const sent = `${capturedReq!.system}
+${capturedReq!.user}`;
+    expect(sent).toContain('Pantalla de la app seleccionada: «Panel principal» (screen-dashboard)');
+    expect(sent).toContain('- [screen] app/dashboard/page.tsx');
+    expect(sent).toContain('- [component] components/Header.tsx (compartido)');
+  });
 });
+

@@ -146,7 +146,7 @@ function entryFor(
   }
   // Definido en el mismo archivo (en RepoMainView, HistoryTabView y CommitWorkspaceView).
   if (new RegExp(`(?:function|const|let|class)\\s+${componentName}\\b`).test(text)) {
-    return [{ path: normPath, provenance: 'static', role: 'screen' }];
+    return [{ path: normPath, provenance: 'static', role: 'screen', symbol: componentName }];
   }
   return [{ path: componentName, provenance: 'unknown', role: 'screen' }];
 }

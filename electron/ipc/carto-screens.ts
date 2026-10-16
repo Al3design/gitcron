@@ -10,7 +10,11 @@ import { simpleGit } from 'simple-git';
 import { withRepoLock } from '../git/repo-queue';
 import { authorizedRepoRoot, isContainedWithin } from './authorized-repos';
 import { scanRepoFilePaths } from '../carto/repo-files';
-import { graphFileDependencies } from '../carto/graph-engine';
+import {
+  getGraphStatus,
+  graphFileDependencies,
+  graphSymbolFileDependencies,
+} from '../carto/graph-engine';
 import { buildScreenMap, type ScreenMapDeps } from '../carto/screen-map/build';
 import { describeScreen, type DescribeScreenDeps } from '../ai/carto/describe-screen';
 import { resolveForUse } from '../ai/use-resolution';
@@ -31,7 +35,34 @@ function fail<T>(error: unknown): Result<T> {
 
 const MAX_READ_BYTES = 400 * 1024; // 400 KB
 
-function createScreenMapDeps(root: string): ScreenMapDeps {
+interface CachedMapEntry {
+  headSha: string | null;
+  indexKey: string;
+  map: ScreenMap;
+}
+
+const mapCache = new Map<string, CachedMapEntry>();
+
+/** Exponé el mapa en caché de un repositorio; null si no está en memoria o no está autorizado. */
+export function getCachedScreenMap(repoPath: string): ScreenMap | null {
+  const root = authorizedRepoRoot(repoPath);
+  if (!root) return null;
+  return mapCache.get(root)?.map ?? null;
+}
+
+export function clearScreenMapCache(): void {
+  mapCache.clear();
+}
+
+function resolveIndexKey(root: string): string {
+  const status = getGraphStatus(root);
+  if (status.state !== 'ready' || !status.stats) {
+    return status.state;
+  }
+  return `${status.state}:${status.stats.files}:${status.stats.nodes}:${status.stats.edges}:${status.lastIndexedAt ?? ''}`;
+}
+
+export function createScreenMapDeps(root: string): ScreenMapDeps {
   return {
     async listFiles() {
       const scan = await scanRepoFilePaths(root);
@@ -51,6 +82,9 @@ function createScreenMapDeps(root: string): ScreenMapDeps {
     fileDependencies(relPath: string) {
       return graphFileDependencies(root, relPath);
     },
+    symbolDependencies(relPath: string, symbolName: string) {
+      return graphSymbolFileDependencies(root, relPath, symbolName);
+    },
     async headSha() {
       try {
         return await withRepoLock(root, async () => {
@@ -68,7 +102,11 @@ function createScreenMapDeps(root: string): ScreenMapDeps {
   };
 }
 
-export async function handleCartoScreensGet(payload: unknown): Promise<Result<ScreenMap>> {
+export async function handleCartoScreensGet(
+  payload: unknown,
+  injectedDeps?: ScreenMapDeps,
+  injectedBuilder: typeof buildScreenMap = buildScreenMap,
+): Promise<Result<ScreenMap>> {
   try {
     const candidatePath = typeof payload === 'string'
       ? payload
@@ -79,8 +117,17 @@ export async function handleCartoScreensGet(payload: unknown): Promise<Result<Sc
       return fail('Repositorio no autorizado');
     }
 
-    const deps = createScreenMapDeps(root);
-    const screenMap = await buildScreenMap(root, deps);
+    const deps = injectedDeps ?? createScreenMapDeps(root);
+    const headSha = await deps.headSha();
+    const indexKey = resolveIndexKey(root);
+
+    const cached = mapCache.get(root);
+    if (cached && cached.headSha === headSha && cached.indexKey === indexKey) {
+      return ok(cached.map);
+    }
+
+    const screenMap = await injectedBuilder(root, deps);
+    mapCache.set(root, { headSha, indexKey, map: screenMap });
     return ok(screenMap);
   } catch (error) {
     return fail(error);

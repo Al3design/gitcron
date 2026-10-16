@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildScreenMap, type ScreenMapDeps } from '../build';
 
 describe('buildScreenMap', () => {
@@ -25,6 +25,7 @@ describe('buildScreenMap', () => {
       fileDependencies(p) {
         return depsMap[p] ?? [];
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'abc1234';
       },
@@ -68,6 +69,7 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'sha1';
       },
@@ -114,6 +116,7 @@ describe('buildScreenMap', () => {
         if (p === 'app/page.tsx') return manyDeps;
         return [];
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'sha2';
       },
@@ -147,6 +150,7 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return null; // índice no listo
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'sha3';
       },
@@ -180,6 +184,7 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'sha4';
       },
@@ -211,6 +216,7 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
+      symbolDependencies() { return []; },
       async headSha() {
         return 'sha5';
       },
@@ -226,4 +232,100 @@ describe('buildScreenMap', () => {
       reason: 'unknown-stack',
     });
   });
+
+  // Cadena con la forma real que reconoce el detector (tres o más «if (…) return <Componente»).
+  const chainFile = `
+import { ViewA } from './ViewA';
+import { ViewB } from './ViewB';
+import { ViewC } from './ViewC';
+export function Tabs() {
+  if (tab === 'a') return <ViewA />;
+  if (tab === 'b') return <ViewB />;
+  if (tab === 'c') return <ViewC />;
+  return <ViewA />;
+}
+`;
+
+  it('con corte de cadena de vistas, una ruta que llega al archivo de la vista no arrastra los archivos de las vistas', async () => {
+    const files: Record<string, string> = {
+      'app/page.tsx': "import { Tabs } from '@/components/Tabs';",
+      'components/Tabs.tsx': chainFile,
+      'components/ViewA.tsx': 'export function ViewA() { return <div>A</div>; }',
+      'components/ViewB.tsx': 'export function ViewB() { return <div>B</div>; }',
+      'components/ViewC.tsx': 'export function ViewC() { return <div>C</div>; }',
+    };
+    const depsMap: Record<string, string[]> = {
+      'app/page.tsx': ['components/Tabs.tsx'],
+      'components/Tabs.tsx': ['components/ViewA.tsx', 'components/ViewB.tsx', 'components/ViewC.tsx'],
+    };
+    const deps: ScreenMapDeps = {
+      async listFiles() { return { paths: Object.keys(files), truncated: false }; },
+      async readFile(p) { return files[p] ?? null; },
+      fileDependencies(p) { return depsMap[p] ?? []; },
+      symbolDependencies() { return []; },
+      async headSha() { return 'sha-chain'; },
+      now() { return '2026-10-16T12:00:00.000Z'; },
+    };
+
+    const map = await buildScreenMap('/mock/repo', deps);
+    const route = map.screens.find((s) => s.kind === 'route')!;
+    const routeFiles = route.files.map((f) => f.path);
+    // La ruta llega al archivo de la cadena (lo lista) pero no entra: las vistas no son suyas.
+    expect(routeFiles).toContain('components/Tabs.tsx');
+    expect(routeFiles).not.toContain('components/ViewB.tsx');
+    expect(routeFiles).not.toContain('components/ViewC.tsx');
+    // Y cada vista se queda con lo suyo.
+    const viewB = map.screens.find((s) => s.name === 'B')!;
+    expect(viewB.files.map((f) => f.path)).toContain('components/ViewB.tsx');
+  });
+
+  it('vista en el mismo archivo usa symbolDependencies y si es null cae a fallback con cobertura partial', async () => {
+    const sameFile = `
+export function Screens(view: string) {
+  if (view === 'a') return <ScreenA />;
+  if (view === 'b') return <ScreenB />;
+  if (view === 'c') return <ScreenC />;
+  return <ScreenA />;
+}
+function ScreenA() { return <Uno />; }
+function ScreenB() { return <Dos />; }
+function ScreenC() { return <div />; }
+`;
+    const files: Record<string, string> = {
+      'components/Screens.tsx': sameFile,
+      'components/Uno.tsx': 'export function Uno() { return <div />; }',
+      'components/Dos.tsx': 'export function Dos() { return <div />; }',
+    };
+    const fileDeps: Record<string, string[]> = { 'components/Screens.tsx': ['components/Uno.tsx', 'components/Dos.tsx'] };
+    const symbolCalls = vi.fn((_file: string, symbol: string): string[] | null => {
+      if (symbol === 'ScreenA') return ['components/Uno.tsx'];
+      if (symbol === 'ScreenB') return ['components/Dos.tsx'];
+      return null; // ScreenC: el índice no lo encuentra
+    });
+    const deps: ScreenMapDeps = {
+      async listFiles() { return { paths: Object.keys(files), truncated: false }; },
+      async readFile(p) { return files[p] ?? null; },
+      fileDependencies(p) { return fileDeps[p] ?? []; },
+      symbolDependencies: symbolCalls,
+      async headSha() { return 'sha-same'; },
+      now() { return '2026-10-16T12:00:00.000Z'; },
+    };
+
+    const map = await buildScreenMap('/mock/repo', deps);
+    const a = map.screens.find((s) => s.name === 'A')!;
+    const b = map.screens.find((s) => s.name === 'B')!;
+    const c = map.screens.find((s) => s.name === 'C')!;
+    // A y B toman lo que usa su componente, no todo el archivo.
+    expect(a.files.map((f) => f.path)).toContain('components/Uno.tsx');
+    expect(a.files.map((f) => f.path)).not.toContain('components/Dos.tsx');
+    expect(b.files.map((f) => f.path)).toContain('components/Dos.tsx');
+    expect(b.files.map((f) => f.path)).not.toContain('components/Uno.tsx');
+    // C cae al archivo entero y la cobertura lo dice.
+    expect(c.files.map((f) => f.path)).toEqual(expect.arrayContaining(['components/Uno.tsx', 'components/Dos.tsx']));
+    expect(map.coverage.state).toBe('partial');
+    if (map.coverage.state === 'partial') {
+      expect(map.coverage.errors).toContain('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
+    }
+  });
 });
+

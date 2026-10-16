@@ -40,6 +40,8 @@ type PersonaMode = 'simple' | 'technical';
 
 const PERSONA_MODE_STORAGE_KEY = 'gitcron:cartographyPersonaMode';
 
+import type { ScreenEntry } from '@/types/screen-map';
+
 export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   const t = useT();
 
@@ -49,6 +51,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // Símbolo elegido dentro del archivo → su explicación IA + impacto. Al cambiar
   // de archivo se limpia (los símbolos son de otro archivo).
   const [selectedNode, setSelectedNode] = useState<CartoNode | null>(null);
+  const [selectedScreen, setSelectedScreen] = useState<{ id: string; name: string } | null>(null);
   const selectedAtHeadRef = useRef<string | null>(null);
 
   const handleSelectNode = useCallback((node: CartoNode | null) => {
@@ -61,9 +64,19 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
     }
   }, []);
 
+  const handleSelectScreen = useCallback((screen: ScreenEntry | null) => {
+    if (screen) {
+      setSelectedScreen({ id: screen.id, name: screen.description?.suggestedName || screen.name });
+      const gitState = useGitStore.getState();
+      selectedAtHeadRef.current = headShaOf(gitState.commits, gitState.currentBranch);
+    } else {
+      setSelectedScreen(null);
+    }
+  }, []);
+
   // El viewId es el que calcula app/page.tsx para Cartografía: 'carto'.
   useAssistContribution('carto', () =>
-    cartoContribution(selectedNode?.id ?? null, selectedAtHeadRef.current)
+    cartoContribution(selectedNode?.id ?? null, selectedAtHeadRef.current, selectedScreen)
   );
   // Estado del índice del repo (idle/indexing/ready/error), gobernado por main.
   const [graphStatus, setGraphStatus] = useState<CartoGraphStatus | null>(null);
@@ -110,6 +123,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // al re-sync del watch para mantener fresco el estado y las relaciones.
   useEffect(() => {
     handleSelectNode(null);
+    handleSelectScreen(null);
     setGraphStatus(null);
     if (!repoPath) return;
 
@@ -217,7 +231,11 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                 detail={t('cartography.emptyHint')}
               />
             ) : personaMode === 'simple' ? (
-              <ScreenCatalog repoPath={repoPath} refreshKey={graphRefresh} />
+              <ScreenCatalog
+                repoPath={repoPath}
+                refreshKey={graphRefresh}
+                onSelectScreen={handleSelectScreen}
+              />
             ) : (
               <div className={styles.lensContent}>
                 <CartoPanoramaHeader repoPath={repoPath} status={graphStatus} refreshKey={graphRefresh} />

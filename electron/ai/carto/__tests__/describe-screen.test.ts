@@ -222,4 +222,49 @@ describe('describeScreen', () => {
     });
     expect(deps.runText).not.toHaveBeenCalled();
   });
+
+  it('valida name (<= 40 caracteres) y lo guarda en suggestedName', async () => {
+    const deps = createMockDeps({
+      runText: vi.fn().mockResolvedValue({
+        text: JSON.stringify({
+          name: 'Pantalla de Bienvenida',
+          text: 'Esta pantalla muestra la página de inicio con bienvenida.',
+          citedFiles: ['app/page.tsx'],
+        }),
+        modelId: 'test-model',
+        providerId: 'test-p',
+      }),
+    });
+
+    const res = await describeScreen(
+      { repoPath: '/mock/repo', screenId: 'screen-main', language: 'es' },
+      deps,
+    );
+
+    expect(res?.status).toBe('ok');
+    if (res?.status === 'ok') {
+      expect(res.description.suggestedName).toBe('Pantalla de Bienvenida');
+    }
+    // El nombre se guarda dentro de la explicación de la caché, junto con el texto y las citas.
+    expect(deps.cache.put).toHaveBeenCalledWith(
+      expect.objectContaining({ explanation: expect.stringContaining('"name":"Pantalla de Bienvenida"') }),
+    );
+  });
+
+  it('un nombre que no sirve no tira la explicación: se muestra sin nombre sugerido', async () => {
+    const deps = createMockDeps({
+      runText: vi.fn().mockResolvedValue({
+        text: JSON.stringify({ name: 'x'.repeat(60), text: 'Muestra la página de inicio.', citedFiles: ['app/page.tsx'] }),
+        modelId: 'test-model',
+        providerId: 'test-p',
+      }),
+    });
+    const res = await describeScreen({ repoPath: '/mock/repo', screenId: 'screen-main', language: 'es' }, deps);
+    expect(res?.status).toBe('ok');
+    if (res?.status === 'ok') {
+      expect(res.description.text).toBe('Muestra la página de inicio.');
+      expect(res.description.suggestedName).toBeUndefined();
+    }
+  });
 });
+

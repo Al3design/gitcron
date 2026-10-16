@@ -95,7 +95,7 @@ function GraphTabView(props: any) {
     expect(graph.locator).toBe('default');
     expect(graph.id).toBe('view:components/RepoMainView.tsx#default');
     expect(graph.entryFiles).toEqual([
-      { path: 'components/RepoMainView.tsx', provenance: 'static', role: 'screen' },
+      { path: 'components/RepoMainView.tsx', provenance: 'static', role: 'screen', symbol: 'GraphTabView' },
     ]);
   });
 
@@ -130,7 +130,7 @@ export function Main() {
     // La de omisión repite NewChangeStartScreen: no se agrega otra; tampoco «OtraCosa», de otra función.
     expect(sddScreens.map((s) => s.name)).toEqual(['In progress', 'Archived', 'New change']);
     // Los componentes del mismo archivo se resuelven a ese archivo.
-    expect(sddScreens[0].entryFiles).toEqual([{ path: 'components/StartScreens.tsx', provenance: 'static', role: 'screen' }]);
+    expect(sddScreens[0].entryFiles).toEqual([{ path: 'components/StartScreens.tsx', provenance: 'static', role: 'screen', symbol: 'InProgressStartScreen' }]);
     // Cada archivo tiene su propia vista por omisión, sin chocar ids.
     const ids = screens.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);

@@ -92,18 +92,23 @@ export async function describeScreen(
   const cached = deps.cache.get(cacheKey);
   if (cached) {
     try {
-      const parsed = JSON.parse(cached.explanation) as { text?: unknown; citedFiles?: unknown };
+      const parsed = JSON.parse(cached.explanation) as { name?: unknown; text?: unknown; citedFiles?: unknown };
       if (
         parsed &&
         typeof parsed.text === 'string' &&
         Array.isArray(parsed.citedFiles) &&
         parsed.citedFiles.every((c) => typeof c === 'string')
       ) {
+        const cachedName =
+          typeof parsed.name === 'string' && parsed.name.trim() && parsed.name.trim().length <= 40
+            ? parsed.name.trim()
+            : undefined;
         return {
           status: 'ok',
           description: {
             text: parsed.text,
             source: 'ai',
+            suggestedName: cachedName,
             citedFiles: parsed.citedFiles,
             model: cached.model ?? cached.provider,
             createdAt: cached.generatedAt,
@@ -138,11 +143,12 @@ export async function describeScreen(
   const system = [
     'Sos el asistente de arquitectura de software de GitCron.',
     `Idioma requerido: ${langNames[args.language]}.`,
-    'Explicá en una o dos frases para alguien que no programa qué hace esta pantalla para quien la usa (no cómo está hecha).',
+    'Explicá en una o dos frases para alguien que no programa qué hace esta pantalla para quien la usa (no cómo está hecha) y dale un nombre corto y claro (hasta 40 caracteres) en el idioma pedido (ejemplos: "Historial de cambios", "Ajustes").',
     'Basate exclusivamente en los archivos provistos.',
     'Respondé únicamente con un objeto JSON estricto sin bloques de código ni formato adicional markdown:',
-    '{"text": "...", "citedFiles": ["ruta/archivo1", ...]}',
+    '{"name": "...", "text": "...", "citedFiles": ["ruta/archivo1", ...]}',
     'Requisitos obligatorios:',
+    '- "name": nombre corto de hasta 40 caracteres, no vacío.',
     '- "text": texto explicativo no vacío de hasta 400 caracteres.',
     '- "citedFiles": arreglo no vacío con las rutas de los archivos de la pantalla en los que te basaste.',
   ].join('\n');
@@ -189,7 +195,15 @@ export async function describeScreen(
     return { status: 'unavailable', message: 'La IA no dio una explicación que se pueda comprobar.' };
   }
 
-  const { text, citedFiles } = parsed as { text?: unknown; citedFiles?: unknown };
+  const { name, text, citedFiles } = parsed as {
+    name?: unknown;
+    text?: unknown;
+    citedFiles?: unknown;
+  };
+
+  // El nombre es un extra: si falta o no sirve, la explicación se muestra igual, sin nombre sugerido.
+  const suggestedName =
+    typeof name === 'string' && name.trim() && name.trim().length <= 40 ? name.trim() : undefined;
 
   if (typeof text !== 'string' || !text.trim() || text.trim().length > MAX_TEXT_CHARS) {
     return { status: 'unavailable', message: 'La IA no dio una explicación que se pueda comprobar.' };
@@ -215,6 +229,7 @@ export async function describeScreen(
   const description: ScreenDescription = {
     text: text.trim(),
     source: 'ai',
+    ...(suggestedName ? { suggestedName } : {}),
     citedFiles: normCited,
     model: modelIdentifier,
     createdAt,
@@ -227,7 +242,11 @@ export async function describeScreen(
     lang: args.language,
     provider: 'ai',
     model: modelIdentifier,
-    explanation: JSON.stringify({ text: description.text, citedFiles: description.citedFiles }),
+    explanation: JSON.stringify({
+      name: description.suggestedName,
+      text: description.text,
+      citedFiles: description.citedFiles,
+    }),
     generatedAt: createdAt,
   });
 

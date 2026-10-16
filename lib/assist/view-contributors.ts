@@ -90,7 +90,32 @@ export function graphContribution(
 export function cartoContribution(
   nodeId: string | null,
   takenAtHead: string | null,
+  selectedScreen?: { id: string; name: string } | null,
 ): { selection: ContextSelection; actions: AssistAction[] } {
+  if (
+    selectedScreen &&
+    selectedScreen.id &&
+    selectedScreen.id.trim() !== '' &&
+    selectedScreen.id.length <= 200 &&
+    selectedScreen.name &&
+    selectedScreen.name.trim() !== '' &&
+    selectedScreen.name.length <= 200 &&
+    takenAtHead &&
+    SHA_REGEX.test(takenAtHead)
+  ) {
+    return {
+      selection: {
+        kind: 'carto-screen',
+        screenId: selectedScreen.id,
+        screenName: selectedScreen.name,
+        takenAtHead,
+      },
+      actions: [
+        createConsultAction('screen-explain', 'assist.ask.screenExplain'),
+      ],
+    };
+  }
+
   if (
     nodeId &&
     nodeId.trim() !== '' &&

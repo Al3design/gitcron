@@ -24,6 +24,7 @@ export interface ScreenMapDeps {
   listFiles(): Promise<{ paths: string[]; truncated: boolean }>;
   readFile(relPath: string): Promise<string | null>;
   fileDependencies(relPath: string): string[] | null; // null = índice no listo
+  symbolDependencies(relPath: string, symbolName: string): string[] | null;
   headSha(): Promise<string | null>;
   now(): string;
 }
@@ -86,7 +87,13 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   }
   const detectedScreens = Array.from(screensById.values());
 
+  // Archivos que declaran una cadena de vistas: el recorrido de otra pantalla no debe entrar en ellos
+  const viewChainFiles = new Set(
+    detectedScreens.filter((s) => s.kind === 'view').map((s) => s.declaredIn.replace(/\\/g, '/')),
+  );
+
   let indexNotReady = false;
+  let hasSymbolFallback = false;
   let totalExclusions = fileExclusionsCount;
   let totalUnresolved = 0;
 
@@ -95,6 +102,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   for (const ds of detectedScreens) {
     const fileLinksMap = new Map<string, ScreenFileLink>();
     let screenExclusions = 0;
+    const ownChain = ds.kind === 'view' ? ds.declaredIn.replace(/\\/g, '/') : null;
 
     // 1. Agregar entryFiles conservando su rol y procedencia
     const queue: { path: string; depth: number }[] = [];
@@ -114,7 +122,42 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
 
       if (entry.provenance === 'static') {
         visited.add(normEntryPath);
-        queue.push({ path: normEntryPath, depth: 0 });
+
+        if (entry.symbol) {
+          const symDeps = deps.symbolDependencies(normEntryPath, entry.symbol);
+          if (symDeps === null) {
+            hasSymbolFallback = true;
+            queue.push({ path: normEntryPath, depth: 0 });
+          } else {
+            for (const rawDep of symDeps) {
+              const depPath = rawDep.replace(/\\/g, '/');
+              if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
+                screenExclusions++;
+                continue;
+              }
+
+              if (!fileLinksMap.has(depPath)) {
+                fileLinksMap.set(depPath, {
+                  path: depPath,
+                  role: roleOf(depPath),
+                  provenance: 'static',
+                  shared: false,
+                });
+              }
+
+              if (!visited.has(depPath)) {
+                visited.add(depPath);
+                // Parada en las cadenas: no entrar en un archivo de otra cadena
+                const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
+                if (!isForeignChain && 1 < MAX_DEPTH) {
+                  queue.push({ path: depPath, depth: 1 });
+                }
+              }
+            }
+          }
+        } else {
+          queue.push({ path: normEntryPath, depth: 0 });
+        }
       }
     }
 
@@ -148,7 +191,9 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
 
         if (!visited.has(depPath)) {
           visited.add(depPath);
-          if (current.depth + 1 < MAX_DEPTH) {
+          // Parada en las cadenas: no entrar en un archivo que es declaredIn de una cadena de vistas, salvo la propia
+          const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
+          if (!isForeignChain && current.depth + 1 < MAX_DEPTH) {
             queue.push({ path: depPath, depth: current.depth + 1 });
           }
         }
@@ -217,25 +262,26 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   }
 
   // 5. Determinar la cobertura
+  const coverageErrors: string[] = [];
+  if (indexNotReady) {
+    coverageErrors.push('El índice de Cartografía todavía no está listo: faltan los archivos que usa cada pantalla.');
+  }
+  if (hasSymbolFallback) {
+    coverageErrors.push('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
+  }
+
   let coverage: ScreenMapCoverage;
   if (screens.length === 0) {
     const hasUI = normalizedPaths.some((p) => /\.(?:tsx|jsx|vue|svelte)$/i.test(p));
     coverage = hasUI
       ? { state: 'unsupported', reason: 'unknown-stack' }
       : { state: 'unsupported', reason: 'no-ui' };
-  } else if (indexNotReady) {
+  } else if (coverageErrors.length > 0 || totalUnresolved > 0 || totalExclusions > 0 || scan.truncated) {
     coverage = {
       state: 'partial',
       unresolved: totalUnresolved,
       excluded: totalExclusions,
-      errors: ['El índice de Cartografía todavía no está listo: faltan los archivos que usa cada pantalla.'],
-    };
-  } else if (totalUnresolved > 0 || totalExclusions > 0 || scan.truncated) {
-    coverage = {
-      state: 'partial',
-      unresolved: totalUnresolved,
-      excluded: totalExclusions,
-      errors: [],
+      errors: coverageErrors,
     };
   } else {
     coverage = { state: 'complete' };

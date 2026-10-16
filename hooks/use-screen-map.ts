@@ -57,5 +57,13 @@ export function useScreenMap(
 
   if (!repoPath) return { map: null, loading: false, error: null };
   const current = result?.key === requestKey ? result : null;
-  return { map: current?.map ?? null, loading: current === null, error: current?.error ?? null };
+  // Mientras se relee (el índice se actualiza con cada archivo que cambia), se sigue mostrando el
+  // mapa anterior del mismo repo: si se vaciara, se perdería la pantalla elegida y el chat se
+  // quedaría sin tema (lo vio el orquestador en carto-04).
+  const previous = !current && result?.key.startsWith(`${repoPath}#`) ? result : null;
+  return {
+    map: current?.map ?? previous?.map ?? null,
+    loading: current === null,
+    error: current?.error ?? null,
+  };
 }

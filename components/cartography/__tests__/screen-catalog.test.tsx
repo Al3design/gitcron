@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import React from 'react';
 import { ScreenCatalog } from '../ScreenCatalog';
 import type { ScreenMap } from '@/types/screen-map';
 import { useGitStore } from '@/lib/git-store';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
+import styles from '../ScreenCatalog.module.css';
 
 describe('ScreenCatalog', () => {
   const originalApi = window.api;
@@ -49,6 +51,7 @@ describe('ScreenCatalog', () => {
         description: {
           text: 'Tablero de especificaciones y tareas.',
           source: 'ai',
+          suggestedName: 'Especificaciones',
           citedFiles: ['components/sdd/Board.tsx'],
           model: 'gemini-3.8-flash',
           createdAt: '2026-10-16T12:00:00Z',
@@ -64,6 +67,7 @@ describe('ScreenCatalog', () => {
 
   beforeEach(() => {
     useGitStore.setState({ language: 'es' });
+    useAssistDockStore.setState({ open: false, activeTabId: 'chat', pendingPrompt: null });
     window.api = {
       ...(window.api || {}),
       cartoScreens: {
@@ -79,7 +83,7 @@ describe('ScreenCatalog', () => {
     vi.restoreAllMocks();
   });
 
-  it('un mapa con una ruta y dos vistas dibuja tres cuadros', async () => {
+  it('en la grilla los cuadros son compactos y no hay botón de explicar grande ni «Ver archivos»', async () => {
     render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
 
     await waitFor(() => {
@@ -88,12 +92,21 @@ describe('ScreenCatalog', () => {
       expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
     });
 
+    // Cuadro con suggestedName muestra el nombre sugerido
+    expect(screen.getByText('Especificaciones')).toBeTruthy();
     expect(screen.getByText('Ajustes')).toBeTruthy();
     expect(screen.getByText('Graph')).toBeTruthy();
-    expect(screen.getByText('SDD')).toBeTruthy();
+
+    // No hay botones de texto de "Explicar qué hace" ni "Ver archivos" en la grilla
+    expect(screen.queryByText('Ver archivos')).toBeNull();
+    expect(screen.queryByText('Explicar qué hace')).toBeNull();
+
+    // Los cuadros tienen su lugar de captura 16:10
+    const cards = screen.getAllByTestId('card-thumbnail');
+    expect(cards.length).toBe(3);
   });
 
-  it('un archivo compartido muestra la marca', async () => {
+  it('tocar un cuadro muestra el detalle y la columna con los demás', async () => {
     render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
 
     await waitFor(() => {
@@ -101,88 +114,113 @@ describe('ScreenCatalog', () => {
     });
 
     const card = screen.getByTestId('screen-card-route:/settings');
-    const toggleBtn = card.querySelector('[data-testid="toggle-files-button"]')!;
-    fireEvent.click(toggleBtn);
+    fireEvent.click(card);
 
     await waitFor(() => {
-      expect(card.querySelector('[data-testid="shared-badge"]')).toBeTruthy();
-      expect(card.querySelector('[data-testid="shared-badge"]')?.textContent).toBe('compartido');
+      expect(screen.getByTestId('screen-detail-route:/settings')).toBeTruthy();
+      expect(screen.getByTestId('screen-catalog-sidebar')).toBeTruthy();
     });
+
+    // En la columna derecha están los otros dos cuadros
+    expect(screen.getByTestId('sidebar-screen-view:graph')).toBeTruthy();
+    expect(screen.getByTestId('sidebar-screen-view:sdd')).toBeTruthy();
+    expect(screen.queryByTestId('sidebar-screen-route:/settings')).toBeNull();
   });
 
-  it('«Ver archivos» agrupa por rol con los nombres en castellano', async () => {
-    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
-    });
-
-    const card = screen.getByTestId('screen-card-view:sdd');
-    const toggleBtn = card.querySelector('[data-testid="toggle-files-button"]')!;
-    fireEvent.click(toggleBtn);
-
-    await waitFor(() => {
-      expect(card.querySelector('[data-testid="role-group-screen"]')).toBeTruthy();
-      expect(card.querySelector('[data-testid="role-group-logic"]')).toBeTruthy();
-      expect(card.querySelector('[data-testid="role-group-style"]')).toBeTruthy();
-    });
-
-    expect(card.textContent).toContain('Pantalla');
-    expect(card.textContent).toContain('Lógica');
-    expect(card.textContent).toContain('Estilos');
-  });
-
-  it('una descripción ai muestra «Sugerida por IA» y los citados', async () => {
-    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
-    });
-
-    const card = screen.getByTestId('screen-card-view:sdd');
-    expect(card.textContent).toContain('Tablero de especificaciones y tareas.');
-    expect(card.textContent).toContain('Sugerida por IA');
-    expect(card.textContent).toContain('Según:');
-    expect(card.textContent).toContain('Board.tsx');
-  });
-
-  it('sin descripción hay botón y al tocarlo llama a describe', async () => {
-    // Al aparecer, cada cuadro pregunta si hay una explicación guardada (cacheOnly): no hay.
-    // La respuesta preparada es para el pedido del botón.
-    (window.api.cartoScreens.describe as any).mockImplementation(async (args: { cacheOnly?: boolean }) => args.cacheOnly ? { success: true, data: null } : ({
-      success: true,
-      data: {
-        status: 'ok',
-        description: {
-          text: 'Configuración de la cuenta y preferencias de la aplicación.',
-          source: 'ai',
-          citedFiles: ['app/settings/page.tsx'],
-          model: 'test-model',
-          createdAt: '2026-10-16T12:00:00Z',
-        },
-      },
-    }));
-
+  it('la X y la tecla Escape vuelven a la grilla', async () => {
     render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
     });
 
-    const card = screen.getByTestId('screen-card-route:/settings');
-    const explainBtn = card.querySelector('[data-testid="explain-screen-button"]')!;
-    expect(explainBtn).toBeTruthy();
+    // 1. Abrir detalle
+    fireEvent.click(screen.getByTestId('screen-card-route:/settings'));
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-detail-route:/settings')).toBeTruthy();
+    });
 
-    fireEvent.click(explainBtn);
+    // 2. Cerrar con la X
+    fireEvent.click(screen.getByTestId('detail-close-button'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('screen-detail-route:/settings')).toBeNull();
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    // 3. Abrir detalle y cerrar con Escape
+    fireEvent.click(screen.getByTestId('screen-card-route:/settings'));
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-detail-route:/settings')).toBeTruthy();
+    });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('screen-detail-route:/settings')).toBeNull();
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+  });
+
+  it('el ícono de IA no expande el cuadro, publica la pantalla y abre el panel de asistencia', async () => {
+    const onSelectScreenSpy = vi.fn();
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} onSelectScreen={onSelectScreenSpy} />);
 
     await waitFor(() => {
-      expect(window.api.cartoScreens.describe).toHaveBeenCalledWith({
-        repoPath: '/mock/repo',
-        screenId: 'route:/settings',
-        language: 'es',
-      });
-      expect(card.textContent).toContain('Configuración de la cuenta y preferencias de la aplicación.');
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
     });
+
+    const card = screen.getByTestId('screen-card-route:/settings');
+    const aiBtn = card.querySelector('[data-testid="explain-screen-button"]')!;
+    expect(aiBtn).toBeTruthy();
+
+    fireEvent.click(aiBtn);
+
+    // No expandió al detalle (sigue la grilla)
+    expect(screen.queryByTestId('screen-detail-route:/settings')).toBeNull();
+    expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+
+    // Notificó la pantalla seleccionada
+    expect(onSelectScreenSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'route:/settings' }),
+    );
+
+    // Abrió el panel y configuró el chat
+    const dockState = useAssistDockStore.getState();
+    expect(dockState.open).toBe(true);
+    expect(dockState.activeTabId).toBe('chat');
+    expect(dockState.pendingPrompt).toBe('¿Qué hace esta pantalla y para qué sirve?');
+  });
+
+  it('detalle: el control por rol muestra solo los roles con archivos y la lista tiene su propio contenedor con desplazamiento', async () => {
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
+    });
+
+    // Abrir SDD (tiene archivos con roles 'screen', 'logic', 'style')
+    fireEvent.click(screen.getByTestId('screen-card-view:sdd'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-detail-view:sdd')).toBeTruthy();
+    });
+
+    // Control segmentado muestra solo los 3 roles existentes
+    expect(screen.getByTestId('role-tab-screen')).toBeTruthy();
+    expect(screen.getByTestId('role-tab-logic')).toBeTruthy();
+    expect(screen.getByTestId('role-tab-style')).toBeTruthy();
+    expect(screen.queryByTestId('role-tab-component')).toBeNull();
+    expect(screen.queryByTestId('role-tab-data')).toBeNull();
+
+    // Contenedor de la lista tiene la clase filesScrollContainer
+    const scrollContainer = screen.getByTestId('screen-detail-files-list');
+    expect(scrollContainer.className).toContain(styles.filesScrollContainer);
+
+    // Cambiar de rol actualiza los archivos listados
+    // (Board.tsx también figura entre los citados de la explicación: se busca en la lista.)
+    expect(within(scrollContainer).getByText('Board.tsx')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('role-tab-logic'));
+    expect(within(screen.getByTestId('screen-detail-files-list')).getByText('sdd-store.ts')).toBeTruthy();
+    expect(within(screen.getByTestId('screen-detail-files-list')).queryByText('Board.tsx')).toBeNull();
   });
 
   it('cobertura no-ui muestra el aviso y ningún cuadro', async () => {
@@ -204,33 +242,5 @@ describe('ScreenCatalog', () => {
     expect(screen.getByText('Este proyecto no tiene pantallas: es una biblioteca o un servicio.')).toBeTruthy();
     expect(screen.queryByTestId('screen-catalog-grid')).toBeNull();
     expect(screen.queryByTestId('screen-card-route:/settings')).toBeNull();
-  });
-
-  it('un error de describe va a setError', async () => {
-    const setErrorSpy = vi.spyOn(useGitStore.getState(), 'setError');
-
-    // Al aparecer, cada cuadro pregunta si hay una explicación guardada (cacheOnly): no hay.
-    // La respuesta preparada es para el pedido del botón.
-    (window.api.cartoScreens.describe as any).mockImplementation(async (args: { cacheOnly?: boolean }) => args.cacheOnly ? { success: true, data: null } : ({
-      success: true,
-      data: {
-        status: 'unavailable',
-        message: 'El modelo elegido no está disponible ahora.',
-      },
-    }));
-
-    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
-    });
-
-    const card = screen.getByTestId('screen-card-route:/settings');
-    const explainBtn = card.querySelector('[data-testid="explain-screen-button"]')!;
-    fireEvent.click(explainBtn);
-
-    await waitFor(() => {
-      expect(setErrorSpy).toHaveBeenCalledWith('El modelo elegido no está disponible ahora.');
-    });
   });
 });
