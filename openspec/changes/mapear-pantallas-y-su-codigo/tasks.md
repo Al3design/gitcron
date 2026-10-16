@@ -4,7 +4,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 1. Modelo
 
-- [ ] 1.1 **Orquestador/auditor:** Definir contrato pantalla/función y asociación muchos-a-muchos con evidencia. **Comprobación:** Incluye archivos compartidos, estados sin URL y procedencia manual/estática/inferida/desconocida.
+- [x] 1.1 **Orquestador/auditor:** Definir contrato pantalla/función y asociación muchos-a-muchos con evidencia. **Comprobación:** Incluye archivos compartidos, estados sin URL y procedencia manual/estática/inferida/desconocida.
 - [ ] 1.2 **IA local:** Agregar extractor de rutas Next/React sin ejecutar el repo. **Comprobación:** Fixture de rutas/layouts demuestra archivos propios y compartidos; import dinámico no resuelto queda desconocido.
 - [ ] 1.3 **IA local:** Agregar detección de vistas por switches de GitCron. **Comprobación:** Reconoce Graph, SDD y Cartografía como vistas aunque no tengan URL propia.
 - [ ] 1.4 **IA local:** Unir asociaciones con relaciones del grafo y niveles de cobertura. **Comprobación:** Ausencia de aristas no se interpreta como ausencia de dependencias.
