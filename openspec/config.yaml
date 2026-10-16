@@ -102,10 +102,15 @@ operations:
         volver a pedir autorización. Las instrucciones actuales del usuario prevalecen
         sobre un prompt histórico: ante contradicciones, identificar la fuente concreta.
       - >-
-        Una tanda se verifica con `pnpm verificar`, que corre sólo lo que depende de los
-        archivos tocados (pruebas relacionadas, tsc, eslint, openspec validate). Se usa
-        mientras se trabaja y para cerrar la tanda, y es la que tiene que estar en verde
-        antes del commit. La verificación completa (`pnpm verificar --completa`) se corre
+        Desde el 2026-10-16 (decisión de Alejandro) ni la ejecutora ni el orquestador
+        verifican tanda por tanda: el orquestador audita leyendo el diff y lo comitea, y la
+        verificación se corre una vez, al final del cambio, cuando se terminaron todas sus
+        tareas, y antes de archivarlo o fusionarlo. Sólo un prompt que lo pida
+        explícitamente hace verificar a la ejecutora, y entonces sólo ese comando, una vez.
+        Hasta ese día cada tanda corría `pnpm verificar` y la ejecutora lo repetía entero
+        ante cada fallo: vueltas de 10 minutos con la máquina cargada. `pnpm verificar` (lo
+        tocado: pruebas relacionadas, tsc, eslint, openspec validate) queda para cuando se
+        pida. La verificación completa (`pnpm verificar --completa`) se corre
         cuando se juntaron varias tandas, antes de fusionar a main; `--todo`, con build y la
         suite entera dos veces, antes de sacar versión. La IA ejecutora no corre la completa
         para cerrar una tanda. El 2026-10-09 una tanda tardó más de 30 minutos de reloj
