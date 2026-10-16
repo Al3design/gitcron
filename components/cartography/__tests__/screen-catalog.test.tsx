@@ -243,4 +243,32 @@ describe('ScreenCatalog', () => {
     expect(screen.queryByTestId('screen-catalog-grid')).toBeNull();
     expect(screen.queryByTestId('screen-card-route:/settings')).toBeNull();
   });
+
+  it('el control de tamaño cambia la clase de la grilla y lo recuerda; en Mínimo no se ve la línea de archivos', async () => {
+    localStorage.clear();
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-catalog-grid')).toBeTruthy();
+    });
+
+    const grid = screen.getByTestId('screen-catalog-grid');
+    // Por omisión, Mediano
+    expect(grid.className).toContain(styles.grid_medium);
+
+    // Cambiar a Grande
+    const largeBtn = screen.getByTestId('card-size-large');
+    fireEvent.click(largeBtn);
+    expect(grid.className).toContain(styles.grid_large);
+    expect(localStorage.getItem('gitcron:cartoCardSize')).toBe('large');
+
+    // Cambiar a Mínimo
+    const minimalBtn = screen.getByTestId('card-size-minimal');
+    fireEvent.click(minimalBtn);
+    expect(grid.className).toContain(styles.grid_minimal);
+    expect(localStorage.getItem('gitcron:cartoCardSize')).toBe('minimal');
+
+    // En Mínimo no se ve la línea de archivos
+    expect(screen.queryByTestId('screen-file-counts')).toBeNull();
+  });
 });

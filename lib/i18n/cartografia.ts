@@ -89,6 +89,11 @@ export const es: Record<string, string> = {
   'cartography.screens.role.other': 'Otros',
   'cartography.screens.loading': 'Leyendo pantallas del proyecto…',
   'cartography.screens.empty': 'No se encontraron pantallas en este proyecto.',
+  'cartography.screens.size': 'Tamaño',
+  'cartography.screens.sizeLarge': 'Grande',
+  'cartography.screens.sizeMedium': 'Mediano',
+  'cartography.screens.sizeSmall': 'Chico',
+  'cartography.screens.sizeMinimal': 'Mínimo',
 };
 
 export const en: Record<string, string> = {
@@ -179,6 +184,11 @@ export const en: Record<string, string> = {
   'cartography.screens.role.other': 'Other',
   'cartography.screens.loading': 'Reading project screens…',
   'cartography.screens.empty': 'No screens found in this project.',
+  'cartography.screens.size': 'Size',
+  'cartography.screens.sizeLarge': 'Large',
+  'cartography.screens.sizeMedium': 'Medium',
+  'cartography.screens.sizeSmall': 'Small',
+  'cartography.screens.sizeMinimal': 'Minimal',
 };
 
 export const zh: Record<string, string> = {
@@ -269,4 +279,9 @@ export const zh: Record<string, string> = {
   'cartography.screens.role.other': '其他',
   'cartography.screens.loading': '正在读取项目屏幕…',
   'cartography.screens.empty': '此项目中未找到屏幕。',
+  'cartography.screens.size': '尺寸',
+  'cartography.screens.sizeLarge': '大',
+  'cartography.screens.sizeMedium': '中',
+  'cartography.screens.sizeSmall': '小',
+  'cartography.screens.sizeMinimal': '最小',
 };

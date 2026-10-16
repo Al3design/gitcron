@@ -20,11 +20,86 @@
   line-height: 1.4;
 }
 
+.catalogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.segmentedControl {
+  background: color-mix(in srgb, var(--color-bg-base) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  padding: var(--space-1);
+  margin-left: auto;
+}
+
+.segmentedBtn {
+  position: relative;
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  gap: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmentedBtn:hover:not(.segmentedBtnActive) {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.segmentedBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.segmentedBtnActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--space-4);
   align-items: start;
+}
+
+.grid_large {
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+}
+
+.grid_medium {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+.grid_small {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.grid_minimal {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.grid_minimal .cardSubtitle,
+.grid_minimal .cardFiles {
+  display: none;
 }
 
 /* ── Cuadro compacto en grilla ── */
@@ -43,7 +118,7 @@
 }
 
 .card:hover {
-  border-color: var(--color-border-default);
+  border-color: var(--color-border-subtle);
 }
 
 .card:focus-visible {
@@ -365,7 +440,7 @@
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-bg-base) 40%, transparent);
 }
 
 .filesScrollContainer {
@@ -467,7 +542,7 @@
 
 .sidebarCard:hover {
   background: var(--color-bg-surface);
-  border-color: var(--color-border-default);
+  border-color: var(--color-border-subtle);
 }
 
 .sidebarCard:focus-visible {

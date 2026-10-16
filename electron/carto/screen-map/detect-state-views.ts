@@ -103,7 +103,7 @@ function resolveImportPath(
   declaringFile: string,
   source: string,
   knownPathsSet: Set<string>,
-): string {
+): string | null {
   let base: string;
   const declDir = path.posix.dirname(declaringFile.replace(/\\/g, '/'));
 
@@ -112,7 +112,8 @@ function resolveImportPath(
   } else if (source.startsWith('./') || source.startsWith('../')) {
     base = path.posix.normalize(path.posix.join(declDir, source));
   } else {
-    base = source;
+    // Un paquete externo (lucide-react, react…): no es un archivo del proyecto.
+    return null;
   }
 
   // Si ya tiene extensión reconocida
@@ -132,6 +133,76 @@ function resolveImportPath(
   return `${base}.tsx`;
 }
 
+/**
+ * Para un componente definido en el mismo archivo, busca su cuerpo y extrae
+ * los archivos que usa según las etiquetas JSX que dibuja (<Componente />).
+ */
+function extractUsedFilesInComponent(
+  componentName: string,
+  normPath: string,
+  text: string,
+  importSourceByComponent: Map<string, string>,
+  knownPathsSet: Set<string>,
+  visited: Set<string> = new Set(),
+): string[] {
+  if (visited.has(componentName)) return [];
+  visited.add(componentName);
+
+  // Buscar desde `function Nombre(` o `const Nombre =`
+  const defRe = new RegExp(`(?:function\\s+${componentName}\\s*\\(|const\\s+${componentName}\\s*=)`);
+  const match = defRe.exec(text);
+  if (!match) return [];
+
+  // El cuerpo termina en la primera llave de cierre AL PRINCIPIO de una línea: una llave con
+  // sangría es de un bloque interno (cortar ahí perdía casi todo el componente; lo midió el
+  // orquestador sobre Graph en carto-05a).
+  const afterMatch = text.slice(match.index);
+  const lines = afterMatch.split(/\r?\n/);
+  const bodyLines: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    bodyLines.push(lines[i]);
+    // Solo una llave sola (o con «;»): `}: Props) {` al principio de línea cierra los parámetros, no la función.
+    if (i > 0 && /^\}\s*;?\s*$/.test(lines[i])) break;
+  }
+
+  const body = bodyLines.join('\n');
+  const jsxTagRe = /<([A-Z][a-zA-Z0-9_]*)/g;
+  let tagMatch: RegExpExecArray | null;
+  const seenTags = new Set<string>();
+  const usedFiles: string[] = [];
+  const seenFiles = new Set<string>();
+
+  while ((tagMatch = jsxTagRe.exec(body)) !== null) {
+    const tagName = tagMatch[1];
+    if (seenTags.has(tagName)) continue;
+    seenTags.add(tagName);
+
+    // Definido en el mismo archivo: se sigue adentro (Graph dibuja vistas que viven en RepoMainView).
+    if (new RegExp(`(?:function|const|let|class)\\s+${tagName}\\b`).test(text)) {
+      const inner = extractUsedFilesInComponent(tagName, normPath, text, importSourceByComponent, knownPathsSet, visited);
+      for (const f of inner) {
+        if (!seenFiles.has(f)) {
+          seenFiles.add(f);
+          usedFiles.push(f);
+        }
+      }
+      continue;
+    }
+
+    // Se resuelve con los imports del archivo (los paquetes externos no cuentan).
+    const impSource = importSourceByComponent.get(tagName);
+    if (impSource) {
+      const resolved = resolveImportPath(normPath, impSource, knownPathsSet);
+      if (resolved && !seenFiles.has(resolved)) {
+        seenFiles.add(resolved);
+        usedFiles.push(resolved);
+      }
+    }
+  }
+
+  return usedFiles;
+}
+
 /** Archivo de un componente: por su import, o el mismo archivo si se define ahí; si no, desconocido. */
 function entryFor(
   componentName: string,
@@ -142,11 +213,28 @@ function entryFor(
 ): DetectedScreen['entryFiles'] {
   const impSource = importSourceByComponent.get(componentName);
   if (impSource) {
-    return [{ path: resolveImportPath(normPath, impSource, knownPathsSet), provenance: 'static', role: 'screen' }];
+    const resolved = resolveImportPath(normPath, impSource, knownPathsSet);
+    // Un componente de un paquete externo no es un archivo del proyecto.
+    return resolved
+      ? [{ path: resolved, provenance: 'static', role: 'screen' }]
+      : [{ path: componentName, provenance: 'unknown', role: 'screen' }];
   }
   // Definido en el mismo archivo (en RepoMainView, HistoryTabView y CommitWorkspaceView).
   if (new RegExp(`(?:function|const|let|class)\\s+${componentName}\\b`).test(text)) {
-    return [{ path: normPath, provenance: 'static', role: 'screen', symbol: componentName }];
+    const usedFiles = extractUsedFilesInComponent(
+      componentName,
+      normPath,
+      text,
+      importSourceByComponent,
+      knownPathsSet,
+    );
+    return [{
+      path: normPath,
+      provenance: 'static',
+      role: 'screen',
+      symbol: componentName,
+      usedFiles,
+    }];
   }
   return [{ path: componentName, provenance: 'unknown', role: 'screen' }];
 }

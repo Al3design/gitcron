@@ -13,7 +13,6 @@ import { scanRepoFilePaths } from '../carto/repo-files';
 import {
   getGraphStatus,
   graphFileDependencies,
-  graphSymbolFileDependencies,
 } from '../carto/graph-engine';
 import { buildScreenMap, type ScreenMapDeps } from '../carto/screen-map/build';
 import { describeScreen, type DescribeScreenDeps } from '../ai/carto/describe-screen';
@@ -81,9 +80,6 @@ export function createScreenMapDeps(root: string): ScreenMapDeps {
     },
     fileDependencies(relPath: string) {
       return graphFileDependencies(root, relPath);
-    },
-    symbolDependencies(relPath: string, symbolName: string) {
-      return graphSymbolFileDependencies(root, relPath, symbolName);
     },
     async headSha() {
       try {

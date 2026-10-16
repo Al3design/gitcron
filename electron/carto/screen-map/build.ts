@@ -24,7 +24,6 @@ export interface ScreenMapDeps {
   listFiles(): Promise<{ paths: string[]; truncated: boolean }>;
   readFile(relPath: string): Promise<string | null>;
   fileDependencies(relPath: string): string[] | null; // null = índice no listo
-  symbolDependencies(relPath: string, symbolName: string): string[] | null;
   headSha(): Promise<string | null>;
   now(): string;
 }
@@ -39,6 +38,23 @@ function isStaticStringLiteral(expression: string): boolean {
   if (/^"[^"]*"$/.test(trimmed)) return true;
   // Template literal sin interpolación (${...})
   if (/^`[^`$]*`$/.test(trimmed)) return true;
+  return false;
+}
+
+function isExcludedFileForScreen(filePath: string, screenEntryInElectron: boolean): boolean {
+  const norm = filePath.replace(/\\/g, '/');
+  // Archivos de prueba: __tests__/, .test., .spec., .e2e.
+  if (norm.includes('__tests__/') || /\.(?:test|spec|e2e)\.[^/]+$/.test(norm)) {
+    return true;
+  }
+  // scripts/
+  if (norm.startsWith('scripts/') || norm.includes('/scripts/')) {
+    return true;
+  }
+  // Proceso principal: si la entrada no está en electron/, nada de electron/
+  if (!screenEntryInElectron && (norm.startsWith('electron/') || norm.includes('/electron/'))) {
+    return true;
+  }
   return false;
 }
 
@@ -103,6 +119,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
     const fileLinksMap = new Map<string, ScreenFileLink>();
     let screenExclusions = 0;
     const ownChain = ds.kind === 'view' ? ds.declaredIn.replace(/\\/g, '/') : null;
+    const screenEntryInElectron = ds.entryFiles.some((e) => e.path.replace(/\\/g, '/').startsWith('electron/'));
 
     // 1. Agregar entryFiles conservando su rol y procedencia
     const queue: { path: string; depth: number }[] = [];
@@ -124,13 +141,16 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
         visited.add(normEntryPath);
 
         if (entry.symbol) {
-          const symDeps = deps.symbolDependencies(normEntryPath, entry.symbol);
-          if (symDeps === null) {
+          const usedFiles = entry.usedFiles ?? [];
+          if (usedFiles.length === 0) {
             hasSymbolFallback = true;
             queue.push({ path: normEntryPath, depth: 0 });
           } else {
-            for (const rawDep of symDeps) {
+            for (const rawDep of usedFiles) {
               const depPath = rawDep.replace(/\\/g, '/');
+              if (isExcludedFileForScreen(depPath, screenEntryInElectron)) {
+                continue;
+              }
               if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
                 screenExclusions++;
                 continue;
@@ -174,6 +194,9 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
 
       for (const rawDep of directDeps) {
         const depPath = rawDep.replace(/\\/g, '/');
+        if (isExcludedFileForScreen(depPath, screenEntryInElectron)) {
+          continue;
+        }
 
         if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
           screenExclusions++;
@@ -205,6 +228,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
     // 3. Inspeccionar imports dinámicos en los archivos alcanzados
     for (const link of Array.from(fileLinksMap.values())) {
       if (link.provenance === 'unknown') continue;
+      if (isExcludedFileForScreen(link.path, screenEntryInElectron)) continue;
 
       let fileText = fileContentCache.get(link.path);
       if (fileText === undefined) {

@@ -41,6 +41,7 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
       'components/pipeline/sdd/SddStartScreens.module.css',
       'components/pipeline/sdd/SddStatusBar.module.css',
       'components/pipeline/sdd/views/SddTasksView.module.css',
+      'components/ui/PixelCard.module.css',
       'components/ui/PlainList.module.css',
       'components/ui/Row.module.css',
       'components/ui/Stack.module.css',

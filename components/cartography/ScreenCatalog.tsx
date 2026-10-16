@@ -9,7 +9,7 @@
 // El ícono de IA publica la pantalla en el chat general y abre el panel de asistencia.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Monitor, PanelsTopLeft } from 'lucide-react';
+import { LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useScreenMap } from '@/hooks/use-screen-map';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
@@ -17,6 +17,36 @@ import type { ScreenEntry, ScreenMapCoverage } from '@/types/screen-map';
 import { ScreenCard } from './ScreenCard';
 import { ScreenDetail } from './ScreenDetail';
 import styles from './ScreenCatalog.module.css';
+
+export type CartoCardSize = 'large' | 'medium' | 'small' | 'minimal';
+const CARD_SIZE_STORAGE_KEY = 'gitcron:cartoCardSize';
+
+function getInitialCardSize(): CartoCardSize {
+  try {
+    const saved = localStorage.getItem(CARD_SIZE_STORAGE_KEY);
+    if (saved === 'large' || saved === 'medium' || saved === 'small' || saved === 'minimal') {
+      return saved;
+    }
+  } catch (err) {
+    console.warn('No se pudo leer gitcron:cartoCardSize de localStorage', err);
+  }
+  return 'medium';
+}
+
+function saveCardSize(size: CartoCardSize): void {
+  try {
+    localStorage.setItem(CARD_SIZE_STORAGE_KEY, size);
+  } catch (err) {
+    console.warn('No se pudo guardar gitcron:cartoCardSize en localStorage', err);
+  }
+}
+
+const SIZES: { key: CartoCardSize; labelKey: string }[] = [
+  { key: 'large', labelKey: 'cartography.screens.sizeLarge' },
+  { key: 'medium', labelKey: 'cartography.screens.sizeMedium' },
+  { key: 'small', labelKey: 'cartography.screens.sizeSmall' },
+  { key: 'minimal', labelKey: 'cartography.screens.sizeMinimal' },
+];
 
 export interface ScreenCatalogProps {
   repoPath: string;
@@ -63,6 +93,12 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   const { map, loading, error } = useScreenMap(repoPath, refreshKey);
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
+  const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
+
+  const handleSizeChange = (newSize: CartoCardSize) => {
+    setCardSize(newSize);
+    saveCardSize(newSize);
+  };
 
   const coverageNotice = useMemo(() => {
     if (!map) return null;
@@ -142,16 +178,53 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
   const otherScreens = sortedScreens.filter((s) => s.id !== selectedScreenId);
 
+  const gridClass = cardSize === 'large'
+    ? styles.grid_large
+    : cardSize === 'small'
+      ? styles.grid_small
+      : cardSize === 'minimal'
+        ? styles.grid_minimal
+        : styles.grid_medium;
+
   return (
     <div className={styles.container} data-testid="screen-catalog">
-      {/* Aviso de cobertura en una línea, si no es complete */}
-      {coverageNotice && (
-        <div
-          className={styles.coverageBanner}
-          role="status"
-          data-testid="screen-coverage-banner"
-        >
-          {coverageNotice}
+      {/* Aviso de cobertura y control de tamaño */}
+      {(!selectedScreen || coverageNotice) && (
+        <div className={styles.catalogHeader}>
+          {coverageNotice && (
+            <div
+              className={styles.coverageBanner}
+              role="status"
+              data-testid="screen-coverage-banner"
+            >
+              {coverageNotice}
+            </div>
+          )}
+
+          {!selectedScreen && !isNoUi && sortedScreens.length > 0 && (
+            <div
+              className={styles.segmentedControl}
+              role="group"
+              aria-label={t('cartography.screens.size')}
+              data-testid="card-size-control"
+            >
+              {SIZES.map(({ key, labelKey }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSizeChange(key)}
+                  aria-pressed={cardSize === key}
+                  title={t(labelKey)}
+                  aria-label={t(labelKey)}
+                  data-testid={`card-size-${key}`}
+                  className={`${styles.segmentedBtn} ${cardSize === key ? styles.segmentedBtnActive : ''}`.trim()}
+                >
+                  <LayoutGrid size={13} aria-hidden="true" />
+                  <span>{t(labelKey)}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -222,12 +295,13 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
             </div>
           ) : (
             /* Grilla normal de cuadros compactos */
-            <div className={styles.grid} data-testid="screen-catalog-grid">
+            <div className={`${styles.grid} ${gridClass}`} data-testid="screen-catalog-grid">
               {sortedScreens.map((screen) => (
                 <ScreenCard
                   key={screen.id}
                   screen={screen}
                   repoPath={repoPath}
+                  size={cardSize}
                   onSelect={() => setSelectedScreenId(screen.id)}
                   onExplain={handleExplain}
                 />

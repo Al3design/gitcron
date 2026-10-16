@@ -404,29 +404,6 @@ export function graphFileSymbols(repoPath: string, filePath: string): CartoNode[
     .map(toCartoNode);
 }
 
-/** Archivos que usa un símbolo (por sus llamadas en el índice); null si el índice no está listo o no se encuentra el símbolo. */
-export function graphSymbolFileDependencies(
-  repoPath: string,
-  filePath: string,
-  symbolName: string,
-): string[] | null {
-  const normFilePath = filePath.replace(/\\/g, '/');
-  const symbols = graphFileSymbols(repoPath, normFilePath);
-  if (symbols === null) return null;
-  const sym = symbols.find((s) => s.name === symbolName);
-  if (!sym) return null;
-  const callees = graphCallees(repoPath, sym.id);
-  if (callees === null) return null;
-  const files = new Set<string>();
-  for (const c of callees) {
-    const cPath = c.node.filePath.replace(/\\/g, '/');
-    if (cPath && cPath !== normFilePath) {
-      files.add(cPath);
-    }
-  }
-  return Array.from(files);
-}
-
 interface SnapshotGraphSource {
   getFiles(): Array<{ path: string }>;
   getFileDependencies(filePath: string): string[];

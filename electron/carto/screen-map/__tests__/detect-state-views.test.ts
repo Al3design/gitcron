@@ -95,7 +95,7 @@ function GraphTabView(props: any) {
     expect(graph.locator).toBe('default');
     expect(graph.id).toBe('view:components/RepoMainView.tsx#default');
     expect(graph.entryFiles).toEqual([
-      { path: 'components/RepoMainView.tsx', provenance: 'static', role: 'screen', symbol: 'GraphTabView' },
+      { path: 'components/RepoMainView.tsx', provenance: 'static', role: 'screen', symbol: 'GraphTabView', usedFiles: [] },
     ]);
   });
 
@@ -130,11 +130,57 @@ export function Main() {
     // La de omisión repite NewChangeStartScreen: no se agrega otra; tampoco «OtraCosa», de otra función.
     expect(sddScreens.map((s) => s.name)).toEqual(['In progress', 'Archived', 'New change']);
     // Los componentes del mismo archivo se resuelven a ese archivo.
-    expect(sddScreens[0].entryFiles).toEqual([{ path: 'components/StartScreens.tsx', provenance: 'static', role: 'screen', symbol: 'InProgressStartScreen' }]);
+    expect(sddScreens[0].entryFiles).toEqual([{ path: 'components/StartScreens.tsx', provenance: 'static', role: 'screen', symbol: 'InProgressStartScreen', usedFiles: [] }]);
     // Cada archivo tiene su propia vista por omisión, sin chocar ids.
     const ids = screens.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(screens.find((s) => s.id === 'view:components/Main.tsx#default')?.name).toBe('Graph');
+  });
+
+  it('una vista del mismo archivo cuyo componente dibuja <CommitGraph /> y <ChronometricGraph /> (importados) y <div> trae esos dos en usedFiles, no el resto de los imports del archivo', () => {
+    const code = `
+import { CommitGraph } from '@/components/CommitGraph';
+import { ChronometricGraph } from '@/components/ChronometricGraph';
+import { UnrelatedNav } from '@/components/UnrelatedNav';
+
+export function MainView() {
+  if (tab === 'one') return <ViewOne />;
+  if (tab === 'two') return <ViewTwo />;
+  if (tab === 'three') return <ViewThree />;
+  return <GraphTabView />;
+}
+
+function GraphTabView() {
+  return (
+    <div>
+      <CommitGraph />
+      <ChronometricGraph />
+    </div>
+  );
+}
+`;
+    const known = [
+      'components/MainView.tsx',
+      'components/CommitGraph.tsx',
+      'components/ChronometricGraph.tsx',
+      'components/UnrelatedNav.tsx',
+    ];
+
+    const screens = detectStateViews([{ path: 'components/MainView.tsx', text: code }], known);
+    const graphScreen = screens.find((s) => s.locator === 'default')!;
+    expect(graphScreen).toBeDefined();
+    expect(graphScreen.entryFiles).toEqual([
+      {
+        path: 'components/MainView.tsx',
+        provenance: 'static',
+        role: 'screen',
+        symbol: 'GraphTabView',
+        usedFiles: [
+          'components/CommitGraph.tsx',
+          'components/ChronometricGraph.tsx',
+        ],
+      },
+    ]);
   });
 
   it('un archivo con solo dos retornos no da nada', () => {

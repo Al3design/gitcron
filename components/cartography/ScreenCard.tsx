@@ -7,10 +7,11 @@
 // a la derecha (32px visibles, 44px de área), nombre, dónde se elige y el conteo de archivos.
 // Al tocarlo lo elige para expandir a detalle.
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Monitor, PanelsTopLeft, Sparkles } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
+import { PixelCard } from '@/components/ui/PixelCard';
 import type { ScreenEntry } from '@/types/screen-map';
 import styles from './ScreenCatalog.module.css';
 
@@ -19,11 +20,14 @@ export interface ScreenCardProps {
   repoPath: string;
   onSelect?: (screen: ScreenEntry) => void;
   onExplain?: (screen: ScreenEntry) => void;
+  size?: 'large' | 'medium' | 'small' | 'minimal';
 }
 
-export function ScreenCard({ screen, onSelect, onExplain }: ScreenCardProps) {
+export function ScreenCard({ screen, onSelect, onExplain, size }: ScreenCardProps) {
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
+  const [isHovered, setIsHovered] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const ownCount = screen.files.filter((f) => !f.shared).length;
   const sharedCount = screen.files.filter((f) => f.shared).length;
@@ -45,6 +49,8 @@ export function ScreenCard({ screen, onSelect, onExplain }: ScreenCardProps) {
     }
   };
 
+  const isCardActive = isHovered || isFocused;
+
   return (
     <motion.article
       layoutId={shouldReduceMotion ? undefined : screen.id}
@@ -56,9 +62,22 @@ export function ScreenCard({ screen, onSelect, onExplain }: ScreenCardProps) {
       tabIndex={0}
       onClick={() => onSelect?.(screen)}
       onKeyDown={handleKeyDown}
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
+      onFocus={() => setIsFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setIsFocused(false);
+        }
+      }}
     >
-      {/* 1. Lugar de la captura 16:10 + ícono de IA */}
-      <div className={styles.cardThumbnail} data-testid="card-thumbnail">
+      {/* 1. Lugar de la captura 16:10 envuelto en PixelCard + ícono de IA */}
+      <PixelCard
+        className={styles.cardThumbnail}
+        data-testid="card-thumbnail"
+        active={isCardActive}
+        noFocus
+      >
         {screen.kind === 'route' ? (
           <Monitor size={28} className={styles.thumbnailIcon} aria-hidden="true" />
         ) : (
@@ -75,7 +94,7 @@ export function ScreenCard({ screen, onSelect, onExplain }: ScreenCardProps) {
         >
           <Sparkles size={14} aria-hidden="true" />
         </button>
-      </div>
+      </PixelCard>
 
       {/* 2. Contenido textual */}
       <div className={styles.cardContent}>
@@ -85,12 +104,16 @@ export function ScreenCard({ screen, onSelect, onExplain }: ScreenCardProps) {
         >
           {displayName}
         </h3>
-        <p className={styles.cardSubtitle} title={locationTooltip}>
-          {locationSubtitle}
-        </p>
-        <p className={styles.cardFiles} data-testid="screen-file-counts">
-          {t('cartography.screens.fileCountsShort', { own: ownCount, shared: sharedCount })}
-        </p>
+        {size !== 'minimal' && (
+          <>
+            <p className={styles.cardSubtitle} title={locationTooltip}>
+              {locationSubtitle}
+            </p>
+            <p className={styles.cardFiles} data-testid="screen-file-counts">
+              {t('cartography.screens.fileCountsShort', { own: ownCount, shared: sharedCount })}
+            </p>
+          </>
+        )}
       </div>
     </motion.article>
   );

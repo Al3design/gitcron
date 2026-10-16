@@ -13,7 +13,7 @@ export interface DetectedScreen {
   locator: string;
   declaredIn: string;
   /** Archivos de entrada de la pantalla, con su procedencia y símbolo opcional si se resuelve al mismo archivo. */
-  entryFiles: { path: string; provenance: ScreenLinkProvenance; role: ScreenFileRole; symbol?: string }[];
+  entryFiles: { path: string; provenance: ScreenLinkProvenance; role: ScreenFileRole; symbol?: string; usedFiles?: string[] }[];
 }
 
 /**

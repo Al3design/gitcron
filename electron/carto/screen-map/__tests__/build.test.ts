@@ -25,7 +25,6 @@ describe('buildScreenMap', () => {
       fileDependencies(p) {
         return depsMap[p] ?? [];
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'abc1234';
       },
@@ -69,7 +68,6 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'sha1';
       },
@@ -116,7 +114,6 @@ describe('buildScreenMap', () => {
         if (p === 'app/page.tsx') return manyDeps;
         return [];
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'sha2';
       },
@@ -150,7 +147,6 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return null; // índice no listo
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'sha3';
       },
@@ -184,7 +180,6 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'sha4';
       },
@@ -216,7 +211,6 @@ describe('buildScreenMap', () => {
       fileDependencies() {
         return [];
       },
-      symbolDependencies() { return []; },
       async headSha() {
         return 'sha5';
       },
@@ -262,7 +256,6 @@ export function Tabs() {
       async listFiles() { return { paths: Object.keys(files), truncated: false }; },
       async readFile(p) { return files[p] ?? null; },
       fileDependencies(p) { return depsMap[p] ?? []; },
-      symbolDependencies() { return []; },
       async headSha() { return 'sha-chain'; },
       now() { return '2026-10-16T12:00:00.000Z'; },
     };
@@ -279,7 +272,82 @@ export function Tabs() {
     expect(viewB.files.map((f) => f.path)).toContain('components/ViewB.tsx');
   });
 
-  it('vista en el mismo archivo usa symbolDependencies y si es null cae a fallback con cobertura partial', async () => {
+  it('una vista con usedFiles toma esos archivos y sigue desde ahí; nunca entran archivos de prueba, scripts/ ni electron/ para una pantalla de components/; un import dinámico de un archivo excluido no aparece', async () => {
+    const mainFile = `
+import { ViewA } from '@/components/ViewA';
+import { ViewB } from '@/components/ViewB';
+import { ViewC } from '@/components/ViewC';
+import { CommitGraph } from '@/components/CommitGraph';
+
+export function Screens(tab: string) {
+  if (tab === 'a') return <ViewA />;
+  if (tab === 'b') return <ViewB />;
+  if (tab === 'c') return <ViewC />;
+  return <GraphTabView />;
+}
+
+function GraphTabView() {
+  return <CommitGraph />;
+}
+`;
+    const files: Record<string, string> = {
+      'components/Screens.tsx': mainFile,
+      'components/ViewA.tsx': 'export function ViewA() { return <div />; }',
+      'components/ViewB.tsx': 'export function ViewB() { return <div />; }',
+      'components/ViewC.tsx': 'export function ViewC() { return <div />; }',
+      'components/CommitGraph.tsx': "import { Sub } from '@/components/Sub'; import { MainProc } from '@/electron/main'; import { runTest } from '@/components/__tests__/helper'; import { runScript } from '@/scripts/run';",
+      'components/Sub.tsx': 'export function Sub() { return <span />; }',
+      'electron/main.ts': "export function MainProc() { const dynamicMod = 'dyn'; import(`./${dynamicMod}`); }",
+      'components/__tests__/helper.ts': "export function runTest() { import('./test-dyn'); }",
+      'scripts/run.ts': "export function runScript() { import('./script-dyn'); }",
+    };
+
+    const fileDeps: Record<string, string[]> = {
+      'components/Screens.tsx': ['components/ViewA.tsx', 'components/ViewB.tsx', 'components/ViewC.tsx', 'components/CommitGraph.tsx'],
+      'components/CommitGraph.tsx': [
+        'components/Sub.tsx',
+        'electron/main.ts',
+        'components/__tests__/helper.ts',
+        'scripts/run.ts',
+      ],
+      'components/Sub.tsx': [],
+      'electron/main.ts': [],
+      'components/__tests__/helper.ts': [],
+      'scripts/run.ts': [],
+    };
+
+    const deps: ScreenMapDeps = {
+      async listFiles() { return { paths: Object.keys(files), truncated: false }; },
+      async readFile(p) { return files[p] ?? null; },
+      fileDependencies(p) { return fileDeps[p] ?? []; },
+      async headSha() { return 'sha-excl'; },
+      now() { return '2026-10-16T12:00:00.000Z'; },
+    };
+
+    const map = await buildScreenMap('/mock/repo', deps);
+    const graphScreen = map.screens.find((s) => s.name === 'Graph')!;
+    expect(graphScreen).toBeDefined();
+
+    const paths = graphScreen.files.map((f) => f.path);
+    // Toma usedFiles (CommitGraph) y sigue desde ahí (Sub)
+    expect(paths).toContain('components/CommitGraph.tsx');
+    expect(paths).toContain('components/Sub.tsx');
+
+    // Nunca entran archivos de prueba, scripts/ ni electron/
+    expect(paths).not.toContain('electron/main.ts');
+    expect(paths).not.toContain('components/__tests__/helper.ts');
+    expect(paths).not.toContain('scripts/run.ts');
+
+    // Tampoco aparecen imports dinámicos de los archivos excluidos
+    const unknownImports = graphScreen.files
+      .filter((f) => f.provenance === 'unknown')
+      .map((f) => f.unresolved);
+    expect(unknownImports.some((u) => u?.includes('dynamicMod'))).toBe(false);
+    expect(unknownImports.some((u) => u?.includes('test-dyn'))).toBe(false);
+    expect(unknownImports.some((u) => u?.includes('script-dyn'))).toBe(false);
+  });
+
+  it('vista en el mismo archivo con usedFiles vacío cae a fallback de archivo completo con cobertura partial', async () => {
     const sameFile = `
 export function Screens(view: string) {
   if (view === 'a') return <ScreenA />;
@@ -287,41 +355,27 @@ export function Screens(view: string) {
   if (view === 'c') return <ScreenC />;
   return <ScreenA />;
 }
-function ScreenA() { return <Uno />; }
-function ScreenB() { return <Dos />; }
+function ScreenA() { return <div />; }
+function ScreenB() { return <div />; }
 function ScreenC() { return <div />; }
 `;
     const files: Record<string, string> = {
       'components/Screens.tsx': sameFile,
       'components/Uno.tsx': 'export function Uno() { return <div />; }',
-      'components/Dos.tsx': 'export function Dos() { return <div />; }',
     };
-    const fileDeps: Record<string, string[]> = { 'components/Screens.tsx': ['components/Uno.tsx', 'components/Dos.tsx'] };
-    const symbolCalls = vi.fn((_file: string, symbol: string): string[] | null => {
-      if (symbol === 'ScreenA') return ['components/Uno.tsx'];
-      if (symbol === 'ScreenB') return ['components/Dos.tsx'];
-      return null; // ScreenC: el índice no lo encuentra
-    });
+    const fileDeps: Record<string, string[]> = { 'components/Screens.tsx': ['components/Uno.tsx'] };
     const deps: ScreenMapDeps = {
       async listFiles() { return { paths: Object.keys(files), truncated: false }; },
       async readFile(p) { return files[p] ?? null; },
       fileDependencies(p) { return fileDeps[p] ?? []; },
-      symbolDependencies: symbolCalls,
       async headSha() { return 'sha-same'; },
       now() { return '2026-10-16T12:00:00.000Z'; },
     };
 
     const map = await buildScreenMap('/mock/repo', deps);
     const a = map.screens.find((s) => s.name === 'A')!;
-    const b = map.screens.find((s) => s.name === 'B')!;
-    const c = map.screens.find((s) => s.name === 'C')!;
-    // A y B toman lo que usa su componente, no todo el archivo.
+    // ScreenA dibuja <div />, por lo que usedFiles es []; cae al archivo entero y la cobertura lo dice.
     expect(a.files.map((f) => f.path)).toContain('components/Uno.tsx');
-    expect(a.files.map((f) => f.path)).not.toContain('components/Dos.tsx');
-    expect(b.files.map((f) => f.path)).toContain('components/Dos.tsx');
-    expect(b.files.map((f) => f.path)).not.toContain('components/Uno.tsx');
-    // C cae al archivo entero y la cobertura lo dice.
-    expect(c.files.map((f) => f.path)).toEqual(expect.arrayContaining(['components/Uno.tsx', 'components/Dos.tsx']));
     expect(map.coverage.state).toBe('partial');
     if (map.coverage.state === 'partial') {
       expect(map.coverage.errors).toContain('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
