@@ -351,7 +351,10 @@ describe('AssistChat component', () => {
     const moreBtn = screen.getByTitle('Más acciones');
     fireEvent.click(moreBtn);
 
-    const menuDeleteBtn = screen.getByRole('menuitem', { name: 'Borrar' });
+    const menu = screen.getByRole('menu');
+    const menuDeleteBtn = Array.from(menu.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Borrar'),
+    )!;
     fireEvent.click(menuDeleteBtn);
 
     expect(screen.getByText('Borrar «Conversación a borrar»')).toBeTruthy();
@@ -661,7 +664,7 @@ describe('AssistChat component', () => {
     }
   });
 
-  it('15. con la conversación vacía las sugerencias aparecen arriba del cuadro', async () => {
+  it('15. con la conversación vacía el contenedor de mensajes ocupa el alto arriba y las sugerencias y el cuadro quedan abajo', async () => {
     mountApi();
     const unregister = assistContributions.register('suggestions-top-view', () => ({
       selection: { kind: 'none' },
@@ -677,9 +680,19 @@ describe('AssistChat component', () => {
     }));
 
     try {
-      render(<AssistChat repoPath="/repo/a" viewId="suggestions-top-view" />);
+      const { container } = render(<AssistChat repoPath="/repo/a" viewId="suggestions-top-view" />);
       expect(screen.getByText('Para preguntar acá')).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Asistente' })).toBeTruthy();
+
+      const emptyMsg = screen.getByText('Escribí una pregunta. La IA ve lo que tenés seleccionado en esta pantalla.');
+      const messagesContainer = emptyMsg.parentElement!;
+      expect(messagesContainer.className).toMatch(/messagesContainer/);
+      expect(messagesContainer.className).toMatch(/messagesContainerEmpty/);
+
+      const main = container.querySelector('main')!;
+      const textarea = screen.getByPlaceholderText('Preguntá sobre este repositorio…');
+      expect(main.firstElementChild).toBe(messagesContainer);
+      expect(main.lastElementChild?.contains(textarea)).toBe(true);
     } finally {
       unregister();
     }
@@ -944,13 +957,13 @@ describe('AssistChat component', () => {
     const moreButtons = screen.getAllByTitle('Más acciones');
     // Primer botón de más acciones corresponde a la fijada
     fireEvent.click(moreButtons[0]);
-    expect(screen.getByRole('menuitem', { name: 'Desfijar' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Fijar' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Desfijar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Fijar' })).toBeNull();
 
     // Segundo botón de más acciones corresponde a la normal
     fireEvent.click(moreButtons[1]);
-    expect(screen.getByRole('menuitem', { name: 'Fijar' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Desfijar' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Fijar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Desfijar' })).toBeNull();
   });
 
   it('21. elegir «Archivar» llama a archive con archived: true y recarga la lista', async () => {
@@ -977,7 +990,7 @@ describe('AssistChat component', () => {
     const moreBtn = screen.getByTitle('Más acciones');
     fireEvent.click(moreBtn);
 
-    const archiveItem = screen.getByRole('menuitem', { name: 'Archivar' });
+    const archiveItem = screen.getByRole('button', { name: 'Archivar' });
     fireEvent.click(archiveItem);
 
     await waitFor(() => {
@@ -1025,14 +1038,20 @@ describe('AssistChat component', () => {
       const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
       fireEvent.click(menuBtn);
 
-      const availableItem = screen.getByRole('menuitem', { name: /Enviar/ });
+      const menu = screen.getByRole('menu');
+      const availableItem = Array.from(menu.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Enviar'),
+      )!;
       fireEvent.click(availableItem);
       expect(availableRun).toHaveBeenCalledTimes(1);
 
       // Reabrir menú para probar el deshabilitado
       fireEvent.click(menuBtn);
-      const unavailableItem = screen.getByRole('menuitem', { name: /Cancelar/ });
-      expect(unavailableItem.getAttribute('aria-disabled')).toBe('true');
+      const reopenedMenu = screen.getByRole('menu');
+      const unavailableItem = Array.from(reopenedMenu.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Cancelar'),
+      )!;
+      expect(unavailableItem.disabled).toBe(true);
       fireEvent.click(unavailableItem);
       expect(unavailableRun).not.toHaveBeenCalled();
     } finally {
@@ -1119,7 +1138,7 @@ describe('AssistChat component', () => {
     const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
     fireEvent.click(menuBtn);
 
-    const settingsItem = screen.getByRole('menuitem', { name: 'Motores y modelos' });
+    const settingsItem = screen.getByRole('button', { name: 'Motores y modelos' });
     expect(settingsItem).toBeTruthy();
 
     fireEvent.click(settingsItem);

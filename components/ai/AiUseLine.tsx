@@ -31,6 +31,8 @@ interface Props {
   sourceFile?: string;
   /** Muestra u oculta el botón propio de «Elegir modelo» (en Motores y modelos la fila ya tiene el suyo). */
   showChooseModel?: boolean;
+  /** Acciones adicionales en la misma fila de botones (p. ej. «Redactar con IA» en Preparar commit). */
+  actions?: React.ReactNode;
 }
 
 export function AiUseLine({
@@ -42,6 +44,7 @@ export function AiUseLine({
   screenChoice = false,
   sourceFile,
   showChooseModel = true,
+  actions,
 }: Props) {
   const t = useT();
   const [status, setStatus] = useState<AiUseStatus | null>(null);
@@ -164,6 +167,7 @@ export function AiUseLine({
               {t('aiUse.showInFolder')}
             </button>
           )}
+          {actions}
         </Row>
         {showPicker && (
           <AiModelPicker
@@ -214,6 +218,7 @@ export function AiUseLine({
               {t('aiUse.showInFolder')}
             </button>
           )}
+          {actions}
         </Row>
         {showPicker && (
           <AiModelPicker
@@ -261,6 +266,7 @@ export function AiUseLine({
             </span>
           </Row>
         )}
+        {actions}
       </Row>
       {showPicker && !withSelector && (
         <AiModelPicker

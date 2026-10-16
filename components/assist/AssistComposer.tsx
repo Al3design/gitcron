@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, ChevronDown, Eye, PenLine, Plus, Square, X } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@/components/ContextMenus';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
 import { AiModelPicker } from '@/components/ai/AiModelPicker';
 import type { AiUseStatus } from '@/types/ai-use';
@@ -70,12 +71,11 @@ export function AssistComposer({
     right: 0,
     maxHeight: 400,
   });
-  const [menuCoords, setMenuCoords] = useState<{ bottom: number; left: number }>({
-    bottom: 0,
-    left: 0,
+  const [menuCoords, setMenuCoords] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
   });
 
-  const menuRef = useRef<HTMLDivElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
@@ -97,9 +97,7 @@ export function AssistComposer({
   const toggleMenu = () => {
     if (!menuOpen && menuBtnRef.current) {
       const rect = menuBtnRef.current.getBoundingClientRect();
-      const bottom = Math.max(8, window.innerHeight - rect.top + 6);
-      const left = Math.max(8, rect.left);
-      setMenuCoords({ bottom, left });
+      setMenuCoords({ x: Math.max(8, rect.left), y: Math.max(8, rect.top) });
       setMenuOpen(true);
     } else {
       setMenuOpen(false);
@@ -128,23 +126,13 @@ export function AssistComposer({
     };
   }, [repoPath, version]);
 
-  // Cierre de popovers al hacer clic afuera o con Escape
+  // Cierre del selector de modelo al hacer clic afuera o con Escape
   useEffect(() => {
-    if (!menuOpen && !showModelPicker) return;
+    if (!showModelPicker) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
-        menuOpen &&
-        menuRef.current &&
-        !menuRef.current.contains(target) &&
-        menuBtnRef.current &&
-        !menuBtnRef.current.contains(target)
-      ) {
-        setMenuOpen(false);
-      }
-      if (
-        showModelPicker &&
         modelPickerRef.current &&
         !modelPickerRef.current.contains(target) &&
         modelBtnRef.current &&
@@ -156,14 +144,8 @@ export function AssistComposer({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (menuOpen) {
-          setMenuOpen(false);
-          menuBtnRef.current?.focus();
-        }
-        if (showModelPicker) {
-          setShowModelPicker(false);
-          modelBtnRef.current?.focus();
-        }
+        setShowModelPicker(false);
+        modelBtnRef.current?.focus();
       }
     };
 
@@ -173,7 +155,7 @@ export function AssistComposer({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [menuOpen, showModelPicker]);
+  }, [showModelPicker]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
@@ -236,10 +218,6 @@ export function AssistComposer({
             </button>
 
             {menuOpen && typeof document !== 'undefined' && (() => {
-              const menuStyle: React.CSSProperties = {
-                bottom: menuCoords.bottom,
-                left: menuCoords.left,
-              };
               const askItems = menuItems.filter((i) => i.section === 'ask');
               const doItems = menuItems.filter((i) => i.section === 'do');
               const appItems = menuItems.filter((i) => i.section === 'app');
@@ -250,46 +228,39 @@ export function AssistComposer({
               ].filter((s) => s.items.length > 0);
 
               return createPortal(
-                <div
-                  ref={menuRef}
-                  className={styles.menuPopover}
-                  role="menu"
-                  style={menuStyle}
+                <ContextMenu
+                  x={menuCoords.x}
+                  y={menuCoords.y}
+                  preferAbove
+                  width="wide"
+                  ariaLabel={t('assist.menu')}
+                  onClose={() => {
+                    setMenuOpen(false);
+                    menuBtnRef.current?.focus();
+                  }}
                 >
                   {orderedSections.map((sec, idx) => (
                     <React.Fragment key={sec.key}>
-                      {idx > 0 && <div className={styles.menuDivider} role="separator" />}
-                      <div className={styles.menuSection} data-section={sec.key}>
+                      {idx > 0 && <ContextMenuSeparator />}
+                      <div data-section={sec.key}>
                         {sec.items.map((item) => (
-                          <button
+                          <ContextMenuItem
                             key={item.id}
-                            type="button"
-                            role="menuitem"
-                            className={`${styles.menuItem} ${item.disabled ? styles.menuItemDisabled : ''}`}
-                            aria-disabled={item.disabled ? 'true' : undefined}
                             onClick={() => {
-                              if (item.disabled) return;
                               item.onSelect();
                               setMenuOpen(false);
                             }}
-                          >
-                            {item.icon && (
-                              <span className={styles.menuItemIcon} aria-hidden="true">
-                                {item.icon}
-                              </span>
-                            )}
-                            <div className={styles.menuItemContent}>
-                              <span className={styles.menuItemLabel}>{item.label}</span>
-                              {item.hint && (
-                                <span className={styles.menuItemHint}>{item.hint}</span>
-                              )}
-                            </div>
-                          </button>
+                            disabled={item.disabled}
+                            title={item.hint}
+                            text={item.label}
+                            textSecondary={item.hint}
+                            icon={item.icon}
+                          />
                         ))}
                       </div>
                     </React.Fragment>
                   ))}
-                </div>,
+                </ContextMenu>,
                 document.body,
               );
             })()}

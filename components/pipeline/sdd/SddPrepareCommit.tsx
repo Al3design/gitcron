@@ -242,26 +242,32 @@ function SddPrepareCommitConfiguredAi({
 }: SddPrepareCommitConfiguredAiProps) {
   return (
     <section className={shared.aiPanel}>
-      <div className={shared.aiRow}>
-        <AiUseLine use="gitcron-commit" repoPath={repoPath} sourceFile={resolvedFilesText || undefined} />
-        <button
-          type="button"
-          className={cn(shared.secondaryAction, shared.aiDraftAction)}
-          disabled={aiBusy || chosenLength === 0}
-          onClick={draftWithAi}
-        >
-          <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
-            {aiPhase === 'drafting' || aiPhase === 'queued'
-              ? t('pipeline.openspec.prepare.aiBusy')
-              : t('pipeline.openspec.prepare.aiDraft')}
-          </span>
-        </button>
-        {aiBusy && (
-          <button type="button" className={shared.secondaryAction} onClick={cancelAiDraft}>
-            {t('pipeline.openspec.prepare.aiCancel')}
-          </button>
-        )}
-      </div>
+      <AiUseLine
+        use="gitcron-commit"
+        repoPath={repoPath}
+        sourceFile={resolvedFilesText || undefined}
+        actions={
+          <>
+            <button
+              type="button"
+              className={cn(shared.secondaryAction, shared.aiDraftAction)}
+              disabled={aiBusy || chosenLength === 0}
+              onClick={draftWithAi}
+            >
+              <span className={aiPhase === 'drafting' ? 'ai-thinking-text' : undefined}>
+                {aiPhase === 'drafting' || aiPhase === 'queued'
+                  ? t('pipeline.openspec.prepare.aiBusy')
+                  : t('pipeline.openspec.prepare.aiDraft')}
+              </span>
+            </button>
+            {aiBusy && (
+              <button type="button" className={shared.secondaryAction} onClick={cancelAiDraft}>
+                {t('pipeline.openspec.prepare.aiCancel')}
+              </button>
+            )}
+          </>
+        }
+      />
       <SddPrepareCommitWarnings
         resolvedCommitModel={resolvedCommitModel}
         fixParamInFile={fixParamInFile}

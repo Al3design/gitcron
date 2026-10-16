@@ -10,8 +10,6 @@
   font-weight: 600;
   font-size: var(--font-size-md);
   font-family: var(--font-mono), ui-monospace, monospace;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--color-text-primary);
 }
 

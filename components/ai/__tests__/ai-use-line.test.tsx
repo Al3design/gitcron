@@ -182,4 +182,21 @@ describe('AiUseLine', () => {
     expect(await screen.findByText(/Usa deepseek\/deepseek-v4-pro de OpenRouter/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Elegir modelo' })).toBeNull();
   });
+
+  it('prop actions renderiza los botones extra en la misma fila que Elegir modelo y Mostrar en la carpeta', async () => {
+    mountApi([{ ...resolved, sourceDir: 'C:/Users/ale/.config/gitcron' }]);
+    render(
+      <AiUseLine
+        use="gitcron-commit"
+        actions={<button type="button">Redactar con IA</button>}
+      />,
+    );
+
+    const chooseBtn = await screen.findByRole('button', { name: 'Elegir modelo' });
+    const folderBtn = screen.getByRole('button', { name: 'Mostrar en la carpeta' });
+    const draftBtn = screen.getByRole('button', { name: 'Redactar con IA' });
+
+    expect(chooseBtn.parentElement).toBe(folderBtn.parentElement);
+    expect(chooseBtn.parentElement).toBe(draftBtn.parentElement);
+  });
 });

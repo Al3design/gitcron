@@ -11,12 +11,16 @@ import { createPortal } from 'react-dom';
 import {
   Archive,
   ArchiveRestore,
+  ArrowRight,
   ChevronDown,
   ChevronRight,
+  Cpu,
+  MessageSquare,
   MoreHorizontal,
   Pin,
   PinOff,
   Play,
+  Plus,
   Trash2,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
@@ -26,6 +30,7 @@ import type { AssistAction } from '@/lib/assist/view-contributions';
 import { formatUsageLine, sumUsage } from '@/lib/assist/usage-format';
 import { groupConversations } from '@/lib/assist/conversation-groups';
 import { changeTitle } from '@/lib/assist/change-title';
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@/components/ContextMenus';
 import { MarkdownViewer } from '@/components/pipeline/MarkdownViewer';
 import { TaskConfirmToast } from '@/components/pipeline/TaskConfirmToast';
 import { Text } from '@/components/ui';
@@ -251,6 +256,7 @@ function buildComposerMenuItems(
     label: t(action.labelKey, action.labelParams),
     onSelect: () => setQuestion(t(action.labelKey, action.labelParams)),
     section: 'ask',
+    icon: <MessageSquare size={13} aria-hidden="true" />,
   }));
 
   const doItems: AssistComposerMenuItem[] = doActions.map((action) => ({
@@ -259,7 +265,12 @@ function buildComposerMenuItems(
     disabled: !action.available,
     hint: !action.available && action.unavailableReasonKey ? t(action.unavailableReasonKey) : undefined,
     section: 'do',
-    icon: action.scope === 'execute' ? <Play size={13} fill="currentColor" aria-hidden="true" /> : undefined,
+    icon:
+      action.scope === 'execute' ? (
+        <Play size={13} fill="currentColor" aria-hidden="true" />
+      ) : (
+        <ArrowRight size={13} aria-hidden="true" />
+      ),
     onSelect: () => {
       if (action.available && action.run) {
         action.run();
@@ -273,6 +284,7 @@ function buildComposerMenuItems(
       label: t('assist.newConversation'),
       onSelect: handleNewConversation,
       section: 'app',
+      icon: <Plus size={13} aria-hidden="true" />,
     },
   ];
 
@@ -282,6 +294,7 @@ function buildComposerMenuItems(
       label: t('assist.openAiSettings'),
       onSelect: onOpenAiSettings,
       section: 'app',
+      icon: <Cpu size={13} aria-hidden="true" />,
     });
   }
 
@@ -645,6 +658,7 @@ interface ConversationRowMenuProps {
   onPin: (conv: AssistConversationSummary, pin: boolean) => void;
   onArchive: (conv: AssistConversationSummary, archive: boolean) => void;
   onDelete: (conv: AssistConversationSummary) => void;
+  onClose: () => void;
 }
 
 function ConversationRowMenu({
@@ -654,54 +668,31 @@ function ConversationRowMenu({
   onPin,
   onArchive,
   onDelete,
+  onClose,
 }: ConversationRowMenuProps): React.JSX.Element | null {
   if (!conv || typeof document === 'undefined') return null;
-  const popoverStyle: React.CSSProperties = { top: coords.y, left: coords.x };
   return createPortal(
-    <div
-      className={styles.rowMenuPopover}
-      role="menu"
-      style={popoverStyle}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <ContextMenu x={coords.x} y={coords.y} onClose={onClose} width="narrow">
       {!conv.archivedAt && (
-        <button
-          type="button"
-          role="menuitem"
-          className={styles.rowMenuItem}
+        <ContextMenuItem
           onClick={() => onPin(conv, !conv.pinnedAt)}
-        >
-          {conv.pinnedAt ? (
-            <PinOff size={13} aria-hidden="true" />
-          ) : (
-            <Pin size={13} aria-hidden="true" />
-          )}
-          <span>{conv.pinnedAt ? t('assist.unpin') : t('assist.pin')}</span>
-        </button>
+          icon={conv.pinnedAt ? <PinOff size={13} /> : <Pin size={13} />}
+          text={conv.pinnedAt ? t('assist.unpin') : t('assist.pin')}
+        />
       )}
-      <button
-        type="button"
-        role="menuitem"
-        className={styles.rowMenuItem}
+      <ContextMenuItem
         onClick={() => onArchive(conv, !conv.archivedAt)}
-      >
-        {conv.archivedAt ? (
-          <ArchiveRestore size={13} aria-hidden="true" />
-        ) : (
-          <Archive size={13} aria-hidden="true" />
-        )}
-        <span>{conv.archivedAt ? t('assist.unarchive') : t('assist.archive')}</span>
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        className={styles.rowMenuItem}
+        icon={conv.archivedAt ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+        text={conv.archivedAt ? t('assist.unarchive') : t('assist.archive')}
+      />
+      <ContextMenuSeparator />
+      <ContextMenuItem
         onClick={() => onDelete(conv)}
-      >
-        <Trash2 size={13} aria-hidden="true" />
-        <span>{t('assist.delete')}</span>
-      </button>
-    </div>,
+        danger
+        icon={<Trash2 size={13} />}
+        text={t('assist.delete')}
+      />
+    </ContextMenu>,
     document.body,
   );
 }
@@ -735,20 +726,6 @@ export function AssistChat({
   const [openMenuConvId, setOpenMenuConvId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [archivedOpen, setArchivedOpen] = useState(false);
-
-  useEffect(() => {
-    if (!openMenuConvId) return;
-    const handleClick = () => setOpenMenuConvId(null);
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenMenuConvId(null);
-    };
-    window.addEventListener('click', handleClick);
-    window.addEventListener('keydown', handleKey);
-    return () => {
-      window.removeEventListener('click', handleClick);
-      window.removeEventListener('keydown', handleKey);
-    };
-  }, [openMenuConvId]);
 
   // Al cambiar de repo, ni la lista ni los mensajes del anterior quedan a la vista
   // (ajuste de estado durante el render, sin un efecto que dispare otro render).
@@ -1048,6 +1025,7 @@ export function AssistChat({
           setOpenMenuConvId(null);
           setConfirmDeleteConv(conv);
         }}
+        onClose={() => setOpenMenuConvId(null)}
       />
 
       {/* Toast de confirmación de borrado */}

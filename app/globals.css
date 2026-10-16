@@ -3569,8 +3569,7 @@ body, .font-sans {
 /* Information windows: flat, squared and aligned. The strong contrast comes
    from hierarchy, not from placing another card inside every block. */
 .pipeline-now,
-.pipeline-economy,
-.pipeline-launcher {
+.pipeline-economy {
   padding: 0;
   border: 0;
   border-radius: 0;

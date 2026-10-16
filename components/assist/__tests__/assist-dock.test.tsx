@@ -148,7 +148,7 @@ describe('AssistDock component', () => {
     const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
     fireEvent.click(menuBtn);
 
-    const settingsItem = screen.getByRole('menuitem', { name: 'Motores y modelos' });
+    const settingsItem = screen.getByRole('button', { name: 'Motores y modelos' });
     expect(settingsItem).toBeTruthy();
 
     fireEvent.click(settingsItem);

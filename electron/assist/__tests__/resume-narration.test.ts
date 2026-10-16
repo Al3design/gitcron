@@ -342,6 +342,11 @@ describe('resume-narration service (Tarea 3.3)', () => {
       depsUnset,
     );
     expect(resUnset.status).toBe('unavailable');
+    if (resUnset.status === 'unavailable') {
+      expect(resUnset.message).toBe(
+        'Todavía no elegiste un modelo para el chat. Elegilo en el selector del chat o en Motores y modelos.',
+      );
+    }
 
     // Modelo caído
     const depsFailed = makeDeps({

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { act, render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import type { TaskEvidence, OpenSpecChangeEvidence } from '@/types/pipeline';
 import {
   deriveResumeCard,
@@ -14,6 +14,7 @@ import {
 } from '../resume-card';
 import { WhereYouLeftOffCard } from '../WhereYouLeftOffCard';
 import { OpenSpecTasksView } from '../OpenSpecTasksView';
+import { PipelineRuntimeLauncher } from '../PipelineRuntimeLauncher';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from '../pipeline-view-state';
 
 describe('Resumen determinista «Dónde quedaste» (Tareas 3.1, 3.3 y 3.5)', () => {
@@ -392,13 +393,17 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
     });
   });
 
-  describe('Lista interactiva de tareas con títulos legibles (Tarea 3.5)', () => {
-    it('muestra el título legible y despliega «Cómo se comprueba» a demanda', () => {
+  describe('Lista interactiva de tareas con títulos legibles (Tarea 3.5 y 4.1)', () => {
+    it('muestra el título legible sin botón «Cómo se comprueba» en la fila y lo despliega desde el menú de tres puntos sólo si la tarea tiene comprobación', () => {
+      const tasksWithAndWithoutCheck: TaskEvidence[] = [
+        ...sampleTasks,
+        { id: '3.3', text: '3.3 Tarea simple sin comprobación.', completed: false, line: 17, sourceRef: 'tasks.md' },
+      ];
       const mockChange: OpenSpecChangeEvidence = {
         changeId: 'retomar-trabajo',
         intent: null,
         validation: 'passed',
-        tasks: sampleTasks,
+        tasks: tasksWithAndWithoutCheck,
         proposalExists: true,
         designExists: true,
         specsCount: 1,
@@ -421,17 +426,54 @@ Los historiales actuales registran ejecuciones y decisiones, pero no ofrecen una
       // El título se muestra limpio sin el markdown crudo "**IA local:**"
       expect(screen.getByText('Construir resumen determinista del cambio con objetivo, evidencia y próximo paso.')).toBeTruthy();
 
-      // Botón «Cómo se comprueba» para la tarea 3.1
-      const howToCheckButtons = screen.getAllByRole('button', { name: /Cómo se comprueba/i });
-      expect(howToCheckButtons.length).toBeGreaterThanOrEqual(1);
+      // Ninguna fila muestra un botón «Cómo se comprueba» inline
+      expect(screen.queryAllByRole('button', { name: /Cómo se comprueba/i })).toHaveLength(0);
 
-      // Al pulsar «Cómo se comprueba», aparece el responsable y la comprobación
+      // Abrir el menú de tres puntos («Más opciones») de la tarea 3.1 (índice 3)
+      const moreButtons = screen.getAllByRole('button', { name: 'Más opciones' });
+      expect(moreButtons).toHaveLength(tasksWithAndWithoutCheck.length);
+      fireEvent.click(moreButtons[3]);
+
+      // Primera opción del menú: «Cómo se comprueba»
+      const howToCheckItem = screen.getByRole('button', { name: 'Cómo se comprueba' });
+      expect(howToCheckItem).toBeTruthy();
+
+      // Al pulsar «Cómo se comprueba», aparece el responsable y la comprobación debajo de esa tarea
       expect(screen.queryByTestId('task-check-detail-3.1')).toBeNull();
-      fireEvent.click(howToCheckButtons[howToCheckButtons.length - 2]); // botón de la tarea 3.1
+      fireEvent.click(howToCheckItem);
       const detailBox = screen.getByTestId('task-check-detail-3.1');
       expect(detailBox).toBeTruthy();
       expect(detailBox.textContent).toContain('IA local');
       expect(detailBox.textContent).toContain('Funciona sin IA');
+
+      // Al volver a abrir el menú de la tarea 3.1, la opción dice «Ocultar cómo se comprueba»
+      fireEvent.click(moreButtons[3]);
+      const hideHowToCheckItem = screen.getByRole('button', { name: 'Ocultar cómo se comprueba' });
+      expect(hideHowToCheckItem).toBeTruthy();
+      fireEvent.click(hideHowToCheckItem);
+      expect(screen.queryByTestId('task-check-detail-3.1')).toBeNull();
+
+      // Una tarea sin comprobación (3.3, índice 5) no ofrece «Cómo se comprueba» en su menú
+      fireEvent.click(moreButtons[5]);
+      expect(screen.queryByRole('button', { name: /Cómo se comprueba/i })).toBeNull();
+      expect(within(screen.getByRole('menu')).getByRole('button', { name: 'Editar tarea' })).toBeTruthy();
+    });
+
+    it('el título del lanzador no tiene la clase en mayúsculas', () => {
+      const { container } = render(
+        <PipelineRuntimeLauncher
+          repoPath="/test/repo"
+          projection={null}
+          intent="implement-task"
+          changeId="retomar-trabajo"
+          taskId="3.1"
+        />,
+      );
+
+      const heading = container.querySelector('.pipeline-launcher h3');
+      expect(heading).toBeTruthy();
+      expect(heading?.classList.contains('pipeline-section__title')).toBe(false);
+      expect(heading?.className).toMatch(/title/);
     });
   });
 });

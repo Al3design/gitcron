@@ -768,7 +768,7 @@
 .linkAction:disabled { cursor: not-allowed; opacity: 0.38; }
 
 .launcherPanel,
-.evidencePanel { margin-top: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-border-subtle); background: color-mix(in srgb, var(--color-bg-overlay) 78%, transparent); }
+.evidencePanel { margin-top: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-bg-overlay) 78%, transparent); }
 /* Mientras el launcher descubre runtimes su interior está vacío: el marco se
    retira para no ofrecer un recuadro vacío. El estado de carga vive adentro. */
 .launcherPanel[data-launcher-loading] { padding: 0; border: 0; background: transparent; }
@@ -4343,15 +4343,16 @@ summary.centerBlock {
 
 .whereYouLeftOffRowsList {
   display: grid;
-  grid-template-columns: minmax(130px, 150px) 1fr;
-  row-gap: var(--space-2);
-  column-gap: var(--space-3);
+  grid-template-columns: 1fr;
+  row-gap: 0;
+  column-gap: 0;
   margin: 0;
   font-size: var(--font-size-xs);
   line-height: 1.5;
 }
 
 .whereYouLeftOffRowLabel {
+  font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--color-text-secondary);
   margin: 0;
@@ -4359,7 +4360,7 @@ summary.centerBlock {
 }
 
 .whereYouLeftOffRowValue {
-  margin: 0;
+  margin: var(--space-1) 0 0;
   color: var(--color-text-primary);
   word-break: break-word;
 }
@@ -4569,11 +4570,11 @@ summary.centerBlock {
 @media (max-width: 640px) {
   .whereYouLeftOffRowsList {
     grid-template-columns: 1fr;
-    row-gap: var(--space-1);
+    row-gap: 0;
   }
 
   .whereYouLeftOffRowLabel {
-    margin-top: var(--space-1);
+    margin-top: 0;
   }
 }
 
@@ -4605,6 +4606,10 @@ summary.centerBlock {
   background: color-mix(in srgb, var(--color-warning) 12%, transparent);
   color: var(--color-text-primary);
   font-size: var(--font-size-xs);
+}
+
+.whereYouLeftOffRowValue + .whereYouLeftOffRowLabel {
+  margin-top: var(--space-3);
 }
 
 .whereYouLeftOffContainer[data-stale='true'] .whereYouLeftOffRowsList {

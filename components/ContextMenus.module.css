@@ -1,0 +1,21 @@
+.menu {
+  position: fixed;
+  z-index: 100;
+  border-radius: var(--radius-lg);
+  padding: var(--space-1) 0;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
+.narrow {
+  width: 13rem;
+}
+
+.wide {
+  width: 18rem;
+}
+
+.separator {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: color-mix(in srgb, var(--color-border-subtle) 15%, transparent);
+}

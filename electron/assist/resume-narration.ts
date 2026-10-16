@@ -347,7 +347,11 @@ export async function narrateResume(
 
   const modelConfig = deps.resolveModel('gitcron-assist', root);
   if (modelConfig.status !== 'resolved') {
-    return { status: 'unavailable', message: `El modelo no está disponible para gitcron-assist (${modelConfig.status}).` };
+    const message =
+      modelConfig.status === 'unset'
+        ? 'Todavía no elegiste un modelo para el chat. Elegilo en el selector del chat o en Motores y modelos.'
+        : 'El modelo elegido para el chat no está disponible ahora.';
+    return { status: 'unavailable', message };
   }
 
   const query = await queryModelForNarration(modelConfig, root, args.language, payloadBuild.json, deps.runText);

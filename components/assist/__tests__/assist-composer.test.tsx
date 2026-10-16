@@ -195,16 +195,18 @@ describe('AssistComposer component', () => {
 
     // Abre el menú
     fireEvent.click(menuBtn);
-    expect(screen.getByRole('menu')).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: '¿Qué hizo este commit?' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Nueva conversación' })).toBeTruthy();
+    const menu = screen.getByRole('menu');
+    expect(menu).toBeTruthy();
+    expect(menu.className).toContain('glass-overlay');
+    expect(screen.getByRole('button', { name: '¿Qué hizo este commit?' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
 
     // Escape lo cierra
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('el menú muestra los tres bloques en orden; un ítem deshabilitado no llama a onSelect y muestra su motivo', () => {
+  it('el menú muestra los tres bloques en orden con íconos; un ítem deshabilitado usa disabled, title y textSecondary sin llamar a onSelect', () => {
     mountApi();
     const onSelectAsk = vi.fn();
     const onSelectDo = vi.fn();
@@ -244,18 +246,23 @@ describe('AssistComposer component', () => {
     const menuBtn = screen.getByRole('button', { name: 'Más opciones' });
     fireEvent.click(menuBtn);
 
-    const menuitems = screen.getAllByRole('menuitem');
-    // El orden debe ser ask -> do -> app
+    const menu = screen.getByRole('menu');
+    const menuitems = Array.from(menu.querySelectorAll('button'));
+    // El orden debe ser ask -> do -> app y cada opción tiene su ícono SVG
     expect(menuitems[0].textContent).toContain('Preguntar algo');
     expect(menuitems[1].textContent).toContain('Ejecutar paso');
     expect(menuitems[2].textContent).toContain('Acción bloqueada');
     expect(menuitems[3].textContent).toContain('Nueva conversación');
+    for (const btn of menuitems) {
+      expect(btn.querySelector('svg')).toBeTruthy();
+    }
 
-    // Motivo del ítem deshabilitado
+    // Motivo del ítem deshabilitado como textSecondary y title en ContextMenuItem
     expect(screen.getByText('No disponible por fixture')).toBeTruthy();
 
-    const disabledBtn = screen.getByRole('menuitem', { name: /Acción bloqueada/ });
-    expect(disabledBtn.getAttribute('aria-disabled')).toBe('true');
+    const disabledBtn = menuitems[2];
+    expect(disabledBtn.disabled).toBe(true);
+    expect(disabledBtn.getAttribute('title')).toBe('No disponible por fixture');
 
     fireEvent.click(disabledBtn);
     expect(onSelectDisabled).not.toHaveBeenCalled();
