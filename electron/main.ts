@@ -21,6 +21,7 @@ import { registerGitSyncHandlers } from './ipc/git-sync';
 import { registerShellHandlers } from './ipc/shell';
 import { registerCartoHandlers } from './ipc/carto';
 import { registerCartoGraphHandlers } from './ipc/carto-graph';
+import { registerCartoScreensHandlers } from './ipc/carto-screens';
 import { registerCartoAiHandlers } from './ipc/carto-ai';
 import { registerCommitMessageAiHandlers } from './ipc/commit-message-ai';
 import { readLegacySources, registerAiUseHandlers } from './ipc/ai-use';
@@ -301,6 +302,7 @@ registerGitSyncHandlers();         // git push/pull/fetch (network)
 registerShellHandlers();           // shell:* + terminal:open + fs:delete-file
 registerCartoHandlers();           // carto:* handlers generales (sin canales activos en Fase 10)
 registerCartoGraphHandlers(getMainWindow); // carto:graph-* (CodeGraph embebido, local, solo lectura)
+registerCartoScreensHandlers();     // carto-screens:get (mapa de pantallas de Cartografía)
 registerCartoAiHandlers();         // carto:ai-* (proveedor de IA local/online; opt-in; secretos sólo en main)
 registerCommitMessageAiHandlers(); // commit-ai:* (redactar el asunto del commit con un modelo local; nunca solo)
 registerAiUseHandlers();           // ai-use:* (qué modelo usa cada uso de texto según gitcron.json; «usar lo que tenías»)

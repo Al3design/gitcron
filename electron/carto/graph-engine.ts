@@ -376,6 +376,18 @@ function emptyImpact(): CartoImpact {
   return { impactedFiles: [], impactedSymbols: [], total: 0, truncated: false };
 }
 
+/** Imports resueltos de un archivo según el índice; `null` si el índice no está listo. */
+export function graphFileDependencies(repoPath: string, filePath: string): string[] | null {
+  const cg = readyGraph(repoPath);
+  if (!cg) return null;
+  if (!cg.getFile(filePath)) return [];
+  try {
+    return cg.getFileDependencies(filePath);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Símbolos de un archivo (función/clase/método/…), para el selector de nodos del
  * panel de detalle. Excluye el nodo `file` (representa el archivo, no un símbolo) y

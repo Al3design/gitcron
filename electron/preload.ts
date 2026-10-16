@@ -410,6 +410,9 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('carto:graph-updated', handler);
     },
   },
+  cartoScreens: {
+    get: (repoPath: string) => ipcRenderer.invoke('carto-screens:get', { repoPath }),
+  },
   // Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).
   // Opt-in, apagada por defecto. Las keys nunca cruzan este límite.
   cartoAi: {

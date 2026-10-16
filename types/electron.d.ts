@@ -30,6 +30,7 @@ import type {
   CartoAskResult,
   CartoPanoramaResult,
 } from './carto-ai';
+import type { ScreenMap } from './screen-map';
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
@@ -525,6 +526,9 @@ interface ElectronAPI {
     onProgress(cb: (payload: { repoPath: string; status: CartoGraphStatus }) => void): () => void;
     /** El watch re-sincronizó el índice del repo (relaciones frescas). Devuelve un disposer. */
     onUpdated(cb: (payload: { repoPath: string }) => void): () => void;
+  };
+  cartoScreens: {
+    get(repoPath: string): Promise<GitResult<ScreenMap>>;
   };
   /**
    * Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).
