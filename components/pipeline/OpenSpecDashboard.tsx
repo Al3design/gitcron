@@ -127,6 +127,7 @@ type OpenSpecDashboardProps = {
   onResizeLeft?: (event: React.MouseEvent) => void;
   onResizeRight?: (event: React.MouseEvent) => void;
   onEnsureRightOpen?: () => void;
+  onEnsureRightClosed?: () => void;
   projection: RuntimeProjection | null;
   runtimeHistory: RuntimeProjection[];
   /** Hay datos de vista previa en pantalla: nada ejecutable puede habilitarse. */
@@ -214,6 +215,7 @@ export function OpenSpecDashboard({
   onResizeLeft,
   onResizeRight,
   onEnsureRightOpen,
+  onEnsureRightClosed,
   projection,
   runtimeHistory = [],
   fixtureActive = false,
@@ -1207,6 +1209,7 @@ export function OpenSpecDashboard({
         repoPath={repoPath}
         setPrepareOpen={setPrepareOpen}
         onEnsureRightOpen={onEnsureRightOpen}
+        onEnsureRightClosed={onEnsureRightClosed}
         isSwitcherOpen={isSwitcherOpen}
         setIsSwitcherOpen={setIsSwitcherOpen}
         isSwitcherVisible={isSwitcherVisible}

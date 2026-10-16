@@ -708,7 +708,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     );
 
     const chipOutdated = await screen.findByRole('status', { name: /OpenSpec v1\.8\.0/i });
-    expect(chipOutdated.className).toMatch(/text-warning/);
+    expect(chipOutdated.getAttribute('data-attention')).toBe('true');
     expect(chipOutdated.getAttribute('title')).toMatch(/desactualizada/i);
     unmount1();
 
@@ -735,7 +735,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     );
 
     const chipNotInit = await screen.findByRole('status', { name: /OpenSpec v1\.8\.0/i });
-    expect(chipNotInit.className).toMatch(/text-warning/);
+    expect(chipNotInit.getAttribute('data-attention')).toBe('true');
     expect(chipNotInit.getAttribute('title')).toMatch(/no está inicializado/i);
     unmount2();
 
@@ -768,7 +768,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     );
 
     const chipDivergent = await screen.findByRole('status', { name: /OpenSpec v1\.8\.0/i });
-    expect(chipDivergent.className).toMatch(/text-warning/);
+    expect(chipDivergent.getAttribute('data-attention')).toBe('true');
     expect(chipDivergent.getAttribute('title')).toMatch(/divergen/i);
     unmount3();
 
@@ -790,7 +790,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     );
 
     const chipClean = await screen.findByRole('status', { name: /OpenSpec v1\.14\.0/i });
-    expect(chipClean.className).not.toMatch(/text-warning/);
+    expect(chipClean.getAttribute('data-attention')).toBeNull();
     unmount4();
 
     vi.unstubAllGlobals();
@@ -829,7 +829,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     );
 
     const chipBehind = await screen.findByRole('status', { name: /OpenSpec v1\.8\.0/i });
-    expect(chipBehind.className).toMatch(/text-warning/);
+    expect(chipBehind.getAttribute('data-attention')).toBe('true');
     expect(chipBehind.getAttribute('title')).toMatch(/anterior al ciclo declarado/i);
 
     vi.unstubAllGlobals();
@@ -869,7 +869,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
 
     const chipNotDetected = await screen.findByRole('status', { name: /OpenSpec:\s*sin detectar/i });
     expect(chipNotDetected).toBeTruthy();
-    expect(chipNotDetected.className).toMatch(/text-warning/);
+    expect(chipNotDetected.getAttribute('data-attention')).toBe('true');
     expect(chipNotDetected.textContent).not.toContain(OPENSPEC_CYCLE_TARGET_VERSION);
     expect(chipNotDetected.getAttribute('title') ?? '').not.toContain(OPENSPEC_CYCLE_TARGET_VERSION);
 
@@ -910,7 +910,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
 
     const chipAbsent = await screen.findByRole('status', { name: /Ausente/i });
     expect(chipAbsent).toBeTruthy();
-    expect(chipAbsent.className).toMatch(/text-warning/);
+    expect(chipAbsent.getAttribute('data-attention')).toBe('true');
     expect(chipAbsent.textContent).not.toContain(OPENSPEC_CYCLE_TARGET_VERSION);
     expect(chipAbsent.getAttribute('title') ?? '').not.toContain(OPENSPEC_CYCLE_TARGET_VERSION);
 
@@ -1199,7 +1199,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     vi.unstubAllGlobals();
   });
 
-  it('motor 1.14.0 sano y latest 1.15.0: la píldora avisa con punto, texto en title y clase text-warning (6.7-B + decisión 2026-09-14)', async () => {
+  it('motor 1.14.0 sano y latest 1.15.0: la píldora avisa con punto, texto en title y marca de atención (6.7-B + decisión 2026-09-14)', async () => {
     const status114Healthy: OpenSpecEngineStatus = {
       ...dummyStatusHealthy,
       cli: {
@@ -1257,7 +1257,7 @@ describe('OpenSpecDashboard Integration (Ubicación, Jerarquía Visual y Cablead
     expect(dot.getAttribute('data-upgrade')).toBe('available');
 
     // versión nueva → ámbar, decisión de Alejandro 2026-09-14
-    expect(pill.className).toContain('text-warning');
+    expect(pill.getAttribute('data-attention')).toBe('true');
 
     vi.unstubAllGlobals();
   });

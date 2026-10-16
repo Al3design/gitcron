@@ -23,7 +23,7 @@ import {
 } from '../pipeline-domain';
 import type { OpenSpecEngineStatus } from '@/types/pipeline';
 import type { OpenSpecChangeSummary } from '../pipeline-view-state';
-import shared from '../OpenSpecDashboard.module.css';
+import styles from './SddStatusBar.module.css';
 
 const INTEGRATION_STATE_KEY_MAP: Record<string, string> = {
   'up-to-date': 'pipeline.openspec.engine.integrationState.upToDate',
@@ -47,6 +47,7 @@ export interface SddStatusBarProps {
   repoPath: string;
   setPrepareOpen: (open: boolean, repoPath?: string) => void;
   onEnsureRightOpen?: () => void;
+  onEnsureRightClosed?: () => void;
   isSwitcherOpen: boolean;
   setIsSwitcherOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isSwitcherVisible: boolean;
@@ -69,9 +70,9 @@ function BranchTrackingIndicator({
       <div
         role="status"
         title={t('sidebar.branchStatus.gone', { upstream: tracking.upstream ?? '' })}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-error/15 text-error"
+        className={cn(styles.badge, styles.badgeGone)}
       >
-        <AlertCircle size={11} className="shrink-0" />
+        <AlertCircle size={11} className={styles.icon} />
         <span>{t('sidebar.upstreamGone')}</span>
       </div>
     );
@@ -85,9 +86,9 @@ function BranchTrackingIndicator({
           ahead: tracking.ahead,
           behind: tracking.behind,
         })}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-secondary/10 text-secondary font-mono"
+        className={cn(styles.badge, styles.badgeMono, styles.badgeSynced)}
       >
-        <GitMerge size={11} className="shrink-0" />
+        <GitMerge size={11} className={styles.icon} />
         <span>+{tracking.ahead} -{tracking.behind}</span>
       </div>
     );
@@ -97,9 +98,9 @@ function BranchTrackingIndicator({
       <div
         role="status"
         title={t('sidebar.branchStatus.synced', { upstream: tracking.upstream ?? '' })}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-secondary/10 text-secondary"
+        className={cn(styles.badge, styles.badgeSynced)}
       >
-        <Check size={11} strokeWidth={2.5} className="shrink-0" />
+        <Check size={11} strokeWidth={2.5} className={styles.icon} />
         <span>{t('sidebar.branchStatus.syncedShort')}</span>
       </div>
     );
@@ -108,9 +109,9 @@ function BranchTrackingIndicator({
     <div
       role="status"
       title={t('sidebar.branchStatus.local')}
-      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 bg-text-primary/[0.035] text-text-secondary/80"
+      className={cn(styles.badge, styles.badgeLocal)}
     >
-      <Monitor size={11} className="shrink-0" />
+      <Monitor size={11} className={styles.icon} />
       <span>{t('sidebar.branchStatus.localShort')}</span>
     </div>
   );
@@ -234,9 +235,9 @@ function EngineVersionIndicator({
       <div
         role="status"
         title={t('pipeline.openspec.engine.reading')}
-        className="relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 font-mono bg-text-primary/[0.035] text-text-secondary/80"
+        className={cn(styles.badge, styles.badgeMono, styles.badgeMuted)}
       >
-        <Package size={11} className="shrink-0 animate-pulse" />
+        <Package size={11} className={cn(styles.icon, styles.badgePulse)} />
         <span>{t('pipeline.openspec.engine.reading')}</span>
       </div>
     );
@@ -253,20 +254,20 @@ function EngineVersionIndicator({
     <div
       role="status"
       title={engineTitle}
+      data-attention={engineAttention ? 'true' : undefined}
       onClick={onOpenReview}
       className={cn(
-        'relative flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0 font-mono',
-        engineAttention
-          ? 'bg-warning/15 text-warning'
-          : 'bg-text-primary/[0.035] text-text-secondary/80',
-        'cursor-pointer hover:bg-text-primary/[0.07]',
+        styles.badge,
+        styles.badgeMono,
+        styles.badgeInteractive,
+        engineAttention ? styles.badgeWarning : styles.badgeMuted,
       )}
     >
-      <Package size={11} className="shrink-0" />
+      <Package size={11} className={styles.icon} />
       <span>{versionStr}</span>
       {upgrade && (
         <span
-          className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-git-mod ring-2 ring-bg-base/70 shadow-[0_0_8px_var(--color-git-mod)]"
+          className={styles.upgradeDot}
           aria-label={t('pipeline.openspec.engine.pill.upgradeAvailable', { latest: upgrade.latest })}
           data-upgrade="available"
         />
@@ -283,22 +284,22 @@ function ValidationIndicator({
   const t = useT();
   const valStatus = selectedChange?.validation;
   let valText = t('pipeline.openspec.notApplicable');
-  let valClass = 'bg-text-primary/[0.035] text-text-secondary/80';
-  let valIcon = <ShieldCheck size={11} className="shrink-0" />;
+  let valClass = styles.badgeMuted;
+  let valIcon = <ShieldCheck size={11} className={styles.icon} />;
 
   if (selectedChange) {
     if (valStatus === 'passed') {
       valText = t('pipeline.openspec.validation.passed');
-      valClass = 'bg-secondary/10 text-secondary';
-      valIcon = <Check size={11} strokeWidth={2.5} className="shrink-0" />;
+      valClass = styles.badgeClean;
+      valIcon = <Check size={11} strokeWidth={2.5} className={styles.icon} />;
     } else if (valStatus === 'failed') {
       valText = t('pipeline.openspec.validation.failed');
-      valClass = 'bg-error/15 text-error';
-      valIcon = <AlertCircle size={11} className="shrink-0" />;
+      valClass = styles.badgeError;
+      valIcon = <AlertCircle size={11} className={styles.icon} />;
     } else {
       valText = t('pipeline.openspec.validation.unknown');
-      valClass = 'bg-text-primary/[0.035] text-text-secondary/80';
-      valIcon = <ShieldCheck size={11} className="shrink-0" />;
+      valClass = styles.badgeMuted;
+      valIcon = <ShieldCheck size={11} className={styles.icon} />;
     }
   }
 
@@ -306,10 +307,7 @@ function ValidationIndicator({
     <div
       role="status"
       title={`${t('pipeline.openspec.evidence.validation')}: ${valText}`}
-      className={cn(
-        'flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0',
-        valClass,
-      )}
+      className={cn(styles.badge, valClass)}
     >
       {valIcon}
       <span>{valText}</span>
@@ -331,6 +329,7 @@ export function SddStatusBar({
   repoPath,
   setPrepareOpen,
   onEnsureRightOpen,
+  onEnsureRightClosed,
   isSwitcherOpen,
   setIsSwitcherOpen,
   isSwitcherVisible,
@@ -339,15 +338,44 @@ export function SddStatusBar({
 }: SddStatusBarProps) {
   const t = useT();
 
+  const isToggleDisabled = Boolean(rightOpen && !onEnsureRightClosed);
+  // Con «Preparar commit» abierta no hay riel en pantalla aunque la preferencia diga que sí.
+  const navVisible = isSwitcherVisible && !prepareOpen;
+  const toggleLabel = navVisible
+    ? t('pipeline.switcher.hideNav')
+    : t('pipeline.switcher.showNav');
+  const toggleTitle = navVisible
+    ? t('pipeline.switcher.hideNav')
+    : rightOpen
+      ? (onEnsureRightClosed
+          ? t('pipeline.switcher.showNavClosesInspector')
+          : t('pipeline.switcher.toggleDisabledHelp'))
+      : t('pipeline.switcher.showNav');
+
+  // «Preparar commit» no tiene riel: mostrar la navegación desde ahí también cierra esa vista,
+  // si no el botón diría que la navegación está a la vista sin que aparezca nada.
+  const handleToggleClick = () => {
+    if (rightOpen || prepareOpen) {
+      if (rightOpen) {
+        if (!onEnsureRightClosed) return;
+        onEnsureRightClosed();
+      }
+      if (prepareOpen) setPrepareOpen(false, repoPath);
+      setIsSwitcherOpen(true);
+    } else {
+      setIsSwitcherOpen((prev) => !prev);
+    }
+  };
+
   return (
-    <ContentHeader className="h-11 border-b border-border-subtle/15 flex items-center justify-between gap-3 normal-case font-normal shrink-0">
+    <ContentHeader className={cn('h-11', styles.statusBar)}>
       {/* Left: Branch name and repo status indicators */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className={styles.leftGroup}>
         {/* Branch name */}
-        <div className="flex items-center gap-1.5 min-w-0 shrink">
-          <GitBranch size={13} className="shrink-0 text-text-secondary/70" />
+        <div className={styles.branchWrapper}>
+          <GitBranch size={13} className={styles.branchIcon} />
           <span
-            className="font-mono font-semibold text-xs text-text-primary truncate"
+            className={styles.branchName}
             title={currentBranch || '-'}
           >
             {currentBranch || '-'}
@@ -355,22 +383,20 @@ export function SddStatusBar({
         </div>
 
         {/* Indicators */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className={styles.indicatorsGroup}>
           {/* Working tree state */}
           <div
             role="status"
             title={workingTreeClean ? t('pipeline.openspec.repo.clean') : t('pipeline.openspec.repo.changed')}
             className={cn(
-              'flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-2xs)] font-semibold shrink-0',
-              workingTreeClean
-                ? 'bg-secondary/10 text-secondary'
-                : 'bg-git-mod/15 text-git-mod'
+              styles.badge,
+              workingTreeClean ? styles.badgeClean : styles.badgeModified,
             )}
           >
             {workingTreeClean ? (
-              <Check size={11} strokeWidth={2.5} className="shrink-0" />
+              <Check size={11} strokeWidth={2.5} className={styles.icon} />
             ) : (
-              <AlertCircle size={11} className="shrink-0" />
+              <AlertCircle size={11} className={styles.icon} />
             )}
             <span>
               {workingTreeClean
@@ -397,8 +423,8 @@ export function SddStatusBar({
       </div>
 
       {/* Right: Acciones de encabezado */}
-      <div className="shrink-0 ml-auto flex items-center gap-1.5">
-        <div className="bg-bg-base/80 border border-border-subtle/30 rounded-lg flex items-center p-0.5 shadow-sm">
+      <div className={styles.rightGroup}>
+        <div className={styles.pillWrapper}>
           <button
             type="button"
             data-clean={workingTreeClean}
@@ -412,40 +438,34 @@ export function SddStatusBar({
               }
             }}
             className={cn(
-              "h-7 px-2.5 py-1 rounded-md transition-all duration-150 flex items-center justify-center gap-1.5",
-              prepareOpen
-                ? "bg-secondary/15 text-secondary shadow-[0_0_6px_color-mix(in_srgb,var(--color-git-add)_25%,transparent)]"
-                : "text-text-secondary hover:text-text-primary hover:bg-border-subtle/50"
+              styles.prepareBtn,
+              prepareOpen && styles.prepareBtnActive,
             )}
           >
-            <GitCommit size={13} className="shrink-0" />
-            <span className="text-[length:var(--font-size-xs)] leading-none font-semibold">{t('pipeline.openspec.prepare.open')}</span>
+            <GitCommit size={13} className={styles.icon} />
+            <span className={styles.prepareBtnLabel}>{t('pipeline.openspec.prepare.open')}</span>
           </button>
         </div>
 
         {/* Alternar resumen fijado (intercambiador de vistas) */}
-        <div className="bg-bg-base/80 border border-border-subtle/30 rounded-lg flex items-center p-0.5 shadow-sm">
+        <div className={styles.pillWrapper}>
           <button
             type="button"
             data-testid="pipeline.switcher.toggle"
             data-active={isSwitcherOpen ? 'true' : undefined}
-            aria-label={t('pipeline.switcher.toggle')}
-            aria-expanded={isSwitcherVisible}
-            aria-disabled={rightOpen}
-            disabled={rightOpen}
-            title={rightOpen ? t('pipeline.switcher.toggleDisabledHelp') : t('pipeline.switcher.toggle')}
-            onClick={() => {
-              if (!rightOpen) {
-                setIsSwitcherOpen((prev) => !prev);
-              }
-            }}
+            aria-label={toggleLabel}
+            aria-expanded={navVisible}
+            aria-disabled={isToggleDisabled}
+            disabled={isToggleDisabled}
+            title={toggleTitle}
+            onClick={handleToggleClick}
             className={cn(
-              shared.iconBtn,
-              isSwitcherOpen && shared.iconBtnActive,
-              rightOpen && "opacity-50 cursor-not-allowed"
+              styles.toggleBtn,
+              isSwitcherOpen && styles.toggleBtnActive,
+              isToggleDisabled && styles.toggleBtnDisabled,
             )}
           >
-            <PanelRight size={13} className="shrink-0" />
+            <PanelRight size={13} className={styles.icon} />
           </button>
         </div>
       </div>

@@ -365,29 +365,31 @@ export function OpenSpecInspector({
           </section>
         </SidebarSection>
 
-        <SidebarSection
-          title={t('pipeline.openspec.attention.title')}
-          count={snapshot?.decisions?.length}
-          icon={<AlertTriangle size={13} aria-hidden="true" />}
-          isOpen={sectionState.isOpen('details-attention')}
-          onToggle={() => sectionState.toggle('details-attention')}
-        >
-          <section
-            className={styles.attention}
-            data-needed={(snapshot?.decisions?.length ?? 0) > 0}
-            ref={attentionRef}
-            tabIndex={-1}
-            aria-label={t('pipeline.openspec.attention.title')}
+        {((snapshot?.decisions && snapshot.decisions.length > 0) || Boolean(controlNotice)) && (
+          <SidebarSection
+            title={t('pipeline.openspec.attention.title')}
+            count={snapshot?.decisions?.length}
+            icon={<AlertTriangle size={13} aria-hidden="true" />}
+            isOpen={sectionState.isOpen('details-attention')}
+            onToggle={() => sectionState.toggle('details-attention')}
           >
-            <DecisionInbox
-              decisions={snapshot?.decisions ?? []}
-              onRespondDecision={onRespondDecision}
-              controlNotice={controlNotice}
-              sendingDecisions={sendingDecisions}
-              repoPath={repoPath}
-            />
-          </section>
-        </SidebarSection>
+            <section
+              className={styles.attention}
+              data-needed={(snapshot?.decisions?.length ?? 0) > 0}
+              ref={attentionRef}
+              tabIndex={-1}
+              aria-label={t('pipeline.openspec.attention.title')}
+            >
+              <DecisionInbox
+                decisions={snapshot?.decisions ?? []}
+                onRespondDecision={onRespondDecision}
+                controlNotice={controlNotice}
+                sendingDecisions={sendingDecisions}
+                repoPath={repoPath}
+              />
+            </section>
+          </SidebarSection>
+        )}
 
         <SidebarSection
           title={t('pipeline.openspec.rail.tools')}

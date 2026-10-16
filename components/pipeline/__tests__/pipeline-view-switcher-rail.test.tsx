@@ -121,4 +121,34 @@ describe('ViewSwitcherRail - Intercambiador modular de vistas', () => {
     // Los ítems del riel permanecen siempre visibles
     expect(screen.getByRole('button', { name: /Archivados/ })).toBeTruthy();
   });
+  it('mientras está plegado (isFolded), ViewSwitcherRail tiene el atributo inert para evitar foco y clics', () => {
+    const views: ViewSwitcherItem[] = [
+      { id: 'archived', label: 'Archivados', slotIndex: 1 },
+    ];
+
+    const { container, rerender } = render(
+      <ViewSwitcherRail
+        views={views}
+        activeViewId="in-progress"
+        onSwitchView={() => undefined}
+        isFolded={true}
+      />,
+    );
+
+    const rail = container.querySelector('nav[class*="switcherRail"]');
+    expect(rail).toBeTruthy();
+    expect(rail?.hasAttribute('inert')).toBe(true);
+
+    // Al desplegarse (isFolded: false), se remueve inert
+    rerender(
+      <ViewSwitcherRail
+        views={views}
+        activeViewId="in-progress"
+        onSwitchView={() => undefined}
+        isFolded={false}
+      />,
+    );
+
+    expect(rail?.hasAttribute('inert')).toBe(false);
+  });
 });

@@ -821,6 +821,7 @@ export default function GitCronPage() {
   const {
     sidebarW, detailsW, sidebarOpen, detailsOpen, isDragging, graphColumns,
     beginColDrag, beginGraphColDrag, toggleSidebar, toggleDetails, ensureDetailsOpen,
+    ensureDetailsClosed,
   } = usePanelLayout();
   const repositoryDetailsVisible = detailsOpen && activeView === 'repository' && !!repoPath && !isRepoStartView && !cartographyActive;
   const leftGraphSafe = 0;
@@ -1688,6 +1689,7 @@ export default function GitCronPage() {
               pipelineLayout: {
                 rightOpen: repositoryDetailsVisible,
                 onEnsureRightOpen: ensureDetailsOpen,
+                onEnsureRightClosed: ensureDetailsClosed,
               },
               onSelectCommit: handleSelectCommit,
               onCommitContextMenu: (event, commit) => openContextMenu({ x: event.clientX, y: event.clientY, hash: commit.hash }),

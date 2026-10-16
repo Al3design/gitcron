@@ -1,2 +1,260 @@
-/* Estilos exclusivos de SddStatusBar (Tanda 3: Tarea 2.3) */
-/* La mayoría de los controles usan Tailwind y utilidades atómicas estándar del ContentHeader */
+/* Estilos exclusivos de SddStatusBar (Tanda 21: Tarea 3.4) */
+
+.statusBar {
+  height: 2.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border-subtle) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-weight: 400;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+.leftGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.branchWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.branchIcon {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.branchName {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicatorsGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* Mismo tamaño que antes de pasar a módulo (6 px por 2 px). */
+  padding: calc(var(--space-1) / 2) calc(var(--space-1) * 1.5);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.badgeMono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.badgeClean,
+.badgeSynced {
+  background: color-mix(in srgb, var(--color-secondary) 10%, transparent);
+  color: var(--color-secondary);
+}
+
+.badgeModified {
+  background: color-mix(in srgb, var(--color-git-mod) 15%, transparent);
+  color: var(--color-git-mod);
+}
+
+.badgeError,
+.badgeGone {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
+}
+
+.badgeWarning {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
+}
+
+.badgeMuted,
+.badgeLocal {
+  background: color-mix(in srgb, var(--color-text-primary) 3.5%, transparent);
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, transparent);
+}
+
+.badgeInteractive {
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms ease;
+}
+
+.badgeInteractive:hover {
+  background: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+}
+
+.badgeInteractive:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.badgeInteractive::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+  min-height: 44px;
+}
+
+.badgePulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.upgradeDot {
+  position: absolute;
+  right: -0.25rem;
+  top: -0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-git-mod);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-bg-base) 70%, transparent), 0 0 8px var(--color-git-mod);
+}
+
+.rightGroup {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pillWrapper {
+  background: color-mix(in srgb, var(--color-bg-base) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  padding: var(--space-1);
+}
+
+.prepareBtn {
+  position: relative;
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.prepareBtn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.prepareBtn:hover {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.prepareBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.prepareBtnActive {
+  background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  color: var(--color-secondary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-git-add) 25%, transparent);
+}
+
+.prepareBtnActive:hover {
+  background: color-mix(in srgb, var(--color-secondary) 20%, transparent);
+  color: var(--color-secondary);
+}
+
+.prepareBtnLabel {
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  font-weight: 600;
+}
+
+.toggleBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+  flex-shrink: 0;
+}
+
+.toggleBtn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.toggleBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+  color: var(--color-text-primary);
+}
+
+.toggleBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.toggleBtnActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.toggleBtn:disabled,
+.toggleBtnDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

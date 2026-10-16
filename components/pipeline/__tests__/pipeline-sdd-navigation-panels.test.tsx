@@ -1,3 +1,5 @@
+import { renderHook, act } from '@testing-library/react';
+import { usePanelLayout } from '@/hooks/use-panel-layout';
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +18,9 @@ const testTranslations: Record<string, string> = {
   'pipeline.openspec.attention.title': 'Necesita atención',
   'pipeline.decision.viewEvidence': 'Ver evidencia',
   'pipeline.next.task.action': 'Aplicar {{task}}',
+  'pipeline.switcher.showNav': 'Mostrar navegación de SDD',
+  'pipeline.switcher.hideNav': 'Ocultar navegación de SDD',
+  'pipeline.switcher.showNavClosesInspector': 'Cierra el inspector para mostrar la navegación de SDD',
 };
 
 vi.mock('@/hooks/use-translation', () => ({
@@ -271,6 +276,7 @@ function SddHarness({
           onResizeLeft={vi.fn()}
           onResizeRight={vi.fn()}
           onEnsureRightOpen={() => setRightOpen(true)}
+          onEnsureRightClosed={() => setRightOpen(false)}
           projection={null}
           runtimeHistory={[]}
           onRefresh={vi.fn()}
@@ -530,5 +536,105 @@ describe('Tarea 4.1: Navegación de SDD entre objetivo, tarea, artefactos y revi
     expect(detailsPanel.style.visibility).toBe('visible');
     expect(usePipelineStore.getState().prepareOpen).toBe(true);
     expect(screen.getByRole('region', { name: 'pipeline.openspec.prepare.title' })).toBeTruthy();
+  });
+  it('6. Con inspector abierto, el botón de navegación lo cierra mediante el callback del armazón y muestra el riel', () => {
+    const { container } = render(<SddHarness initialRightOpen={true} />);
+    const detailsPanel = container.querySelector('[data-testid="repo-details-panel"]') as HTMLElement;
+    expect(detailsPanel.style.visibility).toBe('visible');
+
+    const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
+    expect(toggleBtn.getAttribute('disabled')).toBeNull();
+    expect(toggleBtn.getAttribute('title')).toBe('Cierra el inspector para mostrar la navegación de SDD');
+    expect(toggleBtn.getAttribute('aria-label')).toBe('Mostrar navegación de SDD');
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+
+    // 1ra pulsación: cierra el inspector fijo y muestra el riel
+    fireEvent.click(toggleBtn);
+    expect(detailsPanel.style.visibility).toBe('hidden');
+    expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(toggleBtn.getAttribute('aria-label')).toBe('Ocultar navegación de SDD');
+
+    // 2da pulsación: oculta el riel
+    fireEvent.click(toggleBtn);
+    expect(container.querySelector('nav[class*="switcherRail"]')).toBeNull();
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+    expect(toggleBtn.getAttribute('aria-label')).toBe('Mostrar navegación de SDD');
+
+    // 3ra pulsación: vuelve a mostrar el riel
+    fireEvent.click(toggleBtn);
+    expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(toggleBtn.getAttribute('aria-label')).toBe('Ocultar navegación de SDD');
+  });
+
+  it('6b. Desde «Preparar commit», mostrar la navegación cierra esa vista y el inspector, y el riel aparece de verdad', () => {
+    const { container } = render(<SddHarness initialRightOpen={false} />);
+    const detailsPanel = container.querySelector('[data-testid="repo-details-panel"]') as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: 'pipeline.openspec.prepare.open' }));
+    expect(usePipelineStore.getState().prepareOpen).toBe(true);
+    expect(detailsPanel.style.visibility).toBe('visible');
+
+    const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
+    // Sin riel en pantalla, el botón no dice que la navegación está a la vista.
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+    expect(toggleBtn.getAttribute('aria-label')).toBe('Mostrar navegación de SDD');
+
+    fireEvent.click(toggleBtn);
+    expect(usePipelineStore.getState().prepareOpen).toBe(false);
+    expect(detailsPanel.style.visibility).toBe('hidden');
+    expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
+    expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+  });
+  it('7. Sin avisos y sin error, no hay sección «Necesita atención»; con aviso o error de control sí hay contenido alcanzable', () => {
+    // Caso A: Sin avisos ni error -> sección no se monta
+    const cleanSnap = mockSnapshot({ decisions: [] });
+    const { container, unmount } = render(<SddHarness snapshot={cleanSnap} initialRightOpen={true} />);
+    expect(screen.queryByRole('region', { name: 'Necesita atención' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Avisos' })).toBeNull();
+    expect(screen.queryByText(/No hay avisos pendientes/)).toBeNull();
+    unmount();
+
+    // Caso B: Con aviso informativo -> sección se monta con su tarjeta
+    const snapWithDecision = mockSnapshot({
+      decisions: [{
+        decisionId: 'dec-info',
+        changeId: 'cambio-operativo',
+        title: 'Aviso informativo de prueba',
+        options: [{ id: 'opt-1', labelKey: 'pipeline.decision.viewEvidence', availability: 'informational' }],
+        evidenceRefs: [],
+      }],
+    });
+    const { unmount: unmountDecision } = render(<SddHarness snapshot={snapWithDecision} initialRightOpen={true} />);
+    openSidebarSection('C:/repo-test', 'details-attention');
+    expect(screen.getByRole('button', { name: /Necesita atención/ })).toBeTruthy();
+    expect(screen.getByText('Aviso informativo de prueba')).toBeTruthy();
+    unmountDecision();
+  });
+
+  it('8. ensureDetailsClosed es idempotente y persiste su estado en localStorage', () => {
+    const { result } = renderHook(() => usePanelLayout());
+
+    // Asegurar abierto primero
+    act(() => {
+      result.current.ensureDetailsOpen();
+    });
+    expect(result.current.detailsOpen).toBe(true);
+    expect(localStorage.getItem('gitcron:detailsOpen')).toBe('true');
+
+    // Cierre idempotente: primer llamado
+    act(() => {
+      result.current.ensureDetailsClosed();
+    });
+    expect(result.current.detailsOpen).toBe(false);
+    expect(localStorage.getItem('gitcron:detailsOpen')).toBe('false');
+
+    // Cierre idempotente: segundo llamado consecutivo no alterna (permanece cerrado)
+    act(() => {
+      result.current.ensureDetailsClosed();
+    });
+    expect(result.current.detailsOpen).toBe(false);
+    expect(localStorage.getItem('gitcron:detailsOpen')).toBe('false');
   });
 });
