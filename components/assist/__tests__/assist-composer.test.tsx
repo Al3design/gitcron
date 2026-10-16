@@ -214,9 +214,10 @@ describe('AssistComposer component', () => {
     const onSelectApp = vi.fn();
 
     const menuItems = [
-      { id: 'app-item', label: 'Nueva conversación', onSelect: onSelectApp, section: 'app' as const },
-      { id: 'ask-item', label: 'Preguntar algo', onSelect: onSelectAsk, section: 'ask' as const },
-      { id: 'do-item', label: 'Ejecutar paso', onSelect: onSelectDo, section: 'do' as const },
+      // El chat le pasa a cada ítem su ícono; el cuadro de texto lo dibuja tal cual.
+      { id: 'app-item', label: 'Nueva conversación', onSelect: onSelectApp, section: 'app' as const, icon: <svg data-icon="app" /> },
+      { id: 'ask-item', label: 'Preguntar algo', onSelect: onSelectAsk, section: 'ask' as const, icon: <svg data-icon="ask" /> },
+      { id: 'do-item', label: 'Ejecutar paso', onSelect: onSelectDo, section: 'do' as const, icon: <svg data-icon="do" /> },
       {
         id: 'do-disabled',
         label: 'Acción bloqueada',
@@ -224,6 +225,7 @@ describe('AssistComposer component', () => {
         hint: 'No disponible por fixture',
         onSelect: onSelectDisabled,
         section: 'do' as const,
+        icon: <svg data-icon="disabled" />,
       },
     ];
 
