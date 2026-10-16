@@ -191,8 +191,8 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
     const writtenText = fs.readFileSync(globalConfigPath, 'utf8');
     expect(writtenText).toContain('// Mi configuracion personal');
     const parsed = parse(writtenText);
+    expect(parsed.model).toBe('codex/gpt-5.6-sol');
     expect(parsed.agent['gitcron-commit']).toEqual({
-      model: 'codex/gpt-5.6-sol',
       options: { reasoning_effort: 'ultra' },
     });
   });
@@ -222,10 +222,8 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
     expect(res.success).toBe(true);
     const writtenText = fs.readFileSync(globalConfigPath, 'utf8');
     const parsed = JSON.parse(writtenText);
-    expect(parsed.agent['gitcron-commit']).toEqual({
-      model: 'codex/gpt-5.6-sol',
-    });
-    expect(parsed.agent['gitcron-commit']).not.toHaveProperty('options');
+    expect(parsed.model).toBe('codex/gpt-5.6-sol');
+    expect(parsed.agent?.['gitcron-commit']).toBeUndefined();
   });
 
   it('quitar el nivel conserva otras claves en options', async () => {
@@ -254,8 +252,8 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
 
     expect(res.success).toBe(true);
     const parsed = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
+    expect(parsed.model).toBe('codex/gpt-5.6-sol');
     expect(parsed.agent['gitcron-commit']).toEqual({
-      model: 'codex/gpt-5.6-sol',
       options: {
         temperature: 0.2,
       },
@@ -295,14 +293,50 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
 
     // El del repositorio se actualizó
     const repoParsed = JSON.parse(fs.readFileSync(repoConfigPath, 'utf8'));
+    expect(repoParsed.model).toBe('codex/gpt-5.6-sol');
     expect(repoParsed.agent['gitcron-commit']).toEqual({
-      model: 'codex/gpt-5.6-sol',
       options: { reasoning_effort: 'low' },
     });
 
     // El global no se tocó
     const globalParsed = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
     expect(globalParsed).not.toHaveProperty('agent');
+  });
+
+  it('ai-use:choose escribe model en la raíz, borra agent.<uso>.model, conserva options/effort y no toca otro uso', async () => {
+    fs.writeFileSync(globalConfigPath, JSON.stringify({
+      model: 'codex/gpt-5.5',
+      agent: {
+        'gitcron-commit': {
+          model: 'codex/gpt-5.5',
+          options: { reasoning_effort: 'low' },
+        },
+        'gitcron-cartography': {
+          model: 'casa/qwen',
+          options: { reasoning_effort: 'high' },
+        },
+      },
+    }, null, 2), 'utf8');
+
+    const chooseHandler = handlers.get('ai-use:choose')!;
+    const res = await chooseHandler({ sender }, {
+      use: 'gitcron-commit',
+      model: 'codex/gpt-5.6-sol',
+      effort: 'medium',
+    });
+
+    expect(res.success).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
+    // Escribe model en la raíz
+    expect(parsed.model).toBe('codex/gpt-5.6-sol');
+    // Borra agent.gitcron-commit.model y actualiza reasoning_effort
+    expect(parsed.agent['gitcron-commit'].model).toBeUndefined();
+    expect(parsed.agent['gitcron-commit'].options.reasoning_effort).toBe('medium');
+    // No toca otro uso
+    expect(parsed.agent['gitcron-cartography']).toEqual({
+      model: 'casa/qwen',
+      options: { reasoning_effort: 'high' },
+    });
   });
 
   it('un CLI que no está instalado no se puede guardar, aunque su lista sea fija (Claude Code)', async () => {
@@ -364,12 +398,17 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
       effort: 'medium',
     });
     expect(chooseRes.success).toBe(true);
-    expect(chooseRes.data.file).toBe(globalConfigPath);
+    // La elección general vale para toda la app (2026-10-16): el repositorio ya pisa la
+    // general, así que se escribe ahí; el modelo propio del uso se borra del global (si
+    // quedara, seguiría pisando la elección) y el nivel sigue con la entrada del uso.
+    expect(chooseRes.data.file).toBe(repoConfigPath);
 
     const globalContent = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
+    expect(globalContent.agent['gitcron-sdd'].model).toBeUndefined();
     expect(globalContent.agent['gitcron-sdd'].options.reasoning_effort).toBe('medium');
 
     const repoContent = JSON.parse(fs.readFileSync(repoConfigPath, 'utf8'));
+    expect(repoContent.model).toBe('codex/gpt-5.6-sol');
     expect(repoContent).not.toHaveProperty('agent');
 
     // 3b. Si el repositorio declara la entrada del agente, ésa es la que vale: se escribe ahí,
@@ -381,7 +420,9 @@ describe('ai-use:choose y ai-use:models (tarea 4.5)', () => {
       model: 'codex/gpt-5.6-sol',
     });
     expect(chooseRepo.success).toBe(true);
-    expect(JSON.parse(fs.readFileSync(repoConfigPath, 'utf8')).agent['gitcron-sdd'].model).toBe('codex/gpt-5.6-sol');
+    const repoConfig = JSON.parse(fs.readFileSync(repoConfigPath, 'utf8'));
+    expect(repoConfig.model).toBe('codex/gpt-5.6-sol');
+    expect(repoConfig.agent?.['gitcron-sdd']?.model).toBeUndefined();
 
     // 4. ai-use:last-request sigue rechazando gitcron-sdd
     const lastReqRes = await handlers.get('ai-use:last-request')!({ sender }, { use: 'gitcron-sdd' });

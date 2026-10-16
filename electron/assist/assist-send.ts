@@ -371,7 +371,6 @@ export async function sendAssistMessage(
       system,
       user,
       signal: controller.signal,
-      timeoutMs: 120_000,
       repoPath: root,
     });
     const durationMs = Date.now() - startTime;

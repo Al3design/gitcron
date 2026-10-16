@@ -315,9 +315,10 @@ describe('resume-narration service (Tarea 3.3)', () => {
     expect(deps.resolveModel).toHaveBeenCalledWith('gitcron-assist', authorizedRoot);
     expect(deps.runText).toHaveBeenCalledWith(validModelConfig, expect.objectContaining({
       maxTokens: 600,
-      timeoutMs: 30_000,
       repoPath: authorizedRoot,
     }));
+    // Sin espera fija: manda la del proveedor, o 120 s (2026-10-16; con 30 s Strata no llegaba).
+    expect((deps.runText as ReturnType<typeof vi.fn>).mock.calls[0][1].timeoutMs).toBeUndefined();
     const request = vi.mocked(deps.runText).mock.calls[0][1];
     expect(request.user).not.toContain(authorizedRoot);
     expect(request.user).toContain('openspec/changes/mi-cambio/tasks.md');

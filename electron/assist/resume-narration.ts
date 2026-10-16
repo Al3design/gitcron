@@ -280,7 +280,6 @@ async function queryModelForNarration(
       system,
       user: `Datos del cambio:\n${payloadJson}`,
       maxTokens: 600,
-      timeoutMs: 30_000,
       repoPath: root,
     });
     return { textResult };

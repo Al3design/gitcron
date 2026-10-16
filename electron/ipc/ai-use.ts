@@ -75,6 +75,21 @@ function offerFor(use: TextUse, repoPath: string | null, screenModel: string | n
   return { modelRef: offer.modelRef, label: offer.label, addsProvider: offer.addsProvider ? offer.providerId : null, file: offer.file };
 }
 
+/** Si el archivo tiene un valor en esa ruta (JSONC, sin lanzar si no existe o no se lee). */
+function existsAt(filePath: string, segments: (string | number)[]): boolean {
+  if (!nodeFs.existsSync(filePath)) return false;
+  const root = parseTree(nodeFs.readFileSync(filePath, 'utf8'));
+  return Boolean(root && findNodeAtLocation(root, segments));
+}
+
+/** Si en esa ruta hay un objeto sin claves. */
+function isEmptyObjectAt(filePath: string, segments: (string | number)[]): boolean {
+  if (!nodeFs.existsSync(filePath)) return false;
+  const root = parseTree(nodeFs.readFileSync(filePath, 'utf8'));
+  const node = root ? findNodeAtLocation(root, segments) : undefined;
+  return Boolean(node && node.type === 'object' && (node.children ?? []).length === 0);
+}
+
 export function registerAiUseHandlers(): void {
   ipcMain.handle('ai-use:status', async (_e, args: unknown): Promise<Result<AiUseStatus>> => {
     try {
@@ -344,35 +359,50 @@ export function registerAiUseHandlers(): void {
       const repo = repoPath ? authorizedRepoRoot(repoPath) : null;
       const loaded = loadGitCronConfig({ globalPath, repoPath: repo });
 
+      // Dos destinos (decisión de Alejandro, 2026-10-16): la elección general se escribe
+      // donde ya vale la general (el repositorio si la pisa), y lo propio del uso (nivel,
+      // variante) donde está la entrada del uso. El modelo propio del uso se borra en
+      // todos los archivos donde esté: si quedara en otro, seguiría pisando la elección.
       let targetFile = globalPath;
+      let generalFile = globalPath;
       const repoFile = loaded.files.find((f) => f.scope === 'repo');
       if (repo && repoFile?.exists && repoFile.path) {
-        // Se escribe donde está el modelo que vale. Con la entrada del uso en los dos
-        // archivos, el objeto `agent.<uso>` figura como del global aunque el repositorio
-        // pise su `model`: mirar el objeto escribiría donde no cambia nada.
-        if (loaded.originOf(['agent', use, 'model']) === repoFile.path) {
-          targetFile = repoFile.path;
-        }
+        // Con la entrada del uso en los dos archivos, el objeto `agent.<uso>` figura como
+        // del global aunque el repositorio pise su `model`: se mira el `model`.
+        // Si el repositorio ya tenía su elección (general o de este uso), la nueva queda en el
+        // repositorio y no se toca el global.
+        if (loaded.originOf(['agent', use, 'model']) === repoFile.path) targetFile = repoFile.path;
+        if (loaded.originOf(['model']) === repoFile.path || targetFile === repoFile.path) generalFile = repoFile.path;
       }
 
-      // Escribir modelo puntual
       let res = updateGitCronConfigValue({
-        filePath: targetFile,
-        segments: ['agent', use, 'model'],
+        filePath: generalFile,
+        segments: ['model'],
         value: model,
       });
       if (!res.ok) {
         throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
       }
 
-      // Escribir o borrar variante
-      res = updateGitCronConfigValue({
-        filePath: targetFile,
-        segments: ['agent', use, 'variant'],
-        value: variant || undefined,
-      });
-      if (!res.ok) {
-        throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+      const filesWithUseModel = [globalPath, ...(repoFile?.exists && repoFile.path ? [repoFile.path] : [])]
+        .filter((file) => existsAt(file, ['agent', use, 'model']));
+      for (const file of filesWithUseModel) {
+        res = updateGitCronConfigValue({ filePath: file, segments: ['agent', use, 'model'], value: undefined });
+        if (!res.ok) {
+          throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+        }
+      }
+
+      // Escribir o borrar variante (borrar sólo si está)
+      if (variant || existsAt(targetFile, ['agent', use, 'variant'])) {
+        res = updateGitCronConfigValue({
+          filePath: targetFile,
+          segments: ['agent', use, 'variant'],
+          value: variant || undefined,
+        });
+        if (!res.ok) {
+          throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+        }
       }
 
       // Escribir o borrar nivel de razonamiento
@@ -418,7 +448,17 @@ export function registerAiUseHandlers(): void {
         }
       }
 
-      return ok({ written: true, file: targetFile });
+      // Sin modelo, variante ni nivel, la entrada del uso queda vacía: se quita.
+      for (const file of new Set([targetFile, ...filesWithUseModel])) {
+        if (isEmptyObjectAt(file, ['agent', use])) {
+          res = updateGitCronConfigValue({ filePath: file, segments: ['agent', use], value: undefined });
+          if (!res.ok) {
+            throw new Error(res.reason === 'broken' ? 'El archivo tiene un error de sintaxis.' : 'No se pudo escribir el archivo.');
+          }
+        }
+      }
+
+      return ok({ written: true, file: generalFile });
     } catch (error) {
       return fail(error);
     }

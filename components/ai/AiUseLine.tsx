@@ -279,9 +279,6 @@ export function AiUseLine({
           }}
         />
       )}
-      {!status.offer && !withSelector && !isAgent && (
-        <p className={styles.note}>{t('aiUse.unsetHint', { use })}</p>
-      )}
       {adoptError && <p className={styles.problem} role="alert">{adoptError}</p>}
     </Stack>
   );
