@@ -35,4 +35,4 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 4. Aceptación
 
-- [ ] 4.1 **Orquestador/auditor:** Recorrer retorno tras ausencia, consulta y ejecución compatible hasta revisión Git. **Comprobación:** Alejandro identifica dónde quedó y qué sigue; verificar dos repos, offline, persistencia y ningún envío IA implícito. Registrar resultados.
+- [x] 4.1 **Orquestador/auditor:** Recorrer retorno tras ausencia, consulta y ejecución compatible hasta revisión Git. **Comprobación:** Alejandro identifica dónde quedó y qué sigue; verificar dos repos, offline, persistencia y ningún envío IA implícito. Registrar resultados.
