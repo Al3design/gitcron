@@ -48,6 +48,14 @@ El contrato está en `types/screen-map.ts`. Una pantalla (`ScreenEntry`) es una 
 
 El selector Simple/Técnico que ya tenía Cartografía decide la entrada: en Simple (el de omisión) se ve el catálogo de cuadros; en Técnico, el panorama y el grafo de siempre. Cada cuadro lleva el nombre, dónde se elige (la ruta, o «Vista dentro de la app»), qué hace y qué archivos la forman, con los propios separados de los compartidos y agrupados por rol en palabras de todos los días. La explicación de qué hace la pide la persona con un botón (no se llama sola, y por ser un pedido explícito no depende del interruptor de IA de Cartografía); usa el uso `gitcron-cartography`, manda un contexto acotado (los archivos y el comienzo de hasta tres archivos de entrada, 12.000 caracteres como tope), exige JSON con texto y archivos citados que sean de esa pantalla, y se guarda en la caché de Cartografía por contenido, así que no se vuelve a pedir mientras los archivos no cambien. Una explicación sin citas válidas no se muestra. La descripción manual y las asociaciones manuales llegan con la tanda 04 (tarea 1.5).
 
+### 9. Cuadros que se expanden, IA por el chat general y capturas reales (Alejandro, 2026-10-16)
+
+Al ver la tanda 03, Alejandro pidió:
+
+- **Interacción:** los cuadros no se empujan entre sí. Al tocar uno, se expande a la izquierda como detalle y el resto pasa a una columna angosta a la derecha, uno debajo del otro; tocar otro de la columna lo cambia, y cerrar vuelve a la grilla. Sin modal y con animación (que respeta el movimiento reducido). La lista de archivos vive dentro del detalle, con su propio desplazamiento y agrupada por rol, nunca empujando la página.
+- **IA:** nada de un botón grande repetido en cada cuadro. Un ícono de IA chico arriba a la derecha de cada cuadro, con la ayuda «Explicar qué hace», **abre el chat general** (el panel de abajo, el de toda la app) con esa pantalla como tema. Para eso se suma el destino `carto-screen` al contrato de contexto de la asistencia. No hay un chat por cuadro.
+- **Captura de cada pantalla, automática:** cada cuadro muestra cómo se ve la pantalla. Una captura real exige que la app esté corriendo, y por eso esta decisión **reemplaza** lo de «no iniciar la app externa» de la decisión 5, con un resguardo: GitCron pide permiso **una vez por proyecto** antes de arrancarlo. Las pantallas con dirección se capturan arrancando el proyecto con su propio comando de inicio y visitando cada dirección en una ventana oculta de Electron; las vistas sin dirección, con las pruebas de pantalla que tenga el proyecto (como las e2e de GitCron) o pidiéndole a la IA que llegue a esa pantalla navegando la app. Las capturas se guardan y solo se rehacen cuando cambian los archivos de esa pantalla. Es la tanda 05; la 04 deja el lugar de la captura listo.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
