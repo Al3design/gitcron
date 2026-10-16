@@ -12,7 +12,7 @@ El orquestador ya leyó el código. El prompt (pegado, o la ruta `tmp/prompts/<t
 2. **Leer:** lista cerrada de archivos, con los rangos de líneas. Si la tanda es para una ejecutora de ventana grande, el prompt puede declararla **abierta** y nombrar las carpetas o archivos modelo que se pueden leer enteros; aun así, nada fuera de lo nombrado.
 3. **Qué se hace:** el objetivo, y las firmas, tipos, imports y el esqueleto ya resueltos, con las reglas de negocio decididas.
 4. **Criterios de aceptación.**
-5. **Comprobación:** el comando exacto (por omisión `pnpm verificar`) y, si hay pantallas, qué capturas sacar.
+5. **Comprobación:** el comando exacto (por omisión `pnpm verificar`). Las capturas de pantalla las saca el orquestador al auditar, no la ejecutora.
 6. **Cierre:** la ruta del reporte, si se marca la tarea en `tasks.md` y si hay revisión.
 
 Si a tu prompt le falta una de estas partes y no podés seguir sin ella, no la inventes: pará, anotalo en «Dudas» y marcá la tanda INCOMPLETA.
@@ -41,7 +41,7 @@ Tu ventana es chica (o el prompt te la trata como chica). Leé **solo** los arch
 - **Trampas** (`!!`): cada aviso se corrige o se explica en «Dudas»; no se esconde.
 - **Errores heredados** de eslint (los que ya estaban en la base) no son de tu tanda: no los arregles salvo que el prompt lo pida.
 - Si Fallow marca **«export sin uso»** en algo que el prompt pide exportar y que se conecta en una tarea posterior, cubrilo con una prueba que lo use y anotalo en «Dudas». No lo dejes sin exportar ni lo conectes por tu cuenta.
-- Si el prompt pide capturas, seguí sus pasos y copiá tal cual la salida de `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`.
+- No saques capturas ni corras pruebas de pantalla (e2e), aunque un prompt viejo las pida: las saca el orquestador al auditar. Desde el 2026-10-16: sacarlas y mirarlas gastaba buena parte de la ventana y de los tokens de la ejecutora, y el orquestador las volvía a sacar igual. Si algo de pantalla no se puede comprobar con una prueba de Vitest, anotalo en «Dudas».
 
 ## 5. Reporte
 
@@ -57,13 +57,13 @@ uno por línea, con qué cambió
 ✓/✗ por cada criterio de aceptación y por cada punto del cierre del prompt
 
 ## Verificación
-el resumen de pnpm verificar tal cual (con la línea de riesgo) y la salida del comparador si hubo capturas
+el resumen de pnpm verificar tal cual (con la línea de riesgo)
 
 ## Dudas
 dudas y decisiones; nada más
 ```
 
-Corregí cada ✗ antes de entregar. Cada ✓ dice **dónde** se ve: `archivo:línea`, el nombre de la prueba o la captura (por ejemplo «✓ recuerda el alto — `lib/assist/assist-dock-store.ts:52`, prueba «recuerda en el disco…»»). Un ✓ sin dónde no cuenta. Medido en retomar-09 y retomar-10: el reporte afirmaba persistencia que no estaba y una captura de SDD que era del grafo. Las capturas se sacan después del último cambio de código y se miran antes de describirlas. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
+Corregí cada ✗ antes de entregar. Cada ✓ dice **dónde** se ve: `archivo:línea`, o el nombre de la prueba (por ejemplo «✓ recuerda el alto — `lib/assist/assist-dock-store.ts:52`, prueba «recuerda en el disco…»»). Un ✓ sin dónde no cuenta. Medido en retomar-09 y retomar-10: el reporte afirmaba persistencia que no estaba y una captura de SDD que era del grafo. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
 
 ## 6. Revisión (solo si el prompt trae «Revisión»)
 

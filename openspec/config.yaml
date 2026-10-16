@@ -115,7 +115,7 @@ operations:
         trampas (protecciones aflojadas, catch vacíos, pruebas ablandadas, capturas anteriores
         al código) y Fallow sobre las líneas agregadas (exports o archivos sin uso, funciones
         demasiado complejas, ciclos) ya las revisa el script, y la lectura se concentra en lo
-        que el script no puede juzgar. Las capturas de antes y después de una tanda se comparan
+        que el script no puede juzgar. Desde el 2026-10-16 las capturas las saca el orquestador al auditar (un test temporal en e2e/tests/zz-*.e2e.ts, escrito con la herramienta de escribir archivos y borrado al terminar), no la ejecutora: le gastaba la ventana y los tokens y el orquestador las repetía igual. Las capturas de antes y después de una tanda se comparan
         con `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`, que da el porcentaje de
         píxeles distintos y una imagen con las diferencias en rojo; a ojo se escapan. Al mirar las capturas, el auditor compara cada pieza nueva con su equivalente ya existente en la app (menú, título, contenedor, fila de botones, cuadro de chat; ver la regla de `context`) y no solo que funcione: el 2026-10-16 Alejandro encontró siete detalles así que la auditoría había dejado pasar. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
