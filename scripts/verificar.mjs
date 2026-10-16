@@ -487,7 +487,8 @@ function main() {
     { nombre: 'tsc', comando: 'pnpm exec tsc --noEmit', cuando: true },
     {
       nombre: 'eslint',
-      comando: `pnpm exec eslint ${tocadosTs.map((f) => `"${f}"`).join(' ')}`,
+      // Con caché: en la segunda vuelta de una tanda sólo relee lo que cambió.
+      comando: `pnpm exec eslint --cache --cache-location node_modules/.cache/eslint-verificar/ ${tocadosTs.map((f) => `"${f}"`).join(' ')}`,
       cuando: tocadosTs.length > 0,
       motivoSalto: 'ningún .ts/.tsx tocado',
     },
