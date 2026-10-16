@@ -23,10 +23,16 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
   it('declara explícitamente los archivos CSS que recorre (Invariante 22)', () => {
     expect(scannedCssFiles).toEqual([
       'app/globals.css',
+      'components/ContextMenus.module.css',
       'components/ai/AiModelPicker.module.css',
       'components/ai/AiSentDetails.module.css',
       'components/ai/AiUseLine.module.css',
+      'components/assist/AssistChat.module.css',
+      'components/assist/AssistComposer.module.css',
+      'components/assist/AssistDock.module.css',
       'components/pipeline/OpenSpecDashboard.module.css',
+      'components/pipeline/PipelineRuntimeLauncher.module.css',
+      'components/pipeline/ResumeNarration.module.css',
       'components/pipeline/sdd/SddArchivedChange.module.css',
       'components/pipeline/sdd/SddChangeHeader.module.css',
       'components/pipeline/sdd/SddPrepareCommit.module.css',

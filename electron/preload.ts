@@ -364,6 +364,24 @@ contextBridge.exposeInMainWorld('api', {
     linkCommit: (args: { repoPath: string; recordId: string; commitHash: string; edited: boolean }) =>
       ipcRenderer.invoke('ai-use-history:link-commit', args),
   },
+  assistConversations: {
+    send: (args: import('../types/assist-context').AssistSendArgs) =>
+      ipcRenderer.invoke('assist:send', args),
+    cancel: (args: { requestId: string }) =>
+      ipcRenderer.invoke('assist:cancel', args),
+    list: (args: { repoPath: string; limit?: number; offset?: number }) =>
+      ipcRenderer.invoke('assist-conversation:list', args),
+    get: (args: { repoPath: string; conversationId: string }) =>
+      ipcRenderer.invoke('assist-conversation:get', args),
+    delete: (args: { repoPath: string; conversationId: string }) =>
+      ipcRenderer.invoke('assist-conversation:delete', args),
+    pin: (args: { repoPath: string; conversationId: string; pinned: boolean }) =>
+      ipcRenderer.invoke('assist-conversation:pin', args),
+    archive: (args: { repoPath: string; conversationId: string; archived: boolean }) =>
+      ipcRenderer.invoke('assist-conversation:archive', args),
+    narrateResume: (args: import('../types/resume-narration').ResumeNarrationArgs) =>
+      ipcRenderer.invoke('assist:narrate-resume', args),
+  },
   cartoGraph: {
     ensure: (repoPath: string) => ipcRenderer.invoke('carto:graph-ensure', repoPath),
     status: (repoPath: string) => ipcRenderer.invoke('carto:graph-status', repoPath),

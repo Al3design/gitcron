@@ -275,6 +275,7 @@ export function AiHistoryView({ repoPath }: AiHistoryViewProps) {
               <option value="gitcron-cartography">{t('aiHistory.use.gitcron-cartography')}</option>
               <option value="gitcron-openspec-analysis">{t('aiHistory.use.gitcron-openspec-analysis')}</option>
               <option value="gitcron-temporal">{t('aiHistory.use.gitcron-temporal')}</option>
+              <option value="gitcron-assist">{t('aiHistory.use.gitcron-assist')}</option>
             </select>
           </div>
 

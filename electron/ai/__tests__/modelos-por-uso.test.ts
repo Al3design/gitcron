@@ -201,6 +201,7 @@ describe('4.3 cada uso con cada familia', () => {
     await runTextUse(resolveFor('gitcron-temporal'), { system: 's', user: 'u', maxTokens: 4096 }, { fetchFn: srv.fetchFn });
     expect(srv.calls[0].body.max_tokens).toBe(4096);
 
+
     write({
       provider: { ...PROVIDERS, casa: { ...PROVIDERS.casa, models: { 'qwen-27b': { limit: { output: 2000 } } } } },
       agent: { 'gitcron-temporal': { model: 'casa/qwen-27b' } },
@@ -411,5 +412,20 @@ describe('4.4 el servidor donde se cargan modelos, por uso', () => {
       delete process.env.GITCRON_TEST_CASA;
       setUseConfigPathForTesting(null);
     }
+  });
+  it('el tiempo de espera que declara el proveedor (options.timeout) llega a la resolución del uso', () => {
+    write({
+      provider: { ...PROVIDERS, casa: { ...PROVIDERS.casa, options: { ...PROVIDERS.casa.options, timeout: 600_000 } } },
+      agent: { 'gitcron-temporal': { model: 'casa/qwen-27b' } },
+    });
+    resetGitCronConfigCacheForTesting();
+    const conTimeout = resolveFor('gitcron-temporal');
+    expect(conTimeout.status).toBe('resolved');
+    if (conTimeout.status === 'resolved') expect(conTimeout.resolved.timeoutMs).toBe(600_000);
+
+    write({ provider: PROVIDERS, agent: { 'gitcron-temporal': { model: 'casa/qwen-27b' } } });
+    resetGitCronConfigCacheForTesting();
+    const sinTimeout = resolveFor('gitcron-temporal');
+    if (sinTimeout.status === 'resolved') expect(sinTimeout.resolved.timeoutMs).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 import type { RuntimeProjection } from '@/types/pipeline';
 import type { OpenSpecChangeSummary } from './pipeline-view-state';
+import type { AssistAction } from '@/lib/assist/view-contributions';
 
 /**
  * Derivación del "siguiente paso" del workspace OpenSpec.
@@ -548,4 +549,36 @@ export function derivePipelineNextAction(input: PipelineNextActionInput): Pipeli
     secondary: input.hasDiffs ? button({ kind: 'view-diff' }, 'pipeline.next.readyToArchive.diff') : null,
     instruction: composeArchiveInstruction(selectedChange.changeId),
   };
+}
+
+/**
+ * Los botones del siguiente paso, como acciones del chat. Mismo intent, misma regla de
+ * disponibilidad que el botón de la pantalla (`fixtureActive && executable` lo apaga).
+ */
+export function nextActionAssistActions(
+  buttons: (PipelineNextActionButton | null)[],
+  fixtureActive: boolean,
+  onIntent: (intent: PipelineActionIntent) => void,
+): AssistAction[] {
+  const result: AssistAction[] = [];
+
+  for (const btn of buttons) {
+    if (!btn) continue;
+    const { intent, labelKey, labelParams, executable } = btn;
+    const available = !(fixtureActive && executable);
+    const id = intent.kind === 'start-apply' ? `next-start-apply-${intent.taskId}` : `next-${intent.kind}`;
+
+    result.push({
+      id,
+      labelKey,
+      ...(labelParams ? { labelParams } : {}),
+      scope: executable ? 'execute' : 'prepare',
+      available,
+      ...(available ? {} : { unavailableReasonKey: 'assist.action.fixture' }),
+      requiresConfirmation: executable,
+      run: () => onIntent(intent),
+    });
+  }
+
+  return result;
 }

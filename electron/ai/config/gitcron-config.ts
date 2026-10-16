@@ -129,6 +129,8 @@ export interface ResolvedUse {
   maxTokensFromModel?: boolean;
   options?: Record<string, unknown>;
   contextLength?: number;
+  /** Tiempo de espera del proveedor en ms (options.timeout). */
+  timeoutMs?: number;
   /**
    * De dónde sale el modelo: la entrada del uso, la elección general (`model`) o,
    * sin ninguna de las dos, el selector de la pantalla (4.3).
@@ -768,6 +770,7 @@ export function resolveUse(
     }
   }
   const substitutedOptions = resolveRefs(rawOptions, ['provider', providerId, 'options']);
+  const timeoutMs = typeof substitutedOptions?.timeout === 'number' && Number.isFinite(substitutedOptions.timeout) && substitutedOptions.timeout > 0 ? substitutedOptions.timeout : undefined;
   const rawModel = rawProvider.models?.[modelId];
   const modelConfig = rawModel ? resolveRefs(rawModel, ['provider', providerId, 'models', modelId]) : undefined;
 
@@ -960,6 +963,7 @@ export function resolveUse(
     temperature,
     maxTokens,
     maxTokensFromModel,
+    timeoutMs,
     options: Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined,
     contextLength,
     modelSource,

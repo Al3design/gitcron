@@ -212,9 +212,10 @@
   border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
 }
 
-/* 6. glass-alert-error: Red conflict/error toast backdrop */
+/* 6. glass-alert-error: aviso de error, como el de advertencia: fondo de la app y borde rojo.
+   Hasta el 2026-10-16 era rojo al 95 % y los dos avisos que lo usan escribían en rojo encima. */
 @utility glass-alert-error {
-  background-color: color-mix(in srgb, var(--color-error) 95%, transparent);
+  background-color: color-mix(in srgb, var(--color-bg-overlay) 98%, transparent);
   backdrop-filter: var(--backdrop-blur-glass-md);
   border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
 }
@@ -3569,8 +3570,7 @@ body, .font-sans {
 /* Information windows: flat, squared and aligned. The strong contrast comes
    from hierarchy, not from placing another card inside every block. */
 .pipeline-now,
-.pipeline-economy,
-.pipeline-launcher {
+.pipeline-economy {
   padding: 0;
   border: 0;
   border-radius: 0;

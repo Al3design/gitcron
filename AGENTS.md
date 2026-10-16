@@ -9,17 +9,17 @@ Las reglas del proyecto (stack, estilos, ramas) están en la sección `context` 
 El orquestador ya leyó el código. El prompt (pegado, o la ruta `tmp/prompts/<tanda>.md`) trae siempre estas partes:
 
 1. **Encabezado:** cambio, tanda, rama y base Git.
-2. **Leer:** lista cerrada de archivos, con los rangos de líneas.
+2. **Leer:** lista cerrada de archivos, con los rangos de líneas. Si la tanda es para una ejecutora de ventana grande, el prompt puede declararla **abierta** y nombrar las carpetas o archivos modelo que se pueden leer enteros; aun así, nada fuera de lo nombrado.
 3. **Qué se hace:** el objetivo, y las firmas, tipos, imports y el esqueleto ya resueltos, con las reglas de negocio decididas.
 4. **Criterios de aceptación.**
-5. **Comprobación:** el comando exacto (por omisión `pnpm verificar`) y, si hay pantallas, qué capturas sacar.
+5. **Comprobación:** por omisión, ninguna (ver punto 4). Solo si el prompt la pide explícitamente, el comando exacto. Las capturas de pantalla las saca el orquestador, no la ejecutora.
 6. **Cierre:** la ruta del reporte, si se marca la tarea en `tasks.md` y si hay revisión.
 
 Si a tu prompt le falta una de estas partes y no podés seguir sin ella, no la inventes: pará, anotalo en «Dudas» y marcá la tanda INCOMPLETA.
 
 ## 2. No explores
 
-Tu ventana es chica. Leé **solo** los archivos y rangos de «Leer». Nada de recorrer carpetas ni de buscar con grep o glob «para ubicarte», salvo que el prompt dé la búsqueda exacta. Si te falta algo, pará (punto 1): la IA local que sale a buscar entra en bucle (en otro proyecto repitió la misma búsqueda 246 veces sin escribir nada). Para leer algo de `tmp/` usá la ruta directa: grep y glob no ven `tmp/` porque está en `.gitignore`.
+Tu ventana es chica (o el prompt te la trata como chica). Leé **solo** los archivos y rangos de «Leer», o lo que nombra una tanda abierta. Nada de recorrer carpetas ni de buscar con grep o glob «para ubicarte», salvo que el prompt dé la búsqueda exacta. Si te falta algo, pará (punto 1): la IA local que sale a buscar entra en bucle (en otro proyecto repitió la misma búsqueda 246 veces sin escribir nada). Para leer algo de `tmp/` usá la ruta directa: grep y glob no ven `tmp/` porque está en `.gitignore`.
 
 ## 3. Reglas permanentes
 
@@ -30,17 +30,14 @@ Tu ventana es chica. Leé **solo** los archivos y rangos de «Leer». Nada de re
 - No agregues dependencias salvo que el prompt lo pida.
 - Si algo no sale en dos intentos, pará y documentalo (qué intentaste y qué error dio) en vez de probar variantes.
 
-## 4. Sensores: cómo te enterás de si salió bien
+## 4. Sin verificaciones, salvo que el prompt las pida
 
-`pnpm verificar` es el sensor de la tanda: corre las pruebas que dependen de lo que tocaste, tsc, eslint, openspec validate, Fallow sobre lo agregado y la búsqueda de trampas, y al final dice el **riesgo** de la tanda. Sus mensajes ya dicen qué corregir.
+Desde el 2026-10-16 (decisión de Alejandro), la ejecutora **no corre verificaciones**: ni `pnpm verificar`, ni pruebas, ni tsc, ni eslint, ni e2e, ni capturas. Se verifica una vez, al final del cambio de OpenSpec, cuando se terminaron todas sus tareas. Hasta ese día cada tanda corría `pnpm verificar` y, ante un fallo, lo repetía entero: vueltas de 10 minutos con la máquina cargada, que gastaban la ventana y los tokens de la ejecutora.
 
-- Corrélo al terminar de editar: una vez por intento, en primer plano. Si tenés el subagente `verificador`, delegale el comando exacto y esperá sin editar.
-- Nunca `pnpm verificar --completa` ni `--todo`: esas son del orquestador.
-- Ante un fallo, leé solo el bloque de `tmp/verificacion.log` que corresponde, corregí y volvé a correr. No repitas un verde sin cambios.
-- Guardá la salida de cada intento en `tmp/reportes/<tanda>-verificacion-intento-N.md`: el verde no borra el fallo anterior.
-- **Trampas** (`!!`): cada aviso se corrige o se explica en «Dudas»; no se esconde.
-- **Errores heredados** de eslint (los que ya estaban en la base) no son de tu tanda: no los arregles salvo que el prompt lo pida.
-- Si el prompt pide capturas, seguí sus pasos y copiá tal cual la salida de `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`.
+- Escribí el código y las pruebas que pida el prompt, sin correrlas.
+- Si el prompt pide explícitamente una verificación, corré **solo** ese comando, una vez. Si falla, no lo repitas: anotá el error en «Dudas» y entregá.
+- Nunca `pnpm verificar --completa` ni `--todo`: son del orquestador.
+- Lo que vale igual sin sensor: no aflojar protecciones, no tragar errores, no `eslint-disable`, no `.skip`/`.only`, estilos en módulos CSS con tokens (sin `className="…"` ni `style={{…}}` nuevos, salvo un valor que se calcula al dibujar), y nada de ramas «si estoy en pruebas». Lo que no puedas cumplir, en «Dudas».
 
 ## 5. Reporte
 
@@ -56,13 +53,13 @@ uno por línea, con qué cambió
 ✓/✗ por cada criterio de aceptación y por cada punto del cierre del prompt
 
 ## Verificación
-el resumen de pnpm verificar tal cual (con la línea de riesgo) y la salida del comparador si hubo capturas
+solo si el prompt pidió una verificación: su salida tal cual; si no, «sin verificación (no la pidió el prompt)»
 
 ## Dudas
 dudas y decisiones; nada más
 ```
 
-Corregí cada ✗ antes de entregar. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
+Corregí cada ✗ antes de entregar. Cada ✓ dice **dónde** se ve: `archivo:línea`, o el nombre de la prueba (por ejemplo «✓ recuerda el alto — `lib/assist/assist-dock-store.ts:52`, prueba «recuerda en el disco…»»). Un ✓ sin dónde no cuenta. Medido en retomar-09 y retomar-10: el reporte afirmaba persistencia que no estaba y una captura de SDD que era del grafo. No escribas secciones de «auditoría» propias, ni en el reporte ni en `tasks.md`: la auditoría es del orquestador. Marcá `[x]` en `tasks.md` solo si el prompt lo pide.
 
 ## 6. Revisión (solo si el prompt trae «Revisión»)
 

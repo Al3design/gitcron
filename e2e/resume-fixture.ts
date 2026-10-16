@@ -1,9 +1,15 @@
-// Repositorio y conversaciones de prueba en el perfil aislado. No usa cuentas ni motores reales.
+// Repositorio y conversaciones de prueba (del pipeline y del chat de asistencia) en el perfil aislado. No usa cuentas ni motores reales.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { openTemporalAgentDatabase, temporalAgentDatabasePath } from '../electron/db/connection';
 import { PipelineRepository } from '../electron/pipeline/pipeline-repository';
+import {
+  appendMessage,
+  createConversation,
+  setConversationArchived,
+  setConversationPinned,
+} from '../electron/db/assist-conversations';
 
 export function seedResumeFixture(homeDir: string): Record<string, string> {
   const repoPath = path.join(homeDir, 'resume-repo');
@@ -28,6 +34,33 @@ export function seedResumeFixture(homeDir: string): Record<string, string> {
       controlCapabilities: [], droppedActivity: 0, diagnostics: [],
       runtimeSessionId: 'conversation-27', requestedModel: 'gemini-3.8-flash-low', reasoningEffort: 'high', continuesSessionId: null,
     });
+    // Conversaciones del chat de asistencia: sin un modelo no se crean desde la pantalla.
+    const conv1 = createConversation({ checkoutPath: canonical, title: 'Qué falta en retomar', viewId: 'graph' }, { db });
+    appendMessage({ checkoutPath: canonical, conversationId: conv1.id, role: 'user', text: '¿Qué falta para cerrar el cambio?' }, { db });
+    appendMessage({ checkoutPath: canonical, conversationId: conv1.id, role: 'assistant', text: 'Faltan la **2.7** y la **3.3**.', providerName: 'Prueba', modelId: 'modelo-de-prueba' }, { db });
+
+    const conv2 = createConversation({ checkoutPath: canonical, title: 'Por qué falla el build', viewId: 'graph' }, { db });
+    appendMessage({ checkoutPath: canonical, conversationId: conv2.id, role: 'user', text: '¿Por qué falla el build?' }, { db });
+    appendMessage({ checkoutPath: canonical, conversationId: conv2.id, role: 'assistant', text: 'Porque corre encima de otro build.', providerName: 'Prueba', modelId: 'modelo-de-prueba' }, { db });
+
+    const conv3 = createConversation({ checkoutPath: canonical, title: 'Cómo sigue la 2.11', viewId: 'graph' }, { db });
+    appendMessage({
+      checkoutPath: canonical,
+      conversationId: conv3.id,
+      role: 'user',
+      text: '¿Cómo sigue la 2.11?',
+      references: [
+        {
+          selection: { kind: 'change', changeId: 'retomar-trabajo-con-asistencia-contextual' },
+          headSha: null,
+          status: 'ok',
+        },
+      ],
+    }, { db });
+    appendMessage({ checkoutPath: canonical, conversationId: conv3.id, role: 'assistant', text: 'Sigue con fijar, archivar y agrupar.', providerName: 'Prueba', modelId: 'modelo-de-prueba' }, { db });
+
+    setConversationPinned({ checkoutPath: canonical, conversationId: conv1.id, pinned: true }, { db });
+    setConversationArchived({ checkoutPath: canonical, conversationId: conv2.id, archived: true }, { db });
   } finally { db.close(); }
   const bin = path.join(homeDir, 'fixture-bin');
   fs.mkdirSync(bin);

@@ -776,19 +776,18 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
       // 1. Pantalla de inicio
       const { container: startContainer, unmount: unmountStart } = renderStartScreen({ rightOpen: true });
       expect(startContainer.querySelector('nav[class*="switcherRail"]')).toBeNull();
-      const startBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const startBtn = screen.getByTestId('pipeline.switcher.toggle');
       expect(startBtn.getAttribute('disabled')).not.toBeNull();
       expect(startBtn.getAttribute('aria-disabled')).toBe('true');
       expect(startBtn.getAttribute('aria-expanded')).toBe('false');
       expect(startBtn.getAttribute('title')).toBe('pipeline.switcher.toggleDisabledHelp');
-      expect(startBtn.className).toContain('opacity-50');
-      expect(startBtn.className).toContain('cursor-not-allowed');
+      expect(startBtn.className).toMatch(/toggleBtnDisabled|opacity-50/);
       unmountStart();
 
       // 2. Cambio activo
       const { container: activeContainer, unmount: unmountActive } = renderActiveChange({ rightOpen: true });
       expect(activeContainer.querySelector('nav[class*="switcherRail"]')).toBeNull();
-      const activeBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const activeBtn = screen.getByTestId('pipeline.switcher.toggle');
       expect(activeBtn.getAttribute('disabled')).not.toBeNull();
       expect(activeBtn.getAttribute('aria-disabled')).toBe('true');
       expect(activeBtn.getAttribute('aria-expanded')).toBe('false');
@@ -798,7 +797,7 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
       // 3. Cambio archivado
       const { container: archiveContainer, unmount: unmountArchive } = renderArchivedChange('cambio-archivado', { rightOpen: true });
       expect(archiveContainer.querySelector('nav[class*="switcherRail"]')).toBeNull();
-      const archiveBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const archiveBtn = screen.getByTestId('pipeline.switcher.toggle');
       expect(archiveBtn.getAttribute('disabled')).not.toBeNull();
       expect(archiveBtn.getAttribute('aria-disabled')).toBe('true');
       expect(archiveBtn.getAttribute('aria-expanded')).toBe('false');
@@ -808,7 +807,7 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
       // 4. Visor de especificación
       const { container: specContainer, unmount: unmountSpec } = renderSpecification('spec-prueba', { rightOpen: true });
       expect(specContainer.querySelector('nav[class*="switcherRail"]')).toBeNull();
-      const specBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const specBtn = screen.getByTestId('pipeline.switcher.toggle');
       expect(specBtn.getAttribute('disabled')).not.toBeNull();
       expect(specBtn.getAttribute('aria-disabled')).toBe('true');
       expect(specBtn.getAttribute('aria-expanded')).toBe('false');
@@ -816,9 +815,83 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
       unmountSpec();
     });
 
+
+    it('con inspector abierto y onEnsureRightClosed provisto, el botón está habilitado, cierra el inspector y muestra el riel', () => {
+      const onEnsureRightClosed = vi.fn();
+      const snap = mockSnapshot();
+      const { container, rerender } = render(
+        <OpenSpecDashboard
+          snapshot={snap}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={true}
+          leftOpen={false}
+          rightOpen={true}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          onEnsureRightClosed={onEnsureRightClosed}
+          projection={null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />,
+      );
+
+      const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
+      expect(toggleBtn.getAttribute('disabled')).toBeNull();
+      expect(toggleBtn.getAttribute('aria-disabled')).toBe('false');
+      expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+      expect(toggleBtn.getAttribute('title')).toBe('pipeline.switcher.showNavClosesInspector');
+      expect(toggleBtn.getAttribute('aria-label')).toBe('pipeline.switcher.showNav');
+
+      // Al pulsar, invoca onEnsureRightClosed
+      fireEvent.click(toggleBtn);
+      expect(onEnsureRightClosed).toHaveBeenCalledTimes(1);
+
+      // Simulando que el armazón responde cerrando rightOpen a false
+      rerender(
+        <OpenSpecDashboard
+          snapshot={snap}
+          repoPath="C:/repo"
+          currentBranch="main"
+          workingTreeClean={true}
+          leftOpen={false}
+          rightOpen={false}
+          leftWidth={320}
+          rightWidth={320}
+          onResizeLeft={() => undefined}
+          onResizeRight={() => undefined}
+          onEnsureRightClosed={onEnsureRightClosed}
+          projection={null}
+          runtimeHistory={[]}
+          onRefresh={() => undefined}
+          onPauseAfterTask={() => undefined}
+          onRespondDecision={() => undefined}
+        />,
+      );
+
+      expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
+      expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+      expect(toggleBtn.getAttribute('aria-label')).toBe('pipeline.switcher.hideNav');
+
+      // Segunda pulsación lo oculta
+      fireEvent.click(toggleBtn);
+      expect(container.querySelector('nav[class*="switcherRail"]')).toBeNull();
+      expect(toggleBtn.getAttribute('aria-expanded')).toBe('false');
+      expect(toggleBtn.getAttribute('aria-label')).toBe('pipeline.switcher.showNav');
+
+      // Tercera pulsación lo vuelve a mostrar
+      fireEvent.click(toggleBtn);
+      expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
+      expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
+      expect(toggleBtn.getAttribute('aria-label')).toBe('pipeline.switcher.hideNav');
+    });
     it('al pulsar el botón cuando está deshabilitado por rightOpen, no alterna el estado y el panel no se monta', () => {
       const { container } = renderStartScreen({ rightOpen: true });
-      const toggleBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
       expect(container.querySelector('nav[class*="switcherRail"]')).toBeNull();
 
       fireEvent.click(toggleBtn);
@@ -860,7 +933,7 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
 
       // Con rightOpen=true: panel ausente, botón deshabilitado
       expect(container.querySelector('nav[class*="switcherRail"]')).toBeNull();
-      const btnInitial = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const btnInitial = screen.getByTestId('pipeline.switcher.toggle');
       expect(btnInitial.getAttribute('disabled')).not.toBeNull();
 
       // Rerender con rightOpen=false: panel presente, botón habilitado
@@ -885,11 +958,11 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
       );
 
       expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
-      const btnRestored = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const btnRestored = screen.getByTestId('pipeline.switcher.toggle');
       expect(btnRestored.getAttribute('disabled')).toBeNull();
       expect(btnRestored.getAttribute('aria-disabled')).toBe('false');
       expect(btnRestored.getAttribute('aria-expanded')).toBe('true');
-      expect(btnRestored.getAttribute('title')).toBe('pipeline.switcher.toggle');
+      expect(btnRestored.getAttribute('title')).toBe('pipeline.switcher.hideNav');
     });
 
     it('al pasar rightOpen a verdadero, el riel sigue en el DOM en estado de plegado hasta transitionend', () => {
@@ -994,7 +1067,7 @@ describe('Intercambiador de vistas en la pantalla del cambio activo', () => {
 
       // Estado inicial: panel abierto
       expect(container.querySelector('nav[class*="switcherRail"]')).toBeTruthy();
-      const toggleBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+      const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
 
       // Usuario cierra voluntariamente el panel
       fireEvent.click(toggleBtn);

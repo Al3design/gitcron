@@ -1,0 +1,266 @@
+/* components/assist/AssistComposer.module.css */
+/* Estilos del cuadro de texto estilo Claude escritorio (tarea 2.8) */
+
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: calc(var(--radius-xl) * 2);
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.composer:focus-within {
+  border-color: var(--color-ai);
+}
+
+.textarea {
+  width: 100%;
+  field-sizing: content;
+  min-height: 1.5rem;
+  max-height: 15rem;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  padding: var(--space-1);
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* La regla global `textarea:focus-visible` dibujaba un rectángulo celeste adentro del
+   recuadro redondeado. El foco ya se ve en el borde violeta de todo el recuadro
+   (`.composer:focus-within`), así que acá no se repite. */
+.textarea:focus-visible {
+  outline: none;
+}
+
+.textarea::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.previewArea {
+  min-height: 1.5rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  padding: var(--space-1);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+
+.bottomLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.bottomRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.popoverAnchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.iconBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: color 0.15s ease;
+}
+
+.iconBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.iconBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.targetBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 28px;
+}
+
+.targetBadgeChanged {
+  border-color: var(--color-ai);
+  color: var(--color-ai);
+}
+
+.targetText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clearTargetBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.clearTargetBtn::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-1) * -2);
+}
+
+.clearTargetBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.clearTargetBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.scopeRepoText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.modelBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.modelName {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.modelDot {
+  color: var(--color-text-secondary);
+}
+
+.modelEffort {
+  color: var(--color-text-secondary);
+}
+
+.modelChevron {
+  color: var(--color-text-secondary);
+}
+
+.modelBtn:hover .modelName {
+  color: var(--color-text-primary);
+}
+
+.modelBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.modelPickerPopover {
+  position: fixed;
+  z-index: 9999;
+  background-color: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.sendBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-bg-base);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sendBtn::before {
+  content: '';
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-primary) 85%, transparent);
+  transition: background-color 0.15s ease;
+}
+
+.sendBtn:disabled {
+  cursor: not-allowed;
+}
+
+.sendBtn:disabled::before {
+  background: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
+}
+
+.sendBtn > svg {
+  position: relative;
+  z-index: 1;
+}
+
+.sendBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

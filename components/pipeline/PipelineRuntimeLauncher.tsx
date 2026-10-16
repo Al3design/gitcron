@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useT } from '@/hooks/use-translation';
+import { cn } from '@/lib/utils';
+import styles from './PipelineRuntimeLauncher.module.css';
 import type { AiUseStatus } from '@/types/ai-use';
 import type { RuntimeDiscoveryEntry, RuntimeProjection } from '@/types/pipeline';
 import { AiModelPicker } from '../ai/AiModelPicker';
@@ -249,7 +251,7 @@ export function PipelineRuntimeLauncher({
     // reintentar, igual que cuando el descubrimiento no encuentra nada lanzable.
     return (
       <section className="pipeline-launcher" aria-busy="true" aria-live="polite">
-        <h3 className="pipeline-section__title ai-gradient-text">{t('pipeline.launcher.title')}</h3>
+        <h3 className={cn(styles.title, 'ai-gradient-text')}>{t('pipeline.launcher.title')}</h3>
         <div className="pipeline-launcher__empty">
           <p>{t('pipeline.launcher.discovering')}</p>
         </div>
@@ -271,7 +273,7 @@ export function PipelineRuntimeLauncher({
       aria-labelledby="pipeline-launcher-title"
       data-blocked={blockedByFixture || undefined}
     >
-      <h3 id="pipeline-launcher-title" className="pipeline-section__title ai-gradient-text">
+      <h3 id="pipeline-launcher-title" className={cn(styles.title, 'ai-gradient-text')}>
         {t('pipeline.launcher.title')}
       </h3>
 
@@ -331,7 +333,7 @@ export function PipelineRuntimeLauncher({
             aria-modal="true"
             aria-labelledby="copy-opencode-title"
           >
-            <h4 id="copy-opencode-title" className="pipeline-section__title">
+            <h4 id="copy-opencode-title" className={styles.title}>
               {t('pipeline.launcher.copyModalTitle')}
             </h4>
             <p className="pipeline-launcher__scope">

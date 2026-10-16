@@ -65,7 +65,7 @@ describe('AiUseLine', () => {
     const api = mountApi([unset, resolved]);
     render(<AiUseLine use="gitcron-cartography" />);
 
-    expect(await screen.findByText('Este uso no tiene modelo en gitcron.json.')).toBeTruthy();
+    expect(await screen.findByText('Todavía no elegiste un modelo.')).toBeTruthy();
     expect(screen.getByText(/con el proveedor «openrouter», que el archivo no declara/)).toBeTruthy();
     expect(api.adopt).not.toHaveBeenCalled();
 
@@ -77,7 +77,7 @@ describe('AiUseLine', () => {
   it('guardar gitcron.json a mano vuelve a preguntar', async () => {
     const api = mountApi([unset, resolved]);
     render(<AiUseLine use="gitcron-cartography" />);
-    await screen.findByText('Este uso no tiene modelo en gitcron.json.');
+    await screen.findByText('Todavía no elegiste un modelo.');
     act(() => onChanged?.({ repoPath: null }));
     expect(await screen.findByText(/Usa deepseek\/deepseek-v4-pro/)).toBeTruthy();
     expect(api.status).toHaveBeenCalledTimes(2);
@@ -93,8 +93,8 @@ describe('AiUseLine', () => {
   it('sin servidor que cargue modelos no promete un selector que no está: dice qué escribir', async () => {
     mountApi([{ status: 'unset', use: 'gitcron-commit', offer: null, canLoad: false }]);
     render(<AiUseLine use="gitcron-commit" screenChoice />);
-    expect(await screen.findByText('Este uso no tiene modelo en gitcron.json.')).toBeTruthy();
-    expect(screen.getByText(/Escribí agent.gitcron-commit.model/)).toBeTruthy();
+    expect(await screen.findByText('Todavía no elegiste un modelo.')).toBeTruthy();
+    expect(screen.queryByText(/Escribí agent.gitcron-commit.model/)).toBeNull();
     expect(screen.queryByText(/se usa el elegido abajo/)).toBeNull();
   });
 
@@ -181,5 +181,22 @@ describe('AiUseLine', () => {
     render(<AiUseLine use="gitcron-cartography" showChooseModel={false} />);
     expect(await screen.findByText(/Usa deepseek\/deepseek-v4-pro de OpenRouter/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Elegir modelo' })).toBeNull();
+  });
+
+  it('prop actions renderiza los botones extra en la misma fila que Elegir modelo y Mostrar en la carpeta', async () => {
+    mountApi([{ ...resolved, sourceDir: 'C:/Users/ale/.config/gitcron' }]);
+    render(
+      <AiUseLine
+        use="gitcron-commit"
+        actions={<button type="button">Redactar con IA</button>}
+      />,
+    );
+
+    const chooseBtn = await screen.findByRole('button', { name: 'Elegir modelo' });
+    const folderBtn = screen.getByRole('button', { name: 'Mostrar en la carpeta' });
+    const draftBtn = screen.getByRole('button', { name: 'Redactar con IA' });
+
+    expect(chooseBtn.parentElement).toBe(folderBtn.parentElement);
+    expect(chooseBtn.parentElement).toBe(draftBtn.parentElement);
   });
 });

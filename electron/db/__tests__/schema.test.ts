@@ -14,6 +14,9 @@ import {
   PIPELINE_CURSOR_TABLE,
   PIPELINE_RUNTIME_SESSION_TABLE,
   AI_USE_RECORD_TABLE,
+  ASSIST_CONVERSATION_TABLE,
+  ASSIST_MESSAGE_TABLE,
+  ASSIST_MESSAGE_REFERENCE_TABLE,
 } from '../schema';
 
 type SqliteNameRow = { name: string };
@@ -247,9 +250,12 @@ describe('Temporal Agent SQLite schema', () => {
   it('upgrades an existing Pipeline v4 database without recreating its evidence tables', () => {
     withDb((db) => {
       // Se reconstruye el estado de una base v4 real: sin la tabla de sesiones,
-      // que llega en la 5, sin la tabla de historial de IA de la 7, y **con** la de cursores, que la 6 elimina.
+      // que llega en la 5, sin la tabla de historial de IA de la 7, sin las de assist de la 8, y **con** la de cursores, que la 6 elimina.
       db.exec(`DROP TABLE ${PIPELINE_RUNTIME_SESSION_TABLE}`);
       db.exec(`DROP TABLE IF EXISTS ${AI_USE_RECORD_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_REFERENCE_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_CONVERSATION_TABLE}`);
       db.exec(`CREATE TABLE ${PIPELINE_CURSOR_TABLE} (
         repo_id TEXT NOT NULL, source_ref TEXT NOT NULL, offset INTEGER NOT NULL,
         pending TEXT NOT NULL, generation TEXT, updated_at TEXT NOT NULL,
@@ -270,18 +276,36 @@ describe('Temporal Agent SQLite schema', () => {
     });
   });
 
-  it('upgrades an existing database from version 6 to 7 preserving all data', () => {
+  it('upgrades an existing database from version 6 to 10 preserving all data', () => {
     withDb((db) => {
       const runId = insertRun(db);
       const branchId = insertBranch(db, runId);
       db.exec(`DROP TABLE IF EXISTS ${AI_USE_RECORD_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_REFERENCE_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_TABLE}`);
+      db.exec(`DROP TABLE IF EXISTS ${ASSIST_CONVERSATION_TABLE}`);
       db.exec('PRAGMA user_version = 6');
 
       runMigrations(db);
 
-      expect(pragmaNumber(db, 'user_version')).toBe(7);
+      expect(pragmaNumber(db, 'user_version')).toBe(LATEST_SCHEMA_VERSION);
       const tables = sqliteNames(db, 'table');
       expect(tables).toContain(AI_USE_RECORD_TABLE);
+      expect(tables).toContain(ASSIST_CONVERSATION_TABLE);
+
+      // Verify columns added in migration 9
+      const columns = tableColumns(db, ASSIST_MESSAGE_TABLE).map((c) => c.name);
+      expect(columns).toContain('prompt_tokens');
+      expect(columns).toContain('cached_prompt_tokens');
+      expect(columns).toContain('completion_tokens');
+      expect(columns).toContain('reasoning_tokens');
+      expect(columns).toContain('duration_ms');
+      expect(columns).toContain('context_length');
+
+      // Verify columns added in migration 10
+      const convColumns = tableColumns(db, ASSIST_CONVERSATION_TABLE).map((c) => c.name);
+      expect(convColumns).toContain('pinned_at');
+      expect(convColumns).toContain('archived_at');
 
       // Verify data from v6 was preserved
       const runRow = db.prepare('SELECT id FROM prediction_run WHERE id = ?').get(runId) as { id: string };

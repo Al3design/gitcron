@@ -1544,7 +1544,7 @@ describe('Fase 4 · Rediseño del panel derecho como lista de secciones plegable
     );
 
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
-    expect(screen.getByText('pipeline.openspec.attention.title')).toBeDefined();
+    expect(screen.queryByText('pipeline.openspec.attention.title')).toBeNull();
     expect(screen.getByText('pipeline.openspec.rail.tools')).toBeDefined();
     expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
     expect(screen.getByText('staging.stagedTitle')).toBeDefined();
@@ -1574,7 +1574,7 @@ describe('Fase 4 · Rediseño del panel derecho como lista de secciones plegable
     );
 
     expect(screen.getByText('pipeline.openspec.activity.title')).toBeDefined();
-    expect(screen.getByText('pipeline.openspec.attention.title')).toBeDefined();
+    expect(screen.queryByText('pipeline.openspec.attention.title')).toBeNull();
     expect(screen.getByText('pipeline.openspec.rail.tools')).toBeDefined();
     expect(screen.getByText('staging.unstagedTitle')).toBeDefined();
     expect(screen.getByText('staging.stagedTitle')).toBeDefined();

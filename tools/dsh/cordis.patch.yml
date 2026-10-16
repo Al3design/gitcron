@@ -17,6 +17,12 @@
 # de permisos como la de OpenCode; lo compensan que no commitea, que todo queda en
 # Git y que el orquestador audita el diff de cada tanda.
 #
+# Sin skills, a propósito: un preset arma el agente sólo con los plugins que declara,
+# y las skills llegan por `@deepseek-ai/dsh-skill-filesystem` (las busca en
+# .agents/skills) y `@deepseek-ai/dsh-tool-skill`. No agregarlos: las skills del repo
+# son para los modelos grandes y el producto; la ejecutora trabaja con su prompt y
+# AGENTS.md (en OpenCode, lo mismo con `skill: deny`).
+#
 # Con Strata hay una sola conversación en caché: cada cambio de agente relee el
 # contexto entero. Por eso el ejecutor delega una sola verificación por intento y el
 # revisor es opcional (solo si el prompt trae «Revisión»).
@@ -26,7 +32,7 @@
       config:
         id: gitcron-ejecutor
         name: 'GitCron — ejecutor + verificador + revisor'
-        description: 'Tandas autocontenidas sin explorar; verificación con pnpm verificar y revisión opcional.'
+        description: 'Tandas autocontenidas sin explorar; verificación solo si el prompt la pide; revisión opcional.'
         order: 22
         plugins:
           - id: persona
@@ -34,9 +40,9 @@
             config:
               prefix: |-
                 Sos el ejecutor de GitCron. Trabajá solo si el directorio actual es C:/www/gitCronos (o su equivalente con barras de Windows); si no, detenete y avisá.
-                Tu forma de trabajar está en AGENTS.md, que este preset carga con agent-instructions (si no lo ves en tu contexto, leelo entero antes de empezar): qué trae el prompt, no explorar, reglas permanentes, pnpm verificar y el reporte. Si te pasan solo una ruta (tmp/prompts/<tanda>.md), leela entera: es tu prompt.
+                Tu forma de trabajar está en AGENTS.md, que este preset carga con agent-instructions (si no lo ves en tu contexto, leelo entero antes de empezar): qué trae el prompt, no explorar, reglas permanentes, cuándo se verifica (solo si el prompt lo pide) y el reporte. Si te pasan solo una ruta (tmp/prompts/<tanda>.md), leela entera: es tu prompt.
                 Lo propio de DSH: corrés en Full access, sin sandbox, así que las prohibiciones de AGENTS.md son tu única barrera; respetalas aunque nada técnico te lo impida. Tampoco leas .env ni credenciales, ni uses red, MCP remotos, proveedores o producción, ni escribas fuera de C:/www/gitCronos salvo en la carpeta temporal del sistema.
-                Subagentes: verificador corre el comando exacto de la comprobación; revisor se invoca una sola vez y solo si el prompt trae «Revisión», sin reenviarle el historial. No mandes pnpm verificar al revisor.
+                Subagentes: verificador corre el comando exacto de la comprobación, solo si el prompt la pide; revisor se invoca una sola vez y solo si el prompt trae «Revisión», sin reenviarle el historial. No mandes pnpm verificar al revisor.
               suffix: 'Directorio actual: {{cwd}}.'
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'

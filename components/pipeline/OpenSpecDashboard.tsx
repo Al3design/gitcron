@@ -41,6 +41,8 @@ import { useGitStore } from '@/lib/git-store';
 import { changeIdFromBranch } from '@/lib/change-branch';
 import { usePipelineStore } from '@/lib/pipeline-store';
 import { useT } from '@/hooks/use-translation';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
+import { sddContribution } from '@/lib/assist/view-contributors';
 import type { RuntimeProjection } from '@/types/pipeline';
 import type { DetailTab } from './PipelineDetails';
 import { useReducedMotion } from 'motion/react';
@@ -73,6 +75,7 @@ import {
   deriveArchiveAvailability,
   derivePipelineNextAction,
   hasDiffEvidence,
+  nextActionAssistActions,
   resolveTaskLabel,
   resolveTaskText,
   type EngineInstructionInput,
@@ -124,6 +127,7 @@ type OpenSpecDashboardProps = {
   onResizeLeft?: (event: React.MouseEvent) => void;
   onResizeRight?: (event: React.MouseEvent) => void;
   onEnsureRightOpen?: () => void;
+  onEnsureRightClosed?: () => void;
   projection: RuntimeProjection | null;
   runtimeHistory: RuntimeProjection[];
   /** Hay datos de vista previa en pantalla: nada ejecutable puede habilitarse. */
@@ -211,6 +215,7 @@ export function OpenSpecDashboard({
   onResizeLeft,
   onResizeRight,
   onEnsureRightOpen,
+  onEnsureRightClosed,
   projection,
   runtimeHistory = [],
   fixtureActive = false,
@@ -1013,6 +1018,17 @@ export function OpenSpecDashboard({
     }
   };
 
+  useAssistContribution('sdd', () => {
+    const base = sddContribution(selectedChange?.changeId ?? null, highlightedTaskId);
+    return {
+      selection: base.selection,
+      actions: [
+        ...base.actions,
+        ...nextActionAssistActions([primaryAction, secondaryAction], fixtureActive, handleIntent),
+      ],
+    };
+  });
+
   // Una sesión nueva pasa a estar seleccionada mientras corre: si la persona
   // estaba mirando una sesión vieja, quedarse ahí escondería la que arranca.
   const liveSessionId = projection?.active === true ? projection.sessionId : null;
@@ -1193,6 +1209,7 @@ export function OpenSpecDashboard({
         repoPath={repoPath}
         setPrepareOpen={setPrepareOpen}
         onEnsureRightOpen={onEnsureRightOpen}
+        onEnsureRightClosed={onEnsureRightClosed}
         isSwitcherOpen={isSwitcherOpen}
         setIsSwitcherOpen={setIsSwitcherOpen}
         isSwitcherVisible={isSwitcherVisible}

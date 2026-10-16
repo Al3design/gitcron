@@ -576,7 +576,7 @@ describe('pantalla de entrada del repositorio', () => {
     const { container } = renderDashboard();
 
     // 1. Estado inicial: panel visible (isSwitcherOpen === true)
-    const toggleBtn = screen.getByRole('button', { name: 'pipeline.switcher.toggle' });
+    const toggleBtn = screen.getByTestId('pipeline.switcher.toggle');
     expect(toggleBtn).toBeTruthy();
     expect(toggleBtn.getAttribute('aria-expanded')).toBe('true');
 

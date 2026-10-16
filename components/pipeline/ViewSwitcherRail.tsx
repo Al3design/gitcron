@@ -71,6 +71,7 @@ export function ViewSwitcherRail({
       onTransitionEnd={onTransitionEnd}
       data-folded={isFolded ? 'true' : undefined}
       aria-hidden={isFolded ? 'true' : undefined}
+      inert={isFolded ? true : undefined}
     >
       {availableViews.length > 0 && (
         <div className={styles.railSection}>

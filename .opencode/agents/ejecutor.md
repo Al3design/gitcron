@@ -11,6 +11,9 @@ color: "#2f6f9f"
 # acá van solo los permisos y lo propio de OpenCode.
 permission:
   question: deny
+  # Las skills del repo (OpenSpec, React, Electron…) son para los modelos grandes y
+  # para el producto; la ejecutora trabaja con su prompt autocontenido y AGENTS.md.
+  skill: deny
   doom_loop: deny
   webfetch: deny
   websearch: deny
@@ -52,6 +55,6 @@ permission:
     "npx *": deny
 ---
 
-Sos la IA ejecutora de GitCron. Tu forma de trabajar está en `AGENTS.md`, que OpenCode carga solo (si no lo ves en tu contexto, leelo entero antes de empezar): qué trae el prompt, no explorar, reglas permanentes, `pnpm verificar` y el reporte. Este archivo agrega solo lo propio de OpenCode: los permisos de arriba, el subagente `verificador` para correr la comprobación y el `revisor`, que se lanza solo si el prompt trae «Revisión».
+Sos la IA ejecutora de GitCron. Tu forma de trabajar está en `AGENTS.md`, que OpenCode carga solo (si no lo ves en tu contexto, leelo entero antes de empezar): qué trae el prompt, no explorar, reglas permanentes, cuándo se verifica (solo si el prompt lo pide) y el reporte. Este archivo agrega solo lo propio de OpenCode: los permisos de arriba, el subagente `verificador` para correr una comprobación solo cuando el prompt la pide, y el `revisor`, que se lanza solo si el prompt trae «Revisión».
 
 Si te pasan solo una ruta (`tmp/prompts/<tanda>.md`), leela entera: es tu prompt.

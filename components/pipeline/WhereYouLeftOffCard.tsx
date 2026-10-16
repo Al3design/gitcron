@@ -12,12 +12,26 @@ import {
 } from 'lucide-react';
 import type { ChangeLastCommit, TaskEvidence } from '@/types/pipeline';
 import { useGitStore } from '@/lib/git-store';
+import { usePipelineStore } from '@/lib/pipeline-store';
+import { headShaOf } from '@/lib/assist/view-contributors';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import { Stack, Row, PlainList } from '@/components/ui';
+import type { ResumeNarrationArgs } from '@/types/resume-narration';
+import { ResumeNarration } from './ResumeNarration';
 import type { OpenSpecChangeSummary, OpenSpecWorkspaceSnapshot } from './pipeline-view-state';
-import { deriveResumeCard } from './resume-card';
+import { deriveResumeCard, formatRelativeTime } from './resume-card';
+import { compareFreshness, stampSources, type ResumeSourcesStamp } from './resume-freshness';
 import styles from './OpenSpecDashboard.module.css';
+
+function stableHash(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
 
 export interface WhereYouLeftOffCardProps {
   repoPath?: string | null;
@@ -148,15 +162,50 @@ export function WhereYouLeftOffCard({
     t,
   ]);
 
+  const readAt = usePipelineStore((s) => s.snapshot?.openSpec?.observedAt ?? null);
+  const commits = useGitStore((s) => s.commits);
+  const currentBranch = useGitStore((s) => s.currentBranch);
+  const modifiedPaths = Array.isArray(gitFiles) ? gitFiles.map((f) => f.path) : [];
+  const nowStamp = stampSources(readAt, headShaOf(commits ?? [], currentBranch ?? ''), modifiedPaths, changeId ?? '');
+
+  // Lo que había al leer: se toma de nuevo cada vez que llega una lectura nueva o cambia el cambio
+  // (ajuste de estado durante el render, sin un efecto que dispare otro render).
+  const readKey = `${readAt ?? ''}\u0000${changeId ?? ''}`;
+  const [stampAtRead, setStampAtRead] = useState<{ key: string; stamp: ResumeSourcesStamp } | null>(null);
+  if (stampAtRead?.key !== readKey) {
+    setStampAtRead({ key: readKey, stamp: nowStamp });
+  }
+  const freshness = compareFreshness(stampAtRead?.key === readKey ? stampAtRead.stamp : null, nowStamp);
+
   if (!cardData) return null;
 
   const { objective, whatYouWereDoing, currentWork, remainingWork, archivedNotice, rows } = cardData;
+
+  const proposalRaw = selectedChange?.artifacts?.proposal ?? selectedArchive?.artifacts?.proposal ?? '';
+  const tasksRawText = selectedChange?.artifacts?.tasks ?? selectedArchive?.artifacts?.tasks ?? '';
+  const textFingerprint = stableHash(`${proposalRaw}\0${tasksRawText}`);
+  const headSha = headShaOf(commits ?? [], currentBranch ?? '') ?? '';
+  const isArchived = Boolean(selectedArchive);
+  const archivedAt = selectedArchive?.archivedAt ?? null;
+
+  const narrationSourceKey = `${repoPath ?? ''}\0${changeId ?? ''}\0${isArchived ? archivedAt ?? 'archived' : 'active'}\0${lang}\0${readAt ?? ''}\0${headSha}\0${textFingerprint}`;
+  const narrationDisabled = freshness.state === 'pending' || !repoPath || !changeId;
+  const narrationLanguage: 'es' | 'en' | 'zh' =
+    lang === 'zh' ? 'zh' : lang === 'en' ? 'en' : 'es';
+
+  const narrationArgs: ResumeNarrationArgs = {
+    repoPath: repoPath ?? '',
+    changeId: changeId ?? '',
+    archivedAt,
+    language: narrationLanguage,
+  };
 
   return (
     <section
       className={styles.whereYouLeftOffContainer}
       aria-label={t('pipeline.resumeCard.title')}
       data-testid="where-you-left-off-card"
+      data-stale={freshness.state === 'pending' ? 'true' : undefined}
     >
       <div className={styles.whereYouLeftOffHeader}>
         <Row gap="2">
@@ -168,7 +217,17 @@ export function WhereYouLeftOffCard({
             {archivedNotice}
           </span>
         )}
+        {readAt && (
+          <span className={styles.resumeReadAt} data-testid="resume-read-at">
+            {t('pipeline.resumeCard.readAt', { timeAgo: formatRelativeTime(readAt, undefined, lang) })}
+          </span>
+        )}
       </div>
+      {freshness.state === 'pending' && (
+        <p className={styles.resumePending} role="status" data-testid="resume-pending">
+          {t(freshness.reason === 'checkout' ? 'pipeline.resumeCard.pendingCheckout' : 'pipeline.resumeCard.pendingSources')}
+        </p>
+      )}
 
       <dl className={styles.whereYouLeftOffRowsList}>
         {/* Renglón: Objetivo */}
@@ -359,6 +418,12 @@ export function WhereYouLeftOffCard({
           {rows.nextStep.text}
         </dd>
       </dl>
+
+      <ResumeNarration
+        args={narrationArgs}
+        sourceKey={narrationSourceKey}
+        disabled={narrationDisabled}
+      />
     </section>
   );
 }

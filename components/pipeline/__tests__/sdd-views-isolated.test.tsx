@@ -178,6 +178,49 @@ describe('Vistas de SDD montadas en aislamiento (Tarea 2.1)', () => {
     expect(screen.getByTestId('mock-activity-feed')).toBeTruthy();
   });
 
+  it('al lanzar el agente (onLaunchStarted), la vista navega y permanece en activity', () => {
+    const { result, rerender } = renderHook(
+      (props) => useSddNavigation(props),
+      {
+        initialProps: {
+          selectedChange: mockChange,
+          launchTarget: { taskId: '1.1', instruction: 'Continuar' } as { taskId: string; instruction: string } | null,
+          hasDiffs: false,
+          hasActivity: false,
+          runtimeActive: false,
+        },
+      },
+    );
+
+    // Al inicio, con launchTarget activo
+    expect(result.current.activeChangeView).toBe('overview'); // initialView default
+    act(() => {
+      result.current.setActiveChangeView('tasks');
+    });
+    expect(result.current.activeChangeView).toBe('tasks');
+
+    // Simulamos el disparo de onLaunchStarted:
+    // setLaunchTarget(null); setActiveChangeView('activity');
+    act(() => {
+      result.current.setActiveChangeView('activity');
+    });
+
+    // Rerender con launchTarget: null y sesión arrancando (runtimeActive: true, hasActivity: true)
+    rerender({
+      selectedChange: mockChange,
+      launchTarget: null,
+      hasDiffs: false,
+      hasActivity: true,
+      runtimeActive: true,
+    });
+
+    // La vista debe mantenerse firmemente en 'activity' y no volver a 'overview'
+    expect(result.current.activeChangeView).toBe('activity');
+    const viewIds = result.current.changeViews.map((v) => v.id);
+    expect(viewIds).toContain('overview');
+    expect(viewIds).toContain('tasks');
+    expect(viewIds).not.toContain('activity');
+  });
   it('hook useSddNavigation gestiona el menú de vistas, vista activa y resaltado de tarea', () => {
     const { result } = renderHook(() =>
       useSddNavigation({

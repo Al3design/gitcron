@@ -3,6 +3,9 @@ description: Corre la verificación exacta de una tanda de GitCron y devuelve ev
 mode: subagent
 permission:
   question: deny
+  # Las skills del repo (OpenSpec, React, Electron…) son para los modelos grandes y
+  # para el producto; la ejecutora trabaja con su prompt autocontenido y AGENTS.md.
+  skill: deny
   task: deny
   edit: deny
   webfetch: deny

@@ -3,7 +3,7 @@
 // Los usos de texto de GitCron frente a gitcron.json (tarea 4.3 de modelos-en-casa),
 // como los ve la pantalla. Sin secretos: nombres, destino y archivo.
 
-export type AiTextUse = 'gitcron-commit' | 'gitcron-cartography' | 'gitcron-openspec-analysis' | 'gitcron-temporal';
+export type AiTextUse = 'gitcron-commit' | 'gitcron-cartography' | 'gitcron-openspec-analysis' | 'gitcron-temporal' | 'gitcron-assist';
 export type AiAgentUse = 'gitcron-sdd';
 export type AiUse = AiTextUse | AiAgentUse;
 

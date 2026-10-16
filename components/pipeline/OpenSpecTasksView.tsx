@@ -7,8 +7,6 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Circle,
   Copy,
   Eye,
@@ -933,18 +931,6 @@ export function OpenSpecTasksView({
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col items-start gap-1">
                         <span>{details.title || resolveText(task)}</span>
-                        {(details.responsible || details.check) && (
-                          <button
-                            type="button"
-                            className={styles.taskCheckToggleBtn}
-                            onClick={() => toggleCheckDetail(task.id)}
-                            aria-expanded={isCheckOpen}
-                            aria-label={`${t('pipeline.resumeCard.howToCheckToggle')}: ${details.title}`}
-                          >
-                            {isCheckOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            <span>{t('pipeline.resumeCard.howToCheckToggle')}</span>
-                          </button>
-                        )}
                       </div>
                       {isCheckOpen && (details.responsible || details.check) && (
                         <div className={styles.taskCheckDetailBox} data-testid={`task-check-detail-${task.id}`}>
@@ -1052,12 +1038,16 @@ export function OpenSpecTasksView({
         const task = tasks.find((t) => t.id === openMenuTaskId);
         if (!task) return null;
         const idx = tasks.findIndex((t) => t.id === task.id);
+        const menuDetails = parseTaskDetails(task);
+        const hasHowToCheck = Boolean(menuDetails.responsible || menuDetails.check);
         return (
           <TaskContextMenu
             x={menuCoords.x}
             y={menuCoords.y}
             canMoveUp={idx > 0}
             canMoveDown={idx < tasks.length - 1}
+            howToCheckOpen={hasHowToCheck ? expandedCheckTaskIds.has(task.id) : undefined}
+            onToggleHowToCheck={hasHowToCheck ? () => toggleCheckDetail(task.id) : undefined}
             onEdit={() => handleStartEdit(task)}
             onMoveUp={() => handleKeyboardMove(task, 'up')}
             onMoveDown={() => handleKeyboardMove(task, 'down')}

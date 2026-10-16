@@ -23,7 +23,7 @@ import {
 } from './gitcron-config';
 
 /** Los usos de texto de GitCron (D1). `gitcron-sdd` es de agente, no de texto. */
-export const TEXT_USES = ['gitcron-commit', 'gitcron-cartography', 'gitcron-openspec-analysis', 'gitcron-temporal'] as const;
+export const TEXT_USES = ['gitcron-commit', 'gitcron-cartography', 'gitcron-openspec-analysis', 'gitcron-temporal', 'gitcron-assist'] as const;
 export type TextUse = (typeof TEXT_USES)[number];
 
 export function isTextUse(value: unknown): value is TextUse {
@@ -51,6 +51,7 @@ export const TEXT_USE_LABEL: Record<TextUse, string> = {
   'gitcron-cartography': 'Cartografía',
   'gitcron-openspec-analysis': 'El análisis de versión de OpenSpec',
   'gitcron-temporal': 'El Agente Temporal',
+  'gitcron-assist': 'El asistente',
 };
 
 export interface ModelAlternative {

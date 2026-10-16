@@ -15,6 +15,7 @@ import { useAutoFetch } from '@/hooks/use-auto-fetch';
 import { useCommitAiDraftStateSync } from '@/hooks/use-commit-ai-draft-state-sync';
 import { commitHasBranchRef, normalizeBranchName, type CommitSelectOptions } from '@/components/CommitGraph';
 import { RepoMainView } from '@/components/RepoMainView';
+import { AssistDock } from '@/components/assist/AssistDock';
 import { RepoOverlayLayer, type DeleteBranchState } from '@/components/RepoOverlayLayer';
 import { RepoTabs } from '@/components/RepoTabs';
 import { DangerConfirmDialog } from '@/components/DangerConfirmDialog';
@@ -308,6 +309,17 @@ export default function GitCronPage() {
   // sub-estado per-repo encendido. Replaza al grafo/diffs y oculta el switch/LCAR.
   const cartographyActive =
     enableCartography && activeView === 'repository' && !isRepoStartView && !!repoPath && inCartography;
+
+  const assistViewId = useMemo(() => {
+    if (activeView !== 'repository') {
+      return activeView;
+    }
+    if (cartographyActive) return 'carto';
+    const tab = activeTab.toLowerCase();
+    if (tab === 'graph') return 'graph';
+    if (tab === 'pipeline') return 'sdd';
+    return tab;
+  }, [activeView, activeTab, cartographyActive]);
 
   // Entrar/volver de Cartografía. Vive en RepoState (per-repo), así sobrevive el
   // cambio de tab de repo. Al entrar nos aseguramos de estar en la vista repo.
@@ -809,6 +821,7 @@ export default function GitCronPage() {
   const {
     sidebarW, detailsW, sidebarOpen, detailsOpen, isDragging, graphColumns,
     beginColDrag, beginGraphColDrag, toggleSidebar, toggleDetails, ensureDetailsOpen,
+    ensureDetailsClosed,
   } = usePanelLayout();
   const repositoryDetailsVisible = detailsOpen && activeView === 'repository' && !!repoPath && !isRepoStartView && !cartographyActive;
   const leftGraphSafe = 0;
@@ -1676,6 +1689,7 @@ export default function GitCronPage() {
               pipelineLayout: {
                 rightOpen: repositoryDetailsVisible,
                 onEnsureRightOpen: ensureDetailsOpen,
+                onEnsureRightClosed: ensureDetailsClosed,
               },
               onSelectCommit: handleSelectCommit,
               onCommitContextMenu: (event, commit) => openContextMenu({ x: event.clientX, y: event.clientY, hash: commit.hash }),
@@ -1709,6 +1723,16 @@ export default function GitCronPage() {
               setInteractiveRebaseFrom,
             }}
           />
+          {!isRepoStartView && repoPath && (
+            <AssistDock
+              repoPath={repoPath}
+              assistViewId={assistViewId}
+              onOpenAiSettings={() => {
+                setSelectedSettingsSection('aiModels');
+                handleViewChange('settings');
+              }}
+            />
+          )}
         </main>
 
         {/* RIGHT PANEL: Commit details + staging (Graph) or SDD inspector (Pipeline) */}

@@ -28,6 +28,28 @@ context: |
   En modularizar-sdd, una regla así se mudó sola y las fechas de un cambio archivado se
   separaron 16 px.
 
+  Lo que es de IA se distingue a la vista con su propio color: el violeta `--color-ai` y
+  el degradé multicolor `--ai-gradient` (violeta, azul, verde agua y rosa) de app/globals.css,
+  nunca el verde de Git (`--color-secondary`) ni el azul de las acciones comunes. Para eso
+  hay piezas globales listas: `.ai-thinking-text` (el brillo de «pensando», en un `<span>`
+  propio), `.ai-surface` (superficie con marco en degradé), `.ai-surface-header` (encabezado
+  de un panel de IA) y `.ai-gradient-text` (títulos y marcas en degradé). Se usan esas, no
+  copias en un módulo (decisión de Alejandro, D20 de modelos-en-casa, recordada el 2026-10-13).
+
+  Una pieza nueva se arma con la que ya existe para eso, no desde cero (pedido de Alejandro,
+  2026-10-16, al probar retomar: siete detalles de maquetación que no seguían lo ya
+  establecido). Menús desplegables y contextuales: los de components/ContextMenus.tsx, con
+  ícono y texto, el mismo tamaño de letra y el mismo espaciado que el menú de una tarea de
+  SDD o el clic derecho en una rama. Títulos: la escala de tamaños que ya existe, sin
+  mayúsculas forzadas salvo los encabezados de sección de las barras laterales. Botones de
+  una misma zona: uno al lado del otro en una fila (`Row` con `wrap`), no apilados. Un
+  contenedor con contenido lleva el fondo y el relleno de los demás contenedores de esa
+  pantalla; nada queda pegado al borde. Etiqueta y texto largo: la etiqueta arriba y el
+  texto debajo, no en dos columnas que aplastan el texto. El cuadro de texto de un chat va
+  fijo abajo, como en las aplicaciones de IA de escritorio, también con la conversación
+  vacía. Una ayuda que se repite en cada fila de una lista va al menú de esa fila, no como
+  un botón por fila.
+
   Nada se cita por número. Se escribe lo que la regla dice, o no se escribe. Una referencia
   como «conforme al invariante 12» deja de significar algo en el momento en que ese documento
   se mueve o se borra, y no hay forma de darse cuenta: nada falla. El mismo día se encontraron
@@ -80,10 +102,15 @@ operations:
         volver a pedir autorización. Las instrucciones actuales del usuario prevalecen
         sobre un prompt histórico: ante contradicciones, identificar la fuente concreta.
       - >-
-        Una tanda se verifica con `pnpm verificar`, que corre sólo lo que depende de los
-        archivos tocados (pruebas relacionadas, tsc, eslint, openspec validate). Se usa
-        mientras se trabaja y para cerrar la tanda, y es la que tiene que estar en verde
-        antes del commit. La verificación completa (`pnpm verificar --completa`) se corre
+        Desde el 2026-10-16 (decisión de Alejandro) ni la ejecutora ni el orquestador
+        verifican tanda por tanda: el orquestador audita leyendo el diff y lo comitea, y la
+        verificación se corre una vez, al final del cambio, cuando se terminaron todas sus
+        tareas, y antes de archivarlo o fusionarlo. Sólo un prompt que lo pida
+        explícitamente hace verificar a la ejecutora, y entonces sólo ese comando, una vez.
+        Hasta ese día cada tanda corría `pnpm verificar` y la ejecutora lo repetía entero
+        ante cada fallo: vueltas de 10 minutos con la máquina cargada. `pnpm verificar` (lo
+        tocado: pruebas relacionadas, tsc, eslint, openspec validate) queda para cuando se
+        pida. La verificación completa (`pnpm verificar --completa`) se corre
         cuando se juntaron varias tandas, antes de fusionar a main; `--todo`, con build y la
         suite entera dos veces, antes de sacar versión. La IA ejecutora no corre la completa
         para cerrar una tanda. El 2026-10-09 una tanda tardó más de 30 minutos de reloj
@@ -93,9 +120,9 @@ operations:
         trampas (protecciones aflojadas, catch vacíos, pruebas ablandadas, capturas anteriores
         al código) y Fallow sobre las líneas agregadas (exports o archivos sin uso, funciones
         demasiado complejas, ciclos) ya las revisa el script, y la lectura se concentra en lo
-        que el script no puede juzgar. Las capturas de antes y después de una tanda se comparan
+        que el script no puede juzgar. Desde el 2026-10-16 las capturas las saca el orquestador al auditar (un test temporal en e2e/tests/zz-*.e2e.ts, escrito con la herramienta de escribir archivos y borrado al terminar), no la ejecutora: le gastaba la ventana y los tokens y el orquestador las repetía igual. Las capturas de antes y después de una tanda se comparan
         con `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`, que da el porcentaje de
-        píxeles distintos y una imagen con las diferencias en rojo; a ojo se escapan. El auditor revisa la correspondencia entre código final, resultados
+        píxeles distintos y una imagen con las diferencias en rojo; a ojo se escapan. Al mirar las capturas, el auditor compara cada pieza nueva con su equivalente ya existente en la app (menú, título, contenedor, fila de botones, cuadro de chat; ver la regla de `context`) y no solo que funcione: el 2026-10-16 Alejandro encontró siete detalles así que la auditoría había dejado pasar. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
         Un arreglo chico que encuentra la auditoría lo hace el auditor directamente, con su
         verificación, en vez de devolverlo al ejecutor: cada vuelta le cuesta al ejecutor

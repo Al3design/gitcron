@@ -414,6 +414,9 @@ export function AiModelPicker({ use = 'gitcron-commit', repoPath = null, onClose
           {t('aiUse.cancel')}
         </button>
       </div>
+      <p className={styles.pickerNotice}>
+        {t('aiUse.saveScope')}
+      </p>
     </div>
   );
 }

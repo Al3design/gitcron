@@ -59,6 +59,8 @@ function legacyRef(use: TextUse, sources: LegacyChoiceSources): { providerId: Le
       return sources.temporalProvider === 'claude'
         ? { providerId: 'anthropic', modelId: ANTHROPIC_DEFAULT_MODEL }
         : { providerId: 'openrouter', modelId: OPENROUTER_DEFAULT_MODEL };
+    case 'gitcron-assist':
+      return null;
   }
 }
 

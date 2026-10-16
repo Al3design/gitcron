@@ -2,10 +2,11 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowDown, ArrowUp, Eraser, Pencil, Trash2 } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, Eraser, ListChecks, Pencil, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { GitFile } from '@/lib/git-store';
+import styles from './ContextMenus.module.css';
 
 /**
  * Custom hook to dynamically adjust the context menu position
@@ -13,7 +14,7 @@ import type { GitFile } from '@/lib/git-store';
  * Uses a two-pass render style (hidden first frame) to measure and
  * reposition seamlessly without flickering.
  */
-function useAdjustedPosition(x: number, y: number) {
+function useAdjustedPosition(x: number, y: number, preferAbove?: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState({ left: x, top: y });
   const [isMeasured, setIsMeasured] = useState(false);
@@ -25,26 +26,26 @@ function useAdjustedPosition(x: number, y: number) {
       const winH = window.innerHeight;
 
       let left = x;
-      let top = y;
+      let top = preferAbove && rect.height > 0 ? Math.max(8, y - rect.height - 6) : y;
 
       // Adjust horizontally if it goes off-screen to the right
       if (x + rect.width > winW) {
         left = Math.max(8, winW - rect.width - 8);
       }
       // Adjust vertically if it goes off-screen to the bottom (render upwards)
-      if (y + rect.height > winH) {
+      if (!preferAbove && y + rect.height > winH) {
         top = Math.max(8, winH - rect.height - 8);
       }
 
       setCoords({ left, top });
       setIsMeasured(true);
     }
-  }, [x, y]);
+  }, [x, y, preferAbove]);
 
   return { ref, coords, isMeasured };
 }
 
-function ContextMenuItem({
+export function ContextMenuItem({
   onClick, text, textSecondary, disabled, title, danger, icon,
 }: {
   onClick: () => void;
@@ -79,6 +80,72 @@ function ContextMenuItem({
       </span>
       {textSecondary && <span className="text-[length:var(--font-size-2xs)] opacity-50 ml-4 shrink-0">{textSecondary}</span>}
     </button>
+  );
+}
+
+export function ContextMenuSeparator() {
+  return <div className={styles.separator} role="separator" />;
+}
+
+export function ContextMenu({
+  x,
+  y,
+  preferAbove,
+  onClose,
+  width = 'narrow',
+  ariaLabel,
+  children,
+}: {
+  x: number;
+  y: number;
+  preferAbove?: boolean;
+  onClose: () => void;
+  width?: 'narrow' | 'wide';
+  ariaLabel?: string;
+  children: React.ReactNode;
+}) {
+  const { ref, coords, isMeasured } = useAdjustedPosition(x, y, preferAbove);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const timer = setTimeout(() => {
+      window.addEventListener('click', handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('click', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose, ref]);
+
+  const menuStyle: React.CSSProperties = {
+    left: coords.left,
+    top: coords.top,
+    visibility: isMeasured ? 'visible' : 'hidden',
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      role="menu"
+      aria-label={ariaLabel}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: isMeasured ? 1 : 0 }}
+      className={cn('glass-overlay', styles.menu, width === 'wide' ? styles.wide : styles.narrow)}
+      style={menuStyle}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -359,6 +426,8 @@ export function TaskContextMenu({
   y,
   canMoveUp,
   canMoveDown,
+  howToCheckOpen,
+  onToggleHowToCheck,
   onEdit,
   onMoveUp,
   onMoveDown,
@@ -369,6 +438,8 @@ export function TaskContextMenu({
   y: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  howToCheckOpen?: boolean;
+  onToggleHowToCheck?: () => void;
   onEdit: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -376,42 +447,16 @@ export function TaskContextMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  const { ref, coords, isMeasured } = useAdjustedPosition(x, y);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    const timer = setTimeout(() => {
-      window.addEventListener('click', handleClickOutside);
-      window.addEventListener('keydown', handleKeyDown);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('click', handleClickOutside);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose, ref]);
 
   return (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: isMeasured ? 1 : 0 }}
-      className="fixed glass-overlay rounded-lg py-1 z-[100] w-52 shadow-lg"
-      style={{
-        left: coords.left,
-        top: coords.top,
-        visibility: isMeasured ? 'visible' : 'hidden',
-      }}
-    >
+    <ContextMenu x={x} y={y} onClose={onClose} width="narrow">
+      {onToggleHowToCheck && (
+        <ContextMenuItem
+          onClick={() => { onClose(); onToggleHowToCheck(); }}
+          icon={<ListChecks size={13} />}
+          text={t(howToCheckOpen ? 'pipeline.openspec.task.hideHowToCheck' : 'pipeline.openspec.task.howToCheck')}
+        />
+      )}
       <ContextMenuItem
         onClick={() => { onClose(); onEdit(); }}
         icon={<Pencil size={13} />}
@@ -431,14 +476,14 @@ export function TaskContextMenu({
         text={t('pipeline.openspec.task.moveDown')}
         textSecondary="Alt+↓"
       />
-      <div className="h-px bg-border-subtle/15 my-1" />
+      <ContextMenuSeparator />
       <ContextMenuItem
         onClick={() => { onClose(); onDelete(); }}
         danger
         icon={<Trash2 size={13} />}
         text={t('pipeline.openspec.task.delete')}
       />
-    </motion.div>
+    </ContextMenu>
   );
 }
 

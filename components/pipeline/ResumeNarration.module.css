@@ -1,0 +1,160 @@
+/* components/pipeline/ResumeNarration.module.css */
+
+.container {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.explainButton {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-ai-violet) 12%, transparent);
+  color: var(--color-ai);
+  border: 1px solid color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.explainButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-ai-violet) 20%, transparent);
+  border-color: color-mix(in srgb, var(--color-ai-violet) 45%, transparent);
+}
+
+.explainButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.narrationBox {
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.boxHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ai-violet) 25%, var(--color-border-subtle));
+}
+
+.badge {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.subtleButton {
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.subtleButton:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-surface);
+}
+
+.subtleButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paragraphList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.paragraphItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.paragraphText {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.paragraphSources {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.sourcePill {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.boxFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--color-ai-violet) 20%, var(--color-border-subtle));
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+}
+
+.metaInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.thinkingText {
+  display: inline-block;
+}
+
+.explainButton:focus-visible,
+.subtleButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}

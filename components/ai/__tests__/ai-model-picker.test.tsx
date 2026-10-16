@@ -172,7 +172,7 @@ describe('AiModelPicker (tarea 4.5)', () => {
     expect(chooseMock).not.toHaveBeenCalled();
 
     // Guardar escribe con los valores elegidos
-    const saveBtn = screen.getByRole('button', { name: 'Guardar en gitcron.json' });
+    const saveBtn = screen.getByRole('button', { name: 'Usar este modelo' });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -217,7 +217,7 @@ describe('AiModelPicker (tarea 4.5)', () => {
 
     fireEvent.change(variantSelect, { target: { value: 'alta' } });
 
-    const saveBtn = screen.getByRole('button', { name: 'Guardar en gitcron.json' });
+    const saveBtn = screen.getByRole('button', { name: 'Usar este modelo' });
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -244,7 +244,8 @@ describe('AiModelPicker (tarea 4.5)', () => {
     expect(await screen.findByText('Elegir modelo para este uso')).toBeTruthy();
     expect(screen.getByText('Proveedor')).toBeTruthy();
     expect(screen.getByText('Intensidad de razonamiento')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Guardar en gitcron.json' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Usar este modelo' })).toBeTruthy();
+    expect(screen.getByText('Vale para todo GitCron. Para usar otro en una sola función, entrá a Motores y modelos.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeTruthy();
     unmountEs();
 
@@ -254,7 +255,8 @@ describe('AiModelPicker (tarea 4.5)', () => {
     expect(await screen.findByText('Choose model for this use')).toBeTruthy();
     expect(screen.getByText('Provider')).toBeTruthy();
     expect(screen.getByText('Reasoning effort')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Save to gitcron.json' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Use this model' })).toBeTruthy();
+    expect(screen.getByText('Applies to all of GitCron. To use a different one for a single feature, go to Engines and models.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'low (default)' })).toBeTruthy();
     unmountEn();
@@ -265,7 +267,8 @@ describe('AiModelPicker (tarea 4.5)', () => {
     expect(await screen.findByText('为此用途选择模型')).toBeTruthy();
     expect(screen.getByText('提供方')).toBeTruthy();
     expect(screen.getByText('推理强度')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '保存到 gitcron.json' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '使用此模型' })).toBeTruthy();
+    expect(screen.getByText('适用于整个 GitCron。如需在单个功能中使用其他模型，请进入引擎与模型。')).toBeTruthy();
     expect(screen.getByRole('button', { name: '取消' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'low (默认)' })).toBeTruthy();
   });

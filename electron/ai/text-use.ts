@@ -139,6 +139,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
   const base = { label: modelLabel(resolved), providerId: resolved.providerId, modelId: resolved.modelId };
   const maxTokens = resolved.maxTokensFromModel ? resolved.maxTokens : (req.maxTokens ?? resolved.maxTokens);
   const temperature = resolved.temperature ?? req.temperature;
+  const effectiveTimeoutMs = req.timeoutMs ?? (typeof resolved.options?.timeout === 'number' ? resolved.options.timeout : undefined) ?? resolved.timeoutMs ?? 120_000;
   const startedAt = Date.now();
 
   const saveHistory = (
@@ -214,7 +215,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
         effort,
         prompt: `${req.system}\n\n${req.user}`,
         signal: req.signal,
-        timeoutMs: req.timeoutMs,
+        timeoutMs: effectiveTimeoutMs,
         onChunk: req.onChunk,
         spawnFn: deps.spawnFn,
         resolveExecutable: deps.resolveExecutable,
@@ -251,7 +252,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
         maxTokens: effectiveMaxTokens,
         temperature,
         options: resolved.options,
-        timeoutMs: req.timeoutMs,
+        timeoutMs: effectiveTimeoutMs,
         signal: req.signal,
         fetchFn: deps.fetchFn,
       };
@@ -354,7 +355,7 @@ export async function runTextUse(target: ResolvedModelFor, req: TextUseRequest, 
       temperature,
       maxTokens: effectiveMaxTokens,
       options: resolved.options,
-      timeoutMs: req.timeoutMs,
+      timeoutMs: effectiveTimeoutMs,
       signal: req.signal,
     };
     let usage: DraftUsage | null = null;

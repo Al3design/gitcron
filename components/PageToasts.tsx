@@ -354,10 +354,10 @@ export function PageToasts({
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
             role="alert"
             aria-live="assertive"
-            className="pointer-events-auto p-3 bg-error text-white rounded-lg shadow-2xl flex items-start gap-3 border border-error/20 max-w-[min(calc(100vw-2rem),640px)]"
+            className="pointer-events-auto p-3 glass-alert-error text-text-primary rounded-lg shadow-2xl flex items-start gap-3 max-w-[min(calc(100vw-2rem),640px)]"
           >
-            <AlertCircle size={20} className="shrink-0 mt-0.5" />
-            <span className="text-sm font-medium flex-1 whitespace-pre-line">{error}</span>
+            <AlertCircle size={20} className="shrink-0 mt-0.5 text-error" />
+            <span className="text-sm font-medium flex-1 whitespace-pre-line text-text-primary">{error}</span>
             {/* Recovery action when git index is locked */}
             {error.toLowerCase().includes('index.lock') && (
               <button
@@ -366,7 +366,7 @@ export function PageToasts({
                   const ok = await removeIndexLock();
                   if (ok) setError(null);
                 }}
-                className="shrink-0 px-3 py-1 text-xs font-bold bg-white/20 hover:bg-white/30 text-white rounded transition-colors"
+                className="shrink-0 px-3 py-1 text-xs font-bold bg-error/15 hover:bg-error/25 text-error rounded transition-colors"
                 title="Borra .git/index.lock y refresca el estado"
               >
                 Eliminar lock
@@ -377,13 +377,13 @@ export function PageToasts({
                 type="button"
                 onClick={onTrustSafeDirectory}
                 disabled={isLoading}
-                className="shrink-0 px-3 py-1 text-xs font-bold bg-white/20 hover:bg-white/30 text-white rounded transition-colors disabled:opacity-50"
+                className="shrink-0 px-3 py-1 text-xs font-bold bg-error/15 hover:bg-error/25 text-error rounded transition-colors disabled:opacity-50"
                 title="Agrega esta carpeta a git config --global safe.directory y vuelve a abrirla"
               >
                 Confiar carpeta
               </button>
             )}
-            <button type="button" onClick={() => setError(null)} className="hover:opacity-70 shrink-0">
+            <button type="button" onClick={() => setError(null)} className="hover:opacity-70 shrink-0 text-error">
               <X size={16} />
             </button>
           </motion.div>

@@ -202,9 +202,19 @@ function capturasViejas(tocados) {
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   const carpeta = carpetas[0];
   if (!carpeta) return [];
-  const capturas = readdirSync(carpeta).filter((f) => f.endsWith('.png')).map((f) => `${carpeta}/${f}`);
+  // Las de la carpeta y las de `despues/`, que son las que dicen mostrar el código final. Medido
+  // en retomar-09: las de `despues/` eran de 11:20 y el código siguió cambiando hasta 11:28.
+  const despues = `${carpeta}/despues`;
+  const capturas = [
+    ...readdirSync(carpeta).filter((f) => f.endsWith('.png')).map((f) => `${carpeta}/${f}`),
+    ...(existsSync(despues) ? readdirSync(despues).filter((f) => f.endsWith('.png')).map((f) => `${despues}/${f}`) : []),
+  ];
   const codigo = tocados.filter((f) => /.(tsx?|css)$/.test(f) && !/__tests__|.test./.test(f) && existsSync(f));
   if (capturas.length === 0 || codigo.length === 0) return [];
+  // Si la captura más nueva es anterior al último commit, la carpeta es de una tanda ya cerrada
+  // y no de la que se verifica. Medido en retomar-12 (sin capturas): avisaba por las de retomar-11.
+  const ultimoCommitMs = Number(git(`log -1 --format=%ct ${base}`)) * 1000;
+  if (Math.max(...capturas.map((f) => statSync(f).mtimeMs)) < ultimoCommitMs) return [];
   const ultimoCodigo = Math.max(...codigo.map((f) => statSync(f).mtimeMs));
   const viejas = capturas.filter((f) => statSync(f).mtimeMs < ultimoCodigo);
   return viejas.length > 0 ? [`${carpeta}: ${viejas.length} captura(s) anteriores al último cambio de código`] : [];
@@ -261,6 +271,11 @@ function trampas() {
     if (/catch\s*(\([^)]*\))?\s*\{\s*\}|\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)/.test(texto)) {
       avisos.push(`${archivo}: catch vacío agregado`);
     }
+    // Lo mismo con otra cara. Medido en retomar-08: `.catch(() => undefined)` y un `catch`
+    // con sólo «// Ignorar fallos» dejaban la lista vacía sin decir que había fallado.
+    if (/\.catch\(\s*\(\s*\)\s*=>\s*(undefined|null|void 0)\s*\)|catch\s*(\([^)]*\))?\s*\{\s*(\/\/[^\n]*\s*)+\}/.test(texto)) {
+      avisos.push(`${archivo}: error tragado (.catch(() => undefined) o catch con sólo un comentario) → avisarlo, o explicar en «Dudas» por qué se ignora`);
+    }
     // Estilos fuera de los módulos CSS (regla de openspec/config.yaml). Medido en
     // estilos-02: `className="w-full"` en cuatro lugares y un `style={{ flexBasis }}`.
     if (archivo.endsWith('.tsx')) {
@@ -310,6 +325,8 @@ function trampas() {
     }
   }
 
+  avisos.push(...pruebasQueNoCorren(tocados));
+
   // Capturas de la tanda más viejas que el código que dicen mostrar. Medido el
   // 2026-10-09: una captura de las 18:30 se entregó como evidencia de código que
   // siguió cambiando hasta las 19:04.
@@ -344,6 +361,21 @@ function trampas() {
     }
   }
   return avisos;
+}
+
+/**
+ * Pruebas tocadas que Vitest no corre porque su carpeta no está en el `include`
+ * de vitest.config.ts: todo da verde y nadie se entera. Medido en retomar-07:
+ * electron/assist/__tests__ no estaba incluida y la ejecutora lo vio de casualidad.
+ */
+function pruebasQueNoCorren(tocados) {
+  const pruebas = tocados.filter((f) => /\.test\.tsx?$/.test(f) && !/\.e2e\./.test(f) && existsSync(f));
+  if (pruebas.length === 0) return [];
+  const { salida } = correr(`pnpm exec vitest list --filesOnly ${pruebas.map((f) => `"${f}"`).join(' ')}`);
+  const listadas = new Set(salida.split(/\r?\n/).map((l) => l.trim().replace(/\\/g, '/')));
+  return pruebas
+    .filter((f) => !listadas.has(f))
+    .map((f) => `${f}: Vitest no corre esta prueba → sumar su carpeta al \`include\` de vitest.config.ts`);
 }
 
 /**
@@ -455,7 +487,8 @@ function main() {
     { nombre: 'tsc', comando: 'pnpm exec tsc --noEmit', cuando: true },
     {
       nombre: 'eslint',
-      comando: `pnpm exec eslint ${tocadosTs.map((f) => `"${f}"`).join(' ')}`,
+      // Con caché: en la segunda vuelta de una tanda sólo relee lo que cambió.
+      comando: `pnpm exec eslint --cache --cache-location node_modules/.cache/eslint-verificar/ ${tocadosTs.map((f) => `"${f}"`).join(' ')}`,
       cuando: tocadosTs.length > 0,
       motivoSalto: 'ningún .ts/.tsx tocado',
     },

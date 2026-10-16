@@ -28,6 +28,9 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore, type Commit, type GitFile } from '@/lib/git-store';
 import { PipelineWorkspace } from '@/components/pipeline/PipelineWorkspace';
 import { cn } from '@/lib/utils';
+import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
+import { graphContribution } from '@/lib/assist/view-contributors';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import type { SpeculativeBranch } from '@/types/temporal-agent';
 import type { BlameLine, FileHistoryEntry, PullRequestDiffData, PullRequestEntry } from '@/types/electron';
 
@@ -106,6 +109,7 @@ type TabViewsProps = {
     onResizeLeft?: (event: MouseEvent) => void;
     onResizeRight?: (event: MouseEvent) => void;
     onEnsureRightOpen?: () => void;
+    onEnsureRightClosed?: () => void;
   };
   onSelectCommit: (commit: Commit, options?: CommitSelectOptions) => void;
   onCommitContextMenu: (event: MouseEvent, commit: Commit) => void;
@@ -212,6 +216,7 @@ export function RepoMainView({
         onResizeLeft={tabViews.pipelineLayout?.onResizeLeft}
         onResizeRight={tabViews.pipelineLayout?.onResizeRight}
         onEnsureRightOpen={tabViews.pipelineLayout?.onEnsureRightOpen}
+        onEnsureRightClosed={tabViews.pipelineLayout?.onEnsureRightClosed}
       />
     );
   }
@@ -296,6 +301,7 @@ export function RepoMainView({
         onResizeLeft={tabViews.pipelineLayout?.onResizeLeft}
         onResizeRight={tabViews.pipelineLayout?.onResizeRight}
         onEnsureRightOpen={tabViews.pipelineLayout?.onEnsureRightOpen}
+        onEnsureRightClosed={tabViews.pipelineLayout?.onEnsureRightClosed}
       />
     );
   }
@@ -412,6 +418,16 @@ function GraphTabView({ tabViews, graphView }: { tabViews: TabViewsProps; graphV
   const branchTracking = useGitStore((s) => s.branchTracking);
   const currentBranch = tabViews.currentBranch;
   const modifiedFiles = tabViews.modifiedFiles;
+
+  // Se escucha la idea de Centauro (no sólo se lee): así esta vista se redibuja al elegir
+  // una, y el chat se entera y actualiza «Vas a preguntar sobre…».
+  const temporalIdea = useAssistDockStore((s) => s.temporalIdea);
+  useAssistContribution('graph', () =>
+    graphContribution(
+      useGitStore.getState().getActiveRepo()?.selectedCommit ?? null,
+      temporalIdea,
+    )
+  );
 
   return (
     <div data-testid="graph-tab-container" className="flex-1 flex flex-col relative min-h-0 bg-bg-base overflow-hidden">
