@@ -4,7 +4,9 @@
 // a entender cualquier repo abierto: dónde están las cosas, qué se relaciona con
 // qué y qué se rompe si tocás algo.
 //
-// Tokens: usa exclusivamente el bloque `--carto-*` de globals.css.
+// Estética general de la app con módulos CSS y tokens de `@theme` (cambio
+// mapear-pantallas-y-su-codigo, tanda 01). Columna de chat retirada en favor del
+// panel de asistencia (Centauro). Cabecera única de 44px montada con ContentHeader.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
@@ -12,18 +14,19 @@ import {
   Map,
   ArrowLeft,
   RefreshCw,
-  Network,
 } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useCartoLayout } from '@/hooks/use-carto-layout';
 import { useGitStore } from '@/lib/git-store';
 import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
 import { cartoContribution, headShaOf } from '@/lib/assist/view-contributors';
+import { ContentHeader } from '@/components/ContentHeader';
+import { cn } from '@/lib/utils';
 import type { CartoGraphStatus, CartoNode } from '@/lib/carto-types';
 import { CartoNodeDetail } from './CartoNodeDetail';
-import { CartoAskBox } from './CartoAskBox';
 import { SemanticGraphLens } from './SemanticGraphLens';
 import { CartoPanoramaHeader } from './CartoPanoramaHeader';
+import styles from './CartographyView.module.css';
 
 type CartographyViewProps = {
   /** Ruta del repo activo. `null` si no hay repo abierto. */
@@ -67,11 +70,10 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   const [graphRefresh, setGraphRefresh] = useState(0);
 
   // ── Capa de IA (Fase 4) ──
-  // Si está activa (opt-in), montamos la columna de chat a la derecha. La vista
-  // funciona igual sin IA: cuando está apagada, no hay columna ni divisor.
+  // Se mantiene aiEnabled para CartoNodeDetail (explicación de nodo si está activo en Ajustes).
   const [aiEnabled, setAiEnabled] = useState(false);
-  // Layout arrastrable: ancho de la columna de chat + alto del panel de relaciones.
-  const { chatW, relationsH, isDragging, beginChatDrag, beginRelationsDrag } = useCartoLayout();
+  // Layout arrastrable: alto del panel de relaciones.
+  const { relationsH, isDragging, beginRelationsDrag } = useCartoLayout();
 
   const updatePersonaMode = (next: PersonaMode) => {
     setPersonaMode(next);
@@ -127,7 +129,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
       offProgress();
       offUpdated();
     };
-  }, [repoPath]);
+  }, [repoPath, handleSelectNode]);
 
   return (
     <motion.div
@@ -136,95 +138,87 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="flex-1 flex flex-col min-h-0 overflow-hidden bg-carto-canvas text-carto-text select-none"
+      className={styles.viewRoot}
     >
-      {/* ── Cabecera TCARS ── */}
-      <div className="shrink-0 border-b border-carto-accent/25">
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 px-6 py-4">
-          <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-carto-accent/15 text-carto-accent">
-              <Map size={16} />
-            </span>
-            <h2 className="truncate text-[length:var(--font-size-lg)] font-bold tracking-wide text-carto-text">
+      {/* ── Cabecera única unificada (44 px / h-11) ── */}
+      <ContentHeader className={cn('h-11', styles.header)}>
+        {/* Izquierda: Ícono Map + Título + Beta badge + Métricas de índice */}
+        <div className={styles.leftGroup}>
+          <div className={styles.titleWrapper}>
+            <Map size={16} className={styles.titleIcon} />
+            <span className={styles.titleText}>
               {t('cartography.title')}
-            </h2>
-            <span className="ml-1 rounded-full border border-carto-accent/35 px-2 py-0.5 text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-accent">
+            </span>
+            <span className={styles.betaBadge}>
               Beta
             </span>
           </div>
+          {graphStatus?.state === 'ready' && graphStatus.stats && (
+            <span className={styles.statsText}>
+              {t('cartography.semantic.indexStats', {
+                nodes: graphStatus.stats.nodes,
+                edges: graphStatus.stats.edges,
+              })}
+            </span>
+          )}
+        </div>
+
+        {/* Derecha: Selector segmentado Simple/Técnico + Refrescar + Volver al grafo */}
+        <div className={styles.rightGroup}>
+          <div className={styles.segmentedControl}>
+            {(['simple', 'technical'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => updatePersonaMode(mode)}
+                aria-pressed={personaMode === mode}
+                className={cn(
+                  styles.segmentedBtn,
+                  personaMode === mode && styles.segmentedBtnActive,
+                )}
+              >
+                {t(mode === 'simple' ? 'cartography.mode.simple' : 'cartography.mode.technical')}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void refreshLens()}
+            disabled={!repoPath}
+            title={t('cartography.refresh')}
+            className={styles.actionBtn}
+          >
+            <RefreshCw size={12} />
+            <span>{t('cartography.refresh')}</span>
+          </button>
+
           <button
             type="button"
             onClick={onExit}
-            className="flex shrink-0 items-center gap-1.5 justify-self-end rounded border border-carto-grid px-3 py-1 text-xs font-semibold tracking-wide text-carto-text-muted transition-colors hover:border-carto-accent/50 hover:text-carto-text"
+            title={t('cartography.backToGraph')}
+            className={styles.actionBtn}
           >
             <ArrowLeft size={13} />
-            {t('cartography.backToGraph')}
+            <span>{t('cartography.backToGraph')}</span>
           </button>
         </div>
-      </div>
+      </ContentHeader>
 
       {/* ── Cuerpo: panel de la lente activa ── */}
-      <div className={`relative flex min-h-0 flex-1 overflow-hidden ${isDragging ? 'select-none' : ''}`}>
-        {/* Panel de la lente */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* Barra de la vista: título + métricas + refrescar */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-carto-grid px-4 py-2.5">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <Network size={14} className="shrink-0 text-carto-accent" />
-              <span className="truncate text-xs font-bold tracking-wide text-carto-text">
-                {t('cartography.title')}
-              </span>
-              {graphStatus?.state === 'ready' && graphStatus.stats && (
-                <span className="shrink-0 text-[length:var(--font-size-xs)] text-carto-text-muted">
-                  {t('cartography.semantic.indexStats', {
-                    nodes: graphStatus.stats.nodes,
-                    edges: graphStatus.stats.edges,
-                  })}
-                </span>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="flex overflow-hidden rounded border border-carto-grid">
-                {(['simple', 'technical'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => updatePersonaMode(mode)}
-                    aria-pressed={personaMode === mode}
-                    className={`px-2 py-1 text-[length:var(--font-size-xs)] font-semibold tracking-wide transition-colors ${
-                      personaMode === mode
-                        ? 'bg-carto-accent/15 text-carto-accent'
-                        : 'text-carto-text-muted hover:bg-carto-node/5 hover:text-carto-text'
-                    }`}
-                  >
-                    {t(mode === 'simple' ? 'cartography.mode.simple' : 'cartography.mode.technical')}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => void refreshLens()}
-                disabled={!repoPath}
-                className="flex items-center gap-1.5 rounded border border-carto-grid px-2.5 py-1 text-[length:var(--font-size-2xs)] font-semibold tracking-wide text-carto-text-muted transition-colors hover:border-carto-accent/50 hover:text-carto-text disabled:opacity-40"
-              >
-                <RefreshCw size={12} />
-                {t('cartography.refresh')}
-              </button>
-            </div>
-          </div>
-
-          {/* Contenido de la lente */}
-          <div className="flex min-h-0 flex-1 flex-col">
+      <div className={cn(styles.bodyArea, isDragging && styles.dragging)}>
+        <div className={styles.lensColumn}>
+          <div className={styles.lensContent}>
             {!repoPath ? (
               <CenteredState
-                icon={<Map size={22} strokeWidth={1.5} className="text-carto-node" />}
+                icon={<Map size={24} strokeWidth={1.5} />}
                 title={t('cartography.empty')}
                 detail={t('cartography.emptyHint')}
               />
             ) : (
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className={styles.lensContent}>
                 <CartoPanoramaHeader repoPath={repoPath} status={graphStatus} refreshKey={graphRefresh} />
-                <div className="min-h-0 flex-1">
+                <div className={styles.graphArea}>
                   <SemanticGraphLens
                     repoPath={repoPath}
                     status={graphStatus}
@@ -237,14 +231,14 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                   <>
                     <div
                       onMouseDown={beginRelationsDrag}
-                      className="group relative h-1.5 shrink-0 cursor-row-resize bg-carto-accent/20 transition-colors hover:bg-carto-accent/50"
+                      className={styles.resizeDivider}
                       title={t('cartography.resizeRows')}
                     >
-                      <span className="pointer-events-none absolute left-1/2 top-1/2 h-0.5 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full bg-carto-accent/40 group-hover:bg-carto-accent" />
+                      <span className={styles.resizeHandle} />
                     </div>
                     <div
                       style={{ height: relationsH }}
-                      className="min-h-0 shrink-0 bg-carto-node/[0.02]"
+                      className={styles.relationsPanel}
                     >
                       <CartoNodeDetail
                         repoPath={repoPath}
@@ -260,24 +254,6 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
             )}
           </div>
         </div>
-
-        {/* ── Columna de chat de IA (Fase 4), opt-in ──
-            Sólo se monta si la IA está activa. Divisor horizontal arrastrable
-            entre el explorador y el chat. Con la IA apagada, la vista queda igual. */}
-        {aiEnabled && (
-          <>
-            <div
-              onMouseDown={beginChatDrag}
-              className="group relative w-1.5 shrink-0 cursor-col-resize bg-carto-accent/20 transition-colors hover:bg-carto-accent/50"
-              title={t('cartography.resizeCols')}
-            >
-              <span className="pointer-events-none absolute left-1/2 top-1/2 h-8 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-carto-accent/40 group-hover:bg-carto-accent" />
-            </div>
-            <div style={{ width: chatW }} className="min-w-0 shrink-0 border-l border-carto-accent/15">
-              <CartoAskBox repoPath={repoPath} onSelectNode={handleSelectNode} />
-            </div>
-          </>
-        )}
       </div>
     </motion.div>
   );
@@ -293,13 +269,13 @@ function CenteredState({
   detail?: string;
 }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
-      <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-carto-accent/30 bg-carto-node/5">
+    <div className={styles.emptyState}>
+      <span className={styles.emptyIconWrapper}>
         {icon}
       </span>
-      <p className="text-base font-bold tracking-wide text-carto-text">{title}</p>
+      <p className={styles.emptyTitle}>{title}</p>
       {detail && (
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-carto-text-muted">{detail}</p>
+        <p className={styles.emptyDetail}>{detail}</p>
       )}
     </div>
   );

@@ -30,6 +30,7 @@ describe('css-syntax-scan - Verificación de sintaxis CSS y balance de paréntes
       'components/assist/AssistChat.module.css',
       'components/assist/AssistComposer.module.css',
       'components/assist/AssistDock.module.css',
+      'components/cartography/CartographyView.module.css',
       'components/pipeline/OpenSpecDashboard.module.css',
       'components/pipeline/PipelineRuntimeLauncher.module.css',
       'components/pipeline/ResumeNarration.module.css',

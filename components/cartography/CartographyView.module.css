@@ -1,0 +1,279 @@
+/* components/cartography/CartographyView.module.css */
+/* Estilos de CartographyView (cambio mapear-pantallas-y-su-codigo, tanda 01) */
+/* Usa tokens generales de @theme, reservando --color-carto-* exclusivamente para el interior del grafo */
+
+.viewRoot {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  user-select: none;
+}
+
+/* Cabecera unificada (ContentHeader 44px / h-11) */
+.header {
+  height: 2.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border-subtle) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-weight: 400;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+.leftGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.titleWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.titleIcon {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.titleText {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.betaBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: calc(var(--space-1) / 2) calc(var(--space-1) * 1.5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.statsText {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+.rightGroup {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Selector segmentado Simple / Técnico al estilo SDD */
+.segmentedControl {
+  background: color-mix(in srgb, var(--color-bg-base) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  padding: var(--space-1);
+}
+
+.segmentedBtn {
+  position: relative;
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmentedBtn:hover:not(.segmentedBtnActive) {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.segmentedBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.segmentedBtnActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* Botones secundarios de la app */
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 60%, transparent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  flex-shrink: 0;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-border-subtle) 40%, transparent);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.actionBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.actionBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Cuerpo principal */
+.bodyArea {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+
+.lensColumn {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+.lensContent {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+.graphArea {
+  min-height: 0;
+  flex: 1 1 0%;
+}
+
+/* Divisor de redimensionamiento del panel inferior */
+.resizeDivider {
+  position: relative;
+  height: 6px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: color-mix(in srgb, var(--color-border-subtle) 40%, transparent);
+  transition: background 150ms ease;
+}
+
+.resizeDivider:hover {
+  background: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+.resizeHandle {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 2px;
+  width: 2rem;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+  transition: background 150ms ease;
+}
+
+.resizeDivider:hover .resizeHandle {
+  background: var(--color-primary);
+}
+
+.relationsPanel {
+  min-height: 0;
+  flex-shrink: 0;
+  background: var(--color-bg-surface);
+}
+
+/* Estado vacío */
+.emptyState {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.emptyIconWrapper {
+  margin-bottom: var(--space-4);
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+}
+
+.emptyTitle {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.emptyDetail {
+  margin-top: var(--space-2);
+  max-width: 28rem;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Mientras se arrastra el divisor del panel de relaciones no se selecciona texto. */
+.dragging {
+  user-select: none;
+}
