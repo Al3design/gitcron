@@ -103,6 +103,29 @@ describe('useAssistDockStore', () => {
     expect(useAssistDockStore.getState().conversationByRepo['/repo/b']).toBe('conv-2');
   });
 
+  it('la conversación elegida de cada repo sobrevive a reabrir la app; lo ilegible se descarta', async () => {
+    localStorage.clear();
+    vi.resetModules();
+    const primera = await import('../assist/assist-dock-store');
+    primera.useAssistDockStore.getState().rememberConversation('/repo/a', 'conv-1');
+    primera.useAssistDockStore.getState().rememberConversation('/repo/b', 'conv-2');
+
+    vi.resetModules();
+    const segunda = await import('../assist/assist-dock-store');
+    expect(segunda.useAssistDockStore.getState().conversationByRepo).toEqual({ '/repo/a': 'conv-1', '/repo/b': 'conv-2' });
+
+    localStorage.setItem('gitcron:assistConversationByRepo', '{roto');
+    vi.resetModules();
+    const tercera = await import('../assist/assist-dock-store');
+    expect(tercera.useAssistDockStore.getState().conversationByRepo).toEqual({});
+
+    localStorage.setItem('gitcron:assistConversationByRepo', JSON.stringify({ '/repo/a': 'conv-1', '/repo/c': 7 }));
+    vi.resetModules();
+    const cuarta = await import('../assist/assist-dock-store');
+    expect(cuarta.useAssistDockStore.getState().conversationByRepo).toEqual({ '/repo/a': 'conv-1' });
+    localStorage.clear();
+  });
+
   it('setTemporalIdea fija la idea en memoria y no la guarda en disco', () => {
     localStorage.clear();
     expect(useAssistDockStore.getState().temporalIdea).toBeNull();

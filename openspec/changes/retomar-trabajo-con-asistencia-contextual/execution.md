@@ -29,3 +29,18 @@ Rutina de trabajo: [config.yaml](../../config.yaml). Secuencia del producto: [EX
 | 3.4 | local | ViewSwitcherRail; shell de paneles; tests |
 | 3.5 | local | Componentes de entrada y tarea; i18n; tests focalizados |
 | 4.1 | orquestador | Recorrido de aceptación y validación integrada |
+
+## Aceptación (tarea 4.1)
+
+**Parte automática (2026-10-15, orquestador).** Prueba `e2e/tests/retomar-aceptacion.e2e.ts`, que queda en el repo para repetirla. Corre en el perfil aislado, sin ningún modelo configurado, con un cambio de SDD a medio hacer y dos repositorios abiertos:
+
+- Al abrir el cambio, «Dónde quedaste» muestra el objetivo, lo hecho (1.1), en qué estabas (1.2) y lo que queda, sin IA. «Explicarme este resumen» se ofrece y no se dispara solo.
+- La conversación guardada se abre con su respuesta tal cual.
+- Al reabrir la app, la conversación sigue elegida y la cantidad de mensajes guardados no cambia: nada se mandó al modelo sin pedirlo.
+- El otro repositorio no ve esa conversación, ni en la pantalla ni por el canal del proceso principal.
+
+Hallazgo de esta parte: la conversación elegida se recordaba solo mientras la app estaba abierta. Desde ahora se guarda por repositorio (`gitcron:assistConversationByRepo`, solo identificadores) y se descarta si está ilegible o si la conversación ya no existe.
+
+Capturas: `tmp/reportes/retomar-aceptacion/`.
+
+**Parte de Alejandro (pendiente).** Recorrer sobre el repo real: volver al cambio después de unos días, decir dónde quedó y qué sigue mirando «Dónde quedaste», preguntar algo en el chat, seguir con una tarea desde el menú «+» hasta el lanzador, y llegar a «Preparar commit». Se registra acá lo que diga, y recién entonces se marca la 4.1.

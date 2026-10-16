@@ -81,6 +81,24 @@ function initialChatListWidth(): number {
   return Number.isFinite(value) && value > 0 ? clampChatListWidth(value) : CHAT_LIST_DEFAULT;
 }
 
+const CONVERSATION_BY_REPO_KEY = 'gitcron:assistConversationByRepo';
+
+/** La conversación elegida en cada repo, para retomarla al volver a abrir la app. Solo ids. */
+function initialConversationByRepo(): Record<string, string> {
+  const raw = readStored(CONVERSATION_BY_REPO_KEY);
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed as Record<string, unknown>)
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+    return Object.fromEntries(entries);
+  } catch (error) {
+    console.warn('[assist-dock] se descarta la conversación recordada ilegible', error);
+    return {};
+  }
+}
+
 function initialHeight(): number {
   for (const key of [HEIGHT_KEY, CENTAURO_HEIGHT_KEY]) {
     const value = Number(readStored(key));
@@ -97,7 +115,7 @@ export const useAssistDockStore = create<AssistDockState>((set) => ({
   activeTabId: 'chat',
   registeredTabs: [DEFAULT_TAB],
   slot: null,
-  conversationByRepo: {},
+  conversationByRepo: initialConversationByRepo(),
 
   setOpen: (open) => {
     writeStored(OPEN_KEY, String(open));
@@ -156,12 +174,11 @@ export const useAssistDockStore = create<AssistDockState>((set) => ({
   setSlot: (slot) => set({ slot }),
 
   rememberConversation: (repoPath, conversationId) =>
-    set((state) => ({
-      conversationByRepo: {
-        ...state.conversationByRepo,
-        [repoPath]: conversationId,
-      },
-    })),
+    set((state) => {
+      const conversationByRepo = { ...state.conversationByRepo, [repoPath]: conversationId };
+      writeStored(CONVERSATION_BY_REPO_KEY, JSON.stringify(conversationByRepo));
+      return { conversationByRepo };
+    }),
 
   temporalIdea: null,
   setTemporalIdea: (temporalIdea) => set({ temporalIdea }),
