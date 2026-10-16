@@ -108,10 +108,7 @@
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-default);
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  overflow: hidden;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
@@ -126,11 +123,21 @@
   outline-offset: var(--focus-offset);
 }
 
+/* El lienzo de píxeles ocupa el cuadro entero: el relleno va acá, adentro del efecto. */
+.cardInner {
+  height: 100%;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .cardThumbnail {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
-  background: var(--color-bg-base);
+  /* Translúcido mientras no hay captura, para que el efecto también se vea detrás. */
+  background: color-mix(in srgb, var(--color-bg-base) 60%, transparent);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-default);
   display: flex;

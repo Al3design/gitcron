@@ -71,50 +71,48 @@ export function ScreenCard({ screen, onSelect, onExplain, size }: ScreenCardProp
         }
       }}
     >
-      {/* 1. Lugar de la captura 16:10 envuelto en PixelCard + ícono de IA */}
-      <PixelCard
-        className={styles.cardThumbnail}
-        data-testid="card-thumbnail"
-        active={isCardActive}
-        noFocus
-      >
-        {screen.kind === 'route' ? (
-          <Monitor size={28} className={styles.thumbnailIcon} aria-hidden="true" />
-        ) : (
-          <PanelsTopLeft size={28} className={styles.thumbnailIcon} aria-hidden="true" />
-        )}
+      {/* El efecto de píxeles cubre el cuadro entero, detrás de la captura y del texto (Ale, carto-05a). */}
+      <PixelCard className={styles.cardInner} active={isCardActive} noFocus>
+        {/* 1. Lugar de la captura 16:10 + ícono de IA */}
+        <div className={styles.cardThumbnail} data-testid="card-thumbnail">
+          {screen.kind === 'route' ? (
+            <Monitor size={28} className={styles.thumbnailIcon} aria-hidden="true" />
+          ) : (
+            <PanelsTopLeft size={28} className={styles.thumbnailIcon} aria-hidden="true" />
+          )}
 
-        <button
-          type="button"
-          className={styles.aiIconButton}
-          onClick={handleAiClick}
-          title={t('cartography.screens.explainAction')}
-          aria-label={t('cartography.screens.explainAction')}
-          data-testid="explain-screen-button"
-        >
-          <Sparkles size={14} aria-hidden="true" />
-        </button>
+          <button
+            type="button"
+            className={styles.aiIconButton}
+            onClick={handleAiClick}
+            title={t('cartography.screens.explainAction')}
+            aria-label={t('cartography.screens.explainAction')}
+            data-testid="explain-screen-button"
+          >
+            <Sparkles size={14} aria-hidden="true" />
+          </button>
+        </div>
+
+        {/* 2. Contenido textual */}
+        <div className={styles.cardContent}>
+          <h3
+            className={styles.cardTitle}
+            title={screen.description?.suggestedName ? screen.name : undefined}
+          >
+            {displayName}
+          </h3>
+          {size !== 'minimal' && (
+            <>
+              <p className={styles.cardSubtitle} title={locationTooltip}>
+                {locationSubtitle}
+              </p>
+              <p className={styles.cardFiles} data-testid="screen-file-counts">
+                {t('cartography.screens.fileCountsShort', { own: ownCount, shared: sharedCount })}
+              </p>
+            </>
+          )}
+        </div>
       </PixelCard>
-
-      {/* 2. Contenido textual */}
-      <div className={styles.cardContent}>
-        <h3
-          className={styles.cardTitle}
-          title={screen.description?.suggestedName ? screen.name : undefined}
-        >
-          {displayName}
-        </h3>
-        {size !== 'minimal' && (
-          <>
-            <p className={styles.cardSubtitle} title={locationTooltip}>
-              {locationSubtitle}
-            </p>
-            <p className={styles.cardFiles} data-testid="screen-file-counts">
-              {t('cartography.screens.fileCountsShort', { own: ownCount, shared: sharedCount })}
-            </p>
-          </>
-        )}
-      </div>
     </motion.article>
   );
 }
