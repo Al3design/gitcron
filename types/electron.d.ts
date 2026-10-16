@@ -529,6 +529,12 @@ interface ElectronAPI {
   };
   cartoScreens: {
     get(repoPath: string): Promise<GitResult<ScreenMap>>;
+    describe(args: {
+      repoPath: string;
+      screenId: string;
+      language: 'es' | 'en' | 'zh';
+      cacheOnly?: boolean;
+    }): Promise<GitResult<{ status: 'ok'; description: ScreenDescription } | { status: 'unavailable'; message: string } | null>>;
   };
   /**
    * Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).

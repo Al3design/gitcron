@@ -412,6 +412,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   cartoScreens: {
     get: (repoPath: string) => ipcRenderer.invoke('carto-screens:get', { repoPath }),
+    describe: (args: { repoPath: string; screenId: string; language: 'es' | 'en' | 'zh'; cacheOnly?: boolean }) =>
+      ipcRenderer.invoke('carto-screens:describe', args),
   },
   // Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).
   // Opt-in, apagada por defecto. Las keys nunca cruzan este límite.

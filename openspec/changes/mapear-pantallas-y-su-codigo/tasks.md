@@ -13,13 +13,13 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 2. Interfaz
 
-- [ ] 2.1 **IA local:** Construir catálogo de pantallas con estado de cobertura. **Comprobación:** Repo sin UI muestra módulos/no aplica; incompleto se distingue de vacío.
+- [x] 2.1 **IA local:** Construir catálogo de pantallas con estado de cobertura. **Comprobación:** Repo sin UI muestra módulos/no aplica; incompleto se distingue de vacío.
 - [ ] 2.2 **IA local:** Construir detalle con archivos, estilos, datos y compartidos. **Comprobación:** Una pantalla puede tener múltiples archivos y uno pertenecer a varias; mapa técnico sigue accesible.
 - [ ] 2.3 **IA local:** Conectar abrir archivo/diff y consulta contextual de pantalla. **Comprobación:** Usa referencias verificadas y rechaza selección obsoleta; IA distingue evidencia de inferencia.
 
 - [x] 2.4 **IA local:** Quitar la columna derecha del chat de Cartografía y publicar su selección y herramientas en el panel de asistencia (requiere retomar 2.4 y 2.6). **Comprobación:** No queda otra superficie de conversación en Cartografía; preguntar sobre una pantalla o archivo desde el panel cita esa selección.
 - [ ] 2.5 **IA local:** Rediseñar la estética de Cartografía con módulos CSS y tokens de `@theme`. **Comprobación:** Sin clases de Tailwind ni colores fuera de la paleta en Cartografía; capturas antes y después revisadas por Alejandro en su ronda de UX.
-- [ ] 2.6 **IA local:** Mostrar en cada cuadro de pantalla qué hace, en lenguaje llano, y qué archivos la forman. **Comprobación:** Alejandro identifica qué hace cada pantalla de GitCron y dónde está su código sin conocer carpetas; una descripción sugerida por IA se distingue de una manual y cita sus archivos.
+- [x] 2.6 **IA local:** Mostrar en cada cuadro de pantalla qué hace, en lenguaje llano, y qué archivos la forman. **Comprobación:** Alejandro identifica qué hace cada pantalla de GitCron y dónde está su código sin conocer carpetas; una descripción sugerida por IA se distingue de una manual y cita sus archivos.
 
 ## 3. Aceptación
 

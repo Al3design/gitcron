@@ -26,6 +26,7 @@ import type { CartoGraphStatus, CartoNode } from '@/lib/carto-types';
 import { CartoNodeDetail } from './CartoNodeDetail';
 import { SemanticGraphLens } from './SemanticGraphLens';
 import { CartoPanoramaHeader } from './CartoPanoramaHeader';
+import { ScreenCatalog } from './ScreenCatalog';
 import styles from './CartographyView.module.css';
 
 type CartographyViewProps = {
@@ -215,6 +216,8 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                 title={t('cartography.empty')}
                 detail={t('cartography.emptyHint')}
               />
+            ) : personaMode === 'simple' ? (
+              <ScreenCatalog repoPath={repoPath} refreshKey={graphRefresh} />
             ) : (
               <div className={styles.lensContent}>
                 <CartoPanoramaHeader repoPath={repoPath} status={graphStatus} refreshKey={graphRefresh} />
