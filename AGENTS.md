@@ -37,6 +37,8 @@ Desde el 2026-10-16 (decisión de Alejandro), la ejecutora **no corre verificaci
 - Escribí el código y las pruebas que pida el prompt, sin correrlas.
 - Si el prompt pide explícitamente una verificación, corré **solo** ese comando, una vez. Si falla, no lo repitas: anotá el error en «Dudas» y entregá.
 - Nunca `pnpm verificar --completa` ni `--todo`: son del orquestador.
+- Una prueba nueva va en una carpeta que Vitest corre: mirá el `include` de `vitest.config.ts`; si la carpeta no está, poné la prueba en una que esté (por ejemplo `electron/__tests__/`). Medido en carto-02: las 21 pruebas nuevas quedaron en `electron/carto/` y `electron/ipc/`, que Vitest no mira, y nadie se enteraba.
+- Un comentario de bloque (`/* … */` o `/** … */`) no puede contener `*/`: un patrón como `app/**/page` cierra el comentario en el medio y el archivo deja de compilar (pasó en carto-02). Escribilo de otra forma (`app/<carpetas>/page`).
 - Lo que vale igual sin sensor: no aflojar protecciones, no tragar errores, no `eslint-disable`, no `.skip`/`.only`, estilos en módulos CSS con tokens (sin `className="…"` ni `style={{…}}` nuevos, salvo un valor que se calcula al dibujar), y nada de ramas «si estoy en pruebas». Lo que no puedas cumplir, en «Dudas».
 
 ## 5. Reporte
