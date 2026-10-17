@@ -23,6 +23,7 @@
     "publish:mac": "npm run package:build && electron-builder --mac --publish always",
     "publish:linux": "npm run package:build && electron-builder --linux --publish always",
     "verificar": "node scripts/verificar.mjs",
+    "captura": "node scripts/captura.mjs",
     "e2e": "node scripts/e2e.mjs run"
   },
   "build": {

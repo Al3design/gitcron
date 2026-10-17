@@ -102,15 +102,25 @@ operations:
         volver a pedir autorización. Las instrucciones actuales del usuario prevalecen
         sobre un prompt histórico: ante contradicciones, identificar la fuente concreta.
       - >-
-        Desde el 2026-10-16 (decisión de Alejandro) ni la ejecutora ni el orquestador
-        verifican tanda por tanda: el orquestador audita leyendo el diff y lo comitea, y la
-        verificación se corre una vez, al final del cambio, cuando se terminaron todas sus
-        tareas, y antes de archivarlo o fusionarlo. Sólo un prompt que lo pida
-        explícitamente hace verificar a la ejecutora, y entonces sólo ese comando, una vez.
-        Hasta ese día cada tanda corría `pnpm verificar` y la ejecutora lo repetía entero
-        ante cada fallo: vueltas de 10 minutos con la máquina cargada. `pnpm verificar` (lo
-        tocado: pruebas relacionadas, tsc, eslint, openspec validate) queda para cuando se
-        pida. La verificación completa (`pnpm verificar --completa`) se corre
+        Desde el 2026-10-17 (Alejandro) cada tanda se entrega verificada y el orquestador no
+        repite lo que ya corrió la ejecutora. Entre el 2026-10-16 y el 2026-10-17 las tandas
+        llegaron sin verificar y la auditoría pagó con su tiempo y sus tokens pruebas que no
+        compilaban, errores de lint y fallas que el script ataja; antes del 2026-10-16 el
+        problema era el contrario, la ejecutora repetía la verificación ante cada fallo. Por
+        eso: la ejecutora corre `pnpm verificar --tanda <tanda>` (lo tocado), con un tope de
+        dos intentos que el script hace cumplir, y deja el resumen con la huella del código
+        en tmp/reportes/<tanda>.verificacion.txt. Si el prompt trae «Captura», el orquestador
+        escribe la prueba de pantalla en tmp/prompts/<tanda>.captura.e2e.ts al armar el
+        prompt (sabe qué hay que mirar) y la ejecutora la corre con `pnpm captura <tanda>`,
+        que deja las imágenes y un manifiesto con la misma huella en
+        tmp/reportes/<tanda>/capturas/. La auditoría empieza por
+        `node scripts/verificar.mjs --sello <tanda>` (un segundo): si el sello está vigente y
+        el resultado es OK, no se vuelven a correr pruebas, tsc ni eslint, y las capturas
+        valen si su manifiesto tiene la misma huella y `huellaCambioDurante: false`. Después
+        el orquestador lee el diff según el riesgo y mira las capturas; solo corre algo si el
+        sello está vencido, si hay que confirmar una sospecha (pruebas puntuales de segundos)
+        o si tocó código al corregir (y entonces lo que tocó, con
+        `pnpm verificar --tanda <tanda> --orquestador`). La verificación completa (`pnpm verificar --completa`) se corre
         cuando se juntaron varias tandas, antes de fusionar a main; `--todo`, con build y la
         suite entera dos veces, antes de sacar versión. La IA ejecutora no corre la completa
         para cerrar una tanda. El 2026-10-09 una tanda tardó más de 30 minutos de reloj
@@ -120,7 +130,7 @@ operations:
         trampas (protecciones aflojadas, catch vacíos, pruebas ablandadas, capturas anteriores
         al código) y Fallow sobre las líneas agregadas (exports o archivos sin uso, funciones
         demasiado complejas, ciclos) ya las revisa el script, y la lectura se concentra en lo
-        que el script no puede juzgar. Desde el 2026-10-16 las capturas las saca el orquestador al auditar (un test temporal en e2e/tests/zz-*.e2e.ts, escrito con la herramienta de escribir archivos y borrado al terminar), no la ejecutora: le gastaba la ventana y los tokens y el orquestador las repetía igual. Las capturas de antes y después de una tanda se comparan
+        que el script no puede juzgar. Las capturas de antes y después de una tanda se comparan
         con `node scripts/comparar-capturas.mjs tmp/reportes/<tanda>`, que da el porcentaje de
         píxeles distintos y una imagen con las diferencias en rojo; a ojo se escapan. Al mirar las capturas, el auditor compara cada pieza nueva con su equivalente ya existente en la app (menú, título, contenedor, fila de botones, cuadro de chat; ver la regla de `context`) y no solo que funcione: el 2026-10-16 Alejandro encontró siete detalles así que la auditoría había dejado pasar. El auditor revisa la correspondencia entre código final, resultados
         y evidencia, y puede hacer pruebas puntuales de segundos para confirmar una sospecha.
