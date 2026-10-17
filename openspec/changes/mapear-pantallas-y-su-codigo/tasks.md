@@ -24,6 +24,8 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [ ] 2.7 **IA local:** Mostrar la captura real de cada pantalla con dirección, arrancando el proyecto con permiso una vez por proyecto (decisión 11). **Comprobación:** Sin permiso no se ejecuta nada del repo; la captura aparece en el cuadro, la columna y el detalle; se rehace cuando cambian sus archivos; el servidor no queda vivo al terminar, cancelar o cerrar.
 - [ ] 2.8 **IA local:** Capturar las vistas sin dirección y las direcciones variables navegando la app. **Comprobación:** Graph, SDD y Cartografía de GitCron muestran su captura real.
 
+- [ ] 2.9 **IA local:** Cuadros modernos con temas de color, datos de composición y filtros por tema (decisión 12). **Comprobación:** Alejandro identifica de qué tema es cada pantalla y filtra las de un tema; la captura va de borde a borde con las acciones encima.
+
 ## 3. Aceptación
 
 - [ ] 3.1 **Orquestador/auditor:** Comprobar localización de código desde una pantalla con Alejandro. **Comprobación:** Identifica archivos sin conocer carpetas; comprobar renombrado, layout compartido, cancelación y vista técnica.

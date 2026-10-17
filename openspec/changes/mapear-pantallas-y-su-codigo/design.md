@@ -69,6 +69,20 @@ Concreta la parte de capturas de la decisión 9. Se capturan primero las pantall
 - **Captura:** cada dirección se abre en una ventana oculta de Electron sin acceso al sistema (sandbox, sin preload, partición propia, sin ventanas nuevas, sin salir del servidor local, permisos denegados). Se guarda en JPEG achicado en la base de GitCron (tabla nueva, fuera del repo). El servidor se detiene siempre al terminar, al cancelar y al cerrar GitCron.
 - **Cuándo se rehace:** cada captura guarda una clave hecha con tamaño y fecha de cambio de los archivos de esa pantalla. Si cambia, la captura sigue mostrándose marcada como vieja y se rehace. Con permiso dado, al abrir el catálogo se capturan solas las que falten o estén viejas; también hay un botón para actualizarlas y otro para detener.
 
+### 12. Cuadros modernos, temas con color y filtros (Alejandro, 2026-10-17)
+
+Alejandro vio los cuadros con captura y pidió que se vean actuales y que ayuden a entender de qué va el proyecto de un vistazo.
+
+- **El cuadro:**
+  - La captura ocupa todo el ancho, de borde a borde, arriba y sin relleno alrededor.
+  - Encima de la imagen van las acciones (el ícono de IA), con fondo translúcido, y arriba a la izquierda el tema principal con su color.
+  - Debajo, el nombre y dónde se elige, los temas en chips de color y datos que sirven: una barra de composición (qué parte son pantalla y componentes, estilos, datos, lógica, textos), cuántos archivos tiene, cuántos son propios y cuándo cambió por última vez.
+  - En tamaño Mínimo quedan la captura y el nombre.
+- **Temas:** cada pantalla lleva los temas que se leen en su código, con la evidencia guardada (qué archivo lo dijo). Son Gráficos, Datos, IA, Git, Configuración, Contenido, Cuentas y Pagos. Cada tema tiene una regla de imports y rutas en un solo archivo, fácil de extender. El tema principal es el que tiene más evidencia entre los archivos propios; si no hay ninguno, la pantalla es «General». Los colores salen de los tokens del tema visual, nunca escritos a mano.
+- **Filtros y agrupado:** arriba de la grilla, chips por tema con su cantidad («Todas» vuelve a mostrar todo; tocar un chip activo lo apaga) y un control «Sin agrupar / Por tema» que separa la grilla en secciones con título. Las dos cosas se recuerdan.
+
+Las capturas de las vistas sin dirección (tarea 2.8) pasan a la tanda siguiente.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
