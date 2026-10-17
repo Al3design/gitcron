@@ -21,6 +21,9 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [ ] 2.5 **IA local:** Rediseñar la estética de Cartografía con módulos CSS y tokens de `@theme`. **Comprobación:** Sin clases de Tailwind ni colores fuera de la paleta en Cartografía; capturas antes y después revisadas por Alejandro en su ronda de UX.
 - [x] 2.6 **IA local:** Mostrar en cada cuadro de pantalla qué hace, en lenguaje llano, y qué archivos la forman. **Comprobación:** Alejandro identifica qué hace cada pantalla de GitCron y dónde está su código sin conocer carpetas; una descripción sugerida por IA se distingue de una manual y cita sus archivos.
 
+- [ ] 2.7 **IA local:** Mostrar la captura real de cada pantalla con dirección, arrancando el proyecto con permiso una vez por proyecto (decisión 11). **Comprobación:** Sin permiso no se ejecuta nada del repo; la captura aparece en el cuadro, la columna y el detalle; se rehace cuando cambian sus archivos; el servidor no queda vivo al terminar, cancelar o cerrar.
+- [ ] 2.8 **IA local:** Capturar las vistas sin dirección y las direcciones variables navegando la app. **Comprobación:** Graph, SDD y Cartografía de GitCron muestran su captura real.
+
 ## 3. Aceptación
 
 - [ ] 3.1 **Orquestador/auditor:** Comprobar localización de código desde una pantalla con Alejandro. **Comprobación:** Identifica archivos sin conocer carpetas; comprobar renombrado, layout compartido, cancelación y vista técnica.

@@ -60,6 +60,15 @@ Al ver la tanda 03, Alejandro pidió:
 
 Una sonda sobre el mapa real mostró que Graph listaba 55 archivos y ninguno era suyo: faltaban `CommitGraph` y `ChronometricGraph`, y aparecían archivos del proceso principal, pruebas y scripts. Dos causas. Primera: para una vista definida en el mismo archivo que la elige, se usaron las llamadas del índice, y el índice resuelve una llamada por su nombre (`get`, `run`) hacia cualquier archivo; desde ahora el primer nivel sale de lo que **dibuja** el componente (sus etiquetas JSX resueltas por los imports del archivo), que es exacto. Segunda: el índice cuenta los `import type`, y una pantalla parecía usar el proceso principal; desde ahora una pantalla nunca suma archivos de prueba, `scripts/` ni, si su entrada no está en `electron/`, nada del proceso principal. Además, a pedido de Alejandro: los cuadros llevan el efecto de píxeles de React Bits (Pixel Card, MIT + Commons Clause: se usa dentro de GitCron, no se redistribuye suelto) con los colores de la IA y respetando el movimiento reducido, y la grilla tiene cuatro tamaños de cuadro que se recuerdan.
 
+### 11. Capturas reales de las pantallas con dirección (tanda 05b, 2026-10-16)
+
+Concreta la parte de capturas de la decisión 9. Se capturan primero las pantallas con dirección (`kind: 'route'` sin partes variables como `[id]`); las vistas sin dirección y las direcciones variables quedan con el ícono y llegan en otra tanda (tarea 2.8), porque necesitan navegar la app.
+
+- **Cómo se arranca el proyecto:** si usa Next, con su propio `next dev -p <puerto libre>` desde `node_modules/.bin`; si usa Vite, `vite --port <puerto> --strictPort`; si no, su script `dev` (o `start`) con el gestor de paquetes que indique su archivo de bloqueo y `PORT` en el entorno. Si no hay nada de eso, no se ofrece capturar.
+- **Permiso:** una vez por proyecto y atado a la orden exacta que se muestra. Si la orden cambia (por ejemplo, cambió el script), se vuelve a pedir. El permiso se puede quitar (control completo). Se pide en una franja dentro del catálogo, no en un modal.
+- **Captura:** cada dirección se abre en una ventana oculta de Electron sin acceso al sistema (sandbox, sin preload, partición propia, sin ventanas nuevas, sin salir del servidor local, permisos denegados). Se guarda en JPEG achicado en la base de GitCron (tabla nueva, fuera del repo). El servidor se detiene siempre al terminar, al cancelar y al cerrar GitCron.
+- **Cuándo se rehace:** cada captura guarda una clave hecha con tamaño y fecha de cambio de los archivos de esa pantalla. Si cambia, la captura sigue mostrándose marcada como vieja y se rehace. Con permiso dado, al abrir el catálogo se capturan solas las que falten o estén viejas; también hay un botón para actualizarlas y otro para detener.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
