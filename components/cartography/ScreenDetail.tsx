@@ -13,12 +13,13 @@ import { Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
-import type { ScreenDescription, ScreenEntry, ScreenFileLink, ScreenFileRole } from '@/types/screen-map';
+import type { ScreenCapture, ScreenDescription, ScreenEntry, ScreenFileLink, ScreenFileRole } from '@/types/screen-map';
 import styles from './ScreenCatalog.module.css';
 
 export interface ScreenDetailProps {
   screen: ScreenEntry;
   repoPath: string;
+  capture?: ScreenCapture;
   onClose: () => void;
   onExplain?: (screen: ScreenEntry) => void;
 }
@@ -33,7 +34,7 @@ const ROLE_ORDER: ScreenFileRole[] = [
   'other',
 ];
 
-export function ScreenDetail({ screen, repoPath, onClose, onExplain }: ScreenDetailProps) {
+export function ScreenDetail({ screen, repoPath, capture, onClose, onExplain }: ScreenDetailProps) {
   const t = useT();
   const rawLang = useGitStore((s) => s.language) ?? 'es';
   const lang: 'es' | 'en' | 'zh' = rawLang === 'zh' ? 'zh' : rawLang === 'en' ? 'en' : 'es';
@@ -156,10 +157,17 @@ export function ScreenDetail({ screen, repoPath, onClose, onExplain }: ScreenDet
 
       {/* 2. Captura grande 16:10 */}
       <div className={styles.detailCapture} data-testid="detail-capture">
-        {screen.kind === 'route' ? (
+        {capture ? (
+          <img src={capture.dataUrl} alt="" className={styles.captureImage} />
+        ) : screen.kind === 'route' ? (
           <Monitor size={36} aria-hidden="true" />
         ) : (
           <PanelsTopLeft size={36} aria-hidden="true" />
+        )}
+        {capture?.stale && (
+          <span className={styles.staleBadge} data-testid="detail-stale-badge">
+            {t('cartography.screens.captures.stale')}
+          </span>
         )}
       </div>
 

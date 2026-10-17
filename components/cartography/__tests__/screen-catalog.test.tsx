@@ -74,6 +74,21 @@ describe('ScreenCatalog', () => {
         get: vi.fn().mockResolvedValue({ success: true, data: sampleMap }),
         describe: vi.fn().mockResolvedValue({ success: true, data: null }),
       },
+      cartoCaptures: {
+        get: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            consent: { status: 'unsupported', reason: 'no-package' },
+            captures: {},
+            running: false,
+          },
+        }),
+        consent: vi.fn().mockResolvedValue({ success: true, data: null }),
+        revoke: vi.fn().mockResolvedValue({ success: true, data: null }),
+        run: vi.fn().mockResolvedValue({ success: true, data: { captured: 0, skipped: [], cancelled: false } }),
+        cancel: vi.fn().mockResolvedValue({ success: true, data: true }),
+        onProgress: vi.fn().mockReturnValue(() => {}),
+      },
     } as any;
   });
 
@@ -271,4 +286,85 @@ describe('ScreenCatalog', () => {
     // En Mínimo no se ve la línea de archivos
     expect(screen.queryByTestId('screen-file-counts')).toBeNull();
   });
+
+  it('con needs-consent, la franja muestra la orden y los dos botones', async () => {
+    (window.api.cartoCaptures.get as any).mockResolvedValue({
+      success: true,
+      data: {
+        consent: { status: 'needs-consent', command: 'pnpm run dev' },
+        captures: {},
+        running: false,
+      },
+    });
+
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('capture-banner')).toBeTruthy();
+    });
+
+    expect(screen.getByText(/pnpm run dev/)).toBeTruthy();
+    expect(screen.getByTestId('capture-allow-button')).toBeTruthy();
+    expect(screen.getByTestId('capture-not-now-button')).toBeTruthy();
+  });
+
+  it('con una captura, el cuadro muestra un img', async () => {
+    (window.api.cartoCaptures.get as any).mockResolvedValue({
+      success: true,
+      data: {
+        consent: { status: 'granted', command: 'pnpm run dev', grantedAt: '2026-10-16T12:00:00Z' },
+        captures: {
+          'route:/settings': {
+            screenId: 'route:/settings',
+            dataUrl: 'data:image/jpeg;base64,mockimagedata',
+            capturedAt: '2026-10-16T12:00:00Z',
+            stale: false,
+          },
+        },
+        running: false,
+      },
+    });
+
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    const card = screen.getByTestId('screen-card-route:/settings');
+    const thumbnail = within(card).getByTestId('card-thumbnail');
+    const img = thumbnail.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute('src')).toBe('data:image/jpeg;base64,mockimagedata');
+  });
+
+  it('con stale, aparece el sello', async () => {
+    (window.api.cartoCaptures.get as any).mockResolvedValue({
+      success: true,
+      data: {
+        consent: { status: 'granted', command: 'pnpm run dev', grantedAt: '2026-10-16T12:00:00Z' },
+        captures: {
+          'route:/settings': {
+            screenId: 'route:/settings',
+            dataUrl: 'data:image/jpeg;base64,mockimagedata',
+            capturedAt: '2026-10-16T12:00:00Z',
+            stale: true,
+          },
+        },
+        running: false,
+      },
+    });
+
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    const card = screen.getByTestId('screen-card-route:/settings');
+    const badge = within(card).getByTestId('stale-badge');
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toBe('Desactualizada');
+  });
 });
+

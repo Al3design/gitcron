@@ -340,4 +340,23 @@ export const MIGRATIONS: Migration[] = [
       'ALTER TABLE assist_conversation ADD COLUMN archived_at TEXT;',
     ],
   },
+  {
+    // Capturas reales de pantallas de Cartografía (tarea 2.7).
+    version: 11,
+    statements: [
+      `CREATE TABLE carto_screen_capture (
+  repo_path   TEXT NOT NULL,
+  screen_id   TEXT NOT NULL,
+  content_key TEXT NOT NULL,
+  image       BLOB NOT NULL,
+  captured_at TEXT NOT NULL,
+  PRIMARY KEY (repo_path, screen_id)
+) STRICT;`,
+      `CREATE TABLE carto_capture_consent (
+  repo_path  TEXT PRIMARY KEY,
+  command    TEXT NOT NULL,
+  granted_at TEXT NOT NULL
+) STRICT;`,
+    ],
+  },
 ];

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useScreenMap } from '@/hooks/use-screen-map';
+import { useScreenCaptures } from '@/hooks/use-screen-captures';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import type { ScreenEntry, ScreenMapCoverage } from '@/types/screen-map';
 import { ScreenCard } from './ScreenCard';
@@ -91,8 +92,18 @@ function sortScreens(screens: ScreenEntry[]): ScreenEntry[] {
 export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCatalogProps) {
   const t = useT();
   const { map, loading, error } = useScreenMap(repoPath, refreshKey);
+  const {
+    state: captureState,
+    progress: captureProgress,
+    lastRun,
+    grant,
+    revoke,
+    run,
+    cancel,
+  } = useScreenCaptures(repoPath, map);
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
+  const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
   const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
 
   const handleSizeChange = (newSize: CartoCardSize) => {
@@ -201,6 +212,104 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
             </div>
           )}
 
+          {/* Franja de capturas: solo se ve en la grilla y cuando el stack está soportado */}
+          {!selectedScreen &&
+            captureState &&
+            captureState.consent.status !== 'unsupported' &&
+            !(captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath) && (
+              <div className={styles.captureBanner} data-testid="capture-banner">
+                <div className={styles.captureBannerContent}>
+                  {captureState.running || captureProgress ? (
+                    <span className={styles.captureBannerText} data-testid="capture-running-text">
+                      {captureProgress && captureProgress.total > 0
+                        ? t('cartography.screens.captures.running', {
+                            done: captureProgress.done,
+                            total: captureProgress.total,
+                          })
+                        : t('cartography.screens.captures.starting')}
+                    </span>
+                  ) : captureState.consent.status === 'needs-consent' ? (
+                    <span className={styles.captureBannerText}>
+                      {t('cartography.screens.captures.needsConsent', {
+                        command: captureState.consent.command,
+                      })}
+                    </span>
+                  ) : (
+                    <span className={styles.captureBannerText}>
+                      {t('cartography.screens.captures.granted', {
+                        command: captureState.consent.command,
+                      })}
+                    </span>
+                  )}
+
+                  {lastRun?.error && (
+                    <span className={styles.captureBannerError} data-testid="capture-error-text">
+                      {lastRun.error}
+                    </span>
+                  )}
+
+                  {lastRun?.skipped?.some((s) => s.reason === 'view') && (
+                    <span className={styles.captureBannerViewsLater}>
+                      {t('cartography.screens.captures.viewsLater')}
+                    </span>
+                  )}
+                </div>
+
+                <div className={styles.captureBannerActions}>
+                  {captureState.running || captureProgress ? (
+                    <button
+                      type="button"
+                      onClick={() => void cancel()}
+                      className={styles.captureActionBtn}
+                      data-testid="capture-stop-button"
+                    >
+                      {t('cartography.screens.captures.stop')}
+                    </button>
+                  ) : captureState.consent.status === 'needs-consent' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void grant().then(() => run());
+                        }}
+                        className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
+                        data-testid="capture-allow-button"
+                      >
+                        {t('cartography.screens.captures.allow')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDismissedConsentRepo(repoPath)}
+                        className={styles.captureActionBtn}
+                        data-testid="capture-not-now-button"
+                      >
+                        {t('cartography.screens.captures.notNow')}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void run()}
+                        className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
+                        data-testid="capture-refresh-button"
+                      >
+                        {t('cartography.screens.captures.refresh')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void revoke()}
+                        className={styles.captureActionBtn}
+                        data-testid="capture-revoke-button"
+                      >
+                        {t('cartography.screens.captures.revoke')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
           {!selectedScreen && !isNoUi && sortedScreens.length > 0 && (
             <div
               className={styles.segmentedControl}
@@ -237,6 +346,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
               <ScreenDetail
                 screen={selectedScreen}
                 repoPath={repoPath}
+                capture={captureState?.captures[selectedScreen.id]}
                 onClose={() => setSelectedScreenId(null)}
                 onExplain={handleExplain}
               />
@@ -250,6 +360,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   const ownCount = screen.files.filter((f) => !f.shared).length;
                   const sharedCount = screen.files.filter((f) => f.shared).length;
                   const displayName = screen.description?.suggestedName || screen.name;
+                  const screenCapture = captureState?.captures[screen.id];
 
                   return (
                     <div
@@ -267,7 +378,9 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                       data-testid={`sidebar-screen-${screen.id}`}
                     >
                       <div className={styles.sidebarThumbnail}>
-                        {screen.kind === 'route' ? (
+                        {screenCapture ? (
+                          <img src={screenCapture.dataUrl} alt="" className={styles.captureImage} />
+                        ) : screen.kind === 'route' ? (
                           <Monitor size={16} aria-hidden="true" />
                         ) : (
                           <PanelsTopLeft size={16} aria-hidden="true" />
@@ -301,6 +414,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   key={screen.id}
                   screen={screen}
                   repoPath={repoPath}
+                  capture={captureState?.captures[screen.id]}
                   size={cardSize}
                   onSelect={() => setSelectedScreenId(screen.id)}
                   onExplain={handleExplain}

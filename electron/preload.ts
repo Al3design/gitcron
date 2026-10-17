@@ -415,6 +415,18 @@ contextBridge.exposeInMainWorld('api', {
     describe: (args: { repoPath: string; screenId: string; language: 'es' | 'en' | 'zh'; cacheOnly?: boolean }) =>
       ipcRenderer.invoke('carto-screens:describe', args),
   },
+  cartoCaptures: {
+    get: (repoPath: string) => ipcRenderer.invoke('carto-captures:get', { repoPath }),
+    consent: (args: { repoPath: string; command: string }) => ipcRenderer.invoke('carto-captures:consent', args),
+    revoke: (repoPath: string) => ipcRenderer.invoke('carto-captures:revoke', { repoPath }),
+    run: (repoPath: string) => ipcRenderer.invoke('carto-captures:run', { repoPath }),
+    cancel: (repoPath: string) => ipcRenderer.invoke('carto-captures:cancel', { repoPath }),
+    onProgress: (cb: (payload: { repoPath: string; done: number; total: number }) => void) => {
+      const handler = (_e: unknown, payload: { repoPath: string; done: number; total: number }) => cb(payload);
+      ipcRenderer.on('carto-captures:progress', handler);
+      return () => ipcRenderer.removeListener('carto-captures:progress', handler);
+    },
+  },
   // Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).
   // Opt-in, apagada por defecto. Las keys nunca cruzan este límite.
   cartoAi: {

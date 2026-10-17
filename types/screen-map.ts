@@ -97,3 +97,33 @@ export interface ManualScreenLink {
   /** Lo calcula la lectura: `true` si la pantalla o el archivo ya no están. */
   orphaned?: boolean;
 }
+
+export interface ScreenCapture {
+  screenId: string;
+  /** `data:image/jpeg;base64,…`, listo para un <img>. */
+  dataUrl: string;
+  capturedAt: string;
+  /** Cambiaron los archivos de la pantalla desde que se sacó: se muestra y se rehace. */
+  stale: boolean;
+}
+
+export type ScreenCaptureConsent =
+  | { status: 'unsupported'; reason: 'no-package' | 'no-start-command' | 'not-installed' }
+  | { status: 'needs-consent'; command: string }
+  | { status: 'granted'; command: string; grantedAt: string };
+
+export interface ScreenCaptureState {
+  consent: ScreenCaptureConsent;
+  captures: Record<string, ScreenCapture>;
+  running: boolean;
+}
+
+export type ScreenCaptureSkipReason = 'view' | 'dynamic-route' | 'timeout' | 'load-failed';
+
+export interface ScreenCaptureRunResult {
+  captured: number;
+  skipped: { screenId: string; reason: ScreenCaptureSkipReason }[];
+  cancelled: boolean;
+  /** El servidor no arrancó o se cayó: texto para mostrar. */
+  error?: string;
+}

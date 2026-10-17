@@ -30,7 +30,7 @@ import type {
   CartoAskResult,
   CartoPanoramaResult,
 } from './carto-ai';
-import type { ScreenMap } from './screen-map';
+import type { ScreenMap, ScreenCaptureState, ScreenCaptureRunResult } from './screen-map';
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
@@ -535,6 +535,14 @@ interface ElectronAPI {
       language: 'es' | 'en' | 'zh';
       cacheOnly?: boolean;
     }): Promise<GitResult<{ status: 'ok'; description: ScreenDescription } | { status: 'unavailable'; message: string } | null>>;
+  };
+  cartoCaptures: {
+    get(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
+    consent(args: { repoPath: string; command: string }): Promise<GitResult<ScreenCaptureState>>;
+    revoke(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
+    run(repoPath: string): Promise<GitResult<ScreenCaptureRunResult>>;
+    cancel(repoPath: string): Promise<GitResult<boolean>>;
+    onProgress(cb: (payload: { repoPath: string; done: number; total: number }) => void): () => void;
   };
   /**
    * Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).

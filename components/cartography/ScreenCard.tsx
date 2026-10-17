@@ -12,18 +12,19 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Monitor, PanelsTopLeft, Sparkles } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { PixelCard } from '@/components/ui/PixelCard';
-import type { ScreenEntry } from '@/types/screen-map';
+import type { ScreenCapture, ScreenEntry } from '@/types/screen-map';
 import styles from './ScreenCatalog.module.css';
 
 export interface ScreenCardProps {
   screen: ScreenEntry;
   repoPath: string;
+  capture?: ScreenCapture;
   onSelect?: (screen: ScreenEntry) => void;
   onExplain?: (screen: ScreenEntry) => void;
   size?: 'large' | 'medium' | 'small' | 'minimal';
 }
 
-export function ScreenCard({ screen, onSelect, onExplain, size }: ScreenCardProps) {
+export function ScreenCard({ screen, capture, onSelect, onExplain, size }: ScreenCardProps) {
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
@@ -75,10 +76,18 @@ export function ScreenCard({ screen, onSelect, onExplain, size }: ScreenCardProp
       <PixelCard className={styles.cardInner} active={isCardActive} noFocus>
         {/* 1. Lugar de la captura 16:10 + ícono de IA */}
         <div className={styles.cardThumbnail} data-testid="card-thumbnail">
-          {screen.kind === 'route' ? (
+          {capture ? (
+            <img src={capture.dataUrl} alt="" className={styles.captureImage} />
+          ) : screen.kind === 'route' ? (
             <Monitor size={28} className={styles.thumbnailIcon} aria-hidden="true" />
           ) : (
             <PanelsTopLeft size={28} className={styles.thumbnailIcon} aria-hidden="true" />
+          )}
+
+          {capture?.stale && (
+            <span className={styles.staleBadge} data-testid="stale-badge">
+              {t('cartography.screens.captures.stale')}
+            </span>
           )}
 
           <button
