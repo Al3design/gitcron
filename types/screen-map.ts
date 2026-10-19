@@ -157,3 +157,26 @@ export interface ScreenCaptureRunResult {
   /** El servidor no arrancó o se cayó: texto para mostrar. */
   error?: string;
 }
+
+/** Estado de una pantalla dentro de una corrida de capturas (decisión 14). */
+/** `stopped`: no llegó a capturarse porque se tocó Detener (no es una falla ni falta de receta). */
+export type CaptureItemState = 'pending' | 'running' | 'done' | 'failed' | 'skipped' | 'stopped';
+
+export interface CaptureItem {
+  screenId: string;
+  name: string;
+  via: 'route' | 'view';
+  state: CaptureItemState;
+  /** El motivo en palabras: por qué falló o por qué no se captura. */
+  detail?: string;
+}
+
+/**
+ * El avance de una corrida, por el canal `carto-captures:progress`: primero el plan con todas
+ * las pantallas, después un `item` por cada cambio de estado y al final `finished` (también al
+ * cancelar o fallar).
+ */
+export type CaptureProgressEvent =
+  | { repoPath: string; kind: 'plan'; items: CaptureItem[] }
+  | { repoPath: string; kind: 'item'; screenId: string; state: CaptureItemState; detail?: string }
+  | { repoPath: string; kind: 'finished' };

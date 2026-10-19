@@ -74,7 +74,9 @@ export function buildRecipeTest(
     const shotName = `cap-${idx + 1}`;
     shots.push({ shot: shotName, screenId: screen.id });
 
+    // GitCron lee estas líneas mientras corre la prueba para mostrar el avance (decisión 14).
     const lines: string[] = [];
+    lines.push(`    console.log('GITCRON_RECIPE_START', ${JSON.stringify(screen.id)});`);
     lines.push(`    await app.open('/');`);
 
     // 1. Setup steps
@@ -98,6 +100,7 @@ export function buildRecipeTest(
     lines.push(`    await pausa(1500);`);
     lines.push(`    paso = 'captura';`);
     lines.push(`    await app.screenshot(${JSON.stringify(shotName)});`);
+    lines.push(`    console.log('GITCRON_RECIPE_DONE', ${JSON.stringify(screen.id)});`);
 
     // `paso` se declara fuera del try, en un bloque propio de la pantalla: si quedara dentro, el
     // catch no la vería y una receta rota cortaría la prueba entera («paso is not defined»,

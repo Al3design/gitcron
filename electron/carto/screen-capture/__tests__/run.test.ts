@@ -161,4 +161,29 @@ describe('runScreenCaptures', () => {
     expect(res.captured).toBe(0);
     expect(res.error).toMatch(/Port already in use/);
   });
+
+  it('onScreen avisa running y done por dirección, y failed cuando falla', async () => {
+    const deps: CaptureRunDeps = {
+      startServer: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:3000', stop: vi.fn() }),
+      capture: vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/settings')) throw new Error('no cargó');
+        return Buffer.from('fake-image');
+      }),
+      contentKey: vi.fn().mockResolvedValue('key-new'),
+      stored: vi.fn().mockResolvedValue(new Map()),
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    const calls: string[] = [];
+
+    await runScreenCaptures(sampleMap, deps, {
+      onScreen: (screenId, state, detail) => calls.push(detail ? `${state} ${screenId} ${detail}` : `${state} ${screenId}`),
+    });
+
+    expect(calls).toEqual([
+      'running route:/dashboard',
+      'done route:/dashboard',
+      'running route:/settings',
+      'failed route:/settings no cargó',
+    ]);
+  });
 });

@@ -168,6 +168,109 @@ describe('carto-captures IPC handlers', () => {
     });
   });
 
+  it('el avance va por el canal: plan, un item por cambio y finished', async () => {
+    const fullCommand = 'npm run dev · vistas con pruebas: e2e (e2e/e2e.config.ts)';
+    vi.spyOn(startCmdModule, 'detectStartCommand').mockResolvedValue({
+      executable: 'npm',
+      args: ['run', 'dev'],
+      portViaEnv: true,
+      display: 'npm run dev',
+    });
+    vi.spyOn(recipesModule, 'readRecipes').mockResolvedValue({
+      ok: true,
+      recipes: {
+        version: 1,
+        runner: { kind: 'e2e', config: 'e2e/e2e.config.ts', testsDir: 'e2e/tests' },
+        setup: [],
+        screens: { 'view:graph': { steps: [] } },
+      },
+    });
+    vi.spyOn(viewRunnerModule, 'viewRunnerAvailable').mockReturnValue(true);
+    vi.spyOn(contentKeyModule, 'screenContentKey').mockResolvedValue('key-1');
+    setCaptureConsent(repoRoot, fullCommand, { db });
+
+    const screenBase = {
+      description: null,
+      files: [],
+      tags: [],
+      primaryTag: null,
+      stats: { byRole: {}, lastChangedAt: null },
+    };
+    const mockMap: ScreenMap = {
+      repoPath: repoRoot,
+      headSha: 'head1',
+      detectors: ['next-app-router', 'views'],
+      coverage: { state: 'complete' },
+      readAt: '2026-10-19T12:00:00Z',
+      screens: [
+        { ...screenBase, id: 'route:/settings', kind: 'route', name: 'Ajustes', locator: '/settings', declaredIn: 'app/settings/page.tsx' },
+        { ...screenBase, id: 'view:graph', kind: 'view', name: 'Graph', locator: 'activeTab=graph', declaredIn: 'components/RepoMainView.tsx' },
+        { ...screenBase, id: 'view:orphan', kind: 'view', name: 'Huérfana', locator: 'activeTab=orphan', declaredIn: 'components/RepoMainView.tsx' },
+      ],
+    };
+    vi.spyOn(cartoScreensIpc, 'getCachedScreenMap').mockReturnValue(mockMap);
+
+    const fakeRouteRunner = async (
+      _map: ScreenMap,
+      _deps: unknown,
+      opts: { onScreen?(id: string, state: 'running' | 'done' | 'failed', detail?: string): void },
+    ) => {
+      opts.onScreen?.('route:/settings', 'running');
+      opts.onScreen?.('route:/settings', 'done');
+      return { captured: 1, skipped: [], cancelled: false };
+    };
+    const fakeViewRunner = async (
+      _root: string,
+      _recipes: unknown,
+      _screens: unknown,
+      opts: { onEvent?(e: { screenId: string; state: 'running' | 'done' | 'failed'; detail?: string }): void },
+    ) => {
+      opts.onEvent?.({ screenId: 'view:graph', state: 'running' });
+      opts.onEvent?.({ screenId: 'view:graph', state: 'failed', detail: 'paso 1: no está' });
+      return { images: new Map(), failed: [{ screenId: 'view:graph', detail: 'paso 1: no está' }] };
+    };
+
+    const sent: unknown[] = [];
+    const sender = {
+      isDestroyed: () => false,
+      send: (channel: string, payload: unknown) => {
+        if (channel === 'carto-captures:progress') sent.push(payload);
+      },
+    };
+
+    const result = await handleCartoCapturesRun(
+      { repoPath: repoRoot },
+      { sender } as any,
+      { db },
+      fakeRouteRunner as any,
+      fakeViewRunner as any,
+    );
+
+    expect(result.success).toBe(true);
+    expect(sent).toEqual([
+      {
+        repoPath: repoRoot,
+        kind: 'plan',
+        items: [
+          { screenId: 'route:/settings', name: 'Ajustes', via: 'route', state: 'pending' },
+          { screenId: 'view:graph', name: 'Graph', via: 'view', state: 'pending' },
+          {
+            screenId: 'view:orphan',
+            name: 'Huérfana',
+            via: 'view',
+            state: 'skipped',
+            detail: 'sin receta en .gitcron/capturas.json',
+          },
+        ],
+      },
+      { repoPath: repoRoot, kind: 'item', screenId: 'route:/settings', state: 'running' },
+      { repoPath: repoRoot, kind: 'item', screenId: 'route:/settings', state: 'done' },
+      { repoPath: repoRoot, kind: 'item', screenId: 'view:graph', state: 'running' },
+      { repoPath: repoRoot, kind: 'item', screenId: 'view:graph', state: 'failed', detail: 'paso 1: no está' },
+      { repoPath: repoRoot, kind: 'finished' },
+    ]);
+  });
+
   it('get marca stale cuando cambia la clave de contenido', async () => {
     vi.spyOn(startCmdModule, 'detectStartCommand').mockResolvedValue({
       executable: 'npm',

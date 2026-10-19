@@ -718,7 +718,9 @@
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   line-height: 1.4;
-  flex: 1 1 auto;
+  /* Siempre una fila propia, de todo el ancho: con `auto` se angostaba mientras capturaba y los
+     filtros se le subían al lado (auditoría de carto-05e). */
+  flex: 1 1 100%;
 }
 
 .captureBannerContent {
@@ -726,6 +728,186 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+  flex: 1 1 20rem;
+}
+
+/* ── Avance de las capturas dentro de la franja (decisión 14) ── */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.progressBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.progressRing {
+  transform: rotate(-90deg);
+}
+
+.progressRingTrack,
+.progressRingArc {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.progressRingTrack {
+  stroke: var(--color-border-subtle);
+}
+
+.progressRingArc {
+  stroke: var(--color-primary);
+  stroke-linecap: round;
+  transition: stroke-dasharray 300ms ease;
+}
+
+.progressFailCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-warning);
+  color: var(--color-warning);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.progressToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.progressToggle:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.progressToggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.progressChevron {
+  transition: transform 160ms ease;
+}
+
+.progressChevronOpen {
+  transform: rotate(180deg);
+}
+
+.progressList {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+  animation: progressListOpen 200ms ease-out;
+}
+
+@keyframes progressListOpen {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 240px;
+    opacity: 1;
+  }
+}
+
+.progressItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.progressItemName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressItemDetail {
+  margin-left: auto;
+  padding-left: var(--space-2);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressIcon {
+  flex-shrink: 0;
+}
+
+.progressIconMuted {
+  color: var(--color-text-secondary);
+}
+
+.progressIconDone {
+  color: var(--color-git-add);
+}
+
+.progressIconFailed {
+  color: var(--color-warning);
+}
+
+.progressSpin {
+  color: var(--color-primary);
+  animation: progressSpin 1s linear infinite;
+}
+
+@keyframes progressSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressList,
+  .progressSpin {
+    animation: none;
+  }
+
+  .progressRingArc,
+  .progressChevron {
+    transition: none;
+  }
 }
 
 .captureBannerText {

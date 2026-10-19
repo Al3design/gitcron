@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { CaptureProgressEvent } from '../types/screen-map';
 
 contextBridge.exposeInMainWorld('api', {
   gitCommand: (repoPath: string, args: string[]) => ipcRenderer.invoke('git:command', repoPath, args),
@@ -421,8 +422,8 @@ contextBridge.exposeInMainWorld('api', {
     revoke: (repoPath: string) => ipcRenderer.invoke('carto-captures:revoke', { repoPath }),
     run: (repoPath: string) => ipcRenderer.invoke('carto-captures:run', { repoPath }),
     cancel: (repoPath: string) => ipcRenderer.invoke('carto-captures:cancel', { repoPath }),
-    onProgress: (cb: (payload: { repoPath: string; done: number; total: number }) => void) => {
-      const handler = (_e: unknown, payload: { repoPath: string; done: number; total: number }) => cb(payload);
+    onProgress: (cb: (payload: CaptureProgressEvent) => void) => {
+      const handler = (_e: unknown, payload: CaptureProgressEvent) => cb(payload);
       ipcRenderer.on('carto-captures:progress', handler);
       return () => ipcRenderer.removeListener('carto-captures:progress', handler);
     },

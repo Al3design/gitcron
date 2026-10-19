@@ -181,15 +181,14 @@ describe('view-runner', () => {
         }
 
         // Crear carpetas y capturas en los artefactos
+        // La corrida escribe en su propia subcarpeta de resultados dentro de .e2e.
         const configDir = path.dirname(path.resolve(root, dummyRecipes.runner.config));
-        const artDir = path.join(configDir, '.e2e', 'artifacts', tempBase, 'default', 'attempt-0', 'screenshots');
-
-        dirs.add(path.normalize(path.join(configDir, '.e2e')));
-        dirs.add(path.normalize(path.join(configDir, '.e2e', 'artifacts')));
-        dirs.add(path.normalize(path.join(configDir, '.e2e', 'artifacts', tempBase)));
-        dirs.add(path.normalize(path.join(configDir, '.e2e', 'artifacts', tempBase, 'default')));
-        dirs.add(path.normalize(path.join(configDir, '.e2e', 'artifacts', tempBase, 'default', 'attempt-0')));
-        dirs.add(path.normalize(artDir));
+        const outputDir = path.join(configDir, '.e2e', tempBase.replace(/^zz-/, ''));
+        const parts = ['artifacts', tempBase, 'default', 'attempt-0', 'screenshots'];
+        for (let i = 0; i <= parts.length; i++) {
+          dirs.add(path.normalize(path.join(outputDir, ...parts.slice(0, i))));
+        }
+        const artDir = path.join(outputDir, ...parts);
 
         files.set(path.normalize(path.join(artDir, '001-cap-1.png')), Buffer.from('png-graph'));
         files.set(path.normalize(path.join(artDir, '002-cap-2.png')), Buffer.from('png-history'));
@@ -211,5 +210,70 @@ describe('view-runner', () => {
     expect(res.images.get('view:graph')).toEqual(Buffer.from('png-graph'));
     expect(res.images.get('view:history')).toEqual(Buffer.from('png-history'));
     expect(res.failed).toHaveLength(0);
+  });
+
+  it('la salida se lee línea por línea mientras corre: onEvent recibe running, failed y done en orden', async () => {
+    const { fakeFs, files, dirs } = createFakeHarness();
+    const screens = [
+      { id: 'view:graph', name: 'Graph' },
+      { id: 'view:history', name: 'History' },
+    ];
+    let spawnEnv: NodeJS.ProcessEnv | undefined;
+
+    const fakeSpawn = (_cmd: string, _args: string[], opts: { env: NodeJS.ProcessEnv }) => {
+      spawnEnv = opts.env;
+      const child = new EventEmitter() as any;
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+
+      setTimeout(() => {
+        // El primer pedazo corta la línea de la falla al medio.
+        child.stdout.emit('data', Buffer.from('GITCRON_RECIPE_START view:graph\nGITCRON_RECIPE_FA'));
+
+        // La foto de la segunda pantalla ya está escrita cuando llega su DONE.
+        let tempBase = 'zz-gitcron-capturas';
+        for (const k of files.keys()) {
+          const match = k.match(/(zz-gitcron-capturas-[a-f0-9]+)\.e2e\.ts$/);
+          if (match) tempBase = match[1];
+        }
+        const configDir = path.dirname(path.resolve(root, dummyRecipes.runner.config));
+        const outputDir = path.join(configDir, '.e2e', tempBase.replace(/^zz-/, ''));
+        const parts = ['artifacts', tempBase, 'default', 'attempt-0', 'screenshots'];
+        for (let i = 0; i <= parts.length; i++) {
+          dirs.add(path.normalize(path.join(outputDir, ...parts.slice(0, i))));
+        }
+        files.set(path.normalize(path.join(outputDir, ...parts, '001-cap-2.png')), Buffer.from('png-history'));
+
+        child.stdout.emit(
+          'data',
+          Buffer.from('IL view:graph paso 1: no está el botón\nGITCRON_RECIPE_START view:history\nGITCRON_RECIPE_DONE view:history\n'),
+        );
+        child.emit('close', 0);
+      }, 10);
+
+      return child;
+    };
+
+    const events: { screenId: string; state: string; detail?: string; image?: Buffer }[] = [];
+    const res = await runViewCaptures(
+      root,
+      dummyRecipes,
+      screens,
+      { onEvent: (e) => events.push(e) },
+      { spawn: fakeSpawn as any, fs: fakeFs as any },
+    );
+
+    expect(events.map((e) => `${e.state} ${e.screenId}`)).toEqual([
+      'running view:graph',
+      'failed view:graph',
+      'running view:history',
+      'done view:history',
+    ]);
+    expect(events[1].detail).toBe('paso 1: no está el botón');
+    expect(events[3].image).toEqual(Buffer.from('png-history'));
+    expect(spawnEnv?.GITCRON_CAPTURE).toBe('1');
+    // El resultado final no cambia.
+    expect(res.images.get('view:history')).toEqual(Buffer.from('png-history'));
+    expect(res.failed).toEqual([{ screenId: 'view:graph', detail: 'paso 1: no está el botón' }]);
   });
 });

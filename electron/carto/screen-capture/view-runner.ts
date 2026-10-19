@@ -17,6 +17,35 @@ export interface ViewRunResult {
   error?: string;
 }
 
+/** Un cambio de estado de una vista mientras corre la prueba (decisión 14). */
+export interface ViewRunEvent {
+  screenId: string;
+  state: 'running' | 'done' | 'failed';
+  detail?: string;
+  /** La foto en PNG, si ya estaba en los artefactos al terminar la vista. */
+  image?: Buffer;
+}
+
+type RecipeMarker =
+  | { kind: 'start' | 'done'; screenId: string }
+  | { kind: 'fail'; screenId: string; detail: string };
+
+/** Lee una línea de la salida de la prueba temporal: START, DONE o FAIL de una pantalla. */
+function parseRecipeMarker(line: string): RecipeMarker | null {
+  const fail = line.match(/GITCRON_RECIPE_FAIL\s+(?:"([^"]+)"|(\S+))\s+(.*)$/);
+  if (fail) {
+    const screenId = fail[1] ?? fail[2];
+    return screenId ? { kind: 'fail', screenId, detail: fail[3].trim() } : null;
+  }
+  const mark = line.match(/GITCRON_RECIPE_(START|DONE)\s+(?:"([^"]+)"|(\S+))/);
+  if (mark) {
+    const screenId = mark[2] ?? mark[3];
+    if (!screenId) return null;
+    return { kind: mark[1] === 'START' ? 'start' : 'done', screenId };
+  }
+  return null;
+}
+
 export interface ViewRunnerDeps {
   spawn?: typeof spawn;
   fs?: {
@@ -27,6 +56,7 @@ export interface ViewRunnerDeps {
     readdirSync(p: string, opts?: { withFileTypes?: boolean }): any[];
     statSync(p: string): { mtimeMs: number; isDirectory(): boolean };
     readFileSync(p: string): Buffer;
+    rmSync?(p: string, opts?: { recursive?: boolean; force?: boolean }): void;
   };
 }
 
@@ -112,31 +142,45 @@ async function findSystemNode(): Promise<string | undefined> {
 }
 
 async function executeRunnerProcess(
-  launchArgs: { binJs: string; configAbs: string; testRel: string; configDir: string; nodePath?: string },
-  options: { signal?: AbortSignal; timeoutMs: number },
+  launchArgs: { binJs: string; configAbs: string; testRel: string; configDir: string; outputDir: string; nodePath?: string },
+  options: { signal?: AbortSignal; timeoutMs: number; onMarker?(marker: RecipeMarker): void },
   spawnImpl: typeof spawn,
 ): Promise<ProcessExecutionOutcome> {
   const outputLines: string[] = [];
   const failed: { screenId: string; detail: string }[] = [];
   const procState: { exitCode: number | null; error: Error | null } = { exitCode: null, error: null };
 
-  const recordOutput = (chunk: Buffer | string) => {
-    const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-    const lines = text.split(/\r?\n/);
-    for (const line of lines) {
-      if (line.trim().length > 0) {
-        outputLines.push(line);
-        const match = line.match(/GITCRON_RECIPE_FAIL\s+(?:"([^"]+)"|(\S+))\s+(.*)$/);
-        if (match) {
-          const screenId = match[1] ?? match[2];
-          const detail = match[3].trim();
-          if (screenId && !failed.some((f) => f.screenId === screenId)) {
-            failed.push({ screenId, detail });
-          }
-        }
-      }
+  const recordLine = (line: string) => {
+    if (line.trim().length === 0) return;
+    outputLines.push(line);
+    const marker = parseRecipeMarker(line);
+    if (!marker) return;
+    if (marker.kind === 'fail') {
+      if (failed.some((f) => f.screenId === marker.screenId)) return;
+      failed.push({ screenId: marker.screenId, detail: marker.detail });
     }
+    options.onMarker?.(marker);
   };
+
+  // La salida llega en pedazos que pueden cortar una línea al medio: se junta en un buffer por
+  // canal y se lee cada línea completa en el momento, para avisar el avance mientras corre.
+  const createLineReader = () => {
+    let pending = '';
+    return {
+      push(chunk: Buffer | string) {
+        pending += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() ?? '';
+        for (const line of lines) recordLine(line);
+      },
+      flush() {
+        if (pending.length > 0) recordLine(pending);
+        pending = '';
+      },
+    };
+  };
+  const stdoutReader = createLineReader();
+  const stderrReader = createLineReader();
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -145,6 +189,8 @@ async function executeRunnerProcess(
     const finish = () => {
       if (settled) return;
       settled = true;
+      stdoutReader.flush();
+      stderrReader.flush();
       if (timer) clearTimeout(timer);
       if (options.signal) {
         options.signal.removeEventListener('abort', onAbort);
@@ -159,6 +205,9 @@ async function executeRunnerProcess(
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       E2E_TELEMETRY_DISABLED: '1',
+      // Le avisa a la app del proyecto que la abre GitCron para sacar fotos: GitCron mismo se abre
+      // fuera de la pantalla y sin tomar el foco (decisión 14).
+      GITCRON_CAPTURE: '1',
       DO_NOT_TRACK: '1',
       FORCE_COLOR: '0',
     };
@@ -167,7 +216,9 @@ async function executeRunnerProcess(
     if (!launchArgs.nodePath) childEnv.ELECTRON_RUN_AS_NODE = '1';
     const child: ChildProcess = spawnImpl(
       nodeExecutable,
-      [launchArgs.binJs, 'run', '--config', launchArgs.configAbs, launchArgs.testRel],
+      // Carpeta de resultados propia: con la de omisión (.e2e), la corrida limpiaba los artefactos de
+      // las pruebas del proyecto que estuvieran corriendo (medido en carto-05d y 05e: se perdían fotos).
+      [launchArgs.binJs, 'run', '--config', launchArgs.configAbs, '--output', launchArgs.outputDir, launchArgs.testRel],
       {
         cwd: launchArgs.configDir,
         windowsHide: true,
@@ -196,8 +247,8 @@ async function executeRunnerProcess(
       finish();
     }, options.timeoutMs);
 
-    child.stdout?.on('data', (c) => recordOutput(c));
-    child.stderr?.on('data', (c) => recordOutput(c));
+    child.stdout?.on('data', (c) => stdoutReader.push(c));
+    child.stderr?.on('data', (c) => stderrReader.push(c));
 
     child.on('error', (err) => {
       procState.error = err;
@@ -219,13 +270,13 @@ async function executeRunnerProcess(
 }
 
 function collectCapturedImages(
-  configDir: string,
+  outputDir: string,
   testBaseName: string,
   shots: ShotMapping[],
   fsImpl: NonNullable<ViewRunnerDeps['fs']>,
 ): Map<string, Buffer> {
   const images = new Map<string, Buffer>();
-  const artifactsRoot = path.join(configDir, '.e2e', 'artifacts');
+  const artifactsRoot = path.join(outputDir, 'artifacts');
   const screenshotsDir = findArtifactScreenshotsDir(artifactsRoot, testBaseName, fsImpl);
 
   if (screenshotsDir && fsImpl.existsSync(screenshotsDir)) {
@@ -257,7 +308,11 @@ export async function runViewCaptures(
   root: string,
   recipes: CaptureRecipes,
   screens: { id: string; name: string }[],
-  options: { signal?: AbortSignal; timeoutMs?: number /* 1_800_000 */ } = {},
+  options: {
+    signal?: AbortSignal;
+    timeoutMs?: number /* 1_800_000 */;
+    onEvent?(e: ViewRunEvent): void;
+  } = {},
   deps?: ViewRunnerDeps,
 ): Promise<ViewRunResult> {
   const fsImpl = deps?.fs ?? fs;
@@ -278,20 +333,37 @@ export async function runViewCaptures(
   const configAbs = path.resolve(root, recipes.runner.config);
   const configDir = path.dirname(configAbs);
   const testRel = path.relative(configDir, tempTestPath);
+  // Dentro del proyecto (el CLI rechaza una salida fuera, INVALID_CONFIG) y en una subcarpeta propia
+  // de `.e2e`: así no limpia los artefactos de otras pruebas que estén corriendo.
+  const outputDir = path.join(configDir, '.e2e', `gitcron-capturas-${randomHex}`);
 
   try {
     fsImpl.mkdirSync(tempTestDir, { recursive: true });
     fsImpl.writeFileSync(tempTestPath, code, 'utf8');
 
+    const testBaseName = tempFileName.replace(/\.e2e\.ts$/, '');
+    const onMarker = (marker: RecipeMarker) => {
+      if (!options.onEvent) return;
+      if (marker.kind === 'start') {
+        options.onEvent({ screenId: marker.screenId, state: 'running' });
+      } else if (marker.kind === 'fail') {
+        options.onEvent({ screenId: marker.screenId, state: 'failed', detail: marker.detail });
+      } else {
+        // La foto puede no estar escrita todavía: si falta, se completa al final.
+        const shot = shots.filter((s) => s.screenId === marker.screenId);
+        const image = collectCapturedImages(outputDir, testBaseName, shot, fsImpl).get(marker.screenId);
+        options.onEvent({ screenId: marker.screenId, state: 'done', ...(image ? { image } : {}) });
+      }
+    };
+
     const nodePath = await findSystemNode();
     const outcome = await executeRunnerProcess(
-      { binJs, configAbs, testRel, configDir, nodePath },
-      { signal: options.signal, timeoutMs },
+      { binJs, configAbs, testRel, configDir, outputDir, nodePath },
+      { signal: options.signal, timeoutMs, onMarker },
       spawnImpl,
     );
 
-    const testBaseName = tempFileName.replace(/\.e2e\.ts$/, '');
-    const images = collectCapturedImages(configDir, testBaseName, shots, fsImpl);
+    const images = collectCapturedImages(outputDir, testBaseName, shots, fsImpl);
     const failed = [...outcome.failed];
 
     for (const screen of screens) {
@@ -325,6 +397,12 @@ export async function runViewCaptures(
       }
     } catch {
       // Borrado garantizado en finally
+    }
+    try {
+      (fsImpl.rmSync ?? fs.rmSync)(outputDir, { recursive: true, force: true });
+    } catch (err) {
+      // La carpeta temporal de resultados queda en %TEMP%: no rompe nada, se avisa.
+      console.warn('[capturas] no se pudo borrar la carpeta temporal de resultados', outputDir, err);
     }
   }
 }

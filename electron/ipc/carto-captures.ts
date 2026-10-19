@@ -26,6 +26,9 @@ import { runScreenCaptures, type CaptureRunDeps } from '../carto/screen-capture/
 import { readRecipes } from '../carto/screen-capture/recipes';
 import { runViewCaptures, viewRunnerAvailable } from '../carto/screen-capture/view-runner';
 import type {
+  CaptureItem,
+  CaptureItemState,
+  CaptureProgressEvent,
   ScreenCapture,
   ScreenCaptureConsent,
   ScreenCaptureRunResult,
@@ -50,6 +53,21 @@ const activePromises = new Map<string, Promise<Result<ScreenCaptureRunResult>>>(
 // El servidor de cada corrida, para detenerlo enseguida al cancelar o al cerrar GitCron sin
 // esperar a que termine la captura en curso (hasta 30 s).
 const activeServers = new Map<string, DevServerHandle>();
+
+/** El motivo en palabras de una vista que no se captura, para el detalle de la franja. */
+/** Lo que dice una pantalla que no llegó a capturarse porque se tocó Detener. */
+const STOPPED_DETAIL = 'detenida antes de llegar';
+
+function skippedViewDetail(reason: ScreenCaptureSkipReason): string {
+  return reason === 'runner-missing'
+    ? 'falta el sistema de pruebas del proyecto'
+    : 'sin receta en .gitcron/capturas.json';
+}
+
+/** El nombre que se ve en el cuadro: el sugerido si lo hay. */
+function screenDisplayName(screen: ScreenEntry): string {
+  return screen.description?.suggestedName || screen.name;
+}
 
 export function createStartCommandDeps(root: string) {
   return {
@@ -302,6 +320,18 @@ export async function handleCartoCapturesRun(
     activeControllers.set(root, controller);
     activeRuns.add(root);
 
+    // El avance va por un solo canal: plan, un item por cambio de estado y finished (decisión 14).
+    const sendProgress = (progress: CaptureProgressEvent) => {
+      if (event?.sender && !event.sender.isDestroyed()) {
+        event.sender.send('carto-captures:progress', progress);
+      }
+    };
+    const itemStates = new Map<string, CaptureItemState>();
+    const sendItem = (screenId: string, state: CaptureItemState, detail?: string) => {
+      itemStates.set(screenId, state);
+      sendProgress({ repoPath: root, kind: 'item', screenId, state, ...(detail ? { detail } : {}) });
+    };
+
     const runPromise = (async (): Promise<Result<ScreenCaptureRunResult>> => {
       try {
         const map =
@@ -311,13 +341,13 @@ export async function handleCartoCapturesRun(
         const storedCaptures = getScreenCaptures(root, options);
         const storedMap = new Map(storedCaptures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
 
-        // Contar candidatos de rutas
-        let routeCandidatesCount = 0;
+        // Las direcciones que se van a capturar, para el plan
+        const routeCandidates: ScreenEntry[] = [];
         for (const screen of map.screens) {
           if (screen.kind === 'route' && !screen.locator.includes('[')) {
             const key = await screenContentKey(screen, statFn);
             if (storedMap.get(screen.id)?.contentKey !== key) {
-              routeCandidatesCount++;
+              routeCandidates.push(screen);
             }
           }
         }
@@ -348,7 +378,35 @@ export async function handleCartoCapturesRun(
           }
         }
 
-        const totalToCapture = routeCandidatesCount + viewCandidates.length;
+        // 2. El plan, antes de arrancar nada
+        const screenById = new Map(map.screens.map((s) => [s.id, s]));
+        const planItems: CaptureItem[] = [
+          ...routeCandidates.map((screen): CaptureItem => ({
+            screenId: screen.id,
+            name: screenDisplayName(screen),
+            via: 'route',
+            state: 'pending',
+          })),
+          ...viewCandidates.map(({ screen }): CaptureItem => ({
+            screenId: screen.id,
+            name: screenDisplayName(screen),
+            via: 'view',
+            state: 'pending',
+          })),
+          ...skippedViews.flatMap((skippedView): CaptureItem[] => {
+            const screen = screenById.get(skippedView.screenId);
+            if (!screen) return [];
+            return [{
+              screenId: screen.id,
+              name: screenDisplayName(screen),
+              via: 'view',
+              state: 'skipped',
+              detail: skippedViewDetail(skippedView.reason),
+            }];
+          }),
+        ];
+        for (const item of planItems) itemStates.set(item.screenId, item.state);
+        sendProgress({ repoPath: root, kind: 'plan', items: planItems });
 
         const deps: CaptureRunDeps = {
           startServer: async () => {
@@ -374,17 +432,16 @@ export async function handleCartoCapturesRun(
 
         const routeResult = await injectedRunner(map, deps, {
           signal: controller.signal,
-          onProgress(done, _total) {
-            if (event?.sender && !event.sender.isDestroyed()) {
-              event.sender.send('carto-captures:progress', {
-                repoPath: root,
-                done,
-                total: totalToCapture,
-                phase: 'routes',
-              });
-            }
+          onScreen(screenId, state, detail) {
+            sendItem(screenId, state, detail);
           },
         });
+        // El servidor no arrancó: las direcciones que quedaron sin empezar no se capturan.
+        if (routeResult.error) {
+          for (const screen of routeCandidates) {
+            if (itemStates.get(screen.id) === 'pending') sendItem(screen.id, 'failed', routeResult.error);
+          }
+        }
 
         let totalCaptured = routeResult.captured;
         const skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] =
@@ -394,49 +451,55 @@ export async function handleCartoCapturesRun(
         // Vistas
         let viewError: string | undefined;
         if (viewCandidates.length > 0 && !controller.signal.aborted) {
-          if (event?.sender && !event.sender.isDestroyed()) {
-            event.sender.send('carto-captures:progress', {
-              repoPath: root,
-              done: totalCaptured,
-              total: totalToCapture,
-              phase: 'views',
-            });
-          }
+          const candidateById = new Map(viewCandidates.map((c) => [c.screen.id, c]));
+          const savedViews = new Set<string>();
+          // Cada foto se pasa a JPEG y se guarda en el momento en que llega, para que aparezca en
+          // su cuadro sin esperar al final.
+          const saveViewImage = (screenId: string, png: Buffer) => {
+            const candidate = candidateById.get(screenId);
+            if (!candidate || savedViews.has(screenId)) return;
+            const jpeg = nativeImage.createFromBuffer(png).resize({ width: 960 }).toJPEG(75);
+            upsertScreenCapture(
+              { repoPath: root, screenId, contentKey: candidate.contentKey, image: jpeg },
+              options,
+            );
+            savedViews.add(screenId);
+            totalCaptured++;
+          };
 
           const screensForRunner = viewCandidates.map((c) => ({ id: c.screen.id, name: c.screen.name }));
           const viewResult = await injectedViewRunner(root, recipes!, screensForRunner, {
             signal: controller.signal,
+            onEvent(viewEvent) {
+              if (!candidateById.has(viewEvent.screenId)) return;
+              if (viewEvent.image) saveViewImage(viewEvent.screenId, viewEvent.image);
+              sendItem(viewEvent.screenId, viewEvent.state, viewEvent.detail);
+            },
           });
 
           viewError = viewResult.error;
 
+          // Las fotos que no estaban escritas al avisar la pantalla se completan acá.
           for (const candidate of viewCandidates) {
             const png = viewResult.images.get(candidate.screen.id);
-            if (png) {
-              const jpeg = nativeImage.createFromBuffer(png).resize({ width: 960 }).toJPEG(75);
-              upsertScreenCapture(
-                { repoPath: root, screenId: candidate.screen.id, contentKey: candidate.contentKey, image: jpeg },
-                options,
-              );
-              totalCaptured++;
+            if (png && !savedViews.has(candidate.screen.id)) {
+              saveViewImage(candidate.screen.id, png);
+              sendItem(candidate.screen.id, 'done');
             }
           }
 
           for (const failItem of viewResult.failed) {
+            // Detenida por la persona: lo que no había fallado antes no es una falla de la receta
+            // (auditoría de carto-05e: con Detener, diez vistas figuraban como «fallaron»).
+            if (controller.signal.aborted && itemStates.get(failItem.screenId) !== 'failed') continue;
             skipped.push({
               screenId: failItem.screenId,
               reason: 'recipe-failed',
               detail: failItem.detail,
             });
-          }
-
-          if (event?.sender && !event.sender.isDestroyed()) {
-            event.sender.send('carto-captures:progress', {
-              repoPath: root,
-              done: totalToCapture,
-              total: totalToCapture,
-              phase: 'views',
-            });
+            if (itemStates.get(failItem.screenId) !== 'failed') {
+              sendItem(failItem.screenId, 'failed', failItem.detail);
+            }
           }
         }
 
@@ -459,6 +522,12 @@ export async function handleCartoCapturesRun(
       } catch (err) {
         return fail(err);
       } finally {
+        if (controller.signal.aborted) {
+          for (const [screenId, state] of itemStates) {
+            if (state === 'pending' || state === 'running') sendItem(screenId, 'stopped', STOPPED_DETAIL);
+          }
+        }
+        sendProgress({ repoPath: root, kind: 'finished' });
         activeServers.get(root)?.stop();
         activeServers.delete(root);
         activeRuns.delete(root);

@@ -21,7 +21,11 @@ export interface CaptureRunDeps {
 export async function runScreenCaptures(
   map: ScreenMap,
   deps: CaptureRunDeps,
-  options: { signal?: AbortSignal; onProgress?(done: number, total: number): void } = {},
+  options: {
+    signal?: AbortSignal;
+    /** Avisa cada dirección: `running` antes de capturarla, `done` o `failed` después (decisión 14). */
+    onScreen?(screenId: string, state: 'running' | 'done' | 'failed', detail?: string): void;
+  } = {},
 ): Promise<ScreenCaptureRunResult> {
   const skipped: { screenId: string; reason: ScreenCaptureSkipReason }[] = [];
   const stored = await deps.stored();
@@ -92,11 +96,13 @@ export async function runScreenCaptures(
       }
 
       const { screen, contentKey } = candidates[i];
+      options.onScreen?.(screen.id, 'running');
       try {
         const targetUrl = new URL(screen.locator, server.url).toString();
         const image = await deps.capture(targetUrl, allowedOrigin);
         await deps.save(screen.id, contentKey, image);
         captured++;
+        options.onScreen?.(screen.id, 'done');
       } catch (err) {
         if (options.signal?.aborted) {
           cancelled = true;
@@ -107,9 +113,8 @@ export async function runScreenCaptures(
           ? 'timeout'
           : 'load-failed';
         skipped.push({ screenId: screen.id, reason });
+        options.onScreen?.(screen.id, 'failed', msg);
       }
-
-      options.onProgress?.(i + 1, total);
     }
   } finally {
     if (server) {

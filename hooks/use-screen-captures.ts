@@ -5,14 +5,27 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ScreenCaptureRunResult, ScreenCaptureState, ScreenMap } from '@/types/screen-map';
+import type {
+  CaptureItem,
+  ScreenCaptureRunResult,
+  ScreenCaptureState,
+  ScreenMap,
+} from '@/types/screen-map';
+
+/** Como mucho una relectura de las capturas cada tanto, mientras llegan fotos (decisión 14). */
+const CAPTURE_REFRESH_MIN_MS = 2000;
+
+const EMPTY_ITEMS: CaptureItem[] = [];
 
 export function useScreenCaptures(
   repoPath: string | null,
   map: ScreenMap | null,
 ): {
   state: ScreenCaptureState | null;
-  progress: { done: number; total: number; phase?: 'routes' | 'views' } | null;
+  /** Las pantallas de la corrida en curso o de la última, con su estado. */
+  items: CaptureItem[];
+  /** Hay una corrida entre su plan y su fin. */
+  active: boolean;
   lastRun: ScreenCaptureRunResult | null;
   grant(): Promise<void>;
   revoke(): Promise<void>;
@@ -23,7 +36,9 @@ export function useScreenCaptures(
   // mostrar ni para decidir si corre solo.
   const [stateEntry, setStateEntry] = useState<{ repoPath: string; data: ScreenCaptureState } | null>(null);
   const state = stateEntry && stateEntry.repoPath === repoPath ? stateEntry.data : null;
-  const [progress, setProgress] = useState<{ done: number; total: number; phase?: 'routes' | 'views' } | null>(null);
+  // La lista también guarda de qué repo es; `finished` no la borra, así el resumen queda a la vista.
+  const [itemsEntry, setItemsEntry] = useState<{ repoPath: string; items: CaptureItem[]; active: boolean } | null>(null);
+  const currentItems = itemsEntry && itemsEntry.repoPath === repoPath ? itemsEntry : null;
   const [lastRun, setLastRun] = useState<ScreenCaptureRunResult | null>(null);
   const [fetchKey, setFetchKey] = useState<number>(0);
 
@@ -33,20 +48,51 @@ export function useScreenCaptures(
     setFetchKey((k) => k + 1);
   }, []);
 
-  // Escuchar progreso del IPC
+  // Escuchar el avance del IPC: plan, un item por cambio de estado y finished.
   useEffect(() => {
     if (!repoPath || typeof window === 'undefined' || !window.api?.cartoCaptures?.onProgress) {
       return;
     }
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastRefreshAt = 0;
+    // Una foto lista se ve en su cuadro al releer el estado; con muchas seguidas, se relee como
+    // mucho una vez cada CAPTURE_REFRESH_MIN_MS.
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      const wait = Math.max(0, CAPTURE_REFRESH_MIN_MS - (Date.now() - lastRefreshAt));
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        lastRefreshAt = Date.now();
+        refreshState();
+      }, wait);
+    };
+
     const unsubscribe = window.api.cartoCaptures.onProgress((payload) => {
-      if (payload.repoPath === repoPath) {
-        setProgress({ done: payload.done, total: payload.total, phase: payload.phase });
+      if (payload.repoPath !== repoPath) return;
+      if (payload.kind === 'plan') {
+        setItemsEntry({ repoPath, items: payload.items, active: true });
+      } else if (payload.kind === 'item') {
+        setItemsEntry((prev) => {
+          if (!prev || prev.repoPath !== repoPath) return prev;
+          return {
+            ...prev,
+            items: prev.items.map((item) =>
+              item.screenId === payload.screenId
+                ? { ...item, state: payload.state, detail: payload.detail ?? item.detail }
+                : item,
+            ),
+          };
+        });
+        if (payload.state === 'done') scheduleRefresh();
+      } else {
+        setItemsEntry((prev) => (prev && prev.repoPath === repoPath ? { ...prev, active: false } : prev));
       }
     });
     return () => {
       unsubscribe();
+      if (refreshTimer) clearTimeout(refreshTimer);
     };
-  }, [repoPath]);
+  }, [repoPath, refreshState]);
 
   // Cargar estado al cambiar repoPath, map?.headSha o fetchKey
   useEffect(() => {
@@ -101,7 +147,6 @@ export function useScreenCaptures(
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      setProgress(null);
       refreshState();
     }
   }, [repoPath, refreshState]);
@@ -147,7 +192,6 @@ export function useScreenCaptures(
     try {
       await api.cartoCaptures.cancel(repoPath);
     } finally {
-      setProgress(null);
       refreshState();
     }
   }, [repoPath, refreshState]);
@@ -180,7 +224,8 @@ export function useScreenCaptures(
 
   return {
     state,
-    progress,
+    items: currentItems?.items ?? EMPTY_ITEMS,
+    active: currentItems?.active ?? false,
     lastRun,
     grant,
     revoke,

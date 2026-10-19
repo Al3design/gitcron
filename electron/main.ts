@@ -55,6 +55,8 @@ import {
 } from './ipc/app-window';
 
 const isDev = !app.isPackaged;
+/** GitCron abierto por Cartografía para sacar fotos de sí mismo (decisión 14). */
+const captureMode = process.env.GITCRON_CAPTURE === '1';
 
 let mainWindow: BrowserWindow | null = null;
 const getMainWindow = () => mainWindow;
@@ -169,13 +171,17 @@ function createWindow() {
   const iconPath = fs.existsSync(icoPath) ? icoPath : pngPath;
   const iconExists = fs.existsSync(iconPath);
 
-  // Show splash while the renderer loads.
+  // Show splash while the renderer loads. En el modo de captura no hay pantalla de inicio:
+  // nada tiene que aparecer en el escritorio.
   const splashStartedAt = Date.now();
-  const splash = createSplash();
+  const splash = captureMode ? null : createSplash();
 
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    // En el modo de captura la ventana se abre lejos del escritorio, sin barra de tareas y sin
+    // tomar el foco. Se muestra igual (con `show: false` Chromium deja de pintar y no hay fotos).
+    ...(captureMode
+      ? { x: -32000, y: -32000, width: 1440, height: 900, skipTaskbar: true, focusable: false }
+      : { width: 1400, height: 900 }),
     frame: false,
     backgroundColor: '#020f1e',
     show: false,        // hidden until ready-to-show
@@ -188,6 +194,7 @@ function createWindow() {
       // from working correctly in ASAR-packaged builds (window.api stays undefined).
       // contextIsolation + nodeIntegration:false is the canonical Electron security model.
       webSecurity: true,
+      ...(captureMode ? { backgroundThrottling: false } : {}),
     },
   });
 
@@ -257,9 +264,14 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     const showMainWindow = () => {
       if (!mainWindow) return;
-      if (!splash.isDestroyed()) splash.destroy();
-      mainWindow.maximize();
-      mainWindow.show();
+      if (splash && !splash.isDestroyed()) splash.destroy();
+      if (captureMode) {
+        // Se sigue dibujando sin aparecer ni robar el foco.
+        mainWindow.showInactive();
+      } else {
+        mainWindow.maximize();
+        mainWindow.show();
+      }
       // Silent update check 3 s after the app is visible (not in dev).
       if (!isDev) {
         setTimeout(() => silentCheckForUpdates(), 3000);

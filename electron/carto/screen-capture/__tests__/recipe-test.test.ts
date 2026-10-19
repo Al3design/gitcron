@@ -122,5 +122,13 @@ describe('buildRecipeTest', () => {
 
     expect(logs.some((l) => l.includes('GITCRON_RECIPE_FAIL') && l.includes('view:screen-1') && l.includes('no está el botón'))).toBe(true);
     expect(shots).toEqual(['cap-2']);
+    // Los avisos en vivo de cada pantalla, en orden (decisión 14).
+    const marcas = logs.filter((l) => l.startsWith('GITCRON_RECIPE_')).map((l) => l.split(' ').slice(0, 2).join(' '));
+    expect(marcas).toEqual([
+      'GITCRON_RECIPE_START view:screen-1',
+      'GITCRON_RECIPE_FAIL view:screen-1',
+      'GITCRON_RECIPE_START view:screen-2',
+      'GITCRON_RECIPE_DONE view:screen-2',
+    ]);
   });
 });

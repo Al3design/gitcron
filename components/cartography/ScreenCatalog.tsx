@@ -15,6 +15,7 @@ import { useScreenCaptures } from '@/hooks/use-screen-captures';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { cn } from '@/lib/utils';
 import type { ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
+import { CaptureProgress } from './CaptureProgress';
 import { ScreenCard } from './ScreenCard';
 import { ScreenDetail } from './ScreenDetail';
 import styles from './ScreenCatalog.module.css';
@@ -151,7 +152,8 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   const { map, loading, error } = useScreenMap(repoPath, refreshKey);
   const {
     state: captureState,
-    progress: captureProgress,
+    items: captureItems,
+    active: captureActive,
     lastRun,
     grant,
     revoke,
@@ -306,6 +308,8 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   }
 
   const isNoUi = map.coverage.state === 'unsupported' && map.coverage.reason === 'no-ui';
+  const captureRunning = Boolean(captureState?.running || captureActive);
+  const hasCaptureItems = captureItems.length > 0;
 
   // El filtro también se aplica a la columna lateral cuando hay un cuadro abierto
   const otherScreens = filteredScreens.filter((s) => s.id !== selectedScreenId);
@@ -340,17 +344,13 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
           !(captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath) && (
             <div className={styles.captureBanner} data-testid="capture-banner">
               <div className={styles.captureBannerContent}>
-                {captureState.running || captureProgress ? (
-                  <span className={styles.captureBannerText} data-testid="capture-running-text">
-                    {captureProgress?.phase === 'views'
-                      ? t('cartography.screens.captures.runningViews')
-                      : captureProgress && captureProgress.total > 0
-                        ? t('cartography.screens.captures.running', {
-                            done: captureProgress.done,
-                            total: captureProgress.total,
-                          })
-                        : t('cartography.screens.captures.starting')}
-                  </span>
+                {captureRunning ? (
+                  // Con el plan a la vista, el avance lo cuenta CaptureProgress, más abajo.
+                  hasCaptureItems ? null : (
+                    <span className={styles.captureBannerText} data-testid="capture-running-text">
+                      {t('cartography.screens.captures.starting')}
+                    </span>
+                  )
                 ) : captureState.consent.status === 'needs-consent' ? (
                   <span className={styles.captureBannerText}>
                     {t('cartography.screens.captures.needsConsent', {
@@ -365,13 +365,16 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   </span>
                 )}
 
+                {/* En el mismo lugar durante la corrida y después: el detalle no se pliega solo */}
+                {hasCaptureItems && <CaptureProgress items={captureItems} running={captureRunning} />}
+
                 {lastRun?.error && (
                   <span className={styles.captureBannerError} data-testid="capture-error-text">
                     {lastRun.error}
                   </span>
                 )}
 
-                {(() => {
+                {!hasCaptureItems && (() => {
                   const skippedViews = lastRun?.skipped?.filter(
                     (s) => s.reason === 'no-recipe' || s.reason === 'runner-missing' || s.reason === 'recipe-failed',
                   ) ?? [];
@@ -400,7 +403,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
               </div>
 
               <div className={styles.captureBannerActions}>
-                {captureState.running || captureProgress ? (
+                {captureRunning ? (
                   <button
                     type="button"
                     onClick={() => void cancel()}
