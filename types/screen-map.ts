@@ -21,6 +21,23 @@ export type ScreenLinkProvenance = 'static' | 'inferred' | 'manual' | 'unknown';
 /** Para qué sirve el archivo dentro de la pantalla, en categorías que se entienden sin programar. */
 export type ScreenFileRole = 'screen' | 'component' | 'style' | 'data' | 'logic' | 'text' | 'other';
 
+export type ScreenTag = 'graphics' | 'data' | 'ai' | 'git' | 'settings' | 'content' | 'accounts' | 'payments';
+
+export interface ScreenTagEvidence {
+  tag: ScreenTag;
+  /** Archivos de la pantalla que hicieron saltar la regla (hasta 5). */
+  files: string[];
+  /** Cuántos de esos son propios (no compartidos). */
+  ownCount: number;
+}
+
+export interface ScreenStats {
+  /** Archivos por rol, para la barra de composición. */
+  byRole: Partial<Record<ScreenFileRole, number>>;
+  /** Fecha (ISO) del archivo de la pantalla modificado más recientemente; null si no se pudo leer. */
+  lastChangedAt: string | null;
+}
+
 export interface ScreenFileLink {
   /** Ruta relativa al repositorio, con `/`. */
   path: string;
@@ -61,6 +78,9 @@ export interface ScreenEntry {
   declaredIn: string;
   files: ScreenFileLink[];
   description: ScreenDescription | null;
+  tags: ScreenTagEvidence[];
+  primaryTag: ScreenTag | null;
+  stats: ScreenStats;
 }
 
 /**

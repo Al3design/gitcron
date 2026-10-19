@@ -87,6 +87,9 @@ describe('carto-captures IPC handlers', () => {
           declaredIn: 'app/dashboard/page.tsx',
           description: null,
           files: [],
+          tags: [],
+          primaryTag: null,
+          stats: { byRole: {}, lastChangedAt: null },
         },
       ],
     };

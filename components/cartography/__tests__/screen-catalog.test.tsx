@@ -25,6 +25,9 @@ describe('ScreenCatalog', () => {
         locator: '/settings',
         declaredIn: 'app/settings/page.tsx',
         description: null,
+        tags: [{ tag: 'settings', files: ['app/settings/page.tsx'], ownCount: 1 }],
+        primaryTag: 'settings',
+        stats: { byRole: { screen: 1, component: 1 }, lastChangedAt: '2026-10-16T10:00:00Z' },
         files: [
           { path: 'app/settings/page.tsx', role: 'screen', provenance: 'static', shared: false },
           { path: 'components/ui/Button.tsx', role: 'component', provenance: 'static', shared: true },
@@ -37,6 +40,9 @@ describe('ScreenCatalog', () => {
         locator: 'activeTab=graph',
         declaredIn: 'components/RepoMainView.tsx',
         description: null,
+        tags: [{ tag: 'graphics', files: ['components/CommitGraph.tsx'], ownCount: 1 }],
+        primaryTag: 'graphics',
+        stats: { byRole: { screen: 1, component: 1 }, lastChangedAt: '2026-10-16T11:00:00Z' },
         files: [
           { path: 'components/CommitGraph.tsx', role: 'screen', provenance: 'static', shared: false },
           { path: 'components/ui/Button.tsx', role: 'component', provenance: 'static', shared: true },
@@ -56,6 +62,9 @@ describe('ScreenCatalog', () => {
           model: 'gemini-3.8-flash',
           createdAt: '2026-10-16T12:00:00Z',
         },
+        tags: [{ tag: 'data', files: ['lib/sdd-store.ts'], ownCount: 1 }],
+        primaryTag: 'data',
+        stats: { byRole: { screen: 1, logic: 1, style: 1 }, lastChangedAt: '2026-10-16T12:00:00Z' },
         files: [
           { path: 'components/sdd/Board.tsx', role: 'screen', provenance: 'static', shared: false },
           { path: 'lib/sdd-store.ts', role: 'logic', provenance: 'static', shared: false },
@@ -66,6 +75,7 @@ describe('ScreenCatalog', () => {
   };
 
   beforeEach(() => {
+    localStorage.clear();
     useGitStore.setState({ language: 'es' });
     useAssistDockStore.setState({ open: false, activeTabId: 'chat', pendingPrompt: null });
     window.api = {
@@ -94,6 +104,7 @@ describe('ScreenCatalog', () => {
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     window.api = originalApi;
     vi.restoreAllMocks();
   });
@@ -365,6 +376,94 @@ describe('ScreenCatalog', () => {
     const badge = within(card).getByTestId('stale-badge');
     expect(badge).toBeTruthy();
     expect(badge.textContent).toBe('Desactualizada');
+  });
+
+  it('el filtro por tema deja solo esas pantallas y «Todas» las vuelve', async () => {
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+      expect(screen.getByTestId('screen-card-view:graph')).toBeTruthy();
+      expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
+    });
+
+    // Filtrar por 'graphics'
+    const graphicsFilter = screen.getByTestId('screen-tag-filter-graphics');
+    fireEvent.click(graphicsFilter);
+
+    // Solo se ve Graph
+    expect(screen.getByTestId('screen-card-view:graph')).toBeTruthy();
+    expect(screen.queryByTestId('screen-card-route:/settings')).toBeNull();
+    expect(screen.queryByTestId('screen-card-view:sdd')).toBeNull();
+
+    // Tocar 'Todas' vuelve a mostrar todas
+    const allFilter = screen.getByTestId('screen-tag-filter-all');
+    fireEvent.click(allFilter);
+
+    expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    expect(screen.getByTestId('screen-card-view:graph')).toBeTruthy();
+    expect(screen.getByTestId('screen-card-view:sdd')).toBeTruthy();
+  });
+
+  it('«Por tema» crea las secciones', async () => {
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    // Activar agrupado por tema
+    const groupByTagBtn = screen.getByTestId('screen-group-tag');
+    fireEvent.click(groupByTagBtn);
+
+    // Se crean las secciones correspondientes a los temas presentes
+    expect(screen.getByTestId('screen-group-graphics')).toBeTruthy();
+    expect(screen.getByTestId('screen-group-settings')).toBeTruthy();
+    expect(screen.getByTestId('screen-group-data')).toBeTruthy();
+
+    // Volver a sin agrupar
+    const groupNoneBtn = screen.getByTestId('screen-group-none');
+    fireEvent.click(groupNoneBtn);
+
+    expect(screen.queryByTestId('screen-group-graphics')).toBeNull();
+    expect(screen.getByTestId('screen-catalog-grid')).toBeTruthy();
+  });
+
+  it('en Mínimo no hay barra ni estadísticas', async () => {
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    // En Mediano sí hay estadísticas y barra
+    expect(screen.getAllByTestId('screen-file-counts').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('screen-composition-bar').length).toBeGreaterThan(0);
+
+    // Cambiar a Mínimo
+    fireEvent.click(screen.getByTestId('card-size-minimal'));
+
+    // En Mínimo no hay barra ni estadísticas
+    expect(screen.queryByTestId('screen-file-counts')).toBeNull();
+    expect(screen.queryByTestId('screen-composition-bar')).toBeNull();
+  });
+
+  it('el chip del tema principal se ve sobre la captura', async () => {
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+
+    const settingsCard = screen.getByTestId('screen-card-route:/settings');
+    const primaryTagEl = within(settingsCard).getByTestId('screen-primary-tag');
+    expect(primaryTagEl).toBeTruthy();
+    expect(primaryTagEl.textContent).toContain('Configuración');
+
+    const graphCard = screen.getByTestId('screen-card-view:graph');
+    const graphPrimaryTag = within(graphCard).getByTestId('screen-primary-tag');
+    expect(graphPrimaryTag).toBeTruthy();
+    expect(graphPrimaryTag.textContent).toContain('Gráficos');
   });
 });
 

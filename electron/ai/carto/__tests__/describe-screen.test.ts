@@ -23,6 +23,9 @@ describe('describeScreen', () => {
           { path: 'components/Footer.tsx', role: 'component', provenance: 'static', shared: false },
           { path: 'components/Extra.tsx', role: 'component', provenance: 'static', shared: false },
         ],
+        tags: [],
+        primaryTag: null,
+        stats: { byRole: {}, lastChangedAt: null },
       },
     ],
   };

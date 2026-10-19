@@ -76,6 +76,9 @@ function readAiColors(): string[] {
   return list;
 }
 
+/** Separación entre puntos del lienzo, en píxeles del dibujo (no es un espacio de CSS). */
+const DEFAULT_PIXEL_GAP = 5;
+
 interface Settings {
   colors: string[];
   gap: number;
@@ -99,7 +102,7 @@ export function PixelCard({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const settingsRef = useRef<Settings>({
     colors: [],
-    gap: 5,
+    gap: DEFAULT_PIXEL_GAP,
     speed: 35,
     pixelSize: 2,
     revealDuration: 600,
@@ -155,7 +158,7 @@ export function PixelCard({
       const palette = colors && colors.length > 0 ? colors : readAiColors();
       settingsRef.current = {
         colors: palette,
-        gap: Math.max(2, Number(gap ?? 5) || 5),
+        gap: Math.max(2, Number(gap ?? DEFAULT_PIXEL_GAP) || DEFAULT_PIXEL_GAP),
         speed: clamp(Number(speed ?? 35) || 0, 0, 100),
         pixelSize: 2,
         revealDuration: 600,

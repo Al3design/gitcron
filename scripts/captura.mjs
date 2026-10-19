@@ -93,7 +93,13 @@ if (capturasDir && existsSync(capturasDir)) {
   }
 }
 const screenTxt = intento && existsSync(path.join(intento, 'failure', 'screen.txt')) ? path.join(intento, 'failure', 'screen.txt') : null;
-const consola = r.salida.split(/\r?\n/).filter((l) => /^(stdout|RESUMEN|DATO)\b|^\s*(✓|×|FAIL)/.test(l.trim()) || /RESUMEN|DATO/.test(l)).slice(0, 40);
+const lineas = r.salida.split(/\r?\n/);
+const consola = lineas.filter((l) => /^(stdout|RESUMEN|DATO)\b|^\s*(✓|×|FAIL)/.test(l.trim()) || /RESUMEN|DATO/.test(l)).slice(0, 40);
+// Si falló, el motivo: las líneas de error del CLI y de la compilación de las pantallas. Medido en
+// carto-05c: una llave de más en un CSS rompía la compilación y el manifiesto no decía nada.
+const motivo = paso
+  ? []
+  : [...new Set(lineas.filter((l) => /error|Error|⨯|failed|Timeout|timed out/i.test(l) && !/PackFileCacheStrategy|serializ/i.test(l)).map((l) => l.trim()))].slice(0, 15);
 
 const manifiesto = {
   tanda,
@@ -106,6 +112,7 @@ const manifiesto = {
   capturas: copiadas,
   screenTxt,
   consola,
+  motivo,
 };
 writeFileSync(path.join(DESTINO, 'manifiesto.json'), `${JSON.stringify(manifiesto, null, 2)}\n`, 'utf8');
 
@@ -114,6 +121,7 @@ console.warn([
   `CAPTURA ${tanda}: ${paso ? 'OK' : 'FALLÓ'} (${segundos} s) · ${copiadas.length} imagen(es) en ${DESTINO}`,
   ...copiadas.map((c) => `  ${c}`),
   screenTxt ? `  pantalla al fallar: ${screenTxt}` : '',
+  ...motivo.map((m) => `  !! ${m}`),
   `Manifiesto: ${DESTINO}/manifiesto.json (huella ${huellaAntes})`,
   paso ? '' : 'No se repite: anotalo en «Dudas» y entregá (AGENTS.md §4).',
 ].filter(Boolean).join('\n'));

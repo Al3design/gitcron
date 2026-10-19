@@ -10,6 +10,7 @@
 import type {
   ScreenEntry,
   ScreenFileLink,
+  ScreenFileRole,
   ScreenMap,
   ScreenMapCoverage,
 } from '../../../types/screen-map';
@@ -19,10 +20,12 @@ import {
 } from './detect-next';
 import { detectStateViews } from './detect-state-views';
 import { roleOf } from './file-roles';
+import { screenTags } from './screen-tags';
 
 export interface ScreenMapDeps {
   listFiles(): Promise<{ paths: string[]; truncated: boolean }>;
   readFile(relPath: string): Promise<string | null>;
+  statFile(relPath: string): Promise<{ mtimeMs: number } | null>;
   fileDependencies(relPath: string): string[] | null; // null = índice no listo
   headSha(): Promise<string | null>;
   now(): string;
@@ -268,6 +271,9 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
       declaredIn: ds.declaredIn,
       files: Array.from(fileLinksMap.values()),
       description: null,
+      tags: [],
+      primaryTag: null,
+      stats: { byRole: {}, lastChangedAt: null },
     });
   }
 
@@ -285,7 +291,53 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
     }
   }
 
-  // 5. Determinar la cobertura
+  // 5. Calcular temas y estadísticas para cada pantalla (una sola lectura por archivo)
+  const statCache = new Map<string, { mtimeMs: number } | null>();
+
+  // Asegurar que el contenido de todos los archivos de las pantallas esté en caché
+  for (const screen of screens) {
+    for (const link of screen.files) {
+      if (link.provenance !== 'unknown' && !fileContentCache.has(link.path)) {
+        const text = await deps.readFile(link.path);
+        fileContentCache.set(link.path, text);
+      }
+    }
+  }
+
+  const contentOf = (p: string) => fileContentCache.get(p) ?? null;
+
+  for (const screen of screens) {
+    const { tags, primaryTag } = screenTags(screen.files, contentOf, screen.name);
+    screen.tags = tags;
+    screen.primaryTag = primaryTag;
+
+    const byRole: Partial<Record<ScreenFileRole, number>> = {};
+    let maxMtime: number | null = null;
+
+    for (const link of screen.files) {
+      byRole[link.role] = (byRole[link.role] ?? 0) + 1;
+
+      if (link.provenance !== 'unknown') {
+        let st = statCache.get(link.path);
+        if (st === undefined) {
+          st = await deps.statFile(link.path);
+          statCache.set(link.path, st);
+        }
+        if (st && typeof st.mtimeMs === 'number') {
+          if (maxMtime === null || st.mtimeMs > maxMtime) {
+            maxMtime = st.mtimeMs;
+          }
+        }
+      }
+    }
+
+    screen.stats = {
+      byRole,
+      lastChangedAt: maxMtime !== null ? new Date(maxMtime).toISOString() : null,
+    };
+  }
+
+  // 6. Determinar la cobertura
   const coverageErrors: string[] = [];
   if (indexNotReady) {
     coverageErrors.push('El índice de Cartografía todavía no está listo: faltan los archivos que usa cada pantalla.');

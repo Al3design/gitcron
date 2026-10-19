@@ -78,6 +78,16 @@ export function createScreenMapDeps(root: string): ScreenMapDeps {
         return null;
       }
     },
+    async statFile(relPath: string) {
+      try {
+        const absPath = path.resolve(root, relPath);
+        if (!isContainedWithin(root, absPath)) return null;
+        const st = await fs.stat(absPath);
+        return { mtimeMs: st.mtimeMs };
+      } catch {
+        return null;
+      }
+    },
     fileDependencies(relPath: string) {
       return graphFileDependencies(root, relPath);
     },

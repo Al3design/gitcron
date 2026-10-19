@@ -18,6 +18,9 @@ describe('runScreenCaptures', () => {
         declaredIn: 'components/RepoMainView.tsx',
         description: null,
         files: [],
+        tags: [],
+        primaryTag: null,
+        stats: { byRole: {}, lastChangedAt: null },
       },
       {
         id: 'route:/users/[id]',
@@ -27,6 +30,9 @@ describe('runScreenCaptures', () => {
         declaredIn: 'app/users/[id]/page.tsx',
         description: null,
         files: [],
+        tags: [],
+        primaryTag: null,
+        stats: { byRole: {}, lastChangedAt: null },
       },
       {
         id: 'route:/dashboard',
@@ -36,6 +42,9 @@ describe('runScreenCaptures', () => {
         declaredIn: 'app/dashboard/page.tsx',
         description: null,
         files: [],
+        tags: [],
+        primaryTag: null,
+        stats: { byRole: {}, lastChangedAt: null },
       },
       {
         id: 'route:/settings',
@@ -45,6 +54,9 @@ describe('runScreenCaptures', () => {
         declaredIn: 'app/settings/page.tsx',
         description: null,
         files: [],
+        tags: [],
+        primaryTag: null,
+        stats: { byRole: {}, lastChangedAt: null },
       },
     ],
   };

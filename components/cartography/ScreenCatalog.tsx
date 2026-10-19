@@ -2,11 +2,10 @@
 
 // components/cartography/ScreenCatalog.tsx
 //
-// Catálogo de pantallas del repositorio (decisión 9, tareas 1.4, 2.2).
-// En modo grilla muestra cuadros compactos. Al tocar uno, se expande a dos columnas:
-// a la izquierda el detalle completo (ScreenDetail) y a la derecha una columna angosta
-// con los demás cuadros en formato mínimo. Escape y la X vuelven a la grilla.
-// El ícono de IA publica la pantalla en el chat general y abre el panel de asistencia.
+// Catálogo de pantallas del repositorio (decisiones 9 y 12, tareas 1.4, 2.2, 2.9).
+// En modo grilla muestra cuadros modernos con captura borde a borde, temas y composición.
+// Incluye filtros por tema presente y agrupación por tema («Sin agrupar · Por tema»).
+// Al tocar uno se expande a dos columnas (detalle a la izquierda y columna angosta a la derecha).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
@@ -14,13 +13,27 @@ import { useT } from '@/hooks/use-translation';
 import { useScreenMap } from '@/hooks/use-screen-map';
 import { useScreenCaptures } from '@/hooks/use-screen-captures';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
-import type { ScreenEntry, ScreenMapCoverage } from '@/types/screen-map';
+import { cn } from '@/lib/utils';
+import type { ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
 import { ScreenCard } from './ScreenCard';
 import { ScreenDetail } from './ScreenDetail';
 import styles from './ScreenCatalog.module.css';
 
 export type CartoCardSize = 'large' | 'medium' | 'small' | 'minimal';
 const CARD_SIZE_STORAGE_KEY = 'gitcron:cartoCardSize';
+const TAG_FILTER_STORAGE_KEY = 'gitcron:cartoTagFilter';
+const GROUP_BY_STORAGE_KEY = 'gitcron:cartoGroupBy';
+
+const ALL_TAGS: ScreenTag[] = [
+  'graphics',
+  'data',
+  'ai',
+  'git',
+  'settings',
+  'content',
+  'accounts',
+  'payments',
+];
 
 function getInitialCardSize(): CartoCardSize {
   try {
@@ -39,6 +52,50 @@ function saveCardSize(size: CartoCardSize): void {
     localStorage.setItem(CARD_SIZE_STORAGE_KEY, size);
   } catch (err) {
     console.warn('No se pudo guardar gitcron:cartoCardSize en localStorage', err);
+  }
+}
+
+function getInitialTagFilter(): ScreenTag | null {
+  try {
+    const saved = localStorage.getItem(TAG_FILTER_STORAGE_KEY);
+    if (saved && (ALL_TAGS as string[]).includes(saved)) {
+      return saved as ScreenTag;
+    }
+  } catch (err) {
+    console.warn('No se pudo leer gitcron:cartoTagFilter de localStorage', err);
+  }
+  return null;
+}
+
+function saveTagFilter(tag: ScreenTag | null): void {
+  try {
+    if (tag) {
+      localStorage.setItem(TAG_FILTER_STORAGE_KEY, tag);
+    } else {
+      localStorage.removeItem(TAG_FILTER_STORAGE_KEY);
+    }
+  } catch (err) {
+    console.warn('No se pudo guardar gitcron:cartoTagFilter en localStorage', err);
+  }
+}
+
+function getInitialGroupBy(): 'none' | 'tag' {
+  try {
+    const saved = localStorage.getItem(GROUP_BY_STORAGE_KEY);
+    if (saved === 'tag' || saved === 'none') {
+      return saved;
+    }
+  } catch (err) {
+    console.warn('No se pudo leer gitcron:cartoGroupBy de localStorage', err);
+  }
+  return 'none';
+}
+
+function saveGroupBy(groupBy: 'none' | 'tag'): void {
+  try {
+    localStorage.setItem(GROUP_BY_STORAGE_KEY, groupBy);
+  } catch (err) {
+    console.warn('No se pudo guardar gitcron:cartoGroupBy en localStorage', err);
   }
 }
 
@@ -105,10 +162,17 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
   const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
   const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
+  const [tagFilter, setTagFilter] = useState<ScreenTag | null>(getInitialTagFilter);
+  const [groupBy, setGroupBy] = useState<'none' | 'tag'>(getInitialGroupBy);
 
   const handleSizeChange = (newSize: CartoCardSize) => {
     setCardSize(newSize);
     saveCardSize(newSize);
+  };
+
+  const handleGroupByChange = (newGroupBy: 'none' | 'tag') => {
+    setGroupBy(newGroupBy);
+    saveGroupBy(newGroupBy);
   };
 
   const coverageNotice = useMemo(() => {
@@ -121,13 +185,50 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     return sortScreens(map.screens);
   }, [map]);
 
+  // Conteo de pantallas por tema presente (en base a todas las pantallas del mapa)
+  const tagCounts = useMemo(() => {
+    const counts: Partial<Record<ScreenTag, number>> = {};
+    for (const tag of ALL_TAGS) {
+      const count = sortedScreens.filter(
+        (s) => s.primaryTag === tag || s.tags?.some((te) => te.tag === tag),
+      ).length;
+      if (count > 0) {
+        counts[tag] = count;
+      }
+    }
+    return counts;
+  }, [sortedScreens]);
+
+  const presentTags = useMemo(() => {
+    return ALL_TAGS.filter((tag) => (tagCounts[tag] ?? 0) > 0);
+  }, [tagCounts]);
+
+  // Si el tema guardado ya no está presente, se muestra «Todas»
+  const effectiveTagFilter: ScreenTag | null =
+    tagFilter && presentTags.includes(tagFilter) ? tagFilter : null;
+
+  const handleTagFilterClick = (clickedTag: ScreenTag | null) => {
+    if (clickedTag === null || clickedTag === effectiveTagFilter) {
+      setTagFilter(null);
+      saveTagFilter(null);
+    } else {
+      setTagFilter(clickedTag);
+      saveTagFilter(clickedTag);
+    }
+  };
+
+  // Pantallas filtradas según el tema elegido
+  const filteredScreens = useMemo(() => {
+    if (!effectiveTagFilter) return sortedScreens;
+    return sortedScreens.filter(
+      (s) => s.primaryTag === effectiveTagFilter || s.tags?.some((te) => te.tag === effectiveTagFilter),
+    );
+  }, [sortedScreens, effectiveTagFilter]);
+
   const selectedScreen = useMemo(() => {
     if (!selectedScreenId) return null;
     return sortedScreens.find((s) => s.id === selectedScreenId) ?? null;
   }, [selectedScreenId, sortedScreens]);
-
-  // Si la pantalla elegida ya no está en el mapa, `selectedScreen` queda en null y la vista vuelve
-  // a la grilla sola (sin un efecto que cambie el estado de golpe).
 
   // Notificar al contenedor sobre la pantalla seleccionada
   useEffect(() => {
@@ -161,6 +262,25 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     [onSelectScreen, t],
   );
 
+  // Secciones por tema principal cuando groupBy === 'tag'
+  const tagSections = useMemo(() => {
+    if (groupBy !== 'tag') return [];
+    const sections: { key: string; label: string; screens: ScreenEntry[] }[] = [];
+    const allSectionKeys: (ScreenTag | 'general')[] = [...ALL_TAGS, 'general'];
+
+    for (const key of allSectionKeys) {
+      const screensInGroup = filteredScreens.filter((s) => (s.primaryTag ?? 'general') === key);
+      if (screensInGroup.length > 0) {
+        sections.push({
+          key,
+          label: key === 'general' ? t('cartography.screens.tags.general') : t(`cartography.screens.tags.${key}`),
+          screens: screensInGroup,
+        });
+      }
+    }
+    return sections;
+  }, [groupBy, filteredScreens, t]);
+
   if (loading && !map) {
     return (
       <div className={styles.container}>
@@ -187,155 +307,232 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
   const isNoUi = map.coverage.state === 'unsupported' && map.coverage.reason === 'no-ui';
 
-  const otherScreens = sortedScreens.filter((s) => s.id !== selectedScreenId);
+  // El filtro también se aplica a la columna lateral cuando hay un cuadro abierto
+  const otherScreens = filteredScreens.filter((s) => s.id !== selectedScreenId);
 
-  const gridClass = cardSize === 'large'
-    ? styles.grid_large
-    : cardSize === 'small'
-      ? styles.grid_small
-      : cardSize === 'minimal'
-        ? styles.grid_minimal
-        : styles.grid_medium;
+  const gridClass =
+    cardSize === 'large'
+      ? styles.grid_large
+      : cardSize === 'small'
+        ? styles.grid_small
+        : cardSize === 'minimal'
+          ? styles.grid_minimal
+          : styles.grid_medium;
 
   return (
     <div className={styles.container} data-testid="screen-catalog">
-      {/* Aviso de cobertura y control de tamaño */}
-      {(!selectedScreen || coverageNotice) && (
-        <div className={styles.catalogHeader}>
-          {coverageNotice && (
-            <div
-              className={styles.coverageBanner}
-              role="status"
-              data-testid="screen-coverage-banner"
-            >
-              {coverageNotice}
+      {/* Cabecera con avisos, franja de captura, filtros por tema y controles */}
+      <div className={styles.catalogHeader}>
+        {coverageNotice && (
+          <div
+            className={styles.coverageBanner}
+            role="status"
+            data-testid="screen-coverage-banner"
+          >
+            {coverageNotice}
+          </div>
+        )}
+
+        {/* Franja de capturas: solo se ve en la grilla y cuando el stack está soportado */}
+        {!selectedScreen &&
+          captureState &&
+          captureState.consent.status !== 'unsupported' &&
+          !(captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath) && (
+            <div className={styles.captureBanner} data-testid="capture-banner">
+              <div className={styles.captureBannerContent}>
+                {captureState.running || captureProgress ? (
+                  <span className={styles.captureBannerText} data-testid="capture-running-text">
+                    {captureProgress && captureProgress.total > 0
+                      ? t('cartography.screens.captures.running', {
+                          done: captureProgress.done,
+                          total: captureProgress.total,
+                        })
+                      : t('cartography.screens.captures.starting')}
+                  </span>
+                ) : captureState.consent.status === 'needs-consent' ? (
+                  <span className={styles.captureBannerText}>
+                    {t('cartography.screens.captures.needsConsent', {
+                      command: captureState.consent.command,
+                    })}
+                  </span>
+                ) : (
+                  <span className={styles.captureBannerText}>
+                    {t('cartography.screens.captures.granted', {
+                      command: captureState.consent.command,
+                    })}
+                  </span>
+                )}
+
+                {lastRun?.error && (
+                  <span className={styles.captureBannerError} data-testid="capture-error-text">
+                    {lastRun.error}
+                  </span>
+                )}
+
+                {lastRun?.skipped?.some((s) => s.reason === 'view') && (
+                  <span className={styles.captureBannerViewsLater}>
+                    {t('cartography.screens.captures.viewsLater')}
+                  </span>
+                )}
+              </div>
+
+              <div className={styles.captureBannerActions}>
+                {captureState.running || captureProgress ? (
+                  <button
+                    type="button"
+                    onClick={() => void cancel()}
+                    className={styles.captureActionBtn}
+                    data-testid="capture-stop-button"
+                  >
+                    {t('cartography.screens.captures.stop')}
+                  </button>
+                ) : captureState.consent.status === 'needs-consent' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void grant().then(() => run());
+                      }}
+                      className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
+                      data-testid="capture-allow-button"
+                    >
+                      {t('cartography.screens.captures.allow')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDismissedConsentRepo(repoPath)}
+                      className={styles.captureActionBtn}
+                      data-testid="capture-not-now-button"
+                    >
+                      {t('cartography.screens.captures.notNow')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void run()}
+                      className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
+                      data-testid="capture-refresh-button"
+                    >
+                      {t('cartography.screens.captures.refresh')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void revoke()}
+                      className={styles.captureActionBtn}
+                      data-testid="capture-revoke-button"
+                    >
+                      {t('cartography.screens.captures.revoke')}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Franja de capturas: solo se ve en la grilla y cuando el stack está soportado */}
-          {!selectedScreen &&
-            captureState &&
-            captureState.consent.status !== 'unsupported' &&
-            !(captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath) && (
-              <div className={styles.captureBanner} data-testid="capture-banner">
-                <div className={styles.captureBannerContent}>
-                  {captureState.running || captureProgress ? (
-                    <span className={styles.captureBannerText} data-testid="capture-running-text">
-                      {captureProgress && captureProgress.total > 0
-                        ? t('cartography.screens.captures.running', {
-                            done: captureProgress.done,
-                            total: captureProgress.total,
-                          })
-                        : t('cartography.screens.captures.starting')}
-                    </span>
-                  ) : captureState.consent.status === 'needs-consent' ? (
-                    <span className={styles.captureBannerText}>
-                      {t('cartography.screens.captures.needsConsent', {
-                        command: captureState.consent.command,
-                      })}
-                    </span>
-                  ) : (
-                    <span className={styles.captureBannerText}>
-                      {t('cartography.screens.captures.granted', {
-                        command: captureState.consent.command,
-                      })}
-                    </span>
-                  )}
+        {/* Fila de filtros por tema presente y controles de agrupado y tamaño */}
+        {!isNoUi && sortedScreens.length > 0 && (
+          <>
+            <div className={styles.filterRow} role="group" aria-label="Filtro por tema">
+              <button
+                type="button"
+                onClick={() => handleTagFilterClick(null)}
+                data-testid="screen-tag-filter-all"
+                className={cn(
+                  styles.filterChip,
+                  effectiveTagFilter === null && styles.filterChipActive,
+                )}
+              >
+                <span>{t('cartography.screens.filterAll')}</span>
+                <span>{sortedScreens.length}</span>
+              </button>
 
-                  {lastRun?.error && (
-                    <span className={styles.captureBannerError} data-testid="capture-error-text">
-                      {lastRun.error}
-                    </span>
-                  )}
+              {presentTags.map((tag) => {
+                const count = tagCounts[tag] ?? 0;
+                const isActive = effectiveTagFilter === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleTagFilterClick(tag)}
+                    data-testid={`screen-tag-filter-${tag}`}
+                    className={cn(styles.filterChip, isActive && styles.filterChipActive)}
+                  >
+                    <span className={cn(styles.tagDot, styles[`tag_${tag}`])} />
+                    <span>{t(`cartography.screens.tags.${tag}`)}</span>
+                    <span>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-                  {lastRun?.skipped?.some((s) => s.reason === 'view') && (
-                    <span className={styles.captureBannerViewsLater}>
-                      {t('cartography.screens.captures.viewsLater')}
-                    </span>
-                  )}
+            {!selectedScreen && (
+              <div className={styles.headerControls}>
+                {/* Control segmentado Sin agrupar · Por tema */}
+                <div
+                  className={styles.segmentedControl}
+                  role="group"
+                  aria-label="Agrupado"
+                  data-testid="screen-group-control"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleGroupByChange('none')}
+                    aria-pressed={groupBy === 'none'}
+                    data-testid="screen-group-none"
+                    className={cn(
+                      styles.segmentedBtn,
+                      groupBy === 'none' && styles.segmentedBtnActive,
+                    )}
+                  >
+                    <span>{t('cartography.screens.groupNone')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGroupByChange('tag')}
+                    aria-pressed={groupBy === 'tag'}
+                    data-testid="screen-group-tag"
+                    className={cn(
+                      styles.segmentedBtn,
+                      groupBy === 'tag' && styles.segmentedBtnActive,
+                    )}
+                  >
+                    <span>{t('cartography.screens.groupByTag')}</span>
+                  </button>
                 </div>
 
-                <div className={styles.captureBannerActions}>
-                  {captureState.running || captureProgress ? (
+                {/* Control segmentado de tamaño */}
+                <div
+                  className={styles.segmentedControl}
+                  role="group"
+                  aria-label={t('cartography.screens.size')}
+                  data-testid="card-size-control"
+                >
+                  {SIZES.map(({ key, labelKey }) => (
                     <button
+                      key={key}
                       type="button"
-                      onClick={() => void cancel()}
-                      className={styles.captureActionBtn}
-                      data-testid="capture-stop-button"
+                      onClick={() => handleSizeChange(key)}
+                      aria-pressed={cardSize === key}
+                      title={t(labelKey)}
+                      aria-label={t(labelKey)}
+                      data-testid={`card-size-${key}`}
+                      className={cn(
+                        styles.segmentedBtn,
+                        cardSize === key && styles.segmentedBtnActive,
+                      )}
                     >
-                      {t('cartography.screens.captures.stop')}
+                      <LayoutGrid size={13} aria-hidden="true" />
+                      <span>{t(labelKey)}</span>
                     </button>
-                  ) : captureState.consent.status === 'needs-consent' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void grant().then(() => run());
-                        }}
-                        className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
-                        data-testid="capture-allow-button"
-                      >
-                        {t('cartography.screens.captures.allow')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDismissedConsentRepo(repoPath)}
-                        className={styles.captureActionBtn}
-                        data-testid="capture-not-now-button"
-                      >
-                        {t('cartography.screens.captures.notNow')}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void run()}
-                        className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
-                        data-testid="capture-refresh-button"
-                      >
-                        {t('cartography.screens.captures.refresh')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void revoke()}
-                        className={styles.captureActionBtn}
-                        data-testid="capture-revoke-button"
-                      >
-                        {t('cartography.screens.captures.revoke')}
-                      </button>
-                    </>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
-
-          {!selectedScreen && !isNoUi && sortedScreens.length > 0 && (
-            <div
-              className={styles.segmentedControl}
-              role="group"
-              aria-label={t('cartography.screens.size')}
-              data-testid="card-size-control"
-            >
-              {SIZES.map(({ key, labelKey }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => handleSizeChange(key)}
-                  aria-pressed={cardSize === key}
-                  title={t(labelKey)}
-                  aria-label={t(labelKey)}
-                  data-testid={`card-size-${key}`}
-                  className={`${styles.segmentedBtn} ${cardSize === key ? styles.segmentedBtnActive : ''}`.trim()}
-                >
-                  <LayoutGrid size={13} aria-hidden="true" />
-                  <span>{t(labelKey)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Si es repo no-ui, no se dibujan cuadros */}
       {!isNoUi && sortedScreens.length > 0 && (
@@ -406,10 +603,42 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 })}
               </aside>
             </div>
+          ) : groupBy === 'tag' ? (
+            /* Grilla agrupada por tema principal */
+            <div className={styles.groupedContainer} data-testid="screen-catalog-grouped">
+              {tagSections.map((section) => (
+                <section
+                  key={section.key}
+                  className={styles.groupSection}
+                  data-testid={`screen-group-${section.key}`}
+                >
+                  <div className={styles.groupHeader}>
+                    <span className={cn(styles.tagDot, styles[`tag_${section.key}`])} />
+                    <h4 className={styles.groupTitle}>
+                      <span>{section.label}</span>
+                      <span className={styles.groupCount}>{section.screens.length}</span>
+                    </h4>
+                  </div>
+                  <div className={`${styles.grid} ${gridClass}`}>
+                    {section.screens.map((screen) => (
+                      <ScreenCard
+                        key={screen.id}
+                        screen={screen}
+                        repoPath={repoPath}
+                        capture={captureState?.captures[screen.id]}
+                        size={cardSize}
+                        onSelect={() => setSelectedScreenId(screen.id)}
+                        onExplain={handleExplain}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           ) : (
             /* Grilla normal de cuadros compactos */
             <div className={`${styles.grid} ${gridClass}`} data-testid="screen-catalog-grid">
-              {sortedScreens.map((screen) => (
+              {filteredScreens.map((screen) => (
                 <ScreenCard
                   key={screen.id}
                   screen={screen}

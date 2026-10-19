@@ -14,6 +14,9 @@ describe('screenContentKey', () => {
       { path: 'app/home/page.tsx', role: 'screen', provenance: 'static', shared: false },
       { path: 'components/Header.tsx', role: 'component', provenance: 'static', shared: true },
     ],
+    tags: [],
+    primaryTag: null,
+    stats: { byRole: {}, lastChangedAt: null },
   };
 
   const statMap: Record<string, { size: number; mtimeMs: number } | null> = {

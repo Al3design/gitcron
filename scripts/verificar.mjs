@@ -59,7 +59,7 @@ const ES_PRUEBA = /(^|\/)__tests__\/|\.test\.(ts|tsx)$/;
 /** El catálogo de textos y las pruebas que lo cuidan (ver el filtro de `vitest related`). */
 const ES_CATALOGO_TEXTOS = (f) => f === 'lib/i18n.ts' || f.startsWith('lib/i18n/');
 /** Pruebas que recorren los archivos de estilos por ruta (paleta, sintaxis, escala, tamaños). */
-const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
+const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/css-parse-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
 const PRUEBAS_TEXTOS = ['lib/__tests__/i18n-claves-usadas.test.ts', 'components/pipeline/__tests__/pipeline-i18n.test.ts'];
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
 /**
@@ -270,6 +270,9 @@ function trampas() {
       avisos.push(`${archivo}: rama de pruebas en código de producción (NODE_ENV / .mock / vi.fn)`);
     }
     if (/!important/.test(texto)) avisos.push(`${archivo}: !important agregado`);
+    // Medido en carto-05c: con un backdrop-filter en cada cuadro de la grilla, Chromium dejaba
+    // cuadros a medio pintar (sin texto, sin ícono). Las pruebas unitarias no lo ven.
+    if (/backdrop-filter/.test(texto)) avisos.push(`${archivo}: backdrop-filter agregado → en piezas que se repiten (cuadros, filas) Chromium las deja a medio pintar; usar un fondo casi opaco`);
     // Silenciar una regla de lint es tapar un error, no arreglarlo. Medido en
     // la tanda 4d: dos disables para esconder setState en efecto y deps faltantes.
     if (/eslint-disable/.test(texto)) avisos.push(`${archivo}: eslint-disable agregado`);

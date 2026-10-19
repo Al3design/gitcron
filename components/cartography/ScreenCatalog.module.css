@@ -107,6 +107,7 @@
   position: relative;
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border-subtle);
+  border-top: 2px solid var(--tag-color, var(--color-border-subtle));
   border-radius: var(--radius-default);
   overflow: hidden;
   cursor: pointer;
@@ -115,7 +116,24 @@
 }
 
 .card:hover {
-  border-color: var(--color-border-subtle);
+  border-color: var(--tag-color, var(--color-border-subtle));
+}
+
+.card:hover .captureImage,
+.card:hover .thumbnailIcon {
+  transform: scale(1.03);
+}
+
+.captureImage,
+.thumbnailIcon {
+  transition: transform 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .captureImage,
+  .card:hover .thumbnailIcon {
+    transform: none;
+  }
 }
 
 .card:focus-visible {
@@ -123,27 +141,63 @@
   outline-offset: var(--focus-offset);
 }
 
-/* El lienzo de píxeles ocupa el cuadro entero: el relleno va acá, adentro del efecto. */
+/* El lienzo de píxeles ocupa el cuadro entero; la captura va de borde a borde arriba y el cuerpo lleva relleno. */
 .cardInner {
   height: 100%;
-  padding: var(--space-3);
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+}
+
+.cardMedia {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: var(--color-bg-base);
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .cardThumbnail {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 10;
-  /* Opaco: el efecto de píxeles queda detrás de la captura, nunca encima (Ale). */
   background: var(--color-bg-base);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-default);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+.mediaTag {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  /* Sin backdrop-filter: con muchos cuadros, Chromium dejaba cuadros a medio pintar (auditoría de 05c). */
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--color-border-subtle)) 40%, transparent);
+  pointer-events: none;
+}
+
+.mediaActions {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
 }
 
 .thumbnailIcon {
@@ -151,16 +205,14 @@
 }
 
 .aiIconButton {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  z-index: 2;
+  position: relative;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-ai-violet) 15%, var(--color-bg-surface));
+  /* Sin backdrop-filter: con muchos cuadros, Chromium dejaba cuadros a medio pintar (auditoría de 05c). */
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
   color: var(--color-ai);
   border: 1px solid color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
   border-radius: var(--radius-md);
@@ -179,7 +231,7 @@
 }
 
 .aiIconButton:hover {
-  background: color-mix(in srgb, var(--color-ai-violet) 25%, var(--color-bg-surface));
+  background: color-mix(in srgb, var(--color-bg-base) 90%, transparent);
   border-color: color-mix(in srgb, var(--color-ai-violet) 50%, transparent);
 }
 
@@ -188,7 +240,15 @@
   outline-offset: var(--focus-offset);
 }
 
-/* Sin fondo: el texto va por delante del efecto de píxeles, que se ve alrededor (Ale). */
+/* Sin fondo propio: el efecto de píxeles se ve detrás (Ale). */
+.cardBody {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: transparent;
+}
+
 .cardContent {
   display: flex;
   flex-direction: column;
@@ -425,8 +485,8 @@
   background: var(--color-bg-base);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
-  padding: 2px;
-  gap: 2px;
+  padding: var(--space-1);
+  gap: var(--space-1);
   align-self: flex-start;
   flex-wrap: wrap;
 }
@@ -578,7 +638,7 @@
 .sidebarInfo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -633,7 +693,7 @@
   background: color-mix(in srgb, var(--color-warning) 15%, var(--color-bg-surface));
   border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
   border-radius: var(--radius-sm);
-  padding: 1px var(--space-1);
+  padding: var(--space-0) var(--space-1);
   line-height: 1.2;
   pointer-events: none;
 }
@@ -657,7 +717,7 @@
 .captureBannerContent {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -721,5 +781,219 @@
 .captureActionBtnPrimary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-primary) 25%, transparent);
   color: var(--color-text-primary);
+}
+
+/* ── Temas con color y variables semánticas (carto-05c) ── */
+.tag_graphics { --tag-color: var(--color-ai-blue); }
+.tag_data { --tag-color: var(--color-carto-role-database); }
+.tag_ai { --tag-color: var(--color-ai-violet); }
+.tag_git { --tag-color: var(--color-git-add); }
+.tag_settings { --tag-color: var(--color-carto-role-config); }
+.tag_content { --tag-color: var(--color-ai-teal); }
+.tag_accounts { --tag-color: var(--color-warning); }
+.tag_payments { --tag-color: var(--color-ai-rose); }
+.tag_general { --tag-color: var(--color-text-secondary); }
+
+.tagDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--tag-color, var(--color-text-secondary));
+  flex-shrink: 0;
+}
+
+.cardTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--tag-color, var(--color-text-secondary)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--color-text-secondary)) 30%, transparent);
+  line-height: 1.3;
+}
+
+.tagChipMore {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  padding: var(--space-0) var(--space-1);
+}
+
+/* ── Barra de composición ── */
+.compositionBar {
+  display: flex;
+  height: 6px;
+  width: 100%;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-border-subtle) 40%, transparent);
+}
+
+.barSegment {
+  height: 100%;
+}
+
+.barSegment_ui {
+  background-color: var(--color-carto-role-ui);
+}
+
+.barSegment_styles {
+  background-color: var(--color-carto-role-styles);
+}
+
+.barSegment_database {
+  background-color: var(--color-carto-role-database);
+}
+
+.barSegment_logic {
+  background-color: var(--color-carto-role-logic);
+}
+
+.barSegment_config {
+  background-color: var(--color-carto-role-config);
+}
+
+.barSegment_other {
+  background-color: var(--color-carto-role-other);
+}
+
+.cardStats {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Filtros por tema y agrupado ── */
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.filterChip:hover:not(.filterChipActive) {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.filterChip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.filterChipActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.groupedContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.groupSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ── Detalle: chips de tema y barra con leyenda ── */
+.detailTagsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.detailComposition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.compositionLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
 }
 

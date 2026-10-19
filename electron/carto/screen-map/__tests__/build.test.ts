@@ -22,6 +22,9 @@ describe('buildScreenMap', () => {
       async readFile(p) {
         return files[p] ?? null;
       },
+      async statFile() {
+        return null;
+      },
       fileDependencies(p) {
         return depsMap[p] ?? [];
       },
@@ -64,6 +67,9 @@ describe('buildScreenMap', () => {
       },
       async readFile(p) {
         return files[p] ?? null;
+      },
+      async statFile() {
+        return null;
       },
       fileDependencies() {
         return [];
@@ -110,6 +116,9 @@ describe('buildScreenMap', () => {
       async readFile(p) {
         return files[p] ?? null;
       },
+      async statFile() {
+        return null;
+      },
       fileDependencies(p) {
         if (p === 'app/page.tsx') return manyDeps;
         return [];
@@ -144,6 +153,9 @@ describe('buildScreenMap', () => {
       async readFile(p) {
         return files[p] ?? null;
       },
+      async statFile() {
+        return null;
+      },
       fileDependencies() {
         return null; // índice no listo
       },
@@ -177,6 +189,9 @@ describe('buildScreenMap', () => {
       async readFile(p) {
         return files[p] ?? null;
       },
+      async statFile() {
+        return null;
+      },
       fileDependencies() {
         return [];
       },
@@ -207,6 +222,9 @@ describe('buildScreenMap', () => {
       },
       async readFile(p) {
         return files[p] ?? null;
+      },
+      async statFile() {
+        return null;
       },
       fileDependencies() {
         return [];
@@ -255,6 +273,7 @@ export function Tabs() {
     const deps: ScreenMapDeps = {
       async listFiles() { return { paths: Object.keys(files), truncated: false }; },
       async readFile(p) { return files[p] ?? null; },
+      async statFile() { return null; },
       fileDependencies(p) { return depsMap[p] ?? []; },
       async headSha() { return 'sha-chain'; },
       now() { return '2026-10-16T12:00:00.000Z'; },
@@ -319,6 +338,7 @@ function GraphTabView() {
     const deps: ScreenMapDeps = {
       async listFiles() { return { paths: Object.keys(files), truncated: false }; },
       async readFile(p) { return files[p] ?? null; },
+      async statFile() { return null; },
       fileDependencies(p) { return fileDeps[p] ?? []; },
       async headSha() { return 'sha-excl'; },
       now() { return '2026-10-16T12:00:00.000Z'; },
@@ -367,6 +387,7 @@ function ScreenC() { return <div />; }
     const deps: ScreenMapDeps = {
       async listFiles() { return { paths: Object.keys(files), truncated: false }; },
       async readFile(p) { return files[p] ?? null; },
+      async statFile() { return null; },
       fileDependencies(p) { return fileDeps[p] ?? []; },
       async headSha() { return 'sha-same'; },
       now() { return '2026-10-16T12:00:00.000Z'; },
@@ -380,6 +401,65 @@ function ScreenC() { return <div />; }
     if (map.coverage.state === 'partial') {
       expect(map.coverage.errors).toContain('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
     }
+  });
+
+  it('el mapa trae tags, primaryTag y stats (byRole y lastChangedAt con statFile falso), y cada archivo se lee una sola vez', async () => {
+    const files: Record<string, string> = {
+      'app/page.tsx': "import { FlowChart } from '@/components/FlowChart'; import { Nav } from '@/components/Nav';",
+      'components/FlowChart.tsx': "import { ReactFlow } from '@xyflow/react';",
+      'components/Nav.tsx': 'export function Nav() { return null; }',
+    };
+
+    const depsMap: Record<string, string[]> = {
+      'app/page.tsx': ['components/FlowChart.tsx', 'components/Nav.tsx'],
+      'components/FlowChart.tsx': [],
+      'components/Nav.tsx': [],
+    };
+
+    const readFileSpy = vi.fn(async (p: string) => files[p] ?? null);
+    const statFileSpy = vi.fn(async (p: string) => {
+      if (p === 'components/FlowChart.tsx') return { mtimeMs: 1700000000000 };
+      if (p === 'components/Nav.tsx') return { mtimeMs: 1600000000000 };
+      if (p === 'app/page.tsx') return { mtimeMs: 1500000000000 };
+      return null;
+    });
+
+    const deps: ScreenMapDeps = {
+      async listFiles() {
+        return { paths: Object.keys(files), truncated: false };
+      },
+      readFile: readFileSpy,
+      statFile: statFileSpy,
+      fileDependencies(p) {
+        return depsMap[p] ?? [];
+      },
+      async headSha() {
+        return 'sha-stats';
+      },
+      now() {
+        return '2026-10-16T12:00:00.000Z';
+      },
+    };
+
+    const map = await buildScreenMap('/mock/repo', deps);
+    expect(map.screens).toHaveLength(1);
+    const screen = map.screens[0];
+
+    // Trae tags y primaryTag
+    expect(screen.primaryTag).toBe('graphics');
+    expect(screen.tags).toHaveLength(1);
+    expect(screen.tags[0].tag).toBe('graphics');
+
+    // Trae stats (byRole y lastChangedAt)
+    expect(screen.stats).toBeDefined();
+    expect(screen.stats.byRole.screen).toBe(1);
+    expect(screen.stats.byRole.component).toBe(2);
+    expect(screen.stats.lastChangedAt).toBe(new Date(1700000000000).toISOString());
+
+    // Cada archivo se lee una sola vez
+    const calls = readFileSpy.mock.calls.map((c) => c[0]);
+    const uniqueCalls = new Set(calls);
+    expect(calls.length).toBe(uniqueCalls.size);
   });
 });
 

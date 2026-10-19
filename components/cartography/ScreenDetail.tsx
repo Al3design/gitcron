@@ -14,6 +14,7 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
 import type { ScreenCapture, ScreenDescription, ScreenEntry, ScreenFileLink, ScreenFileRole } from '@/types/screen-map';
+import { CompositionBar, getRoleGroupItems } from './ScreenCard';
 import styles from './ScreenCatalog.module.css';
 
 export interface ScreenDetailProps {
@@ -109,6 +110,9 @@ export function ScreenDetail({ screen, repoPath, capture, onClose, onExplain }: 
 
   const currentRoleFiles = filesByRole.get(effectiveRole) ?? [];
 
+  const roleGroups = getRoleGroupItems(screen.stats?.byRole);
+  const totalRoles = roleGroups.reduce((acc, r) => acc + r.count, 0);
+
   return (
     <motion.div
       layoutId={shouldReduceMotion ? undefined : screen.id}
@@ -128,6 +132,26 @@ export function ScreenDetail({ screen, repoPath, capture, onClose, onExplain }: 
           <p className={styles.cardSubtitle} title={locationTooltip}>
             {locationSubtitle}
           </p>
+          {screen.tags && screen.tags.length > 0 && (
+            <div className={styles.detailTagsList} data-testid="detail-tags-list">
+              {screen.tags.map((tEvidence) => {
+                const tagLabel = t(`cartography.screens.tags.${tEvidence.tag}`);
+                const fileNames = tEvidence.files.map((p) => p.split('/').pop() ?? p).join(', ');
+                const whyTooltip = t('cartography.screens.tagWhy', { files: fileNames });
+                return (
+                  <span
+                    key={tEvidence.tag}
+                    className={cn(styles.tagChip, styles[`tag_${tEvidence.tag}`])}
+                    title={whyTooltip}
+                    data-testid={`detail-tag-${tEvidence.tag}`}
+                  >
+                    <span className={cn(styles.tagDot, styles[`tag_${tEvidence.tag}`])} />
+                    <span>{tagLabel}</span>
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className={styles.detailActions}>
@@ -170,6 +194,23 @@ export function ScreenDetail({ screen, repoPath, capture, onClose, onExplain }: 
           </span>
         )}
       </div>
+
+      {/* Barra de composición con leyenda */}
+      {totalRoles > 0 && (
+        <div className={styles.detailComposition} data-testid="detail-composition">
+          <CompositionBar byRole={screen.stats?.byRole} t={t} />
+          <div className={styles.compositionLegend}>
+            {roleGroups.map((rg) => (
+              <span key={rg.role} className={styles.legendItem}>
+                <span className={cn(styles.legendDot, styles[`barSegment_${rg.role}`])} />
+                <span>
+                  {t(rg.labelKey)}: {rg.count}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 3. Qué hace */}
       <section className={styles.section} aria-label="Qué hace">
