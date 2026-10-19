@@ -22,7 +22,7 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 - [x] 2.6 **IA local:** Mostrar en cada cuadro de pantalla qué hace, en lenguaje llano, y qué archivos la forman. **Comprobación:** Alejandro identifica qué hace cada pantalla de GitCron y dónde está su código sin conocer carpetas; una descripción sugerida por IA se distingue de una manual y cita sus archivos.
 
 - [ ] 2.7 **IA local:** Mostrar la captura real de cada pantalla con dirección, arrancando el proyecto con permiso una vez por proyecto (decisión 11). **Comprobación:** Sin permiso no se ejecuta nada del repo; la captura aparece en el cuadro, la columna y el detalle; se rehace cuando cambian sus archivos; el servidor no queda vivo al terminar, cancelar o cerrar.
-- [ ] 2.8 **IA local:** Capturar las vistas sin dirección y las direcciones variables navegando la app. **Comprobación:** Graph, SDD y Cartografía de GitCron muestran su captura real.
+- [ ] 2.8 **IA local:** Capturar las vistas sin dirección con recetas de `.gitcron/capturas.json` corridas por las pruebas de pantalla del proyecto (decisión 13). **Comprobación:** Graph, SDD, Ajustes y Cartografía de GitCron muestran su captura real; una vista sin receta o con receta rota lo dice.
 
 - [ ] 2.9 **IA local:** Cuadros modernos con temas de color, datos de composición y filtros por tema (decisión 12). **Comprobación:** Alejandro identifica de qué tema es cada pantalla y filtra las de un tema; la captura va de borde a borde con las acciones encima.
 

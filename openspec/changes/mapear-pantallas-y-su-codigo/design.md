@@ -83,6 +83,20 @@ Alejandro vio los cuadros con captura y pidió que se vean actuales y que ayuden
 
 Las capturas de las vistas sin dirección (tarea 2.8) pasan a la tanda siguiente.
 
+### 13. Capturas de las vistas sin dirección: recetas y pruebas del proyecto (Alejandro, 2026-10-19)
+
+A una vista sin dirección (Graph, SDD, Ajustes en GitCron) se llega tocando botones, y en una app de escritorio hace falta la app real abierta. Alejandro eligió **recetas** antes que una IA que navegue cada vez: cada vista tiene una lista corta de pasos (tocar «Graph», elegir «History»). Los pasos se corren con el sistema de pruebas de pantalla del propio proyecto, que ya sabe abrirlo (en GitCron, la app de escritorio real, con su `e2e/e2e.config.ts`).
+
+- **Dónde viven:** en el repo, en `.gitcron/capturas.json`, para que se vean, se revisen y viajen con el proyecto.
+  - `runner` dice qué sistema de pruebas y qué configuración usar.
+  - `setup` son los pasos comunes desde la app recién abierta.
+  - `screens` tiene los pasos de cada pantalla, por su id.
+  - `{{repoPath}}` se reemplaza por el repo que se mira.
+  - Los pasos son pocos y declarativos: `click`, `waitFor`, `pause`, `reload` y `evaluate`. Este último es código del propio repo, que corre en las propias pruebas del repo.
+- **Cómo se corre:** con el permiso del proyecto, que ahora nombra también la orden de pruebas, GitCron genera una prueba temporal con las recetas, la corre una vez con el CLI del proyecto, toma las imágenes, las guarda como las de las direcciones (misma tabla, misma clave por archivos) y borra la prueba temporal.
+- **Lo que falta y lo que falla:** una vista sin receta queda con el ícono y el motivo «sin receta». Una receta que falla queda «la receta no llegó», con el paso que falló.
+- **Sugerencias de recetas con IA:** quedan para otra tanda. Las recetas de GitCron las escribió el orquestador mirando la app.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
