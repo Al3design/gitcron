@@ -26,6 +26,8 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 - [ ] 2.9 **IA local:** Cuadros modernos con temas de color, datos de composición y filtros por tema (decisión 12). **Comprobación:** Alejandro identifica de qué tema es cada pantalla y filtra las de un tema; la captura va de borde a borde con las acciones encima.
 
+- [ ] 2.10 **IA local:** Capturas de fondo, sin ventanas a la vista, con progreso en vivo y detalle desplegable (decisión 14). **Comprobación:** Al capturar no aparece otra ventana; la franja muestra el círculo, la pantalla en curso y la lista por estado; cada foto aparece en su cuadro al terminarse.
+
 ## 3. Aceptación
 
 - [ ] 3.1 **Orquestador/auditor:** Comprobar localización de código desde una pantalla con Alejandro. **Comprobación:** Identifica archivos sin conocer carpetas; comprobar renombrado, layout compartido, cancelación y vista técnica.

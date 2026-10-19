@@ -102,6 +102,23 @@ A una vista sin dirección (Graph, SDD, Ajustes en GitCron) se llega tocando bot
   - **Archivados y Empezar un cambio de SDD no tienen receta:** su selector está plegado e inactivo hasta abrir otro panel.
 - **Sugerencias de recetas con IA:** quedan para otra tanda. Las recetas de GitCron las escribió el orquestador mirando la app.
 
+### 14. Capturas de fondo y progreso en vivo (Alejandro, 2026-10-19)
+
+Al probarlo, Alejandro vio abrirse otra ventana de GitCron para sacar las fotos de las vistas: «es contraintuitivo». Pidió que todo pase de fondo y que la franja muestre el avance con un círculo o una barra, la foto que se está sacando, y un detalle desplegable.
+
+- **De fondo:** GitCron les pasa `GITCRON_CAPTURE=1` en el entorno a las pruebas del proyecto. Un proyecto puede usarla para no mostrar nada.
+  - GitCron mismo la usa: con esa variable, la ventana principal se abre fuera de la pantalla (`x`/`y` lejos del escritorio, 1440×900), sin pantalla de inicio, sin barra de tareas y sin tomar el foco. Se sigue dibujando, que es lo que necesitan las fotos; con `show: false` Chromium deja de pintar.
+  - No es una rama «si estoy en pruebas»: es un modo del producto, el de GitCron capturándose a sí mismo, y lo pide el permiso del usuario.
+- **Progreso en vivo:**
+  - La prueba temporal escribe `GITCRON_RECIPE_START <id>` y `GITCRON_RECIPE_DONE <id>` al empezar y terminar cada vista. GitCron lee esa salida mientras corre.
+  - Las direcciones avisan una por una.
+  - El canal manda primero el plan (todas las pantallas que se van a capturar) y después el estado de cada una: pendiente, en curso, lista, falló con su motivo, o sin receta.
+  - Cada foto lista se guarda y aparece en su cuadro al momento, sin esperar al final.
+- **La franja:**
+  - Un círculo de progreso con «Capturando “Configuración”… 4 de 12» y un botón para desplegar el detalle, que se puede plegar de nuevo (control completo). El detalle es la lista de pantallas con su estado.
+  - Al terminar, la franja resume («10 listas · 2 sin receta») y el detalle sigue desplegable.
+  - **Detener** sigue estando.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
