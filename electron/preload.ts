@@ -420,7 +420,8 @@ contextBridge.exposeInMainWorld('api', {
     get: (repoPath: string) => ipcRenderer.invoke('carto-captures:get', { repoPath }),
     consent: (args: { repoPath: string; command: string }) => ipcRenderer.invoke('carto-captures:consent', args),
     revoke: (repoPath: string) => ipcRenderer.invoke('carto-captures:revoke', { repoPath }),
-    run: (repoPath: string) => ipcRenderer.invoke('carto-captures:run', { repoPath }),
+    run: (repoPath: string, options?: { force?: boolean }) =>
+      ipcRenderer.invoke('carto-captures:run', { repoPath, force: Boolean(options?.force) }),
     cancel: (repoPath: string) => ipcRenderer.invoke('carto-captures:cancel', { repoPath }),
     onProgress: (cb: (payload: CaptureProgressEvent) => void) => {
       const handler = (_e: unknown, payload: CaptureProgressEvent) => cb(payload);

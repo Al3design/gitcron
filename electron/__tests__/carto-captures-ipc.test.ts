@@ -259,7 +259,7 @@ describe('carto-captures IPC handlers', () => {
             name: 'Huérfana',
             via: 'view',
             state: 'skipped',
-            detail: 'sin receta en .gitcron/capturas.json',
+            detail: 'GitCron todavía no sabe cómo llegar a esta pantalla (falta su receta)',
           },
         ],
       },

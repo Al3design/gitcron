@@ -8,11 +8,12 @@
 // Al tocar uno se expande a dos columnas (detalle a la izquierda y columna angosta a la derecha).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useScreenMap } from '@/hooks/use-screen-map';
 import { useScreenCaptures } from '@/hooks/use-screen-captures';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
+import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
 import type { ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
 import { CaptureProgress } from './CaptureProgress';
@@ -160,6 +161,25 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     run,
     cancel,
   } = useScreenCaptures(repoPath, map);
+
+  /** «Actualizar capturas» vuelve a sacar todas y avisa el resultado con el aviso de la app. */
+  const refreshCaptures = async () => {
+    const result = await run(true);
+    if (!result) return;
+    const { setSuccess, setError } = useGitStore.getState();
+    if (result.error) {
+      setError(t('cartography.screens.captures.toastError', { detail: result.error }));
+    } else if (result.cancelled) {
+      setSuccess(t('cartography.screens.captures.toastStopped', { n: result.captured }));
+    } else {
+      const notCaptured = result.skipped.filter((s) => s.reason !== 'view').length;
+      setSuccess(
+        notCaptured > 0
+          ? t('cartography.screens.captures.toastDoneWithMissing', { n: result.captured, missing: notCaptured })
+          : t('cartography.screens.captures.toastDone', { n: result.captured }),
+      );
+    }
+  };
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
   const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
@@ -327,6 +347,18 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     <div className={styles.container} data-testid="screen-catalog">
       {/* Cabecera con avisos, franja de captura, filtros por tema y controles */}
       <div className={styles.catalogHeader}>
+        {/* Con un cuadro abierto, la vuelta a la grilla queda siempre a la vista (Alejandro, carto-05e). */}
+        {selectedScreen && (
+          <button
+            type="button"
+            className={styles.captureActionBtn}
+            onClick={() => setSelectedScreenId(null)}
+            data-testid="screen-detail-back"
+          >
+            <ArrowLeft size={13} aria-hidden="true" />
+            <span>{t('cartography.screens.backToGrid')}</span>
+          </button>
+        )}
         {coverageNotice && (
           <div
             className={styles.coverageBanner}
@@ -366,7 +398,13 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 )}
 
                 {/* En el mismo lugar durante la corrida y después: el detalle no se pliega solo */}
-                {hasCaptureItems && <CaptureProgress items={captureItems} running={captureRunning} />}
+                {hasCaptureItems && (
+                  <CaptureProgress
+                    items={captureItems}
+                    running={captureRunning}
+                    coverage={{ withPicture: Object.keys(captureState.captures).length, total: sortedScreens.length }}
+                  />
+                )}
 
                 {lastRun?.error && (
                   <span className={styles.captureBannerError} data-testid="capture-error-text">
@@ -437,7 +475,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   <>
                     <button
                       type="button"
-                      onClick={() => void run()}
+                      onClick={() => void refreshCaptures()}
                       className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
                       data-testid="capture-refresh-button"
                     >

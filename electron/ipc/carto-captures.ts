@@ -59,9 +59,11 @@ const activeServers = new Map<string, DevServerHandle>();
 const STOPPED_DETAIL = 'detenida antes de llegar';
 
 function skippedViewDetail(reason: ScreenCaptureSkipReason): string {
+  // En palabras de todos los días (Alejandro, carto-05e: «sin receta en .gitcron/capturas.json»
+  // no decía qué pasaba ni qué hacer).
   return reason === 'runner-missing'
-    ? 'falta el sistema de pruebas del proyecto'
-    : 'sin receta en .gitcron/capturas.json';
+    ? 'el proyecto no tiene pruebas de pantalla para llegar hasta acá'
+    : 'GitCron todavía no sabe cómo llegar a esta pantalla (falta su receta)';
 }
 
 /** El nombre que se ve en el cuadro: el sugerido si lo hay. */
@@ -300,6 +302,7 @@ export async function handleCartoCapturesRun(
   try {
     const candidatePath =
       typeof payload === 'string' ? payload : (payload as { repoPath?: unknown })?.repoPath;
+    const force = typeof payload === 'object' && payload !== null && (payload as { force?: unknown }).force === true;
     const root = authorizedRepoRoot(candidatePath);
     if (!root) {
       return fail('Repositorio no autorizado');
@@ -338,7 +341,9 @@ export async function handleCartoCapturesRun(
           getCachedScreenMap(root) ??
           (await buildScreenMap(root, createScreenMapDeps(root)));
         const statFn = createStatFn(root);
-        const storedCaptures = getScreenCaptures(root, options);
+        // «Actualizar capturas» vuelve a sacar todas: se hace como si no hubiera ninguna guardada
+        // (Alejandro, carto-05e: con todo al día el botón no hacía nada).
+        const storedCaptures = force ? [] : getScreenCaptures(root, options);
         const storedMap = new Map(storedCaptures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
 
         // Las direcciones que se van a capturar, para el plan
@@ -422,7 +427,7 @@ export async function handleCartoCapturesRun(
           capture: (url, allowedOrigin) => captureUrl(url, { allowedOrigin }),
           contentKey: (screen) => screenContentKey(screen, statFn),
           stored: async () => {
-            const captures = getScreenCaptures(root, options);
+            const captures = force ? [] : getScreenCaptures(root, options);
             return new Map(captures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
           },
           save: async (screenId, contentKey, image) => {

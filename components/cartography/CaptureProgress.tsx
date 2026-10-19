@@ -17,6 +17,8 @@ export interface CaptureProgressProps {
   items: CaptureItem[];
   /** La corrida sigue: se muestra la pantalla en curso; si no, el resumen. */
   running: boolean;
+  /** Cuántas pantallas tienen foto y cuántas hay: el resumen empieza por ahí, no por la última corrida. */
+  coverage?: { withPicture: number; total: number };
 }
 
 const RING_RADIUS = 8;
@@ -67,7 +69,12 @@ function countItems(items: CaptureItem[]) {
 }
 
 /** «Capturando “B”… 2 de 3» mientras corre; «1 lista · 2 detenidas» al terminar. */
-function progressText(items: CaptureItem[], running: boolean, t: Translate): string {
+function progressText(
+  items: CaptureItem[],
+  running: boolean,
+  t: Translate,
+  coverage?: CaptureProgressProps['coverage'],
+): string {
   const c = countItems(items);
   if (running) {
     const current = items.find((item) => item.state === 'running');
@@ -81,6 +88,7 @@ function progressText(items: CaptureItem[], running: boolean, t: Translate): str
   }
   // Singular y plural por clave: «1 lista», «2 listas» (auditoría de carto-05e).
   const parts = [
+    coverage && t('cartography.screens.captures.progress.coverage', { n: coverage.withPicture, total: coverage.total }),
     c.done > 0 && t(c.done === 1 ? 'cartography.screens.captures.progress.doneOne' : 'cartography.screens.captures.progress.done', { n: c.done }),
     c.failed > 0 && t(c.failed === 1 ? 'cartography.screens.captures.progress.failedOne' : 'cartography.screens.captures.progress.failed', { n: c.failed }),
     c.stopped > 0 && t(c.stopped === 1 ? 'cartography.screens.captures.progress.stoppedOne' : 'cartography.screens.captures.progress.stopped', { n: c.stopped }),
@@ -90,13 +98,13 @@ function progressText(items: CaptureItem[], running: boolean, t: Translate): str
   return parts.filter(Boolean).join(' · ');
 }
 
-export function CaptureProgress({ items, running }: CaptureProgressProps) {
+export function CaptureProgress({ items, running, coverage }: CaptureProgressProps) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
 
   const { failed, total, finishedCount } = countItems(items);
-  const text = progressText(items, running, t);
+  const text = progressText(items, running, t, coverage);
   const ratio = total > 0 ? finishedCount / total : 0;
 
   return (

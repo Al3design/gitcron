@@ -130,6 +130,25 @@ interface ProcessExecutionOutcome {
   error: Error | null;
 }
 
+/**
+ * Mientras corre, la prueba temporal aparecía entre los cambios del repo (Alejandro la vio en
+ * una captura de Historial de IA, en carto-05e). Se la ignora en `.git/info/exclude`, que es local
+ * del repo: no se guarda en ningún commit ni toca el `.gitignore` del proyecto.
+ */
+function ignoreTempTestsLocally(root: string, testsDir: string): void {
+  const excludePath = path.join(root, '.git', 'info', 'exclude');
+  const pattern = `/${testsDir.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')}/zz-gitcron-capturas-*`;
+  try {
+    if (!fs.existsSync(path.join(root, '.git', 'info'))) return; // un worktree tiene `.git` como archivo
+    const current = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : '';
+    if (current.split(/\r?\n/).includes(pattern)) return;
+    const prefix = current === '' || current.endsWith('\n') ? '' : '\n';
+    fs.appendFileSync(excludePath, `${prefix}# GitCron: pruebas temporales de capturas\n${pattern}\n`, 'utf8');
+  } catch (err) {
+    console.warn('[capturas] no se pudo marcar la prueba temporal como ignorada', err);
+  }
+}
+
 /** El `node` del sistema, si está en el PATH y se puede lanzar directo (un .exe, no un .cmd). */
 async function findSystemNode(): Promise<string | undefined> {
   try {
@@ -338,6 +357,7 @@ export async function runViewCaptures(
   const outputDir = path.join(configDir, '.e2e', `gitcron-capturas-${randomHex}`);
 
   try {
+    ignoreTempTestsLocally(root, recipes.runner.testsDir);
     fsImpl.mkdirSync(tempTestDir, { recursive: true });
     fsImpl.writeFileSync(tempTestPath, code, 'utf8');
 

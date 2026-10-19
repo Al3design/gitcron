@@ -540,7 +540,8 @@ interface ElectronAPI {
     get(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
     consent(args: { repoPath: string; command: string }): Promise<GitResult<ScreenCaptureState>>;
     revoke(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
-    run(repoPath: string): Promise<GitResult<ScreenCaptureRunResult>>;
+    /** `force`: vuelve a sacar todas, aunque estén al día («Actualizar capturas»). */
+    run(repoPath: string, options?: { force?: boolean }): Promise<GitResult<ScreenCaptureRunResult>>;
     cancel(repoPath: string): Promise<GitResult<boolean>>;
     onProgress(cb: (payload: CaptureProgressEvent) => void): () => void;
   };

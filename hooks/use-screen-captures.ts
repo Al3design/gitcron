@@ -29,7 +29,7 @@ export function useScreenCaptures(
   lastRun: ScreenCaptureRunResult | null;
   grant(): Promise<void>;
   revoke(): Promise<void>;
-  run(): Promise<void>;
+  run(force?: boolean): Promise<ScreenCaptureRunResult | null>;
   cancel(): Promise<void>;
 } {
   // El estado guarda de qué repo es: al cambiar de repo no se usa el del anterior, ni para
@@ -122,33 +122,32 @@ export function useScreenCaptures(
     };
   }, [repoPath, map?.headSha, fetchKey]);
 
-  const run = useCallback(async () => {
-    if (!repoPath) return;
+  /** `force`: vuelve a sacar todas («Actualizar capturas»). Devuelve el resultado, para avisarlo. */
+  const run = useCallback(async (force = false): Promise<ScreenCaptureRunResult | null> => {
+    if (!repoPath) return null;
     const api = typeof window !== 'undefined' ? window.api : undefined;
-    if (!api?.cartoCaptures?.run) return;
+    if (!api?.cartoCaptures?.run) return null;
 
+    let result: ScreenCaptureRunResult | null = null;
     try {
-      const res = await api.cartoCaptures.run(repoPath);
+      const res = await api.cartoCaptures.run(repoPath, { force });
       if (res.success && res.data) {
-        setLastRun(res.data);
+        result = res.data;
       } else if (res.error) {
-        setLastRun({
-          captured: 0,
-          skipped: [],
-          cancelled: false,
-          error: res.error,
-        });
+        result = { captured: 0, skipped: [], cancelled: false, error: res.error };
       }
     } catch (err: unknown) {
-      setLastRun({
+      result = {
         captured: 0,
         skipped: [],
         cancelled: false,
         error: err instanceof Error ? err.message : String(err),
-      });
+      };
     } finally {
       refreshState();
     }
+    if (result) setLastRun(result);
+    return result;
   }, [repoPath, refreshState]);
 
   const grant = useCallback(async () => {
@@ -218,7 +217,7 @@ export function useScreenCaptures(
     if (needsRun) {
       autoRunRef.current = currentKey;
       // Fuera del cuerpo del efecto: `run` cambia estado (react-hooks/set-state-in-effect).
-      void Promise.resolve().then(run);
+      void Promise.resolve().then(() => run());
     }
   }, [repoPath, map, state, run]);
 
