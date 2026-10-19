@@ -23,7 +23,7 @@ function ChangelogPreviewHeader() {
       </div>
       <button
         type="button"
-        onClick={() => window.api.shellOpenExternal('https://github.com/alejandropd-1/gitcron/releases/')}
+        onClick={() => window.api.shellOpenExternal('https://github.com/Al3design/gitcron/releases/')}
         className="shrink-0 h-8 px-3 rounded-lg border border-border-subtle/15 bg-bg-overlay/50 text-xs font-bold text-text-secondary hover:border-secondary/35 hover:text-secondary transition-colors flex items-center gap-2"
       >
         <ExternalLink size={13} />

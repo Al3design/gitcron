@@ -574,7 +574,7 @@ export function SettingsPanel({
                     {t('settings.dataLocation')}
                   </p>
                   <button
-                    onClick={() => window.api?.shellOpenPath('https://github.com/alejandropd-1/gitcron/blob/main/SECURITY.md')}
+                    onClick={() => window.api?.shellOpenPath('https://github.com/Al3design/gitcron/blob/main/SECURITY.md')}
                     className="w-full text-left px-4 py-3 bg-bg-base/70 border border-border-subtle/15 hover:border-border-subtle/30 rounded-lg text-sm text-text-secondary hover:text-text-primary flex items-center gap-2 transition-colors"
                   >
                     <FileText size={14} />
@@ -699,7 +699,7 @@ export function SettingsPanel({
                     <div className="pt-2 flex flex-col gap-2">
                       <button
                         type="button"
-                        onClick={() => window.api.shellOpenExternal('https://github.com/alejandropd-1/gitcron/releases/')}
+                        onClick={() => window.api.shellOpenExternal('https://github.com/Al3design/gitcron/releases/')}
                         className="flex items-center gap-2 text-text-secondary hover:text-secondary transition-colors text-left font-semibold"
                       >
                         <Github size={14} />

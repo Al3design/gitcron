@@ -519,7 +519,7 @@ Since the Classic and Cronometric views share the same global file and base vari
 
 ## Installation
 
-Download the latest release from [GitHub Releases](https://github.com/alejandropd-1/gitcron/releases).
+Download the latest release from [GitHub Releases](https://github.com/Al3design/gitcron/releases).
 
 | Platform | File                                                                  |
 | -------- | --------------------------------------------------------------------- |
@@ -533,7 +533,7 @@ Download the latest release from [GitHub Releases](https://github.com/alejandrop
 
 ## Auto-update
 
-GitCron checks for updates silently 3 seconds after the main window appears and then keeps checking every 30 minutes while the app is open. If a new version is available on [GitHub Releases](https://github.com/alejandropd-1/gitcron/releases), a dot appears on the version tag in the topbar. Clicking the tag opens an in-app dropdown with the new version and a download action. Download progress appears beside the GitHub releases icon, and an `UPDATE` button appears there once the update is ready to install.
+GitCron checks for updates silently 3 seconds after the main window appears and then keeps checking every 30 minutes while the app is open. If a new version is available on [GitHub Releases](https://github.com/Al3design/gitcron/releases), a dot appears on the version tag in the topbar. Clicking the tag opens an in-app dropdown with the new version and a download action. Download progress appears beside the GitHub releases icon, and an `UPDATE` button appears there once the update is ready to install.
 
 Settings -> _Buscar actualizaciones_ / _Check for updates_ also shows **Cambios recientes** / **Recent changes**, sourced from the packaged `CHANGELOG.md`. The newest entry is expanded by default, previous versions are collapsible, and the full GitHub Releases page remains one click away for technical release details.
 

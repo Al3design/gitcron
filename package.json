@@ -109,7 +109,7 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "alejandropd-1",
+        "owner": "Al3design",
         "repo": "gitcron",
         "private": true
       }
