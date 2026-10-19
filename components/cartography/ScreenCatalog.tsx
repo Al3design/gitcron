@@ -342,12 +342,14 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
               <div className={styles.captureBannerContent}>
                 {captureState.running || captureProgress ? (
                   <span className={styles.captureBannerText} data-testid="capture-running-text">
-                    {captureProgress && captureProgress.total > 0
-                      ? t('cartography.screens.captures.running', {
-                          done: captureProgress.done,
-                          total: captureProgress.total,
-                        })
-                      : t('cartography.screens.captures.starting')}
+                    {captureProgress?.phase === 'views'
+                      ? t('cartography.screens.captures.runningViews')
+                      : captureProgress && captureProgress.total > 0
+                        ? t('cartography.screens.captures.running', {
+                            done: captureProgress.done,
+                            total: captureProgress.total,
+                          })
+                        : t('cartography.screens.captures.starting')}
                   </span>
                 ) : captureState.consent.status === 'needs-consent' ? (
                   <span className={styles.captureBannerText}>
@@ -369,11 +371,32 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   </span>
                 )}
 
-                {lastRun?.skipped?.some((s) => s.reason === 'view') && (
-                  <span className={styles.captureBannerViewsLater}>
-                    {t('cartography.screens.captures.viewsLater')}
-                  </span>
-                )}
+                {(() => {
+                  const skippedViews = lastRun?.skipped?.filter(
+                    (s) => s.reason === 'no-recipe' || s.reason === 'runner-missing' || s.reason === 'recipe-failed',
+                  ) ?? [];
+                  if (lastRun && skippedViews.length > 0) {
+                    const noRecipe = skippedViews.filter((s) => s.reason === 'no-recipe' || s.reason === 'runner-missing').length;
+                    const failed = skippedViews.filter((s) => s.reason === 'recipe-failed').length;
+                    return (
+                      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+                        {t('cartography.screens.captures.viewsSkipped', { noRecipe, failed })}
+                      </span>
+                    );
+                  }
+                  if (captureState.hasRecipes && captureState.runnerConfig) {
+                    return (
+                      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+                        {t('cartography.screens.captures.viewsWithRecipes', { config: captureState.runnerConfig })}
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+                      {t('cartography.screens.captures.viewsNoRecipes')}
+                    </span>
+                  );
+                })()}
               </div>
 
               <div className={styles.captureBannerActions}>
@@ -544,6 +567,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 screen={selectedScreen}
                 repoPath={repoPath}
                 capture={captureState?.captures[selectedScreen.id]}
+                lastRun={lastRun}
                 onClose={() => setSelectedScreenId(null)}
                 onExplain={handleExplain}
               />

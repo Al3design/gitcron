@@ -36,7 +36,7 @@ Cada tanda se entrega verificada (Alejandro, 2026-10-17). Entre el 2026-10-16 y 
 
 - **Al terminar el código y las pruebas:** `pnpm verificar --tanda <tanda>`. Corre solo lo tocado (pruebas relacionadas, tsc, eslint, openspec, Fallow, trampas), en uno o dos minutos, y deja el resumen con la huella del código en `tmp/reportes/<tanda>.verificacion.txt`.
 - **Si da `XX`:** corregí lo que dice y corrélo **una vez más**. El script corta solo en el tercer intento («ALTO»). Si sigue fallando, no pruebes variantes: anotá en «Dudas» qué falla, qué intentaste y la salida, y entregá.
-- **Cuidá el sello:** no toques ningún archivo después de la última verificación. El auditor compara la huella con el código entregado (`--sello`), y si no coincide vuelve a revisar todo.
+- **Cuidá el sello:** no toques ningún archivo después de la última verificación. Tampoco después de un «ALTO»: si en el segundo intento algo falló, lo dejás como está y lo describís en «Dudas». En carto-05c y carto-05d la ejecutora siguió corrigiendo después del tope, sin verificar, y el auditor tuvo que rehacer la revisión entera. El auditor compara la huella con el código entregado (`--sello`), y si no coincide vuelve a revisar todo.
 - **Si el prompt trae «Captura»:** después de verificar, `pnpm captura <tanda>`, una sola vez. Corre la prueba de pantalla que escribió el orquestador (`tmp/prompts/<tanda>.captura.e2e.ts`) y deja las imágenes y un manifiesto en `tmp/reportes/<tanda>/capturas/`. No escribas otra prueba de captura, no edites la del orquestador y no armes imágenes a mano. Si falla, anotalo en «Dudas» con la ruta de `screen.txt` que da el script.
 - **Nunca** `pnpm verificar --completa` ni `--todo`: son del orquestador.
 - Cada aviso de «trampas» se corrige o se explica en «Dudas».

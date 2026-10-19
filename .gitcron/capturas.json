@@ -1,5 +1,5 @@
 {
-  "$comment": "Recetas para que Cartografía capture las vistas de GitCron que no tienen dirección propia (decisión 13 de mapear-pantallas-y-su-codigo). Cada receta parte de la app recién abierta con `setup`. {{repoPath}} es el repo que se está mirando.",
+  "$comment": "Recetas para que Cartografía capture las vistas de GitCron que no tienen dirección propia (decisión 13 de mapear-pantallas-y-su-codigo). Cada receta parte de la app recién abierta con `setup`. {{repoPath}} es el repo que se está mirando. Archivados y Empezar un cambio no tienen receta: su selector en SDD está plegado e inactivo hasta abrir otro panel (auditoría de carto-05d).",
   "version": 1,
   "runner": {
     "kind": "e2e",
@@ -10,71 +10,149 @@
     {
       "evaluate": "async () => { await window.api.storageSet('openRepoPaths', JSON.stringify(['{{repoPath}}'])); await window.api.storageSet('activeRepoPath', '{{repoPath}}'); await window.api.storageSet('enableCartography', '1'); }"
     },
-    { "reload": true },
-    { "waitFor": { "role": "button", "name": "Abrir Cartografía" }, "timeoutMs": 240000 },
-    { "pause": 1500 }
+    {
+      "reload": true
+    },
+    {
+      "waitFor": {
+        "role": "button",
+        "name": "Abrir Cartografía"
+      },
+      "timeoutMs": 240000
+    },
+    {
+      "pause": 1500
+    }
   ],
   "screens": {
-    "view:components/RepoMainView.tsx#default": { "steps": [] },
+    "view:components/RepoMainView.tsx#default": {
+      "steps": []
+    },
     "view:components/RepoMainView.tsx#tabViews.activeTab=History": {
       "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^History" } }
+        {
+          "click": {
+            "role": "button",
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^History"
+          }
+        }
       ]
     },
     "view:components/RepoMainView.tsx#tabViews.activeTab=Commit": {
       "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^Commit" } }
+        {
+          "click": {
+            "role": "button",
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^Commit"
+          }
+        }
       ]
     },
     "view:components/RepoMainView.tsx#tabViews.activeTab=AiHistory": {
       "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^Historial de IA" } }
+        {
+          "click": {
+            "role": "button",
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^Historial de IA"
+          }
+        }
       ]
     },
     "view:components/RepoMainView.tsx#tabViews.activeTab=Pipeline": {
       "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^SDD" } }
+        {
+          "click": {
+            "role": "button",
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^SDD"
+          }
+        }
       ]
     },
     "view:components/pipeline/sdd/SddStartScreens.tsx#activeStartView=in-progress": {
       "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^SDD" } },
-        { "click": { "role": "button", "nameMatches": "^En curso" } }
-      ]
-    },
-    "view:components/pipeline/sdd/SddStartScreens.tsx#activeStartView=archived": {
-      "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^SDD" } },
-        { "click": { "role": "button", "nameMatches": "rchivados" } }
-      ]
-    },
-    "view:components/pipeline/sdd/SddStartScreens.tsx#activeStartView=new-change": {
-      "steps": [
-        { "click": { "role": "button", "name": "Graph" } },
-        { "click": { "role": "menuitem", "nameMatches": "^SDD" } },
-        { "click": { "role": "button", "nameMatches": "^Empezar un cambio" } }
+        {
+          "click": {
+            "role": "button",
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^SDD"
+          }
+        }
       ]
     },
     "view:components/RepoMainView.tsx#cartographyActive": {
       "steps": [
-        { "click": { "role": "button", "name": "Abrir Cartografía" } },
-        { "waitFor": { "testId": "screen-catalog-grid" }, "timeoutMs": 240000 }
+        {
+          "click": {
+            "role": "button",
+            "name": "Abrir Cartografía"
+          }
+        },
+        {
+          "waitFor": {
+            "testId": "screen-catalog-grid"
+          },
+          "timeoutMs": 240000
+        }
       ]
     },
     "view:components/RepoMainView.tsx#activeView=settings": {
-      "steps": [{ "click": { "role": "button", "name": "Configuración" } }]
+      "steps": [
+        {
+          "click": {
+            "role": "button",
+            "name": "Configuración"
+          }
+        }
+      ]
     },
     "view:components/RepoMainView.tsx#activeView=help": {
-      "steps": [{ "click": { "role": "button", "name": "Ayuda" } }]
+      "steps": [
+        {
+          "click": {
+            "role": "button",
+            "name": "Ayuda"
+          }
+        }
+      ]
     },
     "view:components/RepoMainView.tsx#activeView=profile": {
-      "steps": [{ "click": { "role": "button", "nameMatches": "GitHub|Conectado como" } }]
+      "steps": [
+        {
+          "click": {
+            "role": "button",
+            "nameMatches": "^(Conectar con GitHub|Conectado como)"
+          }
+        }
+      ]
     }
   }
 }

@@ -136,13 +136,23 @@ export interface ScreenCaptureState {
   consent: ScreenCaptureConsent;
   captures: Record<string, ScreenCapture>;
   running: boolean;
+  viewsRunner?: string;
+  hasRecipes?: boolean;
+  runnerConfig?: string;
 }
 
-export type ScreenCaptureSkipReason = 'view' | 'dynamic-route' | 'timeout' | 'load-failed';
+export type ScreenCaptureSkipReason =
+  | 'view'
+  | 'dynamic-route'
+  | 'timeout'
+  | 'load-failed'
+  | 'no-recipe'
+  | 'recipe-failed'
+  | 'runner-missing';
 
 export interface ScreenCaptureRunResult {
   captured: number;
-  skipped: { screenId: string; reason: ScreenCaptureSkipReason }[];
+  skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[];
   cancelled: boolean;
   /** El servidor no arrancó o se cayó: texto para mostrar. */
   error?: string;

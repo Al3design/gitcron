@@ -95,6 +95,11 @@ A una vista sin dirección (Graph, SDD, Ajustes en GitCron) se llega tocando bot
   - Los pasos son pocos y declarativos: `click`, `waitFor`, `pause`, `reload` y `evaluate`. Este último es código del propio repo, que corre en las propias pruebas del repo.
 - **Cómo se corre:** con el permiso del proyecto, que ahora nombra también la orden de pruebas, GitCron genera una prueba temporal con las recetas, la corre una vez con el CLI del proyecto, toma las imágenes, las guarda como las de las direcciones (misma tabla, misma clave por archivos) y borra la prueba temporal.
 - **Lo que falta y lo que falla:** una vista sin receta queda con el ícono y el motivo «sin receta». Una receta que falla queda «la receta no llegó», con el paso que falló.
+- **Medido en la auditoría de 05d:**
+  - **La variable `ELECTRON_RUN_AS_NODE`:** las pruebas del proyecto la heredan al abrir la app, y con ella Electron arranca como consola, sin ventana. Las 12 recetas fallaban por «starting an attempt timed out». Ahora el motor corre el CLI con el `node` del sistema y nunca pasa esa variable; además, el lanzador de pruebas de GitCron la borra.
+  - **El manejo de una receta rota usaba una variable fuera de su alcance:** la primera falla cortaba toda la prueba. Hay una prueba que ejecuta el código generado con una receta rota.
+  - **Una prueba de pantalla que abre GitCron no puede probar la captura de vistas de GitCron:** las dos copias de la app terminan recibiendo los clics cruzados. Esto se comprueba corriendo el motor directo sobre el repo, y la interfaz se mira con capturas ya guardadas.
+  - **Archivados y Empezar un cambio de SDD no tienen receta:** su selector está plegado e inactivo hasta abrir otro panel.
 - **Sugerencias de recetas con IA:** quedan para otra tanda. Las recetas de GitCron las escribió el orquestador mirando la app.
 
 ### Alternativas

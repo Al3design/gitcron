@@ -12,7 +12,7 @@ export function useScreenCaptures(
   map: ScreenMap | null,
 ): {
   state: ScreenCaptureState | null;
-  progress: { done: number; total: number } | null;
+  progress: { done: number; total: number; phase?: 'routes' | 'views' } | null;
   lastRun: ScreenCaptureRunResult | null;
   grant(): Promise<void>;
   revoke(): Promise<void>;
@@ -23,7 +23,7 @@ export function useScreenCaptures(
   // mostrar ni para decidir si corre solo.
   const [stateEntry, setStateEntry] = useState<{ repoPath: string; data: ScreenCaptureState } | null>(null);
   const state = stateEntry && stateEntry.repoPath === repoPath ? stateEntry.data : null;
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; phase?: 'routes' | 'views' } | null>(null);
   const [lastRun, setLastRun] = useState<ScreenCaptureRunResult | null>(null);
   const [fetchKey, setFetchKey] = useState<number>(0);
 
@@ -40,7 +40,7 @@ export function useScreenCaptures(
     }
     const unsubscribe = window.api.cartoCaptures.onProgress((payload) => {
       if (payload.repoPath === repoPath) {
-        setProgress({ done: payload.done, total: payload.total });
+        setProgress({ done: payload.done, total: payload.total, phase: payload.phase });
       }
     });
     return () => {
@@ -164,7 +164,9 @@ export function useScreenCaptures(
     const routeScreens = map.screens.filter(
       (s) => s.kind === 'route' && !s.locator.includes('['),
     );
-    const needsRun = routeScreens.some((s) => {
+    const viewScreens = state.hasRecipes ? map.screens.filter((s) => s.kind === 'view') : [];
+    const candidateScreens = [...routeScreens, ...viewScreens];
+    const needsRun = candidateScreens.some((s) => {
       const cap = state.captures[s.id];
       return !cap || cap.stale;
     });

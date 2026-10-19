@@ -411,6 +411,13 @@
   overflow: hidden;
 }
 
+.detailCaptureReason {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  margin: var(--space-1) 0 0 0;
+  line-height: 1.4;
+}
+
 .section {
   display: flex;
   flex-direction: column;

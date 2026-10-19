@@ -542,7 +542,7 @@ interface ElectronAPI {
     revoke(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
     run(repoPath: string): Promise<GitResult<ScreenCaptureRunResult>>;
     cancel(repoPath: string): Promise<GitResult<boolean>>;
-    onProgress(cb: (payload: { repoPath: string; done: number; total: number }) => void): () => void;
+    onProgress(cb: (payload: { repoPath: string; done: number; total: number; phase?: 'routes' | 'views' }) => void): () => void;
   };
   /**
    * Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).

@@ -5,6 +5,8 @@ import * as authRepos from '../ipc/authorized-repos';
 import * as startCmdModule from '../carto/screen-capture/start-command';
 import * as cartoScreensIpc from '../ipc/carto-screens';
 import * as contentKeyModule from '../carto/screen-capture/content-key';
+import * as recipesModule from '../carto/screen-capture/recipes';
+import * as viewRunnerModule from '../carto/screen-capture/view-runner';
 import {
   handleCartoCapturesConsent,
   handleCartoCapturesRun,
@@ -12,6 +14,7 @@ import {
 } from '../ipc/carto-captures';
 import {
   getCaptureConsent,
+  setCaptureConsent,
   upsertScreenCapture,
 } from '../db/carto-captures';
 import type { ScreenMap } from '../../types/screen-map';
@@ -23,6 +26,8 @@ describe('carto-captures IPC handlers', () => {
   beforeEach(() => {
     db = openTemporalAgentDatabase(':memory:');
     vi.spyOn(authRepos, 'authorizedRepoRoot').mockReturnValue(repoRoot);
+    vi.spyOn(recipesModule, 'readRecipes').mockResolvedValue(null);
+    vi.spyOn(viewRunnerModule, 'viewRunnerAvailable').mockReturnValue(false);
   });
 
   it('consent con una orden distinta de la detectada falla y no guarda', async () => {
@@ -45,6 +50,39 @@ describe('carto-captures IPC handlers', () => {
     expect(saved).toBeNull();
   });
 
+  it('con recetas, el permiso pide la orden con las vistas', async () => {
+    vi.spyOn(startCmdModule, 'detectStartCommand').mockResolvedValue({
+      executable: 'npm',
+      args: ['run', 'dev'],
+      portViaEnv: true,
+      display: 'npm run dev',
+    });
+
+    vi.spyOn(recipesModule, 'readRecipes').mockResolvedValue({
+      ok: true,
+      recipes: {
+        version: 1,
+        runner: { kind: 'e2e', config: 'e2e/e2e.config.ts', testsDir: 'e2e/tests' },
+        setup: [],
+        screens: {},
+      },
+    });
+    vi.spyOn(viewRunnerModule, 'viewRunnerAvailable').mockReturnValue(true);
+
+    const result = await handleCartoCapturesGet({ repoPath: repoRoot }, { db });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.consent.status).toBe('needs-consent');
+    if (result.data?.consent.status !== 'unsupported') {
+      expect(result.data?.consent.command).toBe(
+        'npm run dev · vistas con pruebas: e2e (e2e/e2e.config.ts)',
+      );
+    }
+    expect(result.data?.viewsRunner).toBe('e2e (e2e/e2e.config.ts)');
+    expect(result.data?.hasRecipes).toBe(true);
+    expect(result.data?.runnerConfig).toBe('e2e/e2e.config.ts');
+  });
+
   it('run sin permiso vigente falla', async () => {
     vi.spyOn(startCmdModule, 'detectStartCommand').mockResolvedValue({
       executable: 'npm',
@@ -62,6 +100,72 @@ describe('carto-captures IPC handlers', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/no hay permiso vigente/i);
+  });
+
+  it('una vista sin receta queda no-recipe', async () => {
+    const fullCommand = 'npm run dev · vistas con pruebas: e2e (e2e/e2e.config.ts)';
+    vi.spyOn(startCmdModule, 'detectStartCommand').mockResolvedValue({
+      executable: 'npm',
+      args: ['run', 'dev'],
+      portViaEnv: true,
+      display: 'npm run dev',
+    });
+    vi.spyOn(recipesModule, 'readRecipes').mockResolvedValue({
+      ok: true,
+      recipes: {
+        version: 1,
+        runner: { kind: 'e2e', config: 'e2e/e2e.config.ts', testsDir: 'e2e/tests' },
+        setup: [],
+        screens: {
+          'view:with-recipe': { steps: [] },
+        },
+      },
+    });
+    vi.spyOn(viewRunnerModule, 'viewRunnerAvailable').mockReturnValue(true);
+
+    // Conceder permiso
+    setCaptureConsent(repoRoot, fullCommand, { db });
+
+    const mockMap: ScreenMap = {
+      repoPath: repoRoot,
+      headSha: 'head1',
+      detectors: ['views'],
+      coverage: { state: 'complete' },
+      readAt: '2026-10-19T12:00:00Z',
+      screens: [
+        {
+          id: 'view:without-recipe',
+          kind: 'view',
+          name: 'Sin Receta',
+          locator: 'activeTab=Orphan',
+          declaredIn: 'components/View.tsx',
+          description: null,
+          files: [],
+          tags: [],
+          primaryTag: null,
+          stats: { byRole: {}, lastChangedAt: null },
+        },
+      ],
+    };
+
+    vi.spyOn(cartoScreensIpc, 'getCachedScreenMap').mockReturnValue(mockMap);
+
+    const fakeRouteRunner = async () => ({ captured: 0, skipped: [], cancelled: false });
+    const fakeViewRunner = async () => ({ images: new Map(), failed: [] });
+
+    const result = await handleCartoCapturesRun(
+      { repoPath: repoRoot },
+      undefined,
+      { db },
+      fakeRouteRunner as any,
+      fakeViewRunner as any,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.data?.skipped).toContainEqual({
+      screenId: 'view:without-recipe',
+      reason: 'no-recipe',
+    });
   });
 
   it('get marca stale cuando cambia la clave de contenido', async () => {

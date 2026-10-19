@@ -19,6 +19,7 @@ export interface StartCommand {
    * carpeta rompe el que está corriendo (medido en carto-05b).
    */
   knownPorts?: number[];
+  viewsRunner?: string;
 }
 
 /** Lee los puertos que declaran los scripts `dev` y `start`. */
