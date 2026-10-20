@@ -16,7 +16,7 @@
     {
       "waitFor": {
         "role": "button",
-        "name": "Abrir Cartografía"
+        "name": "Graph"
       },
       "timeoutMs": 240000
     },
@@ -113,7 +113,13 @@
         {
           "click": {
             "role": "button",
-            "name": "Abrir Cartografía"
+            "name": "Graph"
+          }
+        },
+        {
+          "click": {
+            "role": "menuitem",
+            "nameMatches": "^Cartograf"
           }
         },
         {
