@@ -340,14 +340,20 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         t={t}
       />
 
-      {/* 2. Captura grande 16:10 y motivo si fue omitida */}
+      {/* Dos columnas (Alejandro, carto-05e): la captura a la izquierda, un poco más chica, y lo
+          que antes había que bajar para leer, a la derecha. */}
+      <div className={styles.detailBody}>
+      <div className={styles.detailMediaCol}>
+      {/* 2. Captura 16:10 y motivo si fue omitida */}
       <DetailCaptureView
         capture={capture}
         screenKind={screen.kind}
         skippedItem={skippedItem}
         t={t}
       />
+      </div>
 
+      <div className={styles.detailInfoCol}>
       {/* Barra de composición con leyenda */}
       {totalRoles > 0 && (
         <div className={styles.detailComposition} data-testid="detail-composition">
@@ -402,6 +408,8 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         {/* Lista con scroll independiente */}
         <DetailFileList files={currentRoleFiles} t={t} />
       </section>
+      </div>
+      </div>
     </motion.div>
   );
 }

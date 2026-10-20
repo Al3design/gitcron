@@ -8,7 +8,8 @@
 // Al tocar uno se expande a dos columnas (detalle a la izquierda y columna angosta a la derecha).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, LayoutGrid, Monitor, PanelsTopLeft } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Monitor, MoreHorizontal, PanelsTopLeft, RefreshCw, ShieldOff } from 'lucide-react';
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@/components/ContextMenus';
 import { useT } from '@/hooks/use-translation';
 import { useScreenMap } from '@/hooks/use-screen-map';
 import { useScreenCaptures } from '@/hooks/use-screen-captures';
@@ -182,6 +183,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   };
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
+  const [captureMenuAt, setCaptureMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
   const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
   const [tagFilter, setTagFilter] = useState<ScreenTag | null>(getInitialTagFilter);
@@ -472,24 +474,50 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                     </button>
                   </>
                 ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void refreshCaptures()}
-                      className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
-                      data-testid="capture-refresh-button"
-                    >
-                      {t('cartography.screens.captures.refresh')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void revoke()}
-                      className={styles.captureActionBtn}
-                      data-testid="capture-revoke-button"
-                    >
-                      {t('cartography.screens.captures.revoke')}
-                    </button>
-                  </>
+                  // Las dos acciones van en el menú de la app, con un solo botón arriba a la derecha
+                  // (Alejandro, carto-05e: los botones quedaban flotando en el medio de la franja).
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setCaptureMenuAt({ x: r.right - 220, y: r.bottom + 4 });
+                    }}
+                    className={styles.captureActionBtn}
+                    title={t('cartography.screens.captures.menu')}
+                    aria-label={t('cartography.screens.captures.menu')}
+                    aria-haspopup="menu"
+                    aria-expanded={captureMenuAt !== null}
+                    data-testid="capture-menu-button"
+                  >
+                    <MoreHorizontal size={14} aria-hidden="true" />
+                  </button>
+                )}
+                {captureMenuAt && (
+                  <ContextMenu
+                    x={captureMenuAt.x}
+                    y={captureMenuAt.y}
+                    onClose={() => setCaptureMenuAt(null)}
+                    ariaLabel={t('cartography.screens.captures.menu')}
+                  >
+                    <ContextMenuItem
+                      icon={<RefreshCw size={13} />}
+                      text={t('cartography.screens.captures.refresh')}
+                      onClick={() => {
+                        setCaptureMenuAt(null);
+                        void refreshCaptures();
+                      }}
+                    />
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      danger
+                      icon={<ShieldOff size={13} />}
+                      text={t('cartography.screens.captures.revoke')}
+                      onClick={() => {
+                        setCaptureMenuAt(null);
+                        void revoke();
+                      }}
+                    />
+                  </ContextMenu>
                 )}
               </div>
             </div>

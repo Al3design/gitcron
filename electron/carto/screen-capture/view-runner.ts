@@ -149,6 +149,19 @@ function ignoreTempTestsLocally(root: string, testsDir: string): void {
   }
 }
 
+/** Traduce los errores conocidos del sistema de pruebas; si no, la última línea con un error. */
+function runFailureReason(outcome: { outputLines: string[]; error: Error | null; exitCode: number | null }): string | null {
+  const text = outcome.outputLines.join('\n');
+  if (/LAUNCH_TIMEOUT|starting an attempt on engine \w+ timed out/.test(text)) {
+    return 'la app tardó demasiado en abrirse (¿la máquina está muy ocupada?)';
+  }
+  if (/APP_UNREACHABLE/.test(text)) return 'el servidor de la app no respondió a tiempo';
+  if (/INVALID_CONFIG/.test(text)) return 'la configuración de las pruebas del proyecto no es válida';
+  if (outcome.error) return outcome.error.message;
+  const last = [...outcome.outputLines].reverse().find((l) => /error|ERROR|FAIL|×/.test(l) && !/GITCRON_RECIPE/.test(l));
+  return last ? last.trim().slice(0, 160) : null;
+}
+
 /** El `node` del sistema, si está en el PATH y se puede lanzar directo (un .exe, no un .cmd). */
 async function findSystemNode(): Promise<string | undefined> {
   try {
@@ -386,11 +399,14 @@ export async function runViewCaptures(
     const images = collectCapturedImages(outputDir, testBaseName, shots, fsImpl);
     const failed = [...outcome.failed];
 
+    // Si la prueba no llegó, el motivo va en la falla de cada pantalla: con una dirección capturada,
+    // el error general no se mostraba y solo quedaba «la prueba no llegó» (Alejandro, carto-05e).
+    const reason = runFailureReason(outcome);
     for (const screen of screens) {
       if (!images.has(screen.id) && !failed.some((f) => f.screenId === screen.id)) {
         failed.push({
           screenId: screen.id,
-          detail: 'la prueba no llegó a esta pantalla',
+          detail: reason ? `la prueba no llegó a esta pantalla: ${reason}` : 'la prueba no llegó a esta pantalla',
         });
       }
     }
