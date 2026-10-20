@@ -119,6 +119,16 @@ Al probarlo, Alejandro vio abrirse otra ventana de GitCron para sacar las fotos 
   - Al terminar, la franja resume («10 listas · 2 sin receta») y el detalle sigue desplegable.
   - **Detener** sigue estando.
 
+### 15. De la pantalla al archivo: abrir, ver cambios y preguntar (tarea 2.3, 2026-10-20)
+
+En el detalle de una pantalla, cada archivo de la lista ofrece tres acciones, con íconos que aparecen al pasar el mouse o con foco de teclado (siempre visibles en la fila elegida):
+
+- **Preguntar a la IA:** el archivo pasa a ser el tema del chat general (selección `file`, `at: 'worktree'`, con el commit en que se eligió), con la pregunta «¿Qué hace este archivo en esta pantalla?». Si el repo cambió de commit desde que se eligió, el chat ya rechaza la selección vieja.
+- **Ver cambios:** solo si el archivo tiene cambios sin guardar (está en la lista de modificados de Git). Se despliega debajo de la lista con el visor de diferencias que ya usa la app (`DiffViewer`), en modo lectura. Se pliega con el mismo botón.
+- **Abrir:** con el programa que el sistema tiene para ese archivo (`shellOpenItem`). Si falla (por ejemplo, el archivo ya no está), se avisa con el aviso de la app.
+
+Cada fila dice además de dónde salió el vínculo, en palabras: «leído en el código» (`static`), «deducido» (`inferred`) o «puesto a mano» (`manual`). Así la persona y la IA distinguen lo comprobado de lo supuesto.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
