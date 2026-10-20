@@ -189,6 +189,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   };
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
+  const selectScreen = (id: string) => setSelectedScreenId(id);
   const [captureMenuAt, setCaptureMenuAt] = useState<{ x: number; y: number } | null>(null);
   // Las pantallas cuya foto se está sacando ahora: su cuadro muestra el efecto de píxeles.
   const capturingIds = useMemo(
@@ -646,6 +647,8 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
             /* Vista expandida: Detalle a la izquierda + Columna angosta a la derecha */
             <div className={styles.detailLayout} data-testid="screen-catalog-detail-layout">
               <ScreenDetail
+                // Uno nuevo por pantalla: al cambiar desde la columna no viaja, aparece en su lugar.
+                key={selectedScreen.id}
                 screen={selectedScreen}
                 repoPath={repoPath}
                 capture={captureState?.captures[selectedScreen.id]}
@@ -666,20 +669,21 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   const screenCapture = captureState?.captures[screen.id];
 
                   return (
-                    // Mismo layoutId que su cuadro de la grilla: al abrir y al cerrar el detalle, cada
-                    // cuadro viaja entre su lugar en la grilla y la columna, de ida y de vuelta.
+                    // Sin layoutId: con él, al cambiar de pantalla desde la columna se cruzaban dos
+                    // viajes (el cuadro tocado hacia el detalle y el detalle anterior hacia la columna)
+                    // y saltaba (Alejandro, carto-05e). Solo se reacomoda cuando entra o sale uno.
                     <motion.div
                       key={screen.id}
-                      layoutId={shouldReduceMotion ? undefined : screen.id}
-                      transition={{ duration: 0.3, ease: 'easeOut' }}
+                      layout={shouldReduceMotion ? false : 'position'}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
                       className={styles.sidebarCard}
-                      onClick={() => setSelectedScreenId(screen.id)}
+                      onClick={() => selectScreen(screen.id)}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          setSelectedScreenId(screen.id);
+                          selectScreen(screen.id);
                         }
                       }}
                       data-testid={`sidebar-screen-${screen.id}`}
@@ -738,7 +742,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                         capture={captureState?.captures[screen.id]}
                         capturing={capturingIds.has(screen.id)}
                         size={cardSize}
-                        onSelect={() => setSelectedScreenId(screen.id)}
+                        onSelect={() => selectScreen(screen.id)}
                         onExplain={handleExplain}
                       />
                     ))}
@@ -757,7 +761,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   capture={captureState?.captures[screen.id]}
                   capturing={capturingIds.has(screen.id)}
                   size={cardSize}
-                  onSelect={() => setSelectedScreenId(screen.id)}
+                  onSelect={() => selectScreen(screen.id)}
                   onExplain={handleExplain}
                 />
               ))}

@@ -350,6 +350,9 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
   return (
     <motion.div
       layoutId={shouldReduceMotion ? undefined : screen.id}
+      // Al cambiar de pantalla desde la columna, el detalle nuevo aparece con un fundido corto.
+      initial={shouldReduceMotion ? false : { opacity: 0.5 }}
+      animate={{ opacity: 1 }}
       transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
       className={styles.detailColumn}
       data-testid={`screen-detail-${screen.id}`}

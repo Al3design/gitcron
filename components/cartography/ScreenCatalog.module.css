@@ -303,6 +303,9 @@
   padding: var(--space-4);
   gap: var(--space-3);
   overflow-y: auto;
+  /* Lugar reservado para la barra: si aparecía con mucho contenido, la captura se achicaba un
+     poco y se movía (Alejandro, carto-05e). */
+  scrollbar-gutter: stable;
 }
 
 /* El efecto de píxeles encima de la imagen mientras se saca su foto (Alejandro, carto-05e):
