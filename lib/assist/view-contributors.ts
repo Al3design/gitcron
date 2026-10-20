@@ -87,11 +87,43 @@ export function graphContribution(
   };
 }
 
+function isValidFilePath(path: string | null | undefined): path is string {
+  if (!path || typeof path !== 'string') return false;
+  const trimmed = path.trim();
+  if (trimmed === '' || trimmed.length > 500) return false;
+  if (trimmed.includes('..')) return false;
+  if (trimmed.startsWith('/') || trimmed.startsWith('\\') || /^[a-zA-Z]:/.test(trimmed)) return false;
+  return true;
+}
+
 export function cartoContribution(
   nodeId: string | null,
   takenAtHead: string | null,
   selectedScreen?: { id: string; name: string } | null,
+  selectedFile?: { path: string } | null,
 ): { selection: ContextSelection; actions: AssistAction[] } {
+  if (
+    selectedFile &&
+    isValidFilePath(selectedFile.path) &&
+    takenAtHead &&
+    SHA_REGEX.test(takenAtHead)
+  ) {
+    return {
+      selection: {
+        kind: 'file',
+        path: selectedFile.path,
+        at: 'worktree',
+        takenAtHead,
+      },
+      actions: [
+        // Con el nombre: sin él, la sugerencia del chat mostraba «{{name}}» (auditoría de carto-06).
+        {
+          ...createConsultAction('file-in-screen', 'assist.ask.fileInScreen'),
+          labelParams: { name: selectedFile.path.split('/').pop() ?? selectedFile.path },
+        },
+      ],
+    };
+  }
   if (
     selectedScreen &&
     selectedScreen.id &&

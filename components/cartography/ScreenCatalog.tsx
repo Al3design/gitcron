@@ -114,6 +114,7 @@ export interface ScreenCatalogProps {
   repoPath: string;
   refreshKey: number;
   onSelectScreen?: (screen: ScreenEntry | null) => void;
+  onSelectFile?: (file: { path: string } | null) => void;
 }
 
 function resolveCoverageNotice(
@@ -129,7 +130,8 @@ function resolveCoverageNotice(
       return t('cartography.screens.coverage.indexing');
     }
     const count = (coverage.unresolved ?? 0) + (coverage.excluded ?? 0);
-    return t('cartography.screens.coverage.unresolved', { n: count > 0 ? count : 1 });
+    const n = count > 0 ? count : 1;
+    return t(n === 1 ? 'cartography.screens.coverage.unresolvedOne' : 'cartography.screens.coverage.unresolved', { n });
   }
 
   if (coverage.state === 'unsupported') {
@@ -151,6 +153,7 @@ function sortScreens(screens: ScreenEntry[]): ScreenEntry[] {
 }
 
 export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCatalogProps) {
+  const onSelectFile = (arguments[0] as ScreenCatalogProps | undefined)?.onSelectFile;
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
   const { map, loading, error } = useScreenMap(repoPath, refreshKey);
@@ -269,7 +272,10 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   // Notificar al contenedor sobre la pantalla seleccionada
   useEffect(() => {
     onSelectScreen?.(selectedScreen);
-  }, [selectedScreen, onSelectScreen]);
+    if (!selectedScreen) {
+      onSelectFile?.(null);
+    }
+  }, [selectedScreen, onSelectScreen, onSelectFile]);
 
   // Cerrar detalle con tecla Escape
   useEffect(() => {
@@ -296,6 +302,13 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
       useAssistDockStore.getState().setPendingPrompt(t('assist.ask.screenExplain'));
     },
     [onSelectScreen, t],
+  );
+
+  const handleAskFile = useCallback(
+    (path: string) => {
+      onSelectFile?.({ path });
+    },
+    [onSelectFile],
   );
 
   // Secciones por tema principal cuando groupBy === 'tag'
@@ -653,8 +666,12 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 repoPath={repoPath}
                 capture={captureState?.captures[selectedScreen.id]}
                 lastRun={lastRun}
-                onClose={() => setSelectedScreenId(null)}
+                onClose={() => {
+                  setSelectedScreenId(null);
+                  onSelectFile?.(null);
+                }}
                 onExplain={handleExplain}
+                onAskFile={handleAskFile}
               />
 
               <aside

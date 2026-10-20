@@ -18,6 +18,7 @@ import {
 import { useT } from '@/hooks/use-translation';
 import { useCartoLayout } from '@/hooks/use-carto-layout';
 import { useGitStore } from '@/lib/git-store';
+import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { useAssistContribution } from '@/lib/assist/use-assist-contribution';
 import { cartoContribution, headShaOf } from '@/lib/assist/view-contributors';
 import { ContentHeader } from '@/components/ContentHeader';
@@ -52,10 +53,12 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // de archivo se limpia (los símbolos son de otro archivo).
   const [selectedNode, setSelectedNode] = useState<CartoNode | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<{ id: string; name: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ path: string } | null>(null);
   const selectedAtHeadRef = useRef<string | null>(null);
 
   const handleSelectNode = useCallback((node: CartoNode | null) => {
     setSelectedNode(node);
+    setSelectedFile(null);
     if (node) {
       const gitState = useGitStore.getState();
       selectedAtHeadRef.current = headShaOf(gitState.commits, gitState.currentBranch);
@@ -65,6 +68,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   }, []);
 
   const handleSelectScreen = useCallback((screen: ScreenEntry | null) => {
+    setSelectedFile(null);
     if (screen) {
       setSelectedScreen({ id: screen.id, name: screen.description?.suggestedName || screen.name });
       const gitState = useGitStore.getState();
@@ -74,9 +78,29 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
     }
   }, []);
 
+  const handleSelectFile = useCallback(
+    (file: { path: string } | null) => {
+      setSelectedFile(file);
+      if (file) {
+        const gitState = useGitStore.getState();
+        selectedAtHeadRef.current = headShaOf(gitState.commits, gitState.currentBranch);
+        useAssistDockStore.getState().setOpen(true);
+        useAssistDockStore.getState().setActiveTab('chat');
+        const baseName = file.path.split('/').pop() ?? file.path;
+        useAssistDockStore.getState().setPendingPrompt(t('assist.ask.fileInScreen', { name: baseName }));
+      }
+    },
+    [t],
+  );
+
   // El viewId es el que calcula app/page.tsx para Cartografía: 'carto'.
   useAssistContribution('carto', () =>
-    cartoContribution(selectedNode?.id ?? null, selectedAtHeadRef.current, selectedScreen)
+    cartoContribution(
+      selectedNode?.id ?? null,
+      selectedAtHeadRef.current,
+      selectedScreen,
+      selectedFile,
+    )
   );
   // Estado del índice del repo (idle/indexing/ready/error), gobernado por main.
   const [graphStatus, setGraphStatus] = useState<CartoGraphStatus | null>(null);
@@ -124,6 +148,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   useEffect(() => {
     handleSelectNode(null);
     handleSelectScreen(null);
+    setSelectedFile(null);
     setGraphStatus(null);
     if (!repoPath) return;
 
@@ -235,6 +260,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                 repoPath={repoPath}
                 refreshKey={graphRefresh}
                 onSelectScreen={handleSelectScreen}
+                onSelectFile={handleSelectFile}
               />
             ) : (
               <div className={styles.lensContent}>

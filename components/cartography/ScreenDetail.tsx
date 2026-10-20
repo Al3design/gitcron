@@ -7,11 +7,12 @@
 // qué hace (desde caché o aviso para consultar); y archivos agrupados por rol
 // en un control segmentado con scroll independiente.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Maximize2, Minimize2, Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
+import { ExternalLink, GitCompare, Maximize2, Minimize2, Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
+import { DiffViewer } from '@/components/DiffViewer';
 import { cn } from '@/lib/utils';
 import type { ScreenCapture, ScreenCaptureRunResult, ScreenDescription, ScreenEntry, ScreenFileLink, ScreenFileRole } from '@/types/screen-map';
 import { CompositionBar, getRoleGroupItems } from './ScreenCard';
@@ -24,6 +25,7 @@ export interface ScreenDetailProps {
   lastRun?: ScreenCaptureRunResult | null;
   onClose: () => void;
   onExplain?: (screen: ScreenEntry) => void;
+  onAskFile?: (path: string) => void;
 }
 
 const ROLE_ORDER: ScreenFileRole[] = [
@@ -147,7 +149,6 @@ function DetailCaptureView({
     <>
       <div className={styles.detailCapture} data-testid="detail-capture">
         {capture && (
-          // Agranda la captura dentro de su lugar y la vuelve a su tamaño, sin modal (Alejandro, carto-05e).
           <button
             type="button"
             className={styles.captureZoomBtn}
@@ -229,13 +230,199 @@ function DetailDescription({
   );
 }
 
+function getFileProvenance(
+  provenance: string,
+  t: (k: string, vars?: Record<string, string | number>) => string,
+): { label: string | null; hint?: string } {
+  if (provenance === 'static') {
+    return {
+      label: t('cartography.screens.provenance.static'),
+      hint: t('cartography.screens.provenance.staticHint'),
+    };
+  }
+  if (provenance === 'inferred') {
+    return {
+      label: t('cartography.screens.provenance.inferred'),
+      hint: t('cartography.screens.provenance.inferredHint'),
+    };
+  }
+  if (provenance === 'manual') {
+    return {
+      label: t('cartography.screens.provenance.manual'),
+      hint: t('cartography.screens.provenance.manualHint'),
+    };
+  }
+  return { label: null };
+}
+
+function DetailFileActions({
+  filePath,
+  repoPath,
+  isDiffOpen,
+  hasChanges,
+  onToggleDiff,
+  onAskFile,
+  t,
+}: {
+  filePath: string;
+  repoPath: string;
+  isDiffOpen: boolean;
+  hasChanges: boolean;
+  onToggleDiff: (path: string) => void;
+  onAskFile?: (path: string) => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const handleOpenFile = async () => {
+    try {
+      const res = await window.api.shellOpenItem(repoPath, filePath);
+      if (!res.success) {
+        useGitStore
+          .getState()
+          .setError(t('cartography.screens.fileOpenFailed', { error: res.error ?? '' }));
+      }
+    } catch (err) {
+      useGitStore
+        .getState()
+        .setError(
+          t('cartography.screens.fileOpenFailed', {
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+    }
+  };
+
+  const diffTitle = t(
+    isDiffOpen ? 'cartography.screens.fileHideDiff' : 'cartography.screens.fileShowDiff',
+  );
+
+  return (
+    <div className={styles.fileActions}>
+      <button
+        type="button"
+        className={cn(styles.fileActionButton, styles.fileAskButton)}
+        onClick={() => onAskFile?.(filePath)}
+        title={t('cartography.screens.fileAsk')}
+        aria-label={t('cartography.screens.fileAsk')}
+        data-testid={`file-ask-${filePath}`}
+      >
+        <Sparkles size={14} aria-hidden="true" />
+      </button>
+
+      {hasChanges && (
+        <button
+          type="button"
+          className={cn(
+            styles.fileActionButton,
+            isDiffOpen && styles.fileActionButtonActive,
+          )}
+          onClick={() => onToggleDiff(filePath)}
+          title={diffTitle}
+          aria-label={diffTitle}
+          aria-pressed={isDiffOpen}
+          data-testid={`file-diff-${filePath}`}
+        >
+          <GitCompare size={14} aria-hidden="true" />
+        </button>
+      )}
+
+      <button
+        type="button"
+        className={styles.fileActionButton}
+        onClick={handleOpenFile}
+        title={t('cartography.screens.fileOpen')}
+        aria-label={t('cartography.screens.fileOpen')}
+        data-testid={`file-open-${filePath}`}
+      >
+        <ExternalLink size={14} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function DetailFileItem({
+  file,
+  repoPath,
+  isDiffOpen,
+  hasChanges,
+  onToggleDiff,
+  onAskFile,
+  t,
+}: {
+  file: ScreenFileLink;
+  repoPath: string;
+  isDiffOpen: boolean;
+  hasChanges: boolean;
+  onToggleDiff: (path: string) => void;
+  onAskFile?: (path: string) => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const baseName = file.path.split('/').pop() ?? file.path;
+  const lastSlash = file.path.lastIndexOf('/');
+  const dirName = lastSlash !== -1 ? file.path.substring(0, lastSlash) : '';
+  const { label: provenanceLabel, hint: provenanceHint } = getFileProvenance(file.provenance, t);
+
+  return (
+    <li
+      className={styles.fileItem}
+      aria-current={isDiffOpen ? 'true' : undefined}
+    >
+      <div className={styles.fileItemLeft}>
+        <div className={styles.fileNameRow}>
+          <span className={styles.fileName} title={file.path}>
+            {baseName}
+          </span>
+          {dirName && (
+            <span className={styles.fileDir} title={dirName}>
+              {dirName}
+            </span>
+          )}
+          {file.shared && (
+            <span className={styles.sharedBadge} data-testid="shared-badge">
+              {t('cartography.screens.sharedBadge')}
+            </span>
+          )}
+        </div>
+        {provenanceLabel && (
+          <span
+            className={styles.fileProvenance}
+            title={provenanceHint}
+            data-testid={`file-provenance-${file.path}`}
+          >
+            {provenanceLabel}
+          </span>
+        )}
+      </div>
+
+      <DetailFileActions
+        filePath={file.path}
+        repoPath={repoPath}
+        isDiffOpen={isDiffOpen}
+        hasChanges={hasChanges}
+        onToggleDiff={onToggleDiff}
+        onAskFile={onAskFile}
+        t={t}
+      />
+    </li>
+  );
+}
+
 function DetailFileList({
   files,
+  repoPath,
+  diffFor,
+  onToggleDiff,
+  onAskFile,
   t,
 }: {
   files: ScreenFileLink[];
+  repoPath: string;
+  diffFor: { path: string; diff: string | null; error: string | null } | null;
+  onToggleDiff: (path: string) => void;
+  onAskFile?: (path: string) => void;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
+  const modifiedFiles = useGitStore((s) => s.modifiedFiles);
+
   return (
     <div className={styles.filesScrollContainer} data-testid="screen-detail-files-list">
       <ul className={styles.fileList}>
@@ -252,28 +439,20 @@ function DetailFileList({
             );
           }
 
-          const baseName = file.path.split('/').pop() ?? file.path;
-          const lastSlash = file.path.lastIndexOf('/');
-          const dirName = lastSlash !== -1 ? file.path.substring(0, lastSlash) : '';
+          const hasChanges = modifiedFiles.some((f) => f.path === file.path);
+          const isDiffOpen = diffFor?.path === file.path;
 
           return (
-            <li key={file.path} className={styles.fileItem}>
-              <div className={styles.fileItemLeft}>
-                <span className={styles.fileName} title={file.path}>
-                  {baseName}
-                </span>
-                {dirName && (
-                  <span className={styles.fileDir} title={dirName}>
-                    {dirName}
-                  </span>
-                )}
-              </div>
-              {file.shared && (
-                <span className={styles.sharedBadge} data-testid="shared-badge">
-                  {t('cartography.screens.sharedBadge')}
-                </span>
-              )}
-            </li>
+            <DetailFileItem
+              key={file.path}
+              file={file}
+              repoPath={repoPath}
+              isDiffOpen={isDiffOpen}
+              hasChanges={hasChanges}
+              onToggleDiff={onToggleDiff}
+              onAskFile={onAskFile}
+              t={t}
+            />
           );
         })}
       </ul>
@@ -281,10 +460,181 @@ function DetailFileList({
   );
 }
 
+function DetailDiffView({
+  diffFor,
+  onClose,
+  t,
+}: {
+  diffFor: { path: string; diff: string | null; error: string | null };
+  onClose: () => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const fileName = diffFor.path.split('/').pop() ?? diffFor.path;
+  const isLoading = diffFor.diff === null && diffFor.error === null;
+
+  return (
+    <div className={styles.diffContainer} data-testid="screen-detail-diff-container">
+      <div className={styles.diffHeader}>
+        <h5 className={styles.diffTitle}>
+          {t('cartography.screens.fileDiffTitle', { name: fileName })}
+        </h5>
+        <button
+          type="button"
+          className={styles.diffCloseBtn}
+          onClick={onClose}
+          title={t('cartography.screens.closeDetail')}
+          aria-label={t('cartography.screens.closeDetail')}
+          data-testid="diff-close-button"
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      </div>
+      {isLoading ? (
+        <div className={styles.diffLoading} data-testid="diff-loading">
+          {t('cartography.screens.fileDiffLoading')}
+        </div>
+      ) : diffFor.error ? (
+        <div className={styles.diffError} data-testid="diff-error">
+          {diffFor.error}
+        </div>
+      ) : (
+        <div className={styles.diffViewerWrapper} data-testid="diff-viewer-wrapper">
+          <DiffViewer diff={diffFor.diff ?? ''} filePath={diffFor.path} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Los cambios de lugar dentro del detalle (agrandar o achicar la captura). */
 const DETAIL_LAYOUT_TRANSITION = { duration: 0.3, ease: 'easeOut' } as const;
 
+function DetailFilesSection({
+  files,
+  repoPath,
+  onAskFile,
+  shouldReduceMotion,
+  t,
+}: {
+  files: ScreenFileLink[];
+  repoPath: string;
+  onAskFile?: (path: string) => void;
+  shouldReduceMotion?: boolean | null;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const filesByRole = useMemo(() => groupFilesByRole(files), [files]);
+
+  const availableRoles = useMemo(() => {
+    return ROLE_ORDER.filter((role) => (filesByRole.get(role)?.length ?? 0) > 0);
+  }, [filesByRole]);
+
+  const [activeRole, setActiveRole] = useState<ScreenFileRole>(
+    availableRoles[0] ?? 'screen',
+  );
+
+  const [diffFor, setDiffFor] = useState<{ path: string; diff: string | null; error: string | null } | null>(null);
+
+  const effectiveRole: ScreenFileRole = availableRoles.includes(activeRole)
+    ? activeRole
+    : (availableRoles[0] ?? 'screen');
+
+  const currentRoleFiles = filesByRole.get(effectiveRole) ?? [];
+
+  const handleSelectRole = (role: ScreenFileRole) => {
+    setActiveRole(role);
+    setDiffFor(null);
+  };
+
+  const handleToggleDiff = useCallback(
+    async (filePath: string) => {
+      if (diffFor?.path === filePath) {
+        setDiffFor(null);
+        return;
+      }
+      setDiffFor({ path: filePath, diff: null, error: null });
+      try {
+        const res = await window.api.gitDiff(repoPath, filePath);
+        setDiffFor((current) => {
+          if (current?.path !== filePath) return current;
+          if (res.success) {
+            return { path: filePath, diff: res.data ?? '', error: null };
+          }
+          return {
+            path: filePath,
+            diff: null,
+            error: res.error || t('cartography.screens.fileDiffError'),
+          };
+        });
+      } catch (err) {
+        setDiffFor((current) => {
+          if (current?.path !== filePath) return current;
+          return {
+            path: filePath,
+            diff: null,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        });
+      }
+    },
+    [diffFor?.path, repoPath, t],
+  );
+
+  return (
+    <motion.section
+      layout={shouldReduceMotion ? false : 'position'}
+      transition={DETAIL_LAYOUT_TRANSITION}
+      className={styles.detailFilesSection}
+      aria-label="Archivos"
+    >
+      <h4 className={styles.sectionLabel}>Archivos</h4>
+
+      {availableRoles.length > 0 && (
+        <div
+          className={styles.fileTabs}
+          role="tablist"
+          data-testid="screen-role-segmented"
+        >
+          {availableRoles.map((role) => {
+            const count = filesByRole.get(role)?.length ?? 0;
+            const isActive = effectiveRole === role;
+            return (
+              <button
+                key={role}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => handleSelectRole(role)}
+                data-testid={`role-tab-${role}`}
+              >
+                {t(`cartography.screens.role.${role}`)} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <DetailFileList
+        files={currentRoleFiles}
+        repoPath={repoPath}
+        diffFor={diffFor}
+        onToggleDiff={handleToggleDiff}
+        onAskFile={onAskFile}
+        t={t}
+      />
+
+      {diffFor && (
+        <DetailDiffView
+          diffFor={diffFor}
+          onClose={() => setDiffFor(null)}
+          t={t}
+        />
+      )}
+    </motion.section>
+  );
+}
+
 export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onExplain }: ScreenDetailProps) {
+  const onAskFile = (arguments[0] as ScreenDetailProps | undefined)?.onAskFile;
   const t = useT();
   const rawLang = useGitStore((s) => s.language) ?? 'es';
   const lang: 'es' | 'en' | 'zh' = rawLang === 'zh' ? 'zh' : rawLang === 'en' ? 'en' : 'es';
@@ -296,7 +646,6 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
   }, [capture, screen.kind, screen.id, lastRun]);
 
   const [cached, setCached] = useState<{ screenId: string; description: ScreenDescription } | null>(null);
-  // Qué pantalla tiene la captura agrandada: al cambiar de pantalla vuelve sola a su tamaño.
   const [expandedFor, setExpandedFor] = useState<string | null>(null);
   const imageExpanded = expandedFor === screen.id;
   const description: ScreenDescription | null =
@@ -326,31 +675,17 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
     };
   }, [repoPath, screen.id, screen.description, lang]);
 
-  const filesByRole = useMemo(() => groupFilesByRole(screen.files), [screen.files]);
-
-  const availableRoles = useMemo(() => {
-    return ROLE_ORDER.filter((role) => (filesByRole.get(role)?.length ?? 0) > 0);
-  }, [filesByRole]);
-
-  const [activeRole, setActiveRole] = useState<ScreenFileRole>(
-    availableRoles[0] ?? 'screen'
-  );
-
-  const effectiveRole: ScreenFileRole = availableRoles.includes(activeRole) ? activeRole : (availableRoles[0] ?? 'screen');
-
   const displayName = description?.suggestedName || screen.name;
   const locationSubtitle =
     screen.kind === 'route' ? screen.locator : t('cartography.screens.viewInApp');
   const locationTooltip = `${screen.locator} · ${screen.declaredIn}`;
 
-  const currentRoleFiles = filesByRole.get(effectiveRole) ?? [];
   const roleGroups = getRoleGroupItems(screen.stats?.byRole);
   const totalRoles = roleGroups.reduce((acc, r) => acc + r.count, 0);
 
   return (
     <motion.div
       layoutId={shouldReduceMotion ? undefined : screen.id}
-      // Al cambiar de pantalla desde la columna, el detalle nuevo aparece con un fundido corto.
       initial={shouldReduceMotion ? false : { opacity: 0.5 }}
       animate={{ opacity: 1 }}
       transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.25, ease: 'easeOut' }}
@@ -368,91 +703,58 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         t={t}
       />
 
-      {/* La composición y «Qué hace» van a la derecha de la captura; con la captura agrandada pasan
-          abajo. Los archivos, siempre abajo y a todo el ancho. Los cambios de lugar se animan, de
-          ida y de vuelta (Alejandro, carto-05e). */}
       <div className={cn(styles.detailBody, imageExpanded && styles.detailBodyExpanded)}>
-      <motion.div
-        layout={!shouldReduceMotion}
-        transition={DETAIL_LAYOUT_TRANSITION}
-        className={styles.detailMediaCol}
-      >
-      {/* 2. Captura 16:10 y motivo si fue omitida */}
-      <DetailCaptureView
-        capture={capture}
-        screenKind={screen.kind}
-        skippedItem={skippedItem}
-        expanded={imageExpanded}
-        onToggleExpanded={() => setExpandedFor(imageExpanded ? null : screen.id)}
-        t={t}
-      />
-      </motion.div>
+        <motion.div
+          layout={!shouldReduceMotion}
+          transition={DETAIL_LAYOUT_TRANSITION}
+          className={styles.detailMediaCol}
+        >
+          {/* 2. Captura 16:10 y motivo si fue omitida */}
+          <DetailCaptureView
+            capture={capture}
+            screenKind={screen.kind}
+            skippedItem={skippedItem}
+            expanded={imageExpanded}
+            onToggleExpanded={() => setExpandedFor(imageExpanded ? null : screen.id)}
+            t={t}
+          />
+        </motion.div>
 
-      <motion.div
-        layout={shouldReduceMotion ? false : 'position'}
-        transition={DETAIL_LAYOUT_TRANSITION}
-        className={styles.detailInfoCol}
-      >
-      {/* Barra de composición con leyenda */}
-      {totalRoles > 0 && (
-        <div className={styles.detailComposition} data-testid="detail-composition">
-          <CompositionBar byRole={screen.stats?.byRole} t={t} />
-          <div className={styles.compositionLegend}>
-            {roleGroups.map((rg) => (
-              <span key={rg.role} className={styles.legendItem}>
-                <span className={cn(styles.legendDot, styles[`barSegment_${rg.role}`])} />
-                <span>
-                  {t(rg.labelKey)}: {rg.count}
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+        <motion.div
+          layout={shouldReduceMotion ? false : 'position'}
+          transition={DETAIL_LAYOUT_TRANSITION}
+          className={styles.detailInfoCol}
+        >
+          {/* Barra de composición con leyenda */}
+          {totalRoles > 0 && (
+            <div className={styles.detailComposition} data-testid="detail-composition">
+              <CompositionBar byRole={screen.stats?.byRole} t={t} />
+              <div className={styles.compositionLegend}>
+                {roleGroups.map((rg) => (
+                  <span key={rg.role} className={styles.legendItem}>
+                    <span className={cn(styles.legendDot, styles[`barSegment_${rg.role}`])} />
+                    <span>
+                      {t(rg.labelKey)}: {rg.count}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {/* 3. Qué hace */}
-      <DetailDescription description={description} t={t} />
-      </motion.div>
+          {/* 3. Qué hace */}
+          <DetailDescription description={description} t={t} />
+        </motion.div>
       </div>
 
       {/* 4. Archivos */}
-      <motion.section
-        layout={shouldReduceMotion ? false : 'position'}
-        transition={DETAIL_LAYOUT_TRANSITION}
-        className={styles.detailFilesSection}
-        aria-label="Archivos"
-      >
-        <h4 className={styles.sectionLabel}>Archivos</h4>
-
-        {/* Solapas por rol, como las de SDD: texto con una raya debajo de la elegida */}
-        {availableRoles.length > 0 && (
-          <div
-            className={styles.fileTabs}
-            role="tablist"
-            data-testid="screen-role-segmented"
-          >
-            {availableRoles.map((role) => {
-              const count = filesByRole.get(role)?.length ?? 0;
-              const isActive = effectiveRole === role;
-              return (
-                <button
-                  key={role}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setActiveRole(role)}
-                  data-testid={`role-tab-${role}`}
-                >
-                  {t(`cartography.screens.role.${role}`)} ({count})
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Lista con scroll independiente */}
-        <DetailFileList files={currentRoleFiles} t={t} />
-      </motion.section>
+      <DetailFilesSection
+        files={screen.files}
+        repoPath={repoPath}
+        onAskFile={onAskFile}
+        shouldReduceMotion={shouldReduceMotion}
+        t={t}
+      />
     </motion.div>
   );
 }

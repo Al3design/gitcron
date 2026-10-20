@@ -675,23 +675,169 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-primary);
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   gap: var(--space-2);
+  min-height: 38px;
 }
 
 .fileItem:hover {
   background: var(--color-bg-surface);
 }
 
+.fileItem[aria-current='true'] {
+  background: var(--color-bg-surface);
+}
+
 .fileItemLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fileNameRow {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
   overflow: hidden;
+}
+
+.fileProvenance {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  line-height: 1.2;
+}
+
+.fileActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  flex-shrink: 0;
+}
+
+.fileItem:hover .fileActions,
+.fileItem:focus-within .fileActions,
+.fileItem[aria-current='true'] .fileActions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.fileActionButton {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.fileActionButton:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.fileActionButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.fileActionButtonActive {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.fileAskButton {
+  background: color-mix(in srgb, var(--color-ai-violet) 15%, var(--color-bg-surface));
+  color: var(--color-ai);
+  border-color: color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
+}
+
+.fileAskButton:hover {
+  background: color-mix(in srgb, var(--color-ai-violet) 25%, var(--color-bg-surface));
+  border-color: color-mix(in srgb, var(--color-ai-violet) 50%, transparent);
+}
+
+.diffContainer {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-2);
+}
+
+.diffHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diffTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.diffCloseBtn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.diffCloseBtn:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+.diffCloseBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.diffViewerWrapper {
+  max-height: 24rem;
+  overflow-y: auto;
+  background: transparent;
+}
+
+.diffLoading,
+.diffError {
+  font-size: var(--font-size-xs);
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.diffLoading {
+  color: var(--color-text-secondary);
+}
+
+.diffError {
+  color: var(--color-error);
 }
 
 .fileName {

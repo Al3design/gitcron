@@ -212,4 +212,40 @@ describe('assist-view-contributors', () => {
     expect(cartoContribution('x'.repeat(201), validHead).selection).toEqual({ kind: 'none' });
     expect(cartoContribution('x'.repeat(200), validHead).selection.kind).toBe('carto-node');
   });
+  it('10. Cartografía con archivo seleccionado: tiene prioridad sobre la pantalla y el nodo', () => {
+    const validHead = '1234567890abcdef';
+    const screen = { id: 'screen-settings', name: 'Ajustes' };
+    const file = { path: 'components/SettingsForm.tsx' };
+
+    // Con archivo y HEAD válido: selección kind: 'file'
+    const res = cartoContribution('node-1', validHead, screen, file);
+    expect(res.selection).toEqual({
+      kind: 'file',
+      path: 'components/SettingsForm.tsx',
+      at: 'worktree',
+      takenAtHead: validHead,
+    });
+    expect(res.actions.map((a) => a.id)).toEqual(['file-in-screen']);
+    expect(res.actions[0].labelKey).toBe('assist.ask.fileInScreen');
+    expect(res.actions[0].labelParams).toEqual({ name: 'SettingsForm.tsx' });
+
+    // Una ruta con .. se descarta y vuelve a la pantalla
+    const resDotDot = cartoContribution('node-1', validHead, screen, { path: '../etc/passwd' });
+    expect(resDotDot.selection).toEqual({
+      kind: 'carto-screen',
+      screenId: 'screen-settings',
+      screenName: 'Ajustes',
+      takenAtHead: validHead,
+    });
+    expect(resDotDot.actions.map((a) => a.id)).toEqual(['screen-explain']);
+
+    // Sin commit válido no hay selección de archivo (ni de pantalla ni de nodo)
+    const resBadHead = cartoContribution('node-1', 'bad-sha', screen, file);
+    expect(resBadHead.selection).toEqual({ kind: 'none' });
+    expect(resBadHead.actions.map((a) => a.id)).toEqual(['carto-overview']);
+
+    // Ruta de más de 500 caracteres se descarta
+    const resTooLong = cartoContribution('node-1', validHead, screen, { path: 'a/'.repeat(251) });
+    expect(resTooLong.selection.kind).toBe('carto-screen');
+  });
 });
