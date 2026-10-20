@@ -319,27 +319,73 @@
 
 /* Detalle en dos columnas (Alejandro, carto-05e): la captura a la izquierda queda a la vista
    mientras se lee y se baja por lo de la derecha. Angosto, una sola columna. */
+/* La captura y, a su derecha, la composición y «Qué hace». Con la captura agrandada, una sola
+   columna: la información pasa abajo. El movimiento lo anima motion (layout), de ida y de vuelta. */
 .detailBody {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 1fr);
   gap: var(--space-4);
+  align-items: start;
 }
 
-/* Más chica por omisión; con su botón se agranda hasta el ancho del detalle y vuelve. */
+.detailBodyExpanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 1000px) {
+  .detailBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .detailMediaCol {
   position: relative;
-  width: min(100%, 40rem);
-  transition: width 0.3s ease;
+  min-width: 0;
 }
 
-.detailMediaColExpanded {
-  width: 100%;
+/* Solapas de archivos como las de SDD (OpenSpecDashboard .tabs): texto, sin fondo, y una raya
+   del color principal debajo de la elegida. */
+.fileTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  user-select: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .detailMediaCol {
-    transition: none;
-  }
+.fileTabs button {
+  position: relative;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  cursor: pointer;
+}
+
+.fileTabs button:hover {
+  color: var(--color-text-primary);
+}
+
+.fileTabs button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.fileTabs button[aria-selected='true'] {
+  color: var(--color-primary);
+}
+
+.fileTabs button[aria-selected='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--color-primary);
+  content: '';
 }
 
 .captureZoomBtn {
@@ -607,11 +653,10 @@
   max-height: 22rem;
   min-height: 6rem;
   overflow-y: auto;
-  /* Sin fondo propio, como las listas del resto de GitCron (Alejandro, carto-05e). */
+  /* Sin fondo ni recuadro, como el contenido de las solapas de SDD (Alejandro, carto-05e). */
   background: transparent;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2);
+  border: 0;
+  padding: var(--space-2) 0;
 }
 
 .fileList {

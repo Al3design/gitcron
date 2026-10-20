@@ -8,6 +8,7 @@
 // Al tocar uno se expande a dos columnas (detalle a la izquierda y columna angosta a la derecha).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, LayoutGrid, Monitor, MoreHorizontal, PanelsTopLeft, RefreshCw, ShieldOff } from 'lucide-react';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@/components/ContextMenus';
 import { useT } from '@/hooks/use-translation';
@@ -151,6 +152,7 @@ function sortScreens(screens: ScreenEntry[]): ScreenEntry[] {
 
 export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCatalogProps) {
   const t = useT();
+  const shouldReduceMotion = useReducedMotion();
   const { map, loading, error } = useScreenMap(repoPath, refreshKey);
   const {
     state: captureState,
@@ -637,7 +639,9 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
       {/* Si es repo no-ui, no se dibujan cuadros */}
       {!isNoUi && sortedScreens.length > 0 && (
-        <>
+        // Un solo grupo para la grilla y el detalle: así el cuadro se agranda hasta el detalle y,
+        // al cerrar, vuelve desde el detalle a su lugar de origen (Alejandro, carto-05e).
+        <LayoutGroup id="screen-catalog">
           {selectedScreen ? (
             /* Vista expandida: Detalle a la izquierda + Columna angosta a la derecha */
             <div className={styles.detailLayout} data-testid="screen-catalog-detail-layout">
@@ -662,8 +666,12 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   const screenCapture = captureState?.captures[screen.id];
 
                   return (
-                    <div
+                    // Mismo layoutId que su cuadro de la grilla: al abrir y al cerrar el detalle, cada
+                    // cuadro viaja entre su lugar en la grilla y la columna, de ida y de vuelta.
+                    <motion.div
                       key={screen.id}
+                      layoutId={shouldReduceMotion ? undefined : screen.id}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
                       className={styles.sidebarCard}
                       onClick={() => setSelectedScreenId(screen.id)}
                       role="button"
@@ -700,7 +708,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                           })}
                         </span>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </aside>
@@ -755,7 +763,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
               ))}
             </div>
           )}
-        </>
+        </LayoutGroup>
       )}
 
       {!isNoUi && sortedScreens.length === 0 && (

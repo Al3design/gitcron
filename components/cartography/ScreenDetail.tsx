@@ -281,6 +281,9 @@ function DetailFileList({
   );
 }
 
+/** Los cambios de lugar dentro del detalle (agrandar o achicar la captura). */
+const DETAIL_LAYOUT_TRANSITION = { duration: 0.3, ease: 'easeOut' } as const;
+
 export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onExplain }: ScreenDetailProps) {
   const t = useT();
   const rawLang = useGitStore((s) => s.language) ?? 'es';
@@ -362,10 +365,15 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         t={t}
       />
 
-      {/* Una columna (Alejandro, carto-05e): en dos, la información quedaba apretada por las
-          solapas. La captura va más chica y se agranda con su botón, sin modal. */}
-      <div className={styles.detailBody}>
-      <div className={cn(styles.detailMediaCol, imageExpanded && styles.detailMediaColExpanded)}>
+      {/* La composición y «Qué hace» van a la derecha de la captura; con la captura agrandada pasan
+          abajo. Los archivos, siempre abajo y a todo el ancho. Los cambios de lugar se animan, de
+          ida y de vuelta (Alejandro, carto-05e). */}
+      <div className={cn(styles.detailBody, imageExpanded && styles.detailBodyExpanded)}>
+      <motion.div
+        layout={!shouldReduceMotion}
+        transition={DETAIL_LAYOUT_TRANSITION}
+        className={styles.detailMediaCol}
+      >
       {/* 2. Captura 16:10 y motivo si fue omitida */}
       <DetailCaptureView
         capture={capture}
@@ -375,9 +383,13 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         onToggleExpanded={() => setExpandedFor(imageExpanded ? null : screen.id)}
         t={t}
       />
-      </div>
+      </motion.div>
 
-      <div className={styles.detailInfoCol}>
+      <motion.div
+        layout={shouldReduceMotion ? false : 'position'}
+        transition={DETAIL_LAYOUT_TRANSITION}
+        className={styles.detailInfoCol}
+      >
       {/* Barra de composición con leyenda */}
       {totalRoles > 0 && (
         <div className={styles.detailComposition} data-testid="detail-composition">
@@ -397,15 +409,22 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
 
       {/* 3. Qué hace */}
       <DetailDescription description={description} t={t} />
+      </motion.div>
+      </div>
 
       {/* 4. Archivos */}
-      <section className={styles.detailFilesSection} aria-label="Archivos">
+      <motion.section
+        layout={shouldReduceMotion ? false : 'position'}
+        transition={DETAIL_LAYOUT_TRANSITION}
+        className={styles.detailFilesSection}
+        aria-label="Archivos"
+      >
         <h4 className={styles.sectionLabel}>Archivos</h4>
 
-        {/* Control segmentado por rol */}
+        {/* Solapas por rol, como las de SDD: texto con una raya debajo de la elegida */}
         {availableRoles.length > 0 && (
           <div
-            className={styles.segmentedControl}
+            className={styles.fileTabs}
             role="tablist"
             data-testid="screen-role-segmented"
           >
@@ -418,7 +437,6 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  className={cn(styles.segmentedBtn, isActive && styles.segmentedBtnActive)}
                   onClick={() => setActiveRole(role)}
                   data-testid={`role-tab-${role}`}
                 >
@@ -431,9 +449,7 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
 
         {/* Lista con scroll independiente */}
         <DetailFileList files={currentRoleFiles} t={t} />
-      </section>
-      </div>
-      </div>
+      </motion.section>
     </motion.div>
   );
 }
