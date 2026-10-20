@@ -305,6 +305,15 @@
   overflow-y: auto;
 }
 
+/* El efecto de píxeles encima de la imagen mientras se saca su foto (Alejandro, carto-05e):
+   sobre la captura, debajo del tema y del ícono de IA. */
+.capturingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* Detalle en dos columnas (Alejandro, carto-05e): la captura a la izquierda queda a la vista
    mientras se lee y se baja por lo de la derecha. Angosto, una sola columna. */
 .detailBody {

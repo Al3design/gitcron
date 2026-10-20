@@ -10,6 +10,7 @@ import React, { useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Monitor, PanelsTopLeft, Sparkles } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
+import { useImagePalette } from '@/hooks/use-image-palette';
 import { PixelCard } from '@/components/ui/PixelCard';
 import { cn } from '@/lib/utils';
 import type { ScreenCapture, ScreenEntry, ScreenFileRole, ScreenTagEvidence } from '@/types/screen-map';
@@ -22,6 +23,8 @@ export interface ScreenCardProps {
   onSelect?: (screen: ScreenEntry) => void;
   onExplain?: (screen: ScreenEntry) => void;
   size?: 'large' | 'medium' | 'small' | 'minimal';
+  /** Se está sacando la foto de esta pantalla: el efecto de píxeles se prende sobre la imagen. */
+  capturing?: boolean;
 }
 
 function relativeTime(
@@ -87,9 +90,31 @@ export function CompositionBar({
   );
 }
 
+/**
+ * Mientras se saca la foto de la pantalla, el efecto de píxeles va encima de la imagen, con
+ * cuadraditos más grandes y los colores de la captura anterior; sin captura, los de la IA
+ * (Alejandro, carto-05e). Respeta el movimiento reducido, como en el resto de los cuadros.
+ */
+function CapturingOverlay({ src }: { src?: string }) {
+  const palette = useImagePalette(src);
+  return (
+    <PixelCard
+      className={styles.capturingOverlay}
+      active
+      noFocus
+      gap={11}
+      pixelSize={8}
+      speed={45}
+      colors={palette}
+      data-testid="card-capturing-overlay"
+    />
+  );
+}
+
 function CardMedia({
   screen,
   capture,
+  capturing,
   primaryTagClass,
   primaryTagLabel,
   onExplain,
@@ -97,6 +122,7 @@ function CardMedia({
 }: {
   screen: ScreenEntry;
   capture?: ScreenCapture;
+  capturing?: boolean;
   primaryTagClass: string;
   primaryTagLabel: string;
   onExplain?: (screen: ScreenEntry) => void;
@@ -116,6 +142,8 @@ function CardMedia({
       ) : (
         <PanelsTopLeft size={28} className={styles.thumbnailIcon} aria-hidden="true" />
       )}
+
+      {capturing && <CapturingOverlay src={capture?.dataUrl} />}
 
       <span className={cn(styles.mediaTag, primaryTagClass)} data-testid="screen-primary-tag">
         <span className={cn(styles.tagDot, primaryTagClass)} />
@@ -165,7 +193,7 @@ function CardTags({
   );
 }
 
-export function ScreenCard({ screen, capture, onSelect, onExplain, size = 'medium' }: ScreenCardProps) {
+export function ScreenCard({ screen, capture, capturing = false, onSelect, onExplain, size = 'medium' }: ScreenCardProps) {
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
   const [isHovered, setIsHovered] = useState(false);
@@ -221,6 +249,7 @@ export function ScreenCard({ screen, capture, onSelect, onExplain, size = 'mediu
         <CardMedia
           screen={screen}
           capture={capture}
+          capturing={capturing}
           primaryTagClass={primaryTagClass}
           primaryTagLabel={primaryTagLabel}
           onExplain={onExplain}

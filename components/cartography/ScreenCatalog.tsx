@@ -184,6 +184,11 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
   const [captureMenuAt, setCaptureMenuAt] = useState<{ x: number; y: number } | null>(null);
+  // Las pantallas cuya foto se está sacando ahora: su cuadro muestra el efecto de píxeles.
+  const capturingIds = useMemo(
+    () => new Set(captureItems.filter((item) => item.state === 'running').map((item) => item.screenId)),
+    [captureItems],
+  );
   const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
   const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
   const [tagFilter, setTagFilter] = useState<ScreenTag | null>(getInitialTagFilter);
@@ -719,6 +724,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                         screen={screen}
                         repoPath={repoPath}
                         capture={captureState?.captures[screen.id]}
+                        capturing={capturingIds.has(screen.id)}
                         size={cardSize}
                         onSelect={() => setSelectedScreenId(screen.id)}
                         onExplain={handleExplain}
@@ -737,6 +743,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                   screen={screen}
                   repoPath={repoPath}
                   capture={captureState?.captures[screen.id]}
+                  capturing={capturingIds.has(screen.id)}
                   size={cardSize}
                   onSelect={() => setSelectedScreenId(screen.id)}
                   onExplain={handleExplain}

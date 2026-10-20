@@ -122,6 +122,9 @@ export function buildRecipeTest(
   }
 
   const code = [
+    // Sin chequeo de tipos: es código armado al vuelo con los `evaluate` del repo, y el tsc del
+    // proyecto lo leía si la corrida quedaba cortada (auditoría de carto-05e).
+    `// @ts-nocheck`,
     `// Prueba temporal generada automáticamente por GitCron para capturar vistas.`,
     `import { expect } from 'e2e';`,
     `import { test } from '@e2e-dev/web';`,

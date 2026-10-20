@@ -20,6 +20,8 @@ import styles from './PixelCard.module.css';
 
 export interface PixelCardProps {
   gap?: number;
+  /** Tamaño máximo de cada cuadradito, en píxeles del dibujo (2 por omisión). */
+  pixelSize?: number;
   speed?: number;
   colors?: string[];
   noFocus?: boolean;
@@ -89,6 +91,7 @@ interface Settings {
 
 export function PixelCard({
   gap,
+  pixelSize,
   speed,
   colors,
   noFocus = false,
@@ -160,7 +163,7 @@ export function PixelCard({
         colors: palette,
         gap: Math.max(2, Number(gap ?? DEFAULT_PIXEL_GAP) || DEFAULT_PIXEL_GAP),
         speed: clamp(Number(speed ?? 35) || 0, 0, 100),
-        pixelSize: 2,
+        pixelSize: clamp(Number(pixelSize ?? 2) || 2, 1, 16),
         revealDuration: 600,
       };
     };
@@ -403,7 +406,7 @@ export function PixelCard({
       container.removeEventListener('pointerleave', onLeave);
       setActiveStateRef.current = null;
     };
-  }, [gap, speed, colors]);
+  }, [gap, pixelSize, speed, colors]);
 
   useEffect(() => {
     controlledActiveRef.current = controlledActive;

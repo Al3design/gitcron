@@ -149,6 +149,27 @@ function ignoreTempTestsLocally(root: string, testsDir: string): void {
   }
 }
 
+/** Una corrida cortada de golpe (GitCron cerrado a la fuerza) no llega a su `finally`. */
+const STALE_TEMP_TEST_MS = 60 * 60 * 1000;
+
+/**
+ * Borra las pruebas temporales de corridas que quedaron cortadas. Medido en la auditoría de
+ * carto-05e: una quedó en e2e/tests y el tsc del proyecto falló por ella.
+ */
+function removeStaleTempTests(dir: string, fsImpl: NonNullable<ViewRunnerDeps['fs']>): void {
+  try {
+    if (!fsImpl.existsSync(dir)) return;
+    const names = (fsImpl.readdirSync(dir) as (string | { name: string })[]).map((f) => (typeof f === 'string' ? f : f.name));
+    for (const name of names) {
+      if (!/^zz-gitcron-capturas-[a-f0-9]+\.e2e\.ts$/.test(name)) continue;
+      const file = path.join(dir, name);
+      if (Date.now() - fsImpl.statSync(file).mtimeMs > STALE_TEMP_TEST_MS) fsImpl.unlinkSync(file);
+    }
+  } catch (err) {
+    console.warn('[capturas] no se pudieron limpiar pruebas temporales viejas', err);
+  }
+}
+
 /** Traduce los errores conocidos del sistema de pruebas; si no, la última línea con un error. */
 function runFailureReason(outcome: { outputLines: string[]; error: Error | null; exitCode: number | null }): string | null {
   const text = outcome.outputLines.join('\n');
@@ -371,6 +392,7 @@ export async function runViewCaptures(
 
   try {
     ignoreTempTestsLocally(root, recipes.runner.testsDir);
+    removeStaleTempTests(tempTestDir, fsImpl);
     fsImpl.mkdirSync(tempTestDir, { recursive: true });
     fsImpl.writeFileSync(tempTestPath, code, 'utf8');
 
