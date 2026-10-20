@@ -129,6 +129,26 @@ En el detalle de una pantalla, cada archivo de la lista ofrece tres acciones, co
 
 Cada fila dice además de dónde salió el vínculo, en palabras: «leído en el código» (`static`), «deducido» (`inferred`) o «puesto a mano» (`manual`). Así la persona y la IA distinguen lo comprobado de lo supuesto.
 
+### 16. Correcciones a mano: archivos y descripción (tarea 1.5, 2026-10-20)
+
+Lo que GitCron deduce del código puede estar mal o incompleto. La persona puede corregirlo, y la corrección no se pierde al volver a leer el código.
+
+- **Dónde vive:** en el repo, en `.gitcron/pantallas.json`, al lado de las recetas de capturas. Viaja con el proyecto, se ve en Git como cualquier cambio y otra persona del equipo ve lo mismo (decisión 3: portable y auditable, fuera de la caché que se regenera).
+  - Guarda `links`: agregar o quitar un archivo de una pantalla, con fecha.
+  - Guarda `descriptions`: el texto y, si se quiere, un nombre propio, por pantalla.
+  - Si queda vacío, el archivo se borra.
+- **Al leer el mapa:**
+  - un archivo **agregado** a mano entra con procedencia `manual`, aunque el código no lo use;
+  - uno **quitado** a mano no aparece, aunque el código lo use;
+  - una corrección cuya pantalla o archivo ya no existen no se reasigna sola: queda **pendiente**, a la vista, para borrarla.
+  - La caché del mapa tiene en cuenta el contenido de ese archivo, así que un cambio hecho a mano en el archivo, o traído con un pull, se ve enseguida.
+- **Descripción a mano:** reemplaza a la sugerida por la IA y se marca «escrita a mano». «Volver a la sugerida» la borra (control completo).
+- **En el detalle:**
+  - «Qué hace» se puede escribir o editar ahí mismo;
+  - la lista de archivos ofrece «Agregar archivo» (con sugerencias de los archivos del repo) y, en cada fila, «Quitar de esta pantalla»;
+  - lo quitado a mano queda en un grupo plegado «Quitados a mano», con «Devolver»;
+  - las correcciones pendientes se avisan arriba del detalle, con «Borrar».
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
