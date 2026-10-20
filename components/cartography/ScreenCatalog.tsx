@@ -171,7 +171,11 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     if (result.error) {
       setError(t('cartography.screens.captures.toastError', { detail: result.error }));
     } else if (result.cancelled) {
-      setSuccess(t('cartography.screens.captures.toastStopped', { n: result.captured }));
+      setSuccess(
+        t(result.captured === 1 ? 'cartography.screens.captures.toastStoppedOne' : 'cartography.screens.captures.toastStopped', {
+          n: result.captured,
+        }),
+      );
     } else {
       const notCaptured = result.skipped.filter((s) => s.reason !== 'view').length;
       setSuccess(

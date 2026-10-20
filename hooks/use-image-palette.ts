@@ -33,10 +33,32 @@ export function paletteFromPixels(data: Uint8ClampedArray | number[], maxColors 
     bucket.score += 1 + saturation * 3;
     buckets.set(key, bucket);
   }
+  // Solo los tonos con color: en una captura de una app oscura, los grises son los mismos que los
+  // de la imagen y los cuadraditos se camuflaban (Alejandro, carto-05e). Cada tono se aviva para
+  // que resalte sobre la captura.
   return [...buckets.values()]
+    .map((bucket) => ({ ...bucket, hsl: toHsl(bucket.r / bucket.n, bucket.g / bucket.n, bucket.b / bucket.n) }))
+    .filter(({ hsl }) => hsl.s >= 0.18)
     .sort((a, b) => b.score - a.score)
     .slice(0, maxColors)
-    .map(({ r, g, b, n }) => `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})`);
+    .map(({ hsl }) => `hsl(${Math.round(hsl.h)}, ${Math.round(Math.max(hsl.s, 0.65) * 100)}%, 66%)`);
+}
+
+function toHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d) % 6;
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  return { h: (h * 60 + 360) % 360, s, l };
 }
 
 /** Paleta de la imagen (`data:` o URL); `undefined` mientras carga o si no hay imagen. */

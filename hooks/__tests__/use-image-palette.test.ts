@@ -12,17 +12,20 @@ describe('paletteFromPixels', () => {
     ];
     const colors = paletteFromPixels(data);
     expect(colors).toHaveLength(1);
-    expect(colors[0]).toMatch(/^rgb\(20\d, 8\d, 21\d\)$/);
+    expect(colors[0]).toMatch(/^hsl\(29\d, \d+%, 66%\)$/);
   });
 
-  it('prefiere los colores vivos a los grises de la misma cantidad', () => {
-    const data = [...px(160, 160, 160), ...px(160, 160, 160), ...px(80, 200, 120), ...px(82, 198, 122)];
+  it('descarta los grises: se camuflan con la captura', () => {
+    const data = [...px(160, 160, 160), ...px(90, 94, 110), ...px(80, 200, 120)];
     const colors = paletteFromPixels(data);
-    expect(colors[0]).toMatch(/^rgb\(8\d, 19\d|^rgb\(8\d, 20\d/);
+    expect(colors).toHaveLength(1);
+    expect(colors[0]).toMatch(/^hsl\(14\d, /);
   });
 
-  it('ignora los píxeles transparentes y respeta el máximo', () => {
+  it('aviva los tonos apagados y respeta el máximo', () => {
     const many = Array.from({ length: 12 }, (_, i) => px(40 + i * 18, 120, 255 - i * 18)).flat();
-    expect(paletteFromPixels([...px(255, 0, 0, 0), ...many], 4)).toHaveLength(4);
+    const colors = paletteFromPixels([...px(255, 0, 0, 0), ...many], 4);
+    expect(colors).toHaveLength(4);
+    for (const c of colors) expect(Number(c.match(/, (\d+)%, 66%/)?.[1])).toBeGreaterThanOrEqual(65);
   });
 });

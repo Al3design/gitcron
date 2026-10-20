@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
+import { Maximize2, Minimize2, Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
@@ -131,16 +131,35 @@ function DetailCaptureView({
   capture,
   screenKind,
   skippedItem,
+  expanded,
+  onToggleExpanded,
   t,
 }: {
   capture?: ScreenCapture;
   screenKind: 'route' | 'view';
   skippedItem?: { reason: string; detail?: string } | null;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
+  const zoomLabel = expanded ? t('cartography.screens.captureShrink') : t('cartography.screens.captureExpand');
   return (
     <>
       <div className={styles.detailCapture} data-testid="detail-capture">
+        {capture && (
+          // Agranda la captura dentro de su lugar y la vuelve a su tamaño, sin modal (Alejandro, carto-05e).
+          <button
+            type="button"
+            className={styles.captureZoomBtn}
+            onClick={onToggleExpanded}
+            title={zoomLabel}
+            aria-label={zoomLabel}
+            aria-pressed={expanded}
+            data-testid="detail-capture-zoom"
+          >
+            {expanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+          </button>
+        )}
         {capture ? (
           <img src={capture.dataUrl} alt="" className={styles.captureImage} />
         ) : screenKind === 'route' ? (
@@ -274,6 +293,9 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
   }, [capture, screen.kind, screen.id, lastRun]);
 
   const [cached, setCached] = useState<{ screenId: string; description: ScreenDescription } | null>(null);
+  // Qué pantalla tiene la captura agrandada: al cambiar de pantalla vuelve sola a su tamaño.
+  const [expandedFor, setExpandedFor] = useState<string | null>(null);
+  const imageExpanded = expandedFor === screen.id;
   const description: ScreenDescription | null =
     screen.description ?? (cached?.screenId === screen.id ? cached.description : null);
 
@@ -340,15 +362,17 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
         t={t}
       />
 
-      {/* Dos columnas (Alejandro, carto-05e): la captura a la izquierda, un poco más chica, y lo
-          que antes había que bajar para leer, a la derecha. */}
+      {/* Una columna (Alejandro, carto-05e): en dos, la información quedaba apretada por las
+          solapas. La captura va más chica y se agranda con su botón, sin modal. */}
       <div className={styles.detailBody}>
-      <div className={styles.detailMediaCol}>
+      <div className={cn(styles.detailMediaCol, imageExpanded && styles.detailMediaColExpanded)}>
       {/* 2. Captura 16:10 y motivo si fue omitida */}
       <DetailCaptureView
         capture={capture}
         screenKind={screen.kind}
         skippedItem={skippedItem}
+        expanded={imageExpanded}
+        onToggleExpanded={() => setExpandedFor(imageExpanded ? null : screen.id)}
         t={t}
       />
       </div>

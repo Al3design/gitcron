@@ -307,26 +307,66 @@
 
 /* El efecto de píxeles encima de la imagen mientras se saca su foto (Alejandro, carto-05e):
    sobre la captura, debajo del tema y del ícono de IA. */
-.capturingOverlay {
+/* Con el contenedor delante, gana siempre a `.pixelCard { position: relative }` del efecto. */
+.cardMedia .capturingOverlay {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  /* Velo sobre la captura: sin él, los cuadraditos se perdían en la imagen. */
+  background: color-mix(in srgb, var(--color-bg-base) 55%, transparent);
 }
 
 /* Detalle en dos columnas (Alejandro, carto-05e): la captura a la izquierda queda a la vista
    mientras se lee y se baja por lo de la derecha. Angosto, una sola columna. */
 .detailBody {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
-  align-items: start;
 }
 
+/* Más chica por omisión; con su botón se agranda hasta el ancho del detalle y vuelve. */
 .detailMediaCol {
-  position: sticky;
-  top: var(--space-8);
-  min-width: 0;
+  position: relative;
+  width: min(100%, 40rem);
+  transition: width 0.3s ease;
+}
+
+.detailMediaColExpanded {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detailMediaCol {
+    transition: none;
+  }
+}
+
+.captureZoomBtn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.captureZoomBtn:hover {
+  border-color: var(--color-primary);
+}
+
+.captureZoomBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
 .detailInfoCol {
@@ -334,16 +374,6 @@
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
-}
-
-@media (max-width: 1100px) {
-  .detailBody {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .detailMediaCol {
-    position: static;
-  }
 }
 
 /* Siempre arriba aunque se baje en el detalle: la X para volver a la grilla no se pierde. */
@@ -577,7 +607,8 @@
   max-height: 22rem;
   min-height: 6rem;
   overflow-y: auto;
-  background: var(--color-bg-base);
+  /* Sin fondo propio, como las listas del resto de GitCron (Alejandro, carto-05e). */
+  background: transparent;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
   padding: var(--space-2);
