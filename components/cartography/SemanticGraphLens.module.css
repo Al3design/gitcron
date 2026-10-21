@@ -1,0 +1,302 @@
+/* components/cartography/SemanticGraphLens.module.css */
+
+.canvasRoot {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-carto-canvas);
+}
+
+.hudOverlay {
+  pointer-events: none;
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  max-width: min(60rem, calc(100% - var(--space-4)));
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  z-index: 4;
+}
+
+.hudPill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-default);
+  border: 1px solid color-mix(in srgb, var(--color-carto-accent) 25%, transparent);
+  background: color-mix(in srgb, var(--color-carto-canvas) 90%, transparent);
+  padding: calc(var(--space-1) * 1.5) calc(var(--space-1) * 2.5);
+  font-size: var(--font-size-xs);
+  color: var(--color-carto-text-muted);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-bg-base) 20%, transparent);
+}
+
+.hudPillIcon {
+  color: var(--color-carto-accent);
+}
+
+.hudPillText {
+  font-family: var(--font-mono);
+}
+
+.hudPillSecondary {
+  pointer-events: auto;
+  border-radius: var(--radius-default);
+  border: 1px solid var(--color-carto-grid);
+  background: color-mix(in srgb, var(--color-carto-canvas) 90%, transparent);
+  padding: calc(var(--space-1) * 1.5) calc(var(--space-1) * 2.5);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--color-carto-text-muted);
+}
+
+.hudPillWarning {
+  pointer-events: auto;
+  border-radius: var(--radius-default);
+  border: 1px solid color-mix(in srgb, var(--color-carto-accent) 25%, transparent);
+  background: color-mix(in srgb, var(--color-carto-accent) 10%, transparent);
+  padding: calc(var(--space-1) * 1.5) calc(var(--space-1) * 2.5);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--color-carto-accent);
+}
+
+.groupCard {
+  box-sizing: border-box;
+}
+
+.groupHeader {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: calc(var(--space-1) * 2.5);
+}
+
+.groupTitleWrapper {
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.groupTitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-carto-text);
+  margin: 0;
+}
+
+.groupDescription {
+  margin: var(--space-1) 0 0 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  color: var(--color-carto-text-muted);
+}
+
+.groupKeyFiles {
+  margin-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--color-carto-grid) 70%, transparent);
+  padding-top: var(--space-2);
+}
+
+.keyFilesTitle {
+  margin: 0 0 calc(var(--space-1) * 1.5) 0;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-carto-text-muted);
+}
+
+.keyFilesList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.keyFileItem {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: calc(var(--space-1) * 1.5);
+  font-size: var(--font-size-xs);
+}
+
+.keyFileDot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+}
+
+.keyFilePath {
+  min-width: 0;
+  flex: 1 1 0%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  color: var(--color-carto-text);
+}
+
+.keyFileDegree {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  color: var(--color-carto-text-muted);
+}
+
+.groupFooter {
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-carto-accent);
+}
+
+.expandButton {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-default);
+  border: 0;
+  background: transparent;
+  padding: calc(var(--space-1) / 2) var(--space-1);
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  color: var(--color-carto-accent);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  /* «Expandir» / «Colapsar» como antes de la mudanza: el pie del grupo va en mayúsculas,
+     el botón no (auditoría de carto-08). */
+  text-transform: none;
+}
+
+.expandButton:hover {
+  background: color-mix(in srgb, var(--color-carto-accent) 10%, transparent);
+  color: var(--color-carto-text);
+}
+
+.expandButton:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--color-carto-accent) 55%, transparent);
+}
+
+.hiddenCount {
+  font-family: var(--font-mono);
+  color: color-mix(in srgb, var(--color-carto-text-muted) 80%, transparent);
+}
+
+.fileCard {
+  box-sizing: border-box;
+}
+
+.fileHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fileTitleWrapper {
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-carto-text);
+  margin: 0;
+}
+
+.fileDir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-carto-text-muted);
+  margin: 0;
+}
+
+.fileRole {
+  margin: var(--space-1) 0 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-carto-text-muted);
+}
+
+.hintContainer {
+  display: flex;
+  height: 100%;
+  min-height: 14rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-carto-text-muted);
+}
+
+.hintError {
+  color: var(--color-error);
+}
+
+.hintMessage {
+  max-width: 28rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.hintDetail {
+  max-width: 28rem;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--color-carto-text-muted) 70%, transparent);
+  margin: 0;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

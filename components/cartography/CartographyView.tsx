@@ -46,7 +46,16 @@ import type { ScreenEntry } from '@/types/screen-map';
 export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   const t = useT();
 
-  const [personaMode, setPersonaMode] = useState<PersonaMode>('simple');
+  // El modo guardado se lee al crear la vista (antes, en un efecto: setState sincrónico).
+  const [personaMode, setPersonaMode] = useState<PersonaMode>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(PERSONA_MODE_STORAGE_KEY) : null;
+      return saved === 'technical' || saved === 'simple' ? saved : 'simple';
+    } catch (err) {
+      console.warn('No se pudo leer el modo de Cartografía guardado', err);
+      return 'simple';
+    }
+  });
 
   // ── Grounding estructural (CodeGraph, Fase 3) ──
   // Símbolo elegido dentro del archivo → su explicación IA + impacto. Al cambiar
@@ -125,11 +134,6 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
     }
   }, [repoPath]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(PERSONA_MODE_STORAGE_KEY);
-    if (saved === 'technical' || saved === 'simple') setPersonaMode(saved);
-  }, []);
-
   // Leemos si la IA de Cartografía está activa al montar la vista. Se relee al
   // volver a entrar (la vista se remonta), así un cambio en Ajustes se refleja.
   useEffect(() => {
@@ -145,11 +149,9 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   // Índice CodeGraph: al entrar/cambiar de repo, pedimos a main que lo abra e
   // indexe en background (no bloquea el renderer). Nos suscribimos al progreso y
   // al re-sync del watch para mantener fresco el estado y las relaciones.
+  // La selección y el estado del índice arrancan limpios porque la vista se arma de nuevo para
+  // cada repo (`key={repoPath}` en RepoMainView); antes se limpiaban acá, con setState sincrónico.
   useEffect(() => {
-    handleSelectNode(null);
-    handleSelectScreen(null);
-    setSelectedFile(null);
-    setGraphStatus(null);
     if (!repoPath) return;
 
     let active = true;

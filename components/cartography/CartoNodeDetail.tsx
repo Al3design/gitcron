@@ -11,7 +11,7 @@
 // relaciones, impacto). La explicación se cachea por contenido en main, así que
 // re-abrir un nodo que no cambió no vuelve a gastar el modelo. Tokens --carto-*.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Sparkles,
@@ -26,8 +26,10 @@ import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import type { CartoNode } from '@/lib/carto-types';
 import type { CartoExplainNodeResult } from '@/types/carto-ai';
+import { cn } from '@/lib/utils';
 import { AiUseLine } from '../ai/AiUseLine';
 import { AiSentDetails } from '../ai/AiSentDetails';
+import styles from './CartoNodeDetail.module.css';
 
 type CartoNodeDetailProps = {
   repoPath: string;
@@ -41,6 +43,13 @@ type CartoNodeDetailProps = {
   technicalOpenDefault?: boolean;
 };
 
+type NodeExplainState = {
+  key: string;
+  result: CartoExplainNodeResult | null;
+  error: string | null;
+  loading: boolean;
+};
+
 export function CartoNodeDetail({
   repoPath,
   node,
@@ -50,31 +59,45 @@ export function CartoNodeDetail({
 }: CartoNodeDetailProps) {
   const t = useT();
   const lang = useGitStore((s) => s.language);
-  const [result, setResult] = useState<CartoExplainNodeResult | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const reqToken = useRef(0);
+  const reqKey = `${repoPath}:${node.id}:${lang}`;
+
+  const [state, setState] = useState<NodeExplainState>({
+    key: '',
+    result: null,
+    error: null,
+    loading: true,
+  });
 
   useEffect(() => {
-    const token = ++reqToken.current;
-    setResult(null);
-    setError(null);
-    setLoading(true);
+    let active = true;
     void window.api.cartoAi
       .explainNode(repoPath, node.id, lang)
       .then((res) => {
-        if (token !== reqToken.current) return;
-        if (res.success && res.data) setResult(res.data);
-        else setError(res.error ?? t('cartography.detail.error'));
+        if (!active) return;
+        if (res.success && res.data) {
+          setState({ key: reqKey, result: res.data, error: null, loading: false });
+        } else {
+          setState({ key: reqKey, result: null, error: res.error ?? t('cartography.detail.error'), loading: false });
+        }
       })
       .catch((err) => {
-        if (token !== reqToken.current) return;
-        setError(err instanceof Error ? err.message : t('cartography.detail.error'));
-      })
-      .finally(() => {
-        if (token === reqToken.current) setLoading(false);
+        if (!active) return;
+        setState({
+          key: reqKey,
+          result: null,
+          error: err instanceof Error ? err.message : t('cartography.detail.error'),
+          loading: false,
+        });
       });
-  }, [repoPath, node.id, lang, t]);
+
+    return () => {
+      active = false;
+    };
+  }, [reqKey, repoPath, node.id, lang, t]);
+
+  const result = state.key === reqKey ? state.result : null;
+  const loading = state.key === reqKey ? state.loading : true;
+  const error = state.key === reqKey ? state.error : null;
 
   const loc =
     node.startLine != null
@@ -84,35 +107,35 @@ export function CartoNodeDetail({
   const ctx = result?.context;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className={styles.container}>
       {/* Cabecera: volver + identidad del nodo */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-carto-grid px-3 py-2">
+      <div className={styles.header}>
         <button
           type="button"
           onClick={onBack}
           title={t('cartography.detail.back')}
-          className="flex shrink-0 items-center gap-1 rounded border border-carto-grid px-1.5 py-0.5 text-[length:var(--font-size-2xs)] font-semibold text-carto-text-muted transition-colors hover:border-carto-accent/50 hover:text-carto-text"
+          className={styles.backButton}
         >
           <ArrowLeft size={12} />
         </button>
-        <Sparkles size={13} className="shrink-0 text-[var(--color-ai)]" />
-        <span className="truncate text-xs font-bold tracking-wide text-carto-text" title={node.name}>
+        <Sparkles size={13} className={styles.titleIcon} />
+        <span className={styles.nodeName} title={node.name}>
           {node.name}
         </span>
-        <span className="shrink-0 rounded border border-carto-accent/30 px-1.5 py-0.5 text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-accent">
+        <span className={styles.kindBadge}>
           {node.kind}
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-2.5">
+      <div className={styles.content}>
         {/* Ruta */}
-        <p className="mb-3 truncate font-mono text-[length:var(--font-size-xs)] text-carto-text-muted" title={loc}>
+        <p className={styles.locationText} title={loc}>
           {loc}
         </p>
 
         {/* Línea del modelo y detalles de lo enviado en Cartografía (D11, D14) */}
         {aiEnabled && (
-          <div className="mb-3 flex flex-col gap-2">
+          <div className={styles.aiRow}>
             <AiUseLine use="gitcron-cartography" repoPath={repoPath} />
             <AiSentDetails use="gitcron-cartography" busy={loading} />
           </div>
@@ -129,30 +152,30 @@ export function CartoNodeDetail({
         {/* Estructura: impacto + relaciones (siempre que haya contexto) */}
         {ctx && (
           <details
-            className="mt-4 rounded-lg border border-carto-grid bg-carto-node/[0.025] px-3 py-2"
+            className={styles.technicalDetails}
             open={technicalOpenDefault}
           >
-            <summary className="cursor-pointer text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-text-muted transition-colors hover:text-carto-text">
+            <summary className={styles.technicalSummary}>
               {t('cartography.detail.technicalDetails')}
             </summary>
-            <div className="mt-3 flex flex-col gap-3">
-            <ImpactSection
-              summary={t('cartography.graph.impactSummary', {
-                files: ctx.impact.impactedFiles.length,
-                symbols: ctx.impact.total,
-              })}
-              files={ctx.impact.impactedFiles}
-            />
-            <RelatedSection
-              icon={<ArrowLeftRight size={13} className="text-carto-accent" />}
-              title={t('cartography.detail.calledBy')}
-              items={ctx.callers}
-            />
-            <RelatedSection
-              icon={<ArrowRight size={13} className="text-carto-accent" />}
-              title={t('cartography.detail.calls')}
-              items={ctx.callees}
-            />
+            <div className={styles.technicalContent}>
+              <ImpactSection
+                summary={t('cartography.graph.impactSummary', {
+                  files: ctx.impact.impactedFiles.length,
+                  symbols: ctx.impact.total,
+                })}
+                files={ctx.impact.impactedFiles}
+              />
+              <RelatedSection
+                icon={<ArrowLeftRight size={13} />}
+                title={t('cartography.detail.calledBy')}
+                items={ctx.callers}
+              />
+              <RelatedSection
+                icon={<ArrowRight size={13} />}
+                title={t('cartography.detail.calls')}
+                items={ctx.callees}
+              />
             </div>
           </details>
         )}
@@ -179,8 +202,8 @@ function ExplanationBlock({
   }
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-xs text-carto-text-muted">
-        <Loader2 size={14} className="animate-spin text-[var(--color-ai)]" />
+      <div className={styles.loadingRow}>
+        <Loader2 size={14} className={styles.spinnerAi} />
         {aiEnabled ? (
           <span>
             <span className="ai-thinking-text">{t('cartography.detail.explaining')}</span>
@@ -205,14 +228,14 @@ function ExplanationBlock({
   }
   if (explanation) {
     return (
-      <div className="ai-surface ai-panel px-3 py-2.5">
-        <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-carto-text">
+      <div className={cn('ai-surface ai-panel', styles.explanationPanel)}>
+        <p className={styles.explanationText}>
           {explanation.text}
         </p>
-        <div className="mt-2 flex items-center gap-2 font-mono text-[length:var(--font-size-xs)] text-carto-text-muted/70">
-          <span className="truncate">{explanation.provider}</span>
+        <div className={styles.explanationMeta}>
+          <span className={styles.providerName}>{explanation.provider}</span>
           {result?.cached && (
-            <span className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-ai)]/25 px-1 py-0.5 text-[var(--color-ai)]">
+            <span className={styles.cachedBadge}>
               <DatabaseZap size={10} />
               {t('cartography.detail.cached')}
             </span>
@@ -233,14 +256,10 @@ function Banner({
   icon: React.ReactNode;
   text: string;
 }) {
-  const cls =
-    tone === 'error'
-      ? 'border-error/30 bg-error/5 text-error'
-      : 'border-carto-grid bg-carto-node/[0.03] text-carto-text-muted';
   return (
-    <div className={`flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-[length:var(--font-size-2xs)] ${cls}`}>
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <span className="min-w-0 break-words leading-relaxed">{text}</span>
+    <div className={cn(styles.banner, tone === 'error' && styles.bannerError)}>
+      <span className={styles.bannerIcon}>{icon}</span>
+      <span className={styles.bannerText}>{text}</span>
     </div>
   );
 }
@@ -252,22 +271,22 @@ function ImpactSection({ summary, files }: { summary: string; files: string[] })
   const shown = files.slice(0, LIST_CAP);
   return (
     <div>
-      <div className="mb-1 flex items-center gap-1.5">
-        <Zap size={13} className="text-carto-accent" />
-        <span className="text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-text-muted">
+      <div className={styles.sectionHeading}>
+        <span className={styles.sectionIcon}><Zap size={13} /></span>
+        <span className={styles.sectionTitle}>
           {t('cartography.graph.impact')}
         </span>
       </div>
-      <p className="pl-5 text-[length:var(--font-size-xs)] text-carto-text-muted">{summary}</p>
+      <p className={styles.sectionSummary}>{summary}</p>
       {shown.length > 0 && (
-        <ul className="mt-0.5 flex flex-col gap-0.5 pl-5">
+        <ul className={styles.fileList}>
           {shown.map((p) => (
-            <li key={p} className="truncate font-mono text-[length:var(--font-size-xs)] text-carto-text" title={p}>
+            <li key={p} className={styles.fileItem} title={p}>
               {p}
             </li>
           ))}
           {files.length > shown.length && (
-            <li className="text-[length:var(--font-size-xs)] text-carto-text-muted">
+            <li className={styles.moreNotice}>
               {t('cartography.graph.more', { count: files.length - shown.length })}
             </li>
           )}
@@ -290,27 +309,27 @@ function RelatedSection({
   const shown = items.slice(0, LIST_CAP);
   return (
     <div>
-      <div className="mb-1 flex items-center gap-1.5">
-        {icon}
-        <span className="text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest text-carto-text-muted">{title}</span>
-        <span className="text-[length:var(--font-size-xs)] text-carto-text-muted">· {items.length}</span>
+      <div className={styles.sectionHeading}>
+        <span className={styles.sectionIcon}>{icon}</span>
+        <span className={styles.sectionTitle}>{title}</span>
+        <span className={styles.sectionBadge}>· {items.length}</span>
       </div>
       {items.length === 0 ? (
-        <p className="pl-5 text-xs text-carto-text-muted/70">{t('cartography.graph.none')}</p>
+        <p className={styles.emptyNotice}>{t('cartography.graph.none')}</p>
       ) : (
-        <ul className="flex flex-col gap-0.5 pl-5">
+        <ul className={styles.fileList}>
           {shown.map((it) => (
             <li
               key={`${it.filePath}#${it.name}`}
-              className="truncate font-mono text-[length:var(--font-size-xs)] text-carto-text"
+              className={styles.fileItem}
               title={`${it.name} — ${it.filePath}`}
             >
-              <span className="text-carto-text">{it.name}</span>
-              <span className="text-carto-text-muted/60"> · {it.filePath}</span>
+              <span className={styles.fileName}>{it.name}</span>
+              <span className={styles.filePath}> · {it.filePath}</span>
             </li>
           ))}
           {items.length > shown.length && (
-            <li className="text-[length:var(--font-size-xs)] text-carto-text-muted">
+            <li className={styles.moreNotice}>
               {t('cartography.graph.more', { count: items.length - shown.length })}
             </li>
           )}

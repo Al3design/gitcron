@@ -1,0 +1,202 @@
+/* components/cartography/CartoAISettings.module.css */
+
+.loadingContainer {
+  display: flex;
+  min-height: 6rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-secondary);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.headerIcon {
+  flex-shrink: 0;
+  color: var(--color-secondary);
+}
+
+.title {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.description {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.masterSwitch {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 15%, transparent);
+  background: color-mix(in srgb, var(--color-bg-base) 70%, transparent);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.masterSwitch:hover {
+  color: var(--color-text-primary);
+}
+
+.masterSwitch:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.masterSwitchEnabled {
+  background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+  color: var(--color-secondary);
+}
+
+.activeContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.useLineRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (min-width: 640px) {
+  .useLineRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.useLineContainer {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.goToModelsBtn {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  background: color-mix(in srgb, var(--color-bg-base) 70%, transparent);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-1) * 1.5);
+  font-weight: 500;
+}
+
+@media (min-width: 640px) {
+  .goToModelsBtn {
+    align-self: center;
+  }
+}
+
+.goToModelsBtn:hover {
+  border-color: color-mix(in srgb, var(--color-secondary) 40%, transparent);
+  color: var(--color-secondary);
+}
+
+.goToModelsBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.probeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.probeBtn {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  background: color-mix(in srgb, var(--color-bg-base) 70%, transparent);
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.probeBtn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-secondary) 40%, transparent);
+  color: var(--color-secondary);
+}
+
+.probeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.probeBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.probeStatus {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-1) * 1.5);
+  font-size: var(--font-size-xs);
+}
+
+.probeAvailable {
+  color: var(--color-secondary);
+}
+
+.probeUnavailable {
+  color: var(--color-error);
+}
+
+.probeDetail {
+  min-width: 0;
+}
