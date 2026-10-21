@@ -461,5 +461,219 @@ function ScreenC() { return <div />; }
     const uniqueCalls = new Set(calls);
     expect(calls.length).toBe(uniqueCalls.size);
   });
+
+  describe('correcciones manuales en buildScreenMap', () => {
+    const baseFiles: Record<string, string> = {
+      'app/page.tsx': "import { Header } from '@/components/Header';",
+      'components/Header.tsx': 'export function Header() { return <header />; }',
+      'lib/extra.ts': 'export const extra = 42;',
+    };
+    const baseDepsMap: Record<string, string[]> = {
+      'app/page.tsx': ['components/Header.tsx'],
+      'components/Header.tsx': [],
+      'lib/extra.ts': [],
+    };
+
+    const makeBaseDeps = (overrides?: Partial<ScreenMapDeps>): ScreenMapDeps => ({
+      async listFiles() {
+        return { paths: Object.keys(baseFiles), truncated: false };
+      },
+      async readFile(p) {
+        return baseFiles[p] ?? null;
+      },
+      async statFile() {
+        return null;
+      },
+      fileDependencies(p) {
+        return baseDepsMap[p] ?? [];
+      },
+      async headSha() {
+        return 'sha-manual';
+      },
+      now() {
+        return '2026-10-20T12:00:00.000Z';
+      },
+      ...overrides,
+    });
+
+    it('un remove saca el vínculo y lo pone en removedByHand', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return {
+            version: 1,
+            links: [
+              {
+                screenId: 'route:/',
+                path: 'components/Header.tsx',
+                action: 'remove',
+                createdAt: '2026-10-20T10:00:00Z',
+              },
+            ],
+            descriptions: {},
+          };
+        },
+      });
+
+      const map = await buildScreenMap('/mock/repo', deps);
+      const home = map.screens.find((s) => s.id === 'route:/')!;
+      expect(home.files.some((f) => f.path === 'components/Header.tsx')).toBe(false);
+      expect(home.removedByHand).toContain('components/Header.tsx');
+    });
+
+    it('un add de un archivo que existe entra como manual', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return {
+            version: 1,
+            links: [
+              {
+                screenId: 'route:/',
+                path: 'lib/extra.ts',
+                action: 'add',
+                createdAt: '2026-10-20T10:00:00Z',
+              },
+            ],
+            descriptions: {},
+          };
+        },
+      });
+
+      const map = await buildScreenMap('/mock/repo', deps);
+      const home = map.screens.find((s) => s.id === 'route:/')!;
+      const added = home.files.find((f) => f.path === 'lib/extra.ts')!;
+      expect(added).toBeDefined();
+      expect(added.provenance).toBe('manual');
+      expect(added.role).toBe('logic');
+    });
+
+    it('un add de un archivo que no existe y una corrección de una pantalla que no existe van a pending sin reasignarse', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return {
+            version: 1,
+            links: [
+              {
+                screenId: 'route:/',
+                path: 'lib/non-existent.ts',
+                action: 'add',
+                createdAt: '2026-10-20T10:00:00Z',
+              },
+              {
+                screenId: 'route:/missing-screen',
+                path: 'lib/extra.ts',
+                action: 'add',
+                createdAt: '2026-10-20T10:00:00Z',
+              },
+            ],
+            descriptions: {
+              'route:/other-missing': {
+                text: 'Descripción huérfana',
+                updatedAt: '2026-10-20T10:00:00Z',
+              },
+            },
+          };
+        },
+      });
+
+      const map = await buildScreenMap('/mock/repo', deps);
+      expect(map.pending).toHaveLength(3);
+      expect(map.pending).toContainEqual({
+        kind: 'link',
+        screenId: 'route:/',
+        path: 'lib/non-existent.ts',
+        reason: 'file-missing',
+      });
+      expect(map.pending).toContainEqual({
+        kind: 'link',
+        screenId: 'route:/missing-screen',
+        path: 'lib/extra.ts',
+        reason: 'screen-missing',
+      });
+      expect(map.pending).toContainEqual({
+        kind: 'description',
+        screenId: 'route:/other-missing',
+        reason: 'screen-missing',
+      });
+    });
+
+    it('la descripción a mano reemplaza y pone el nombre', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return {
+            version: 1,
+            links: [],
+            descriptions: {
+              'route:/': {
+                text: 'Pantalla principal personalizada',
+                name: 'Inicio Custom',
+                updatedAt: '2026-10-20T10:00:00Z',
+              },
+            },
+          };
+        },
+      });
+
+      const map = await buildScreenMap('/mock/repo', deps);
+      const home = map.screens.find((s) => s.id === 'route:/')!;
+      expect(home.name).toBe('Inicio Custom');
+      expect(home.description).toEqual({
+        text: 'Pantalla principal personalizada',
+        source: 'manual',
+        citedFiles: [],
+        createdAt: '2026-10-20T10:00:00Z',
+      });
+    });
+
+    it('un archivo roto deja la cobertura partial y no aplica nada', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return null; // roto
+        },
+      });
+
+      const map = await buildScreenMap('/mock/repo', deps);
+      expect(map.coverage.state).toBe('partial');
+      if (map.coverage.state === 'partial') {
+        expect(map.coverage.errors).toContain(
+          'El archivo .gitcron/pantallas.json tiene un error y no se pudo leer.',
+        );
+      }
+      const home = map.screens.find((s) => s.id === 'route:/')!;
+      expect(home.description).toBeNull();
+      expect(home.removedByHand).toEqual([]);
+    });
+
+    it('releer el mapa conserva las correcciones: dos buildScreenMap seguidos dan lo mismo', async () => {
+      const deps = makeBaseDeps({
+        async readManual() {
+          return {
+            version: 1,
+            links: [
+              {
+                screenId: 'route:/',
+                path: 'lib/extra.ts',
+                action: 'add',
+                createdAt: '2026-10-20T10:00:00Z',
+              },
+            ],
+            descriptions: {
+              'route:/': {
+                text: 'Descripción consistente',
+                name: 'Home',
+                updatedAt: '2026-10-20T10:00:00Z',
+              },
+            },
+          };
+        },
+      });
+
+      const map1 = await buildScreenMap('/mock/repo', deps);
+      const map2 = await buildScreenMap('/mock/repo', deps);
+
+      expect(map1.screens).toEqual(map2.screens);
+      expect(map1.pending).toEqual(map2.pending);
+      expect(map1.coverage).toEqual(map2.coverage);
+    });
+  });
 });
 

@@ -535,6 +535,15 @@ interface ElectronAPI {
       language: 'es' | 'en' | 'zh';
       cacheOnly?: boolean;
     }): Promise<GitResult<{ status: 'ok'; description: ScreenDescription } | { status: 'unavailable'; message: string } | null>>;
+    manual(args: {
+      repoPath: string;
+      op:
+        | { type: 'link'; screenId: string; path: string; action: 'add' | 'remove' }
+        | { type: 'unlink'; screenId: string; path: string }
+        | { type: 'describe'; screenId: string; text: string; name?: string }
+        | { type: 'undescribe'; screenId: string };
+    }): Promise<GitResult<ScreenMap>>;
+    files(repoPath: string): Promise<GitResult<string[]>>;
   };
   cartoCaptures: {
     get(repoPath: string): Promise<GitResult<ScreenCaptureState>>;

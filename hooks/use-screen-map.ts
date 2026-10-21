@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ScreenMap } from '@/types/screen-map';
 
 interface ScreenMapResult {
@@ -20,9 +20,18 @@ export function useScreenMap(
   map: ScreenMap | null;
   loading: boolean;
   error: string | null;
+  replace: (map: ScreenMap) => void;
 } {
   const requestKey = repoPath ? `${repoPath}#${refreshKey}` : '';
   const [result, setResult] = useState<ScreenMapResult | null>(null);
+
+  const replace = useCallback(
+    (newMap: ScreenMap) => {
+      if (!repoPath) return;
+      setResult({ key: `${repoPath}#${refreshKey}`, map: newMap, error: null });
+    },
+    [repoPath, refreshKey],
+  );
 
   useEffect(() => {
     if (!repoPath) return;
@@ -55,7 +64,7 @@ export function useScreenMap(
     };
   }, [repoPath, refreshKey]);
 
-  if (!repoPath) return { map: null, loading: false, error: null };
+  if (!repoPath) return { map: null, loading: false, error: null, replace };
   const current = result?.key === requestKey ? result : null;
   // Mientras se relee (el índice se actualiza con cada archivo que cambia), se sigue mostrando el
   // mapa anterior del mismo repo: si se vaciara, se perdería la pantalla elegida y el chat se
@@ -65,5 +74,6 @@ export function useScreenMap(
     map: current?.map ?? previous?.map ?? null,
     loading: current === null,
     error: current?.error ?? null,
+    replace,
   };
 }

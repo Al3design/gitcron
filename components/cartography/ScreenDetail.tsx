@@ -2,30 +2,62 @@
 
 // components/cartography/ScreenDetail.tsx
 //
-// Vista de detalle de una pantalla individual de Cartografía (decisión 9, tarea 2.2).
+// Vista de detalle de una pantalla individual de Cartografía (decisiones 9 y 16, tareas 1.5, 2.2).
 // Muestra cabecera con nombre, lugar, ícono de IA y botón de cerrar; captura grande;
-// qué hace (desde caché o aviso para consultar); y archivos agrupados por rol
-// en un control segmentado con scroll independiente.
+// qué hace (desde caché o aviso para consultar, con edición manual); correcciones pendientes;
+// y archivos agrupados por rol en un control segmentado con scroll independiente,
+// con acciones para quitar/agregar archivos y grupo plegado de quitados a mano.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ExternalLink, GitCompare, Maximize2, Minimize2, Monitor, PanelsTopLeft, Sparkles, X } from 'lucide-react';
+import {
+  ExternalLink,
+  GitCompare,
+  Maximize2,
+  Minimize2,
+  MinusCircle,
+  Monitor,
+  PanelsTopLeft,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Undo2,
+  X,
+} from 'lucide-react';
+import { ContextMenu, ContextMenuItem } from '@/components/ContextMenus';
 import { useT } from '@/hooks/use-translation';
 import { useGitStore } from '@/lib/git-store';
 import { DiffViewer } from '@/components/DiffViewer';
 import { cn } from '@/lib/utils';
-import type { ScreenCapture, ScreenCaptureRunResult, ScreenDescription, ScreenEntry, ScreenFileLink, ScreenFileRole } from '@/types/screen-map';
+import type {
+  PendingManualEntry,
+  ScreenCapture,
+  ScreenCaptureRunResult,
+  ScreenDescription,
+  ScreenEntry,
+  ScreenFileLink,
+  ScreenFileRole,
+} from '@/types/screen-map';
 import { CompositionBar, getRoleGroupItems } from './ScreenCard';
 import styles from './ScreenCatalog.module.css';
+
+export type ManualOp =
+  | { type: 'link'; screenId: string; path: string; action: 'add' | 'remove' }
+  | { type: 'unlink'; screenId: string; path: string }
+  | { type: 'describe'; screenId: string; text: string; name?: string }
+  | { type: 'undescribe'; screenId: string };
 
 export interface ScreenDetailProps {
   screen: ScreenEntry;
   repoPath: string;
   capture?: ScreenCapture;
   lastRun?: ScreenCaptureRunResult | null;
+  pending?: PendingManualEntry[];
   onClose: () => void;
   onExplain?: (screen: ScreenEntry) => void;
   onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
 }
 
 const ROLE_ORDER: ScreenFileRole[] = [
@@ -186,19 +218,205 @@ function DetailCaptureView({
   );
 }
 
-function DetailDescription({
-  description,
+function DetailPendingNotice({
+  pending,
+  screenId,
+  onManual,
   t,
 }: {
-  description: ScreenDescription | null;
+  pending: PendingManualEntry[];
+  screenId: string;
+  onManual?: (op: ManualOp) => void | Promise<void>;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
   return (
+    <div className={styles.pendingNotice} data-testid="screen-pending-notice">
+      <h5 className={styles.pendingTitle}>{t('cartography.screens.manual.pendingTitle')}</h5>
+      <ul className={styles.pendingList}>
+        {pending.map((item, idx) => {
+          const isFileMissing = item.reason === 'file-missing';
+          const label = isFileMissing
+            ? t('cartography.screens.manual.pendingFileMissing', { path: item.path ?? '' })
+            : t('cartography.screens.manual.pendingScreenMissing');
+
+          return (
+            <li key={idx} className={styles.pendingItem}>
+              <span>{label}</span>
+              <button
+                type="button"
+                className={styles.pendingDeleteBtn}
+                onClick={() => {
+                  if (item.kind === 'link') {
+                    onManual?.({ type: 'unlink', screenId, path: item.path! });
+                  } else {
+                    onManual?.({ type: 'undescribe', screenId });
+                  }
+                }}
+              >
+                {t('cartography.screens.manual.delete')}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function DetailDescription({
+  screen,
+  description,
+  onManual,
+  t,
+}: {
+  screen: ScreenEntry;
+  description: ScreenDescription | null;
+  onManual?: (op: ManualOp) => void | Promise<void>;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [editName, setEditName] = useState('');
+  const [deleteMenuAt, setDeleteMenuAt] = useState<{ x: number; y: number } | null>(null);
+
+  const startEdit = (initialText: string, initialName?: string) => {
+    setEditText(initialText);
+    setEditName(initialName ?? '');
+    setIsEditing(true);
+  };
+
+  if (isEditing) {
+    return (
+      <section className={styles.section} aria-label="Qué hace">
+        <h4 className={styles.sectionLabel}>{t('cartography.screens.manual.textLabel')}</h4>
+        <div className={styles.descriptionEditBox} data-testid="screen-description-edit">
+          <textarea
+            className={styles.descriptionTextarea}
+            aria-label={t('cartography.screens.manual.textLabel')}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setIsEditing(false);
+            }}
+            maxLength={2000}
+            rows={4}
+            autoFocus
+          />
+          <input
+            type="text"
+            className={styles.descriptionNameInput}
+            aria-label={t('cartography.screens.manual.nameLabel')}
+            placeholder={t('cartography.screens.manual.nameLabel')}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            maxLength={40}
+          />
+          <div className={styles.descriptionEditActions}>
+            <button
+              type="button"
+              className={styles.captureActionBtn}
+              onClick={() => {
+                const trimmed = editText.trim();
+                if (!trimmed) return;
+                onManual?.({
+                  type: 'describe',
+                  screenId: screen.id,
+                  text: trimmed,
+                  name: editName.trim() || undefined,
+                });
+                setIsEditing(false);
+              }}
+            >
+              {t('cartography.screens.manual.save')}
+            </button>
+            <button
+              type="button"
+              className={styles.captureActionBtn}
+              onClick={() => setIsEditing(false)}
+            >
+              {t('cartography.screens.manual.cancel')}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const isManual = description?.source === 'manual';
+
+  return (
     <section className={styles.section} aria-label="Qué hace">
-      <h4 className={styles.sectionLabel}>Qué hace</h4>
+      <div className={styles.sectionHeaderRow}>
+        <h4 className={styles.sectionLabel}>{t('cartography.screens.manual.textLabel')}</h4>
+        {!isManual && (
+          <button
+            type="button"
+            className={styles.manualTextBtn}
+            onClick={() => startEdit(description?.text ?? '')}
+            title={t('cartography.screens.manual.write')}
+          >
+            <Pencil size={12} aria-hidden="true" />
+            <span>{t('cartography.screens.manual.write')}</span>
+          </button>
+        )}
+      </div>
+
       {description ? (
         <div className={styles.descriptionBox} data-testid="screen-description">
           <p className={styles.descriptionText}>{description.text}</p>
+          {isManual && (
+            <div className={styles.manualDescRow}>
+              <span className={styles.byHandBadge} data-testid="screen-by-hand-badge">
+                {t('cartography.screens.manual.byHand')}
+              </span>
+              <div className={styles.manualDescActions}>
+                <button
+                  type="button"
+                  className={styles.manualTextBtn}
+                  onClick={() =>
+                    startEdit(
+                      description.text,
+                      description.suggestedName || (screen.name !== description.text ? screen.name : ''),
+                    )
+                  }
+                  title={t('cartography.screens.manual.edit')}
+                >
+                  <Pencil size={12} aria-hidden="true" />
+                  <span>{t('cartography.screens.manual.edit')}</span>
+                </button>
+                <button
+                  type="button"
+                  className={styles.manualTextBtn}
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setDeleteMenuAt({ x: r.left, y: r.bottom + 4 });
+                  }}
+                  title={t('cartography.screens.manual.backToSuggested')}
+                >
+                  <Undo2 size={12} aria-hidden="true" />
+                  <span>{t('cartography.screens.manual.backToSuggested')}</span>
+                </button>
+                {deleteMenuAt && (
+                  <ContextMenu
+                    x={deleteMenuAt.x}
+                    y={deleteMenuAt.y}
+                    onClose={() => setDeleteMenuAt(null)}
+                    ariaLabel={t('cartography.screens.manual.confirmDelete')}
+                  >
+                    <ContextMenuItem
+                      danger
+                      icon={<Trash2 size={13} />}
+                      text={t('cartography.screens.manual.confirmDelete')}
+                      onClick={() => {
+                        setDeleteMenuAt(null);
+                        onManual?.({ type: 'undescribe', screenId: screen.id });
+                      }}
+                    />
+                  </ContextMenu>
+                )}
+              </div>
+            </div>
+          )}
           {description.source === 'ai' && (
             <div className={styles.aiBadgeRow}>
               <div className={cn('ai-gradient-text', styles.aiBadgeRow)}>
@@ -258,18 +476,24 @@ function getFileProvenance(
 function DetailFileActions({
   filePath,
   repoPath,
+  file,
+  screenId,
   isDiffOpen,
   hasChanges,
   onToggleDiff,
   onAskFile,
+  onManual,
   t,
 }: {
   filePath: string;
   repoPath: string;
+  file: ScreenFileLink;
+  screenId: string;
   isDiffOpen: boolean;
   hasChanges: boolean;
   onToggleDiff: (path: string) => void;
   onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
   const handleOpenFile = async () => {
@@ -335,6 +559,23 @@ function DetailFileActions({
       >
         <ExternalLink size={14} aria-hidden="true" />
       </button>
+
+      <button
+        type="button"
+        className={styles.fileActionButton}
+        onClick={() => {
+          if (file.provenance === 'manual') {
+            onManual?.({ type: 'unlink', screenId, path: file.path });
+          } else {
+            onManual?.({ type: 'link', screenId, path: file.path, action: 'remove' });
+          }
+        }}
+        title={t('cartography.screens.manual.removeFromScreen')}
+        aria-label={t('cartography.screens.manual.removeFromScreen')}
+        data-testid={`file-remove-${filePath}`}
+      >
+        <MinusCircle size={14} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -342,18 +583,22 @@ function DetailFileActions({
 function DetailFileItem({
   file,
   repoPath,
+  screenId,
   isDiffOpen,
   hasChanges,
   onToggleDiff,
   onAskFile,
+  onManual,
   t,
 }: {
   file: ScreenFileLink;
   repoPath: string;
+  screenId: string;
   isDiffOpen: boolean;
   hasChanges: boolean;
   onToggleDiff: (path: string) => void;
   onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
   const baseName = file.path.split('/').pop() ?? file.path;
@@ -396,10 +641,13 @@ function DetailFileItem({
       <DetailFileActions
         filePath={file.path}
         repoPath={repoPath}
+        file={file}
+        screenId={screenId}
         isDiffOpen={isDiffOpen}
         hasChanges={hasChanges}
         onToggleDiff={onToggleDiff}
         onAskFile={onAskFile}
+        onManual={onManual}
         t={t}
       />
     </li>
@@ -409,16 +657,20 @@ function DetailFileItem({
 function DetailFileList({
   files,
   repoPath,
+  screenId,
   diffFor,
   onToggleDiff,
   onAskFile,
+  onManual,
   t,
 }: {
   files: ScreenFileLink[];
   repoPath: string;
+  screenId: string;
   diffFor: { path: string; diff: string | null; error: string | null } | null;
   onToggleDiff: (path: string) => void;
   onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
   const modifiedFiles = useGitStore((s) => s.modifiedFiles);
@@ -447,10 +699,12 @@ function DetailFileList({
               key={file.path}
               file={file}
               repoPath={repoPath}
+              screenId={screenId}
               isDiffOpen={isDiffOpen}
               hasChanges={hasChanges}
               onToggleDiff={onToggleDiff}
               onAskFile={onAskFile}
+              onManual={onManual}
               t={t}
             />
           );
@@ -506,19 +760,22 @@ function DetailDiffView({
   );
 }
 
-/** Los cambios de lugar dentro del detalle (agrandar o achicar la captura). */
 const DETAIL_LAYOUT_TRANSITION = { duration: 0.3, ease: 'easeOut' } as const;
 
 function DetailFilesSection({
+  screen,
   files,
   repoPath,
   onAskFile,
+  onManual,
   shouldReduceMotion,
   t,
 }: {
+  screen: ScreenEntry;
   files: ScreenFileLink[];
   repoPath: string;
   onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
   shouldReduceMotion?: boolean | null;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
@@ -533,6 +790,11 @@ function DetailFilesSection({
   );
 
   const [diffFor, setDiffFor] = useState<{ path: string; diff: string | null; error: string | null } | null>(null);
+  const [isAddingFile, setIsAddingFile] = useState(false);
+  const [addFilePath, setAddFilePath] = useState('');
+  const [repoFiles, setRepoFiles] = useState<string[] | null>(null);
+  const [addFileError, setAddFileError] = useState<string | null>(null);
+  const [removedOpen, setRemovedOpen] = useState(false);
 
   const effectiveRole: ScreenFileRole = availableRoles.includes(activeRole)
     ? activeRole
@@ -579,6 +841,41 @@ function DetailFilesSection({
     [diffFor?.path, repoPath, t],
   );
 
+  const handleStartAddFile = async () => {
+    setIsAddingFile(true);
+    setAddFileError(null);
+    if (!repoFiles) {
+      try {
+        const res = await window.api.cartoScreens.files(repoPath);
+        if (res.success && res.data) {
+          setRepoFiles(res.data);
+        }
+      } catch {
+        // fallback
+      }
+    }
+  };
+
+  const handleAddFileSubmit = () => {
+    const trimmed = addFilePath.trim();
+    if (!trimmed) return;
+    if (repoFiles && !repoFiles.includes(trimmed)) {
+      setAddFileError(t('cartography.screens.manual.addFileUnknown'));
+      return;
+    }
+    onManual?.({
+      type: 'link',
+      screenId: screen.id,
+      path: trimmed,
+      action: 'add',
+    });
+    setIsAddingFile(false);
+    setAddFilePath('');
+    setAddFileError(null);
+  };
+
+  const removedCount = screen.removedByHand?.length ?? 0;
+
   return (
     <motion.section
       layout={shouldReduceMotion ? false : 'position'}
@@ -586,7 +883,78 @@ function DetailFilesSection({
       className={styles.detailFilesSection}
       aria-label="Archivos"
     >
-      <h4 className={styles.sectionLabel}>Archivos</h4>
+      <div className={styles.filesHeaderRow}>
+        <h4 className={styles.sectionLabel}>Archivos</h4>
+        {!isAddingFile && (
+          <button
+            type="button"
+            className={styles.manualTextBtn}
+            onClick={handleStartAddFile}
+            title={t('cartography.screens.manual.addFile')}
+            data-testid="add-file-button"
+          >
+            <Plus size={12} aria-hidden="true" />
+            <span>{t('cartography.screens.manual.addFile')}</span>
+          </button>
+        )}
+      </div>
+
+      {isAddingFile && (
+        <div className={styles.addFileForm} data-testid="add-file-form">
+          <div className={styles.addFileInputRow}>
+            <input
+              type="text"
+              list="carto-repo-files"
+              className={styles.addFileInput}
+              placeholder={t('cartography.screens.manual.addFilePlaceholder')}
+              value={addFilePath}
+              onChange={(e) => {
+                setAddFilePath(e.target.value);
+                setAddFileError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setIsAddingFile(false);
+                  setAddFilePath('');
+                  setAddFileError(null);
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddFileSubmit();
+                }
+              }}
+              autoFocus
+            />
+            <datalist id="carto-repo-files">
+              {repoFiles?.map((f) => (
+                <option key={f} value={f} />
+              ))}
+            </datalist>
+            <button
+              type="button"
+              className={styles.captureActionBtn}
+              onClick={handleAddFileSubmit}
+            >
+              {t('cartography.screens.manual.addFile')}
+            </button>
+            <button
+              type="button"
+              className={styles.captureActionBtn}
+              onClick={() => {
+                setIsAddingFile(false);
+                setAddFilePath('');
+                setAddFileError(null);
+              }}
+            >
+              {t('cartography.screens.manual.cancel')}
+            </button>
+          </div>
+          {addFileError && (
+            <span className={styles.addFileError} data-testid="add-file-error">
+              {addFileError}
+            </span>
+          )}
+        </div>
+      )}
 
       {availableRoles.length > 0 && (
         <div
@@ -616,9 +984,11 @@ function DetailFilesSection({
       <DetailFileList
         files={currentRoleFiles}
         repoPath={repoPath}
+        screenId={screen.id}
         diffFor={diffFor}
         onToggleDiff={handleToggleDiff}
         onAskFile={onAskFile}
+        onManual={onManual}
         t={t}
       />
 
@@ -629,12 +999,56 @@ function DetailFilesSection({
           t={t}
         />
       )}
+
+      {removedCount > 0 && (
+        <div className={styles.removedSection} data-testid="removed-by-hand-section">
+          <button
+            type="button"
+            className={styles.removedHeaderBtn}
+            onClick={() => setRemovedOpen(!removedOpen)}
+            aria-expanded={removedOpen}
+            data-testid="removed-by-hand-toggle"
+          >
+            <span>{t('cartography.screens.manual.removedByHand', { n: removedCount })}</span>
+          </button>
+          {removedOpen && (
+            <ul className={styles.removedList} data-testid="removed-by-hand-list">
+              {(screen.removedByHand ?? []).map((rPath) => (
+                <li key={rPath} className={styles.removedItem}>
+                  <span className={styles.fileName} title={rPath}>
+                    {rPath}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.restoreBtn}
+                    onClick={() => onManual?.({ type: 'unlink', screenId: screen.id, path: rPath })}
+                    title={t('cartography.screens.manual.restore')}
+                    data-testid={`restore-${rPath}`}
+                  >
+                    <Undo2 size={12} aria-hidden="true" />
+                    <span>{t('cartography.screens.manual.restore')}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </motion.section>
   );
 }
 
-export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onExplain }: ScreenDetailProps) {
-  const onAskFile = (arguments[0] as ScreenDetailProps | undefined)?.onAskFile;
+export function ScreenDetail({
+  screen,
+  repoPath,
+  capture,
+  lastRun,
+  pending,
+  onClose,
+  onExplain,
+  onAskFile,
+  onManual,
+}: ScreenDetailProps) {
   const t = useT();
   const rawLang = useGitStore((s) => s.language) ?? 'es';
   const lang: 'es' | 'en' | 'zh' = rawLang === 'zh' ? 'zh' : rawLang === 'en' ? 'en' : 'es';
@@ -742,16 +1156,33 @@ export function ScreenDetail({ screen, repoPath, capture, lastRun, onClose, onEx
             </div>
           )}
 
+          {/* Aviso de pendientes si existen */}
+          {pending && pending.length > 0 && (
+            <DetailPendingNotice
+              pending={pending}
+              screenId={screen.id}
+              onManual={onManual}
+              t={t}
+            />
+          )}
+
           {/* 3. Qué hace */}
-          <DetailDescription description={description} t={t} />
+          <DetailDescription
+            screen={screen}
+            description={description}
+            onManual={onManual}
+            t={t}
+          />
         </motion.div>
       </div>
 
       {/* 4. Archivos */}
       <DetailFilesSection
+        screen={screen}
         files={screen.files}
         repoPath={repoPath}
         onAskFile={onAskFile}
+        onManual={onManual}
         shouldReduceMotion={shouldReduceMotion}
         t={t}
       />

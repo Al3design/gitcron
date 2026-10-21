@@ -156,7 +156,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
   const onSelectFile = (arguments[0] as ScreenCatalogProps | undefined)?.onSelectFile;
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
-  const { map, loading, error } = useScreenMap(repoPath, refreshKey);
+  const { map, loading, error, replace } = useScreenMap(repoPath, refreshKey);
   const {
     state: captureState,
     items: captureItems,
@@ -167,6 +167,32 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     run,
     cancel,
   } = useScreenCaptures(repoPath, map);
+
+  const handleManual = useCallback(
+    async (
+      op:
+        | { type: 'link'; screenId: string; path: string; action: 'add' | 'remove' }
+        | { type: 'unlink'; screenId: string; path: string }
+        | { type: 'describe'; screenId: string; text: string; name?: string }
+        | { type: 'undescribe'; screenId: string },
+    ) => {
+      try {
+        const res = await window.api.cartoScreens.manual({ repoPath, op });
+        if (res.success && res.data) {
+          replace(res.data);
+        } else {
+          useGitStore
+            .getState()
+            .setError(res.error || t('cartography.screens.manual.fileBroken', { error: '' }));
+        }
+      } catch (err) {
+        useGitStore
+          .getState()
+          .setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [repoPath, replace, t],
+  );
 
   /** «Actualizar capturas» vuelve a sacar todas y avisa el resultado con el aviso de la app. */
   const refreshCaptures = async () => {
@@ -672,6 +698,8 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 }}
                 onExplain={handleExplain}
                 onAskFile={handleAskFile}
+                onManual={handleManual}
+                pending={map?.pending?.filter((p) => p.screenId === selectedScreen.id) ?? []}
               />
 
               <aside

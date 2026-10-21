@@ -81,6 +81,7 @@ export interface ScreenEntry {
   tags: ScreenTagEvidence[];
   primaryTag: ScreenTag | null;
   stats: ScreenStats;
+  removedByHand?: string[];
 }
 
 /**
@@ -101,7 +102,29 @@ export interface ScreenMap {
   detectors: string[];
   screens: ScreenEntry[];
   coverage: ScreenMapCoverage;
+  pending?: PendingManualEntry[];
   readAt: string;
+}
+
+export interface ManualScreenDescription {
+  text: string;
+  /** Nombre propio para la pantalla (hasta 40 caracteres); reemplaza al detectado. */
+  name?: string;
+  updatedAt: string;
+}
+
+export interface ManualScreenData {
+  version: 1;
+  links: ManualScreenLink[];
+  descriptions: Record<string, ManualScreenDescription>;
+}
+
+/** Una corrección que ya no encuentra su pantalla o su archivo: queda a la vista para borrarla. */
+export interface PendingManualEntry {
+  kind: 'link' | 'description';
+  screenId: string;
+  path?: string;
+  reason: 'screen-missing' | 'file-missing';
 }
 
 /**

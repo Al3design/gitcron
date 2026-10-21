@@ -8,6 +8,8 @@
 // Nunca ejecuta código del repositorio ni abre una aplicación externa.
 
 import type {
+  ManualScreenData,
+  PendingManualEntry,
   ScreenEntry,
   ScreenFileLink,
   ScreenFileRole,
@@ -29,6 +31,7 @@ export interface ScreenMapDeps {
   fileDependencies(relPath: string): string[] | null; // null = índice no listo
   headSha(): Promise<string | null>;
   now(): string;
+  readManual?(): Promise<ManualScreenData | null>;
 }
 
 const MAX_DEPTH = 4;
@@ -274,7 +277,84 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
       tags: [],
       primaryTag: null,
       stats: { byRole: {}, lastChangedAt: null },
+      removedByHand: [],
     });
+  }
+
+  // 3b. Aplicar correcciones manuales antes de calcular compartidos
+  const pending: PendingManualEntry[] = [];
+  let manualBroken = false;
+
+  if (deps.readManual) {
+    const manualData = await deps.readManual();
+    if (manualData === null) {
+      manualBroken = true;
+    } else {
+      const repoFiles = new Set(normalizedPaths);
+      const screensById = new Map(screens.map((s) => [s.id, s]));
+
+      for (const link of manualData.links) {
+        const screen = screensById.get(link.screenId);
+        if (!screen) {
+          pending.push({
+            kind: 'link',
+            screenId: link.screenId,
+            path: link.path,
+            reason: 'screen-missing',
+          });
+          continue;
+        }
+
+        if (link.action === 'remove') {
+          screen.files = screen.files.filter((f) => f.path !== link.path);
+          if (!screen.removedByHand) {
+            screen.removedByHand = [];
+          }
+          if (!screen.removedByHand.includes(link.path)) {
+            screen.removedByHand.push(link.path);
+          }
+        } else if (link.action === 'add') {
+          if (repoFiles.has(link.path)) {
+            if (!screen.files.some((f) => f.path === link.path)) {
+              screen.files.push({
+                path: link.path,
+                role: roleOf(link.path),
+                provenance: 'manual',
+                shared: false,
+              });
+            }
+          } else {
+            pending.push({
+              kind: 'link',
+              screenId: link.screenId,
+              path: link.path,
+              reason: 'file-missing',
+            });
+          }
+        }
+      }
+
+      for (const [screenId, desc] of Object.entries(manualData.descriptions)) {
+        const screen = screensById.get(screenId);
+        if (!screen) {
+          pending.push({
+            kind: 'description',
+            screenId,
+            reason: 'screen-missing',
+          });
+        } else {
+          screen.description = {
+            text: desc.text,
+            source: 'manual',
+            citedFiles: [],
+            createdAt: desc.updatedAt,
+          };
+          if (desc.name) {
+            screen.name = desc.name;
+          }
+        }
+      }
+    }
   }
 
   // 4. Calcular archivos compartidos (aparecen en 2 o más pantallas)
@@ -345,6 +425,9 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   if (hasSymbolFallback) {
     coverageErrors.push('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
   }
+  if (manualBroken) {
+    coverageErrors.push('El archivo .gitcron/pantallas.json tiene un error y no se pudo leer.');
+  }
 
   let coverage: ScreenMapCoverage;
   if (screens.length === 0) {
@@ -369,6 +452,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
     detectors,
     screens,
     coverage,
+    pending,
     readAt: deps.now(),
   };
 }

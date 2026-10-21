@@ -1461,8 +1461,273 @@
 
 .legendDot {
   width: 8px;
+
   height: 8px;
   border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.manualTextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.manualTextBtn:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.manualTextBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.descriptionEditBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.descriptionTextarea {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.descriptionTextarea:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.descriptionNameInput {
+  width: 100%;
+  height: 32px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+
+.descriptionNameInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.descriptionEditActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.manualDescRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-1);
+}
+
+.byHandBadge {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.manualDescActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pendingNotice {
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-surface));
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pendingTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-warning);
+  margin: 0;
+}
+
+.pendingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pendingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.pendingDeleteBtn {
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.pendingDeleteBtn:hover {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+
+.filesHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.addFileForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.addFileInputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.addFileInput {
+  flex: 1;
+  height: 32px;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+
+.addFileInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.addFileError {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+}
+
+.removedSection {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.removedHeaderBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  text-align: left;
+}
+
+.removedHeaderBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.removedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.removedItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  /* Sin fondo propio, como la lista de archivos (Alejandro, carto-05e). */
+  background: transparent;
+  font-size: var(--font-size-xs);
+}
+
+.restoreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.restoreBtn:hover {
+  background: var(--color-bg-base);
+  border-color: var(--color-primary);
+}

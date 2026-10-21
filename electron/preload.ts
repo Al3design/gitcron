@@ -415,6 +415,15 @@ contextBridge.exposeInMainWorld('api', {
     get: (repoPath: string) => ipcRenderer.invoke('carto-screens:get', { repoPath }),
     describe: (args: { repoPath: string; screenId: string; language: 'es' | 'en' | 'zh'; cacheOnly?: boolean }) =>
       ipcRenderer.invoke('carto-screens:describe', args),
+    manual: (args: {
+      repoPath: string;
+      op:
+        | { type: 'link'; screenId: string; path: string; action: 'add' | 'remove' }
+        | { type: 'unlink'; screenId: string; path: string }
+        | { type: 'describe'; screenId: string; text: string; name?: string }
+        | { type: 'undescribe'; screenId: string };
+    }) => ipcRenderer.invoke('carto-screens:manual', args),
+    files: (repoPath: string) => ipcRenderer.invoke('carto-screens:files', { repoPath }),
   },
   cartoCaptures: {
     get: (repoPath: string) => ipcRenderer.invoke('carto-captures:get', { repoPath }),
