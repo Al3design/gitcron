@@ -149,6 +149,15 @@ Lo que GitCron deduce del código puede estar mal o incompleto. La persona puede
   - lo quitado a mano queda en un grupo plegado «Quitados a mano», con «Devolver»;
   - las correcciones pendientes se avisan arriba del detalle, con «Borrar».
 
+### 17. Lectura del mapa: sin trabajo repetido ni resultados de otra rama (tarea 1.6, 2026-10-21)
+
+Medido sobre GitCron: el mapa de pantallas se arma en unos 100 ms y lee 210 archivos, cada uno una sola vez. Una caché incremental por archivo no se justifica a este tamaño; lo que la tarea pide se resuelve así:
+
+- **Sin trabajo repetido:** dos pedidos del mapa del mismo repo con la misma clave (commit, índice y correcciones) comparten la misma lectura en curso.
+- **Sin resultados de otra rama:** si el commit cambió mientras se armaba el mapa, ese resultado no se guarda en la caché y se arma de nuevo, una vez. En la interfaz, `useScreenMap` ya descarta la respuesta de un repo o pedido anterior.
+- **Exclusiones:** `.gitcron/pantallas.json` acepta `exclude`, una lista de carpetas (por ejemplo `docs/`, `scripts/legacy/`) que nunca se miran para armar pantallas; se suman a las que ya se excluyen siempre (`node_modules`, la salida de compilación y lo de `.gitignore`).
+- **Medida en un proyecto grande:** una prueba arma un repo de mentira con 5000 archivos y 60 pantallas, comprueba que el mapa sale en pocos segundos, que ningún archivo se lee dos veces y que lo excluido no se lee.
+
 ### Alternativas
 
 Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
