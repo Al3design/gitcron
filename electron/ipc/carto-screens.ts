@@ -166,12 +166,51 @@ export async function handleCartoScreensGet(
       return ok(cached.map);
     }
 
-    const screenMap = await injectedBuilder(root, deps);
-    mapCache.set(root, { headSha, indexKey, manualHash, map: screenMap });
-    return ok(screenMap);
+    // Dos pedidos iguales comparten la misma lectura en curso (decisión 17).
+    const inflightKey = `${root}|${headSha}|${indexKey}|${manualHash}`;
+    const running = inflightMaps.get(inflightKey);
+    if (running) return ok(await running);
+
+    const work = buildFreshMap(root, deps, injectedBuilder, headSha, indexKey, manualHash);
+    inflightMaps.set(inflightKey, work);
+    try {
+      return ok(await work);
+    } finally {
+      inflightMaps.delete(inflightKey);
+    }
   } catch (error) {
     return fail(error);
   }
+}
+
+const inflightMaps = new Map<string, Promise<ScreenMap>>();
+
+/**
+ * Arma el mapa y lo guarda en la caché solo si el commit no cambió mientras tanto. Si cambió
+ * (por ejemplo, un cambio de rama a mitad de la lectura), lo arma una vez más con el commit
+ * nuevo; si vuelve a cambiar, devuelve el último sin guardarlo (decisión 17).
+ */
+async function buildFreshMap(
+  root: string,
+  deps: ScreenMapDeps,
+  builder: typeof buildScreenMap,
+  headSha: string | null,
+  indexKey: string,
+  manualHash: string,
+): Promise<ScreenMap> {
+  let expectedHead = headSha;
+  let map = await builder(root, deps);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const headAfter = await deps.headSha();
+    if (headAfter === expectedHead) {
+      mapCache.set(root, { headSha: expectedHead, indexKey, manualHash, map });
+      return map;
+    }
+    if (attempt === 1) break;
+    expectedHead = headAfter;
+    map = await builder(root, deps);
+  }
+  return map;
 }
 
 export async function handleCartoScreensDescribe(

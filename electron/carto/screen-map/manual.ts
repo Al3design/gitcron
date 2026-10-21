@@ -157,14 +157,50 @@ export function validateManualData(raw: unknown): { ok: true; data: ManualScreen
     return descRes;
   }
 
+  const excludeRes = validateExclude(obj.exclude);
+  if (!excludeRes.ok) {
+    return excludeRes;
+  }
+
   return {
     ok: true,
     data: {
       version: 1,
       links: linksRes.links,
       descriptions: descRes.descriptions,
+      ...(excludeRes.exclude.length > 0 ? { exclude: excludeRes.exclude } : {}),
     },
   };
+}
+
+const MAX_EXCLUDE = 100;
+
+/** Carpetas relativas sin `..`, normalizadas a `/` y con `/` al final (decisión 17). */
+function validateExclude(raw: unknown): { ok: true; exclude: string[] } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true, exclude: [] };
+  if (!Array.isArray(raw)) return { ok: false, error: 'exclude debe ser una lista de carpetas' };
+  if (raw.length > MAX_EXCLUDE) return { ok: false, error: `exclude admite hasta ${MAX_EXCLUDE} carpetas` };
+  const out: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (typeof item !== 'string' || item.trim() === '' || item.length > 200) {
+      return { ok: false, error: `exclude[${i}] debe ser una carpeta de 1 a 200 caracteres` };
+    }
+    const norm = item.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+    if (norm.startsWith('/') || /^[a-zA-Z]:/.test(norm) || norm.split('/').includes('..')) {
+      return { ok: false, error: `exclude[${i}] no puede ser absoluta ni contener ".."` };
+    }
+    const folder = norm.endsWith('/') ? norm : `${norm}/`;
+    if (!out.includes(folder)) out.push(folder);
+  }
+  return { ok: true, exclude: out };
+}
+
+/** La ruta cae dentro de alguna carpeta excluida. */
+export function isExcluded(relPath: string, exclude: string[] | undefined): boolean {
+  if (!exclude || exclude.length === 0) return false;
+  const norm = relPath.replace(/\\/g, '/');
+  return exclude.some((folder) => norm.startsWith(folder));
 }
 
 export async function readManualData(
@@ -186,7 +222,7 @@ export async function readManualData(
 }
 
 export function serializeManualData(data: ManualScreenData): string | null {
-  if (data.links.length === 0 && Object.keys(data.descriptions).length === 0) {
+  if (data.links.length === 0 && Object.keys(data.descriptions).length === 0 && !data.exclude?.length) {
     return null;
   }
   return `${JSON.stringify(data, null, 2)}\n`;

@@ -117,6 +117,8 @@ export interface ManualScreenData {
   version: 1;
   links: ManualScreenLink[];
   descriptions: Record<string, ManualScreenDescription>;
+  /** Carpetas que nunca se miran para armar pantallas, normalizadas con `/` al final (decisión 17). */
+  exclude?: string[];
 }
 
 /** Una corrección que ya no encuentra su pantalla o su archivo: queda a la vista para borrarla. */

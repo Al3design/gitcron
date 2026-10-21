@@ -22,6 +22,7 @@ import {
 } from './detect-next';
 import { detectStateViews } from './detect-state-views';
 import { roleOf } from './file-roles';
+import { isExcluded } from './manual';
 import { screenTags } from './screen-tags';
 
 export interface ScreenMapDeps {
@@ -66,7 +67,13 @@ function isExcludedFileForScreen(filePath: string, screenEntryInElectron: boolea
 
 export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Promise<ScreenMap> {
   const scan = await deps.listFiles();
-  const normalizedPaths = scan.paths.map((p) => p.replace(/\\/g, '/'));
+  // Las correcciones se leen primero: sus carpetas excluidas no se miran nunca (decisión 17).
+  // `null` = archivo roto: no se aplica nada y la cobertura lo avisa más abajo.
+  const manualData = deps.readManual ? await deps.readManual() : undefined;
+  const excluded = manualData?.exclude;
+  const normalizedPaths = scan.paths
+    .map((p) => p.replace(/\\/g, '/'))
+    .filter((p) => !isExcluded(p, excluded));
 
   const detectors: string[] = [];
   const appScreens = detectNextAppRouterScreens(normalizedPaths);
@@ -200,7 +207,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
 
       for (const rawDep of directDeps) {
         const depPath = rawDep.replace(/\\/g, '/');
-        if (isExcludedFileForScreen(depPath, screenEntryInElectron)) {
+        if (isExcludedFileForScreen(depPath, screenEntryInElectron) || isExcluded(depPath, excluded)) {
           continue;
         }
 
@@ -285,8 +292,7 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   const pending: PendingManualEntry[] = [];
   let manualBroken = false;
 
-  if (deps.readManual) {
-    const manualData = await deps.readManual();
+  if (manualData !== undefined) {
     if (manualData === null) {
       manualBroken = true;
     } else {

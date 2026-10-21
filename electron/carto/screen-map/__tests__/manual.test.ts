@@ -8,6 +8,7 @@ import {
   setDescription,
   setLink,
   validateManualData,
+  isExcluded,
 } from '../manual';
 
 describe('manual.ts - correcciones a mano en .gitcron/pantallas.json', () => {
@@ -115,5 +116,32 @@ describe('manual.ts - correcciones a mano en .gitcron/pantallas.json', () => {
     expect(serializeManualData(data)).not.toBeNull();
     data = clearDescription(data, 'view:home');
     expect(serializeManualData(data)).toBeNull();
+  });
+
+  describe('exclude (decisión 17)', () => {
+    const base = { version: 1, links: [], descriptions: {} };
+
+    it('normaliza las carpetas válidas', () => {
+      const res = validateManualData({ ...base, exclude: ['docs', 'scripts\\legacy/', './tmp'] });
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.data.exclude).toEqual(['docs/', 'scripts/legacy/', 'tmp/']);
+    });
+
+    it('rechaza .., rutas absolutas y más de 100 carpetas', () => {
+      expect(validateManualData({ ...base, exclude: ['../afuera'] }).ok).toBe(false);
+      expect(validateManualData({ ...base, exclude: ['/abs'] }).ok).toBe(false);
+      expect(validateManualData({ ...base, exclude: ['C:/abs'] }).ok).toBe(false);
+      expect(validateManualData({ ...base, exclude: Array.from({ length: 101 }, (_, i) => `d${i}`) }).ok).toBe(false);
+    });
+
+    it('un archivo con solo exclude no se considera vacío', () => {
+      expect(serializeManualData({ version: 1, links: [], descriptions: {}, exclude: ['docs/'] })).not.toBeNull();
+    });
+
+    it('isExcluded mira el comienzo de la ruta', () => {
+      expect(isExcluded('docs/a.md', ['docs/'])).toBe(true);
+      expect(isExcluded('docsite/a.md', ['docs/'])).toBe(false);
+      expect(isExcluded('a/docs/b.md', ['docs/'])).toBe(false);
+    });
   });
 });

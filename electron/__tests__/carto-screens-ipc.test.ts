@@ -74,6 +74,77 @@ describe('carto-screens IPC handler', () => {
     expect(buildCalls).toBe(1); // No volvió a llamar a buildScreenMap
   });
 
+  describe('lectura compartida y commit que cambia (decisión 17)', () => {
+    const baseMap = (headSha: string) => ({
+      repoPath: '/authorized/repo',
+      screens: [],
+      detectors: [],
+      coverage: { state: 'complete' as const },
+      pending: [],
+      readAt: '2026-10-21T12:00:00Z',
+      headSha,
+    });
+    const depsWithHead = (head: () => string) => ({
+      listFiles: async () => ({ paths: [], truncated: false }),
+      readFile: async () => null,
+      statFile: async () => null,
+      fileDependencies: () => [],
+      headSha: async () => head(),
+      now: () => '2026-10-21T12:00:00Z',
+      readManual: async () => ({ version: 1 as const, links: [], descriptions: {} }),
+    });
+
+    async function setup() {
+      vi.spyOn(authRepos, 'authorizedRepoRoot').mockReturnValue('/authorized/repo');
+      clearScreenMapCache();
+      const graphEngine = await import('../carto/graph-engine');
+      vi.spyOn(graphEngine, 'getGraphStatus').mockReturnValue({ state: 'idle' } as any);
+    }
+
+    it('dos pedidos simultáneos con la misma clave arman el mapa una sola vez', async () => {
+      await setup();
+      let calls = 0;
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((r) => { release = r; });
+      const builder = vi.fn(async () => {
+        calls++;
+        await gate;
+        return baseMap('sha-a');
+      });
+      const deps = depsWithHead(() => 'sha-a');
+
+      const p1 = handleCartoScreensGet({ repoPath: '/authorized/repo' }, deps, builder as any);
+      const p2 = handleCartoScreensGet({ repoPath: '/authorized/repo' }, deps, builder as any);
+      await new Promise((r) => setTimeout(r, 10));
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+
+      expect(calls).toBe(1);
+      expect(r1.success && r2.success).toBe(true);
+      expect(r1.data).toBe(r2.data);
+    });
+
+    it('si el commit cambió mientras se armaba, lo arma de nuevo y guarda el del commit nuevo', async () => {
+      await setup();
+      let head = 'sha-a';
+      const builder = vi.fn(async () => {
+        const built = baseMap(head);
+        head = 'sha-b'; // el cambio de rama ocurre durante la primera lectura
+        return built;
+      });
+      const deps = depsWithHead(() => head);
+
+      const res = await handleCartoScreensGet({ repoPath: '/authorized/repo' }, deps, builder as any);
+      expect(builder).toHaveBeenCalledTimes(2);
+      expect(res.data?.headSha).toBe('sha-b');
+
+      // El segundo pedido con sha-b sale de la caché, sin armar de nuevo.
+      const again = await handleCartoScreensGet({ repoPath: '/authorized/repo' }, deps, builder as any);
+      expect(builder).toHaveBeenCalledTimes(2);
+      expect(again.data?.headSha).toBe('sha-b');
+    });
+  });
+
   describe('con repo temporal en disco', () => {
     async function createTempRepo(): Promise<string> {
       const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'carto-ipc-'));
