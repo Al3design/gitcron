@@ -19,7 +19,7 @@ import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
 import type { ScreenCapture, ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
 import { CaptureProgress } from './CaptureProgress';
-import { relativeTime, ScreenCard } from './ScreenCard';
+import { ScreenCard } from './ScreenCard';
 import { ScreenDetail } from './ScreenDetail';
 import styles from './ScreenCatalog.module.css';
 
@@ -28,21 +28,17 @@ const CARD_SIZE_STORAGE_KEY = 'gitcron:cartoCardSize';
 const TAG_FILTER_STORAGE_KEY = 'gitcron:cartoTagFilter';
 const GROUP_BY_STORAGE_KEY = 'gitcron:cartoGroupBy';
 
-/** « · Última captura: hace 2 h · 3 desactualizadas», o nada si todavía no hay fotos. */
-function lastCaptureText(
-  captures: Record<string, ScreenCapture>,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  const list = Object.values(captures);
-  if (list.length === 0) return '';
-  const latest = list.reduce((max, c) => (c.capturedAt > max ? c.capturedAt : max), list[0].capturedAt);
-  const when = relativeTime(latest, t);
-  const stale = list.filter((c) => c.stale).length;
-  const parts = [when ? t('cartography.screens.captures.lastCapture', { when }) : null];
-  if (stale > 0) {
-    parts.push(t(stale === 1 ? 'cartography.screens.captures.staleCountOne' : 'cartography.screens.captures.staleCount', { n: stale }));
-  }
-  return parts.filter(Boolean).map((p) => ` · ${p}`).join('');
+/** Cuándo fue la última foto y cuántas quedaron viejas; `null` si todavía no hay fotos. */
+export interface CaptureSummary {
+  latestAt: string;
+  stale: number;
+}
+
+function summarizeCaptures(captures: Record<string, ScreenCapture> | undefined): CaptureSummary | null {
+  const list = Object.values(captures ?? {});
+  if (list.length === 0) return null;
+  const latestAt = list.reduce((max, c) => (c.capturedAt > max ? c.capturedAt : max), list[0].capturedAt);
+  return { latestAt, stale: list.filter((c) => c.stale).length };
 }
 
 const ALL_TAGS: ScreenTag[] = [
@@ -132,6 +128,8 @@ export interface ScreenCatalogProps {
   refreshKey: number;
   onSelectScreen?: (screen: ScreenEntry | null) => void;
   onSelectFile?: (file: { path: string } | null) => void;
+  /** La última captura va en una pastilla del encabezado de Cartografía (Alejandro, 2026-10-23). */
+  onCaptureSummary?: (summary: CaptureSummary | null) => void;
 }
 
 function resolveCoverageNotice(
@@ -142,13 +140,10 @@ function resolveCoverageNotice(
     return null;
   }
 
+  // Los vínculos que no se pudieron leer se ven en la lista de archivos de su pantalla; no hace
+  // falta un aviso general arriba (Alejandro, 2026-10-23).
   if (coverage.state === 'partial') {
-    if (coverage.errors && coverage.errors.length > 0) {
-      return t('cartography.screens.coverage.indexing');
-    }
-    const count = (coverage.unresolved ?? 0) + (coverage.excluded ?? 0);
-    const n = count > 0 ? count : 1;
-    return t(n === 1 ? 'cartography.screens.coverage.unresolvedOne' : 'cartography.screens.coverage.unresolved', { n });
+    return coverage.errors && coverage.errors.length > 0 ? t('cartography.screens.coverage.indexing') : null;
   }
 
   if (coverage.state === 'unsupported') {
@@ -411,9 +406,6 @@ function CaptureBanner({
             {t('cartography.screens.captures.granted', {
               command: captureState.consent.command,
             })}
-            {/* Cuándo fue la última foto y cuántas quedaron viejas: ya no se capturan solas al
-                entrar (Alejandro, 2026-10-23). */}
-            {lastCaptureText(captureState.captures, t)}
           </span>
         )}
 
@@ -730,8 +722,7 @@ function ScreenGrid({
   );
 }
 
-export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCatalogProps) {
-  const onSelectFile = (arguments[0] as ScreenCatalogProps | undefined)?.onSelectFile;
+export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen, onSelectFile, onCaptureSummary }: ScreenCatalogProps) {
   const t = useT();
   const shouldReduceMotion = useReducedMotion();
   const { map, loading, error, replace } = useScreenMap(repoPath, refreshKey);
@@ -811,6 +802,11 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     () => new Set(captureItems.filter((item) => item.state === 'running').map((item) => item.screenId)),
     [captureItems],
   );
+
+  const captureSummary = useMemo(() => summarizeCaptures(captureState?.captures), [captureState]);
+  useEffect(() => {
+    onCaptureSummary?.(captureSummary);
+  }, [captureSummary, onCaptureSummary]);
 
   const coverageNotice = useMemo(() => {
     if (!map) return null;

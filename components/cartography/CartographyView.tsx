@@ -27,7 +27,8 @@ import type { CartoGraphStatus, CartoNode } from '@/lib/carto-types';
 import { CartoNodeDetail } from './CartoNodeDetail';
 import { SemanticGraphLens } from './SemanticGraphLens';
 import { CartoPanoramaHeader } from './CartoPanoramaHeader';
-import { ScreenCatalog } from './ScreenCatalog';
+import { ScreenCatalog, type CaptureSummary } from './ScreenCatalog';
+import { relativeTime } from './ScreenCard';
 import styles from './CartographyView.module.css';
 
 type CartographyViewProps = {
@@ -115,6 +116,8 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
   const [graphStatus, setGraphStatus] = useState<CartoGraphStatus | null>(null);
   // Se incrementa cuando el watch re-sincroniza: fuerza refetch de relaciones.
   const [graphRefresh, setGraphRefresh] = useState(0);
+  // Última captura de las pantallas, para la pastilla del encabezado (la informa el catálogo).
+  const [captureSummary, setCaptureSummary] = useState<CaptureSummary | null>(null);
 
   // ── Capa de IA (Fase 4) ──
   // Se mantiene aiEnabled para CartoNodeDetail (explicación de nodo si está activo en Ajustes).
@@ -203,6 +206,9 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
               })}
             </span>
           )}
+          {personaMode === 'simple' && captureSummary && (
+            <CaptureSummaryPill summary={captureSummary} t={t} />
+          )}
         </div>
 
         {/* Derecha: Selector segmentado Simple/Técnico + Refrescar + Volver al grafo */}
@@ -263,6 +269,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
                 refreshKey={graphRefresh}
                 onSelectScreen={handleSelectScreen}
                 onSelectFile={handleSelectFile}
+                onCaptureSummary={setCaptureSummary}
               />
             ) : (
               <div className={styles.lensContent}>
@@ -305,6 +312,32 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/** «Capturas hace 11 min · 1 desactualizada», en pastilla como la de SDD; ámbar si hay viejas. */
+function CaptureSummaryPill({
+  summary,
+  t,
+}: {
+  summary: CaptureSummary;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const when = relativeTime(summary.latestAt, t);
+  if (!when) return null;
+  const staleText =
+    summary.stale > 0
+      ? ` · ${t(summary.stale === 1 ? 'cartography.screens.captures.staleCountOne' : 'cartography.screens.captures.staleCount', { n: summary.stale })}`
+      : '';
+  return (
+    <span
+      className={cn(styles.capturePill, summary.stale > 0 && styles.capturePillStale)}
+      title={t('cartography.screens.captures.lastCaptureHint')}
+      data-testid="capture-summary-pill"
+    >
+      {t('cartography.screens.captures.lastCapture', { when })}
+      {staleText}
+    </span>
   );
 }
 

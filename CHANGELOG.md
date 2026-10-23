@@ -14,7 +14,8 @@ Dos cambios del plan de integración. La IA acompaña en todas las vistas, sabe 
 - **Catálogo de pantallas.** Un cuadro por pantalla o vista de la app, con nombre en lenguaje llano, dónde se abre, temas (configuración, datos, gráficos…), barra de composición y cuándo cambió por última vez. Filtros por tema.
 - **Detalle de cada pantalla:** qué hace, los archivos que la forman agrupados por rol (pantalla, componentes, estilos, datos, lógica), cuáles se comparten con otras pantallas y qué tan segura es cada relación (verificada, inferida o desconocida). Un archivo se puede preguntar a la IA desde ahí.
 - **Fotos de las pantallas.** Con tu permiso, GitCron abre el proyecto de fondo y saca una foto de cada pantalla, también de las vistas que no tienen dirección, siguiendo recetas en `.gitcron/capturas.json`. Avance en vivo con un círculo desplegable, efecto de píxeles sobre el cuadro que se está fotografiando, y se puede frenar.
-- **Las fotos se sacan solas solo la primera vez.** Después se actualizan a pedido, con «Actualizar capturas» en el menú ⋯; el aviso dice cuándo fue la última captura y cuántas quedaron desactualizadas.
+- **Las fotos se sacan solas solo la primera vez.** Después se actualizan a pedido, con «Actualizar capturas» en el menú ⋯. Una pastilla en el encabezado dice cuándo fue la última captura y se pone ámbar si quedaron desactualizadas.
+- **Los vínculos que no se pueden leer se ven en su pantalla**, en la lista de archivos, en vez de en un aviso general.
 - **Correcciones a mano en `.gitcron/pantallas.json`:** vínculos, descripciones y pantallas o carpetas a excluir.
 - **Cartografía se abre desde el menú de vistas**, junto a Graph y SDD.
 

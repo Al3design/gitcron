@@ -395,13 +395,14 @@ describe('ScreenCatalog', () => {
       },
     });
 
-    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+    const onCaptureSummary = vi.fn();
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} onCaptureSummary={onCaptureSummary} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
     });
     await waitFor(() => {
-      expect(screen.getByText(/última captura/)).toBeTruthy();
+      expect(onCaptureSummary).toHaveBeenLastCalledWith(expect.objectContaining({ stale: 1 }));
     });
     expect(window.api.cartoCaptures.run).not.toHaveBeenCalled();
   });
