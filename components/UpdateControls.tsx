@@ -5,12 +5,33 @@
 // las acciones de check/download/install. Extraído de app/page.tsx; el estado
 // vive en useAppUpdate (instanciado por la página) y llega por props.
 
+import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, Github } from 'lucide-react';
 import pkg from '../package.json';
 import { useT } from '@/hooks/use-translation';
 import { cn } from '@/lib/utils';
 import type { UpdateStatus, UpdateInfo } from '@/hooks/use-app-update';
+
+const MENU_WIDTH = 256; // w-64
+const MENU_GAP = 8; // mb-2 y margen contra el borde de la ventana
+
+/**
+ * Dónde dibujar el desplegable: arriba del botón y alineado a su izquierda,
+ * sin salirse de la ventana. Se dibuja en document.body con position fixed
+ * porque el pie del sidebar recorta lo que sobresale de su borde derecho.
+ */
+export function updateMenuPosition(
+  button: { left: number; top: number },
+  viewport: { width: number; height: number },
+) {
+  const maxLeft = Math.max(MENU_GAP, viewport.width - MENU_WIDTH - MENU_GAP);
+  return {
+    left: Math.min(Math.max(MENU_GAP, button.left), maxLeft),
+    bottom: Math.max(MENU_GAP, viewport.height - button.top + MENU_GAP),
+  };
+}
 
 type UpdateControlsProps = {
   updateStatus: UpdateStatus;
@@ -36,6 +57,21 @@ export function UpdateControls({
   onInstallUpdate,
 }: UpdateControlsProps) {
   const t = useT();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuCoords, setMenuCoords] = useState<{ left: number; bottom: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!showUpdateMenu) return;
+    const place = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuCoords(updateMenuPosition(rect, { width: window.innerWidth, height: window.innerHeight }));
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [showUpdateMenu]);
+
   return (
     <div className="flex items-center gap-1.5 mr-1 shrink-0">
       {updateStatus === 'downloaded' && (
@@ -72,6 +108,7 @@ export function UpdateControls({
       </button>
       <div className="relative" ref={updateMenuRef}>
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => setShowUpdateMenu((v) => !v)}
           className="relative text-[length:var(--font-size-2xs)] font-mono font-bold text-bg-base bg-secondary border border-git-add rounded px-2 py-0.5 select-none hover:brightness-110 transition"
@@ -82,13 +119,16 @@ export function UpdateControls({
             <span className="absolute -right-1 -top-1 w-2 h-2 rounded-full bg-git-mod ring-2 ring-bg-base/70 shadow-[0_0_8px_var(--color-git-mod)]" />
           )}
         </button>
+        {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
-          {showUpdateMenu && (
+          {showUpdateMenu && menuCoords && (
             <motion.div
+              data-update-menu=""
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="absolute left-0 bottom-full mb-2 w-64 rounded-xl bg-bg-surface shadow-2xl p-3 z-[220]"
+              style={menuCoords}
+              className="fixed w-64 rounded-xl bg-bg-surface shadow-2xl p-3 z-[220]"
             >
               <div className="flex items-start gap-2.5">
                 <div className={cn(
@@ -149,7 +189,9 @@ export function UpdateControls({
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+        )}
       </div>
     </div>
   );
