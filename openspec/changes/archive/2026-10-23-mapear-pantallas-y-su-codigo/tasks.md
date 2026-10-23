@@ -30,4 +30,4 @@ Lista de resultados y comprobaciones pendientes. Referencias de implementación 
 
 ## 3. Aceptación
 
-- [ ] 3.1 **Orquestador/auditor:** Comprobar localización de código desde una pantalla con Alejandro. **Comprobación:** Identifica archivos sin conocer carpetas; comprobar renombrado, layout compartido, cancelación y vista técnica.
+- [x] 3.1 **Orquestador/auditor:** Comprobar localización de código desde una pantalla con Alejandro. **Comprobación:** Identifica archivos sin conocer carpetas; comprobar renombrado, layout compartido, cancelación y vista técnica.
