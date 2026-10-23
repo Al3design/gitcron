@@ -204,17 +204,11 @@ export function useScreenCaptures(
     const currentKey = `${repoPath}:${map.headSha ?? 'no-sha'}`;
     if (autoRunRef.current === currentKey) return;
 
-    const routeScreens = map.screens.filter(
-      (s) => s.kind === 'route' && !s.locator.includes('['),
-    );
-    const viewScreens = state.hasRecipes ? map.screens.filter((s) => s.kind === 'view') : [];
-    const candidateScreens = [...routeScreens, ...viewScreens];
-    const needsRun = candidateScreens.some((s) => {
-      const cap = state.captures[s.id];
-      return !cap || cap.stale;
-    });
+    // Solo la primera vez, cuando el proyecto todavía no tiene ninguna foto. Después se actualiza
+    // a pedido, con «Actualizar capturas» (Alejandro, 2026-10-23: capturaba cada vez que se entraba).
+    const neverCaptured = Object.keys(state.captures).length === 0;
 
-    if (needsRun) {
+    if (neverCaptured) {
       autoRunRef.current = currentKey;
       // Fuera del cuerpo del efecto: `run` cambia estado (react-hooks/set-state-in-effect).
       void Promise.resolve().then(() => run());

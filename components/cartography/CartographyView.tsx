@@ -228,7 +228,7 @@ export function CartographyView({ repoPath, onExit }: CartographyViewProps) {
             type="button"
             onClick={() => void refreshLens()}
             disabled={!repoPath}
-            title={t('cartography.refresh')}
+            title={t('cartography.refreshHint')}
             className={styles.actionBtn}
           >
             <RefreshCw size={12} />

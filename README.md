@@ -3,7 +3,7 @@
 Desktop Git client built with modern web tooling. GitCron is meant to cover a personal GitKraken-like workflow without a subscription, with a strong focus on visual history, safe Git operations, and GitHub integration.
 
 <p align="center">
-  <img alt="GitCron version" src="https://img.shields.io/badge/GitCron-v1.20.0-fd9d1a?style=for-the-badge&amp;labelColor=2c3440">
+  <img alt="GitCron version" src="https://img.shields.io/badge/GitCron-v1.21.0-fd9d1a?style=for-the-badge&amp;labelColor=2c3440">
   <img alt="Windows installer" src="https://img.shields.io/badge/Windows-installer-5ed8ff?style=for-the-badge&amp;labelColor=2c3440">
   <img alt="macOS DMG" src="https://img.shields.io/badge/macOS-DMG-5ed8ff?style=for-the-badge&amp;labelColor=2c3440">
   <img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-5ed8ff?style=for-the-badge&amp;labelColor=2c3440">
@@ -173,8 +173,11 @@ Desktop Git client built with modern web tooling. GitCron is meant to cover a pe
 - **Chip en vista clásica**: Si hay predicciones disponibles, la cabecera del grafo clásico muestra un chip "N futuros →" que cambia a vista cronométrica en un click.
 - **Dashboard Estadístico (Brier Score)**: Nueva sección "Dashboard temporal" en los ajustes del repositorio y pestaña "Estadísticas" en el HUD Centauro. Muestra el Brier Score del agente, la curva de calibración agrupada por 10 bins (con tamaño de punto proporcional a las muestras), el historial de decisiones temporal y la comparativa de Brier por modelo e i18n trilingüe. Soporta vista local o unificada cross-repo.
 
-### 🧭 Cartografía — Comprensión de repos con IA (v1.10.0)
+### 🧭 Cartografía — Comprensión de repos con IA (v1.10.0 → v1.21)
 
+- **Pantallas, para quien no programa (v1.21)**: El modo Simple muestra un cuadro por pantalla o vista de la app con su foto, qué hace en lenguaje llano, sus temas y los archivos que la forman, agrupados por rol y marcando cuáles se comparten y qué tan segura es cada relación. El modo Técnico conserva el mapa.
+- **Fotos de las pantallas (v1.21)**: Con permiso, GitCron abre el proyecto de fondo y fotografía cada pantalla; las vistas sin dirección se alcanzan con recetas en `.gitcron/capturas.json`. Se sacan solas la primera vez y después a pedido con «Actualizar capturas»; el aviso dice cuándo fue la última.
+- **Correcciones a mano (v1.21)**: `.gitcron/pantallas.json` agrega vínculos y descripciones o excluye pantallas y carpetas. Cartografía se abre desde el menú de vistas y su chat vive en el panel de asistencia.
 - **Vista única de Cartografía**: Un lienzo integrado para entender cualquier repo abierto sin saltar entre tres vistas separadas. El mapa muestra tarjetas por rol, archivos clave y relaciones ponderadas, con expansión on-demand para profundizar cuando hace falta.
 - **Grounding CodeGraph + filesystem**: El modelo combina símbolos, edges y archivos del repo para que componentes, estilos, config, docs y assets entren en la lectura estructural.
 - **Explicaciones y preguntas con citas**: "Explicame esto" abre detalle de nodos con impacto, callers/callees y explicación de IA; "Preguntar a la IA" responde sobre el repo activo citando archivos y símbolos consultados.
@@ -523,9 +526,9 @@ Download the latest release from [GitHub Releases](https://github.com/Al3design/
 
 | Platform | File                                                                  |
 | -------- | --------------------------------------------------------------------- |
-| Windows  | `GitCron Setup 1.20.0.exe`                                            |
-| macOS    | `GitCron-1.20.0.dmg` _(build on macOS with `pnpm package:mac`)_       |
-| Linux    | `GitCron-1.20.0.AppImage` _(build on Linux with `pnpm package:linux`)_ |
+| Windows  | `GitCron Setup 1.21.0.exe`                                            |
+| macOS    | `GitCron-1.21.0.dmg` _(build on macOS with `pnpm package:mac`)_       |
+| Linux    | `GitCron-1.21.0.AppImage` _(build on Linux with `pnpm package:linux`)_ |
 
 > **Note:** Installers are not code-signed. Windows will show a SmartScreen warning — click **"More info" → "Run anyway"** to proceed.
 
@@ -574,7 +577,7 @@ After publishing, install the update from GitCron and run one authenticated push
 
 ## Current version
 
-- **GitCron**: `v1.20.0` (2026-10-09) — ver [CHANGELOG.md](CHANGELOG.md) para el detalle de cada versión.
+- **GitCron**: `v1.21.0` (2026-10-23) — ver [CHANGELOG.md](CHANGELOG.md) para el detalle de cada versión.
 - **Vista Cronométrica (Beta)**: *(Integrada bajo Feature Flag en la rama principal — Activar desde Ajustes)*
 
 ---

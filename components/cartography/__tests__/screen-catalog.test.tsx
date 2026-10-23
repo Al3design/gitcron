@@ -378,6 +378,34 @@ describe('ScreenCatalog', () => {
     expect(badge.textContent).toBe('Desactualizada');
   });
 
+  it('con fotos ya sacadas, aunque estén desactualizadas, no captura sola y dice cuándo fue la última', async () => {
+    (window.api.cartoCaptures.get as any).mockResolvedValue({
+      success: true,
+      data: {
+        consent: { status: 'granted', command: 'pnpm run dev', grantedAt: '2026-10-16T12:00:00Z' },
+        captures: {
+          'route:/settings': {
+            screenId: 'route:/settings',
+            dataUrl: 'data:image/jpeg;base64,mockimagedata',
+            capturedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+            stale: true,
+          },
+        },
+        running: false,
+      },
+    });
+
+    render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('screen-card-route:/settings')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/última captura/)).toBeTruthy();
+    });
+    expect(window.api.cartoCaptures.run).not.toHaveBeenCalled();
+  });
+
   it('el filtro por tema deja solo esas pantallas y «Todas» las vuelve', async () => {
     render(<ScreenCatalog repoPath="/mock/repo" refreshKey={0} />);
 

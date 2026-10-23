@@ -27,7 +27,7 @@ export interface ScreenCardProps {
   capturing?: boolean;
 }
 
-function relativeTime(
+export function relativeTime(
   iso: string | null,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): string | null {

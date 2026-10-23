@@ -17,9 +17,9 @@ import { useScreenCaptures } from '@/hooks/use-screen-captures';
 import { useAssistDockStore } from '@/lib/assist/assist-dock-store';
 import { useGitStore } from '@/lib/git-store';
 import { cn } from '@/lib/utils';
-import type { ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
+import type { ScreenCapture, ScreenEntry, ScreenMapCoverage, ScreenTag } from '@/types/screen-map';
 import { CaptureProgress } from './CaptureProgress';
-import { ScreenCard } from './ScreenCard';
+import { relativeTime, ScreenCard } from './ScreenCard';
 import { ScreenDetail } from './ScreenDetail';
 import styles from './ScreenCatalog.module.css';
 
@@ -27,6 +27,23 @@ export type CartoCardSize = 'large' | 'medium' | 'small' | 'minimal';
 const CARD_SIZE_STORAGE_KEY = 'gitcron:cartoCardSize';
 const TAG_FILTER_STORAGE_KEY = 'gitcron:cartoTagFilter';
 const GROUP_BY_STORAGE_KEY = 'gitcron:cartoGroupBy';
+
+/** « · Última captura: hace 2 h · 3 desactualizadas», o nada si todavía no hay fotos. */
+function lastCaptureText(
+  captures: Record<string, ScreenCapture>,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  const list = Object.values(captures);
+  if (list.length === 0) return '';
+  const latest = list.reduce((max, c) => (c.capturedAt > max ? c.capturedAt : max), list[0].capturedAt);
+  const when = relativeTime(latest, t);
+  const stale = list.filter((c) => c.stale).length;
+  const parts = [when ? t('cartography.screens.captures.lastCapture', { when }) : null];
+  if (stale > 0) {
+    parts.push(t(stale === 1 ? 'cartography.screens.captures.staleCountOne' : 'cartography.screens.captures.staleCount', { n: stale }));
+  }
+  return parts.filter(Boolean).map((p) => ` · ${p}`).join('');
+}
 
 const ALL_TAGS: ScreenTag[] = [
   'graphics',
@@ -394,6 +411,9 @@ function CaptureBanner({
             {t('cartography.screens.captures.granted', {
               command: captureState.consent.command,
             })}
+            {/* Cuándo fue la última foto y cuántas quedaron viejas: ya no se capturan solas al
+                entrar (Alejandro, 2026-10-23). */}
+            {lastCaptureText(captureState.captures, t)}
           </span>
         )}
 

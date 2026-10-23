@@ -4,6 +4,48 @@ Changes are listed from newest to oldest.
 
 ---
 
+## [v1.21.0] - 2026-10-23 - Retomar con ayuda y entender cada pantalla
+
+Dos cambios del plan de integración. La IA acompaña en todas las vistas, sabe qué tenés elegido y deja retomar un trabajo donde quedó. Cartografía pasa a explicar el proyecto pantalla por pantalla, con su foto, qué hace y qué archivos la forman, para alguien que no programa.
+
+### 🧭 Cartografía
+
+#### Added
+- **Catálogo de pantallas.** Un cuadro por pantalla o vista de la app, con nombre en lenguaje llano, dónde se abre, temas (configuración, datos, gráficos…), barra de composición y cuándo cambió por última vez. Filtros por tema.
+- **Detalle de cada pantalla:** qué hace, los archivos que la forman agrupados por rol (pantalla, componentes, estilos, datos, lógica), cuáles se comparten con otras pantallas y qué tan segura es cada relación (verificada, inferida o desconocida). Un archivo se puede preguntar a la IA desde ahí.
+- **Fotos de las pantallas.** Con tu permiso, GitCron abre el proyecto de fondo y saca una foto de cada pantalla, también de las vistas que no tienen dirección, siguiendo recetas en `.gitcron/capturas.json`. Avance en vivo con un círculo desplegable, efecto de píxeles sobre el cuadro que se está fotografiando, y se puede frenar.
+- **Las fotos se sacan solas solo la primera vez.** Después se actualizan a pedido, con «Actualizar capturas» en el menú ⋯; el aviso dice cuándo fue la última captura y cuántas quedaron desactualizadas.
+- **Correcciones a mano en `.gitcron/pantallas.json`:** vínculos, descripciones y pantallas o carpetas a excluir.
+- **Cartografía se abre desde el menú de vistas**, junto a Graph y SDD.
+
+#### Changed
+- **Dos modos: Simple (pantallas) y Técnico (el mapa de antes)**, con la estética general y los tokens de la app.
+- **El chat de Cartografía pasa al panel de asistencia**, que recibe la pantalla o el archivo elegido.
+- **La lectura del mapa se comparte entre pedidos**, no mezcla resultados de otra rama y se rehace si la rama cambió mientras se leía.
+- **«Refrescar» explica qué hace:** vuelve a leer el código del proyecto (qué pantallas hay y qué archivos usa cada una); no saca fotos.
+
+### 💬 Asistencia en todas las vistas
+
+#### Added
+- **El panel de Centauro, con el chat adentro, en todas las vistas.** El grafo, SDD, Cartografía y Centauro le dicen qué tenés elegido, y el chat dice sobre qué vas a preguntar.
+- **Conversaciones por repositorio** que se fijan, archivan y agrupan, y que se recuerdan al reabrir la app.
+- **El uso de cada respuesta** (tokens y tiempo) y sugerencias como pastillas.
+- **Acciones de SDD y de ajustes desde el chat.**
+- **Resumen de un cambio de SDD** con objetivo, avance, decisiones y siguiente paso; avisa cuando quedó viejo y se puede explicar con IA a pedido.
+
+#### Changed
+- **Un solo modelo elegido para toda la app**, también en el lanzador.
+- **El cuadro de texto del chat**, la columna de conversaciones ocultable y con ancho ajustable, y la manija del panel al nivel de los botones del lienzo.
+
+### 🛠️ Proyecto
+
+#### Changed
+- **El repositorio se mudó a [Al3design/gitcron](https://github.com/Al3design/gitcron).** Las actualizaciones automáticas y los enlaces apuntan ahí.
+
+**Validación:** verificación completa contra `main` en verde: `build`, `tsc --noEmit`, 3224 pruebas, 6 pruebas e2e locales, `eslint`, Fallow y `openspec validate --strict`.
+
+---
+
 ## [v1.20.0] - 2026-10-09 - Tus modelos, en toda la app
 
 Segundo cambio del plan de integración: GitCron usa los modelos que tenés, sean de tu casa, de otra PC por un túnel o de una suscripción por línea de comandos, y los elegís en un solo lugar para todas las funciones con IA.
