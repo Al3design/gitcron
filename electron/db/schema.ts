@@ -3,8 +3,6 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 10;
-
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
 export const BRANCH_DECISION_TABLE = 'branch_decision';
@@ -360,3 +358,7 @@ export const MIGRATIONS: Migration[] = [
     ],
   },
 ];
+
+// Sale de la lista: escrita a mano quedó en 10 cuando la migración 11 ya existía (capturas de
+// Cartografía), y las pruebas de la base fallaron en la verificación final.
+export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

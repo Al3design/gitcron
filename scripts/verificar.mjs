@@ -501,7 +501,9 @@ function main() {
   const fallidos = [];
   const inicioTotal = Date.now();
   const tocados = archivosTocados();
-  const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f));
+  // Solo los que siguen existiendo: con --desde, un archivo borrado en el cambio hacía fallar eslint
+  // entero («No files matching the pattern»), medido en la verificación final de Cartografía.
+  const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f) && existsSync(f));
   // Para `vitest related`: código y estilos que siguen existiendo (un archivo
   // borrado no tiene pruebas que dependan de él).
   const tocadosCodigoTodos = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));

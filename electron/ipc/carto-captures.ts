@@ -71,7 +71,7 @@ function screenDisplayName(screen: ScreenEntry): string {
   return screen.description?.suggestedName || screen.name;
 }
 
-export function createStartCommandDeps(root: string) {
+function createStartCommandDeps(root: string) {
   return {
     async readFile(rel: string) {
       try {
@@ -106,7 +106,7 @@ export function createStartCommandDeps(root: string) {
   };
 }
 
-export function createStatFn(root: string) {
+function createStatFn(root: string) {
   return async (rel: string) => {
     try {
       const abs = path.resolve(root, rel);
@@ -167,7 +167,7 @@ async function resolveCaptureCommand(
   };
 }
 
-export async function resolveCaptureState(
+async function resolveCaptureState(
   root: string,
   options: CartoCapturesOptions = {},
   injectedDeps?: ScreenMapDeps,
@@ -272,7 +272,7 @@ export async function handleCartoCapturesConsent(
   }
 }
 
-export async function handleCartoCapturesRevoke(
+async function handleCartoCapturesRevoke(
   payload: unknown,
   options: CartoCapturesOptions = {},
 ): Promise<Result<ScreenCaptureState>> {
@@ -548,7 +548,7 @@ export async function handleCartoCapturesRun(
   }
 }
 
-export function handleCartoCapturesCancel(payload: unknown): Result<boolean> {
+function handleCartoCapturesCancel(payload: unknown): Result<boolean> {
   const candidatePath =
     typeof payload === 'string' ? payload : (payload as { repoPath?: unknown })?.repoPath;
   const root = authorizedRepoRoot(candidatePath);

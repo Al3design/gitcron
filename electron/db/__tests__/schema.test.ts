@@ -256,6 +256,8 @@ describe('Temporal Agent SQLite schema', () => {
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_REFERENCE_TABLE}`);
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_TABLE}`);
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_CONVERSATION_TABLE}`);
+      db.exec('DROP TABLE IF EXISTS carto_screen_capture');
+      db.exec('DROP TABLE IF EXISTS carto_capture_consent');
       db.exec(`CREATE TABLE ${PIPELINE_CURSOR_TABLE} (
         repo_id TEXT NOT NULL, source_ref TEXT NOT NULL, offset INTEGER NOT NULL,
         pending TEXT NOT NULL, generation TEXT, updated_at TEXT NOT NULL,
@@ -276,7 +278,7 @@ describe('Temporal Agent SQLite schema', () => {
     });
   });
 
-  it('upgrades an existing database from version 6 to 10 preserving all data', () => {
+  it('upgrades an existing database from version 6 to the latest preserving all data', () => {
     withDb((db) => {
       const runId = insertRun(db);
       const branchId = insertBranch(db, runId);
@@ -284,6 +286,8 @@ describe('Temporal Agent SQLite schema', () => {
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_REFERENCE_TABLE}`);
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_MESSAGE_TABLE}`);
       db.exec(`DROP TABLE IF EXISTS ${ASSIST_CONVERSATION_TABLE}`);
+      db.exec('DROP TABLE IF EXISTS carto_screen_capture');
+      db.exec('DROP TABLE IF EXISTS carto_capture_consent');
       db.exec('PRAGMA user_version = 6');
 
       runMigrations(db);

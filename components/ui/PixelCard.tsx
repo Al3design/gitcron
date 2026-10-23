@@ -444,4 +444,3 @@ export function PixelCard({
   );
 }
 
-export default PixelCard;

@@ -213,7 +213,7 @@ async function buildFreshMap(
   return map;
 }
 
-export async function handleCartoScreensDescribe(
+async function handleCartoScreensDescribe(
   payload: unknown,
 ): Promise<Result<{ status: 'ok'; description: ScreenDescription } | { status: 'unavailable'; message: string } | null>> {
   try {

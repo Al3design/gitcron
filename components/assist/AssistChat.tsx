@@ -725,11 +725,15 @@ export function AssistChat({
   const [messages, setMessages] = useState<AssistMessage[]>([]);
   const [question, setQuestion] = useState('');
 
+  // La pregunta que deja otra pantalla (Cartografía) pasa al campo fuera del cuerpo del efecto
+  // (react-hooks/set-state-in-effect), como en use-screen-captures.
   useEffect(() => {
-    if (pendingPrompt) {
-      setQuestion(pendingPrompt);
+    if (!pendingPrompt) return;
+    const prompt = pendingPrompt;
+    void Promise.resolve().then(() => {
+      setQuestion(prompt);
       setPendingPrompt(null);
-    }
+    });
   }, [pendingPrompt, setPendingPrompt]);
   // El pedido en curso, con el repo y la conversación de donde salió: sólo ahí se muestra.
   const [pending, setPending] = useState<PendingRequest | null>(null);
