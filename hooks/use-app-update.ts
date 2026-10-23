@@ -19,6 +19,9 @@ export type UpdateInfo = {
   releaseDate?: string;
 };
 
+/** Marca del desplegable de actualización, que vive fuera de updateMenuRef. */
+const UPDATE_MENU_ATTR = 'data-update-menu';
+
 const MOCK_UPDATE_ENABLED = process.env.NEXT_PUBLIC_MOCK_UPDATE === '1';
 const MOCK_UPDATE_VERSION = '1.3.1-dev';
 
@@ -42,6 +45,8 @@ export const useAppUpdate = () => {
     if (!showUpdateMenu) return;
     const handlePointerDown = (e: MouseEvent) => {
       if (updateMenuRef.current?.contains(e.target as Node)) return;
+      // El desplegable se dibuja en document.body, fuera de updateMenuRef.
+      if ((e.target as Element | null)?.closest?.(`[${UPDATE_MENU_ATTR}]`)) return;
       setShowUpdateMenu(false);
     };
     window.addEventListener('mousedown', handlePointerDown);
