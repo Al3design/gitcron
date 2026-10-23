@@ -78,6 +78,53 @@ function readAiColors(): string[] {
   return list;
 }
 
+function computePixelPresence(
+  current: number,
+  ready: boolean,
+  active: boolean,
+  reduce: boolean,
+  appearStep: number,
+  exitStep: number,
+): number {
+  const target = active ? (ready ? 1 : 0) : (ready ? 0 : current);
+  if (reduce) return target;
+  if (target > current) return Math.min(1, current + appearStep);
+  if (target < current) return Math.max(0, current - exitStep);
+  return current;
+}
+
+function computePixelSize(
+  baseSize: number,
+  presence: number,
+  active: boolean,
+  twinkle: number,
+  wave: number,
+): number {
+  let size = baseSize;
+  if (twinkle) {
+    size *= 0.62 + 0.38 * wave;
+  }
+  size *= easeOutBack(presence);
+  const flash = presence < 1 && active ? Math.sin(presence * Math.PI) : 0;
+  return size * (1 + flash * 0.9);
+}
+
+function computePixelAlpha(
+  presence: number,
+  active: boolean,
+  twinkle: number,
+  wave: number,
+  jitter: number,
+): number {
+  let alpha = 0.5 + presence * 0.38;
+  if (twinkle) {
+    alpha += 0.12 * wave + (jitter > 0.92 ? 0.35 * Math.max(0, wave) : 0);
+  }
+  const flash = presence < 1 && active ? Math.sin(presence * Math.PI) : 0;
+  alpha += flash * 0.6;
+  return Math.min(1, Math.max(0, alpha));
+}
+
 /** Separación entre puntos del lienzo, en píxeles del dibujo (no es un espacio de CSS). */
 const DEFAULT_PIXEL_GAP = 5;
 
@@ -239,6 +286,33 @@ export function PixelCard({
       schedule();
     };
 
+    const updateAllPresence = (elapsed: number, appearStep: number, exitStep: number): number => {
+      let presenceSum = 0;
+      for (let i = 0; i < state.count; i++) {
+        const ready = elapsed >= state.delay[i] || reduce;
+        const next = computePixelPresence(state.presence[i], ready, state.active, reduce, appearStep, exitStep);
+        state.presence[i] = next;
+        presenceSum += next;
+      }
+      return presenceSum;
+    };
+
+    const drawColorGroup = (colorIdx: number, twinkle: number, frequency: number) => {
+      for (let i = 0; i < state.count; i++) {
+        if (state.tint[i] !== colorIdx) continue;
+        const presence = state.presence[i];
+        if (presence <= 0.002) continue;
+
+        const wave = twinkle ? Math.sin(state.phase[i] + state.time * frequency * state.rate[i]) : 0;
+        const size = computePixelSize(state.size[i], presence, state.active, twinkle, wave);
+        const alpha = computePixelAlpha(presence, state.active, twinkle, wave, state.jitter[i]);
+
+        if (alpha <= 0.004 || size <= 0.05) continue;
+        ctx.globalAlpha = alpha;
+        ctx.fillRect(state.x[i] - size * 0.5, state.y[i] - size * 0.5, size, size);
+      }
+    };
+
     const draw = (): number => {
       const s = settingsRef.current;
       const { width, height, ratio } = state;
@@ -246,55 +320,17 @@ export function PixelCard({
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      let presenceSum = 0;
       const elapsed = state.time - state.changedAt;
       const appearStep = state.dt / APPEAR;
       const exitStep = state.dt / EXIT;
-
-      for (let i = 0; i < state.count; i++) {
-        const current = state.presence[i];
-        const ready = elapsed >= state.delay[i] || reduce;
-        const target = state.active ? (ready ? 1 : 0) : (ready ? 0 : current);
-        if (reduce) {
-          state.presence[i] = target;
-        } else if (target > current) {
-          state.presence[i] = Math.min(1, current + appearStep);
-        } else if (target < current) {
-          state.presence[i] = Math.max(0, current - exitStep);
-        }
-        presenceSum += state.presence[i];
-      }
+      const presenceSum = updateAllPresence(elapsed, appearStep, exitStep);
 
       const twinkle = reduce ? 0 : smoothstep(0, 100, s.speed) > 0 ? 1 : 0;
       const frequency = (s.speed / 35) * 1.35;
 
       for (let colorIdx = 0; colorIdx < s.colors.length; colorIdx++) {
         ctx.fillStyle = s.colors[colorIdx];
-        for (let i = 0; i < state.count; i++) {
-          if (state.tint[i] !== colorIdx) continue;
-          const presence = state.presence[i];
-          if (presence <= 0.002) continue;
-          const x = state.x[i];
-          const y = state.y[i];
-          let size = state.size[i];
-          let alpha = 0.5 + presence * 0.38;
-
-          if (twinkle) {
-            const wave = Math.sin(state.phase[i] + state.time * frequency * state.rate[i]);
-            size *= 0.62 + 0.38 * wave;
-            alpha += 0.12 * wave + (state.jitter[i] > 0.92 ? 0.35 * Math.max(0, wave) : 0);
-          }
-
-          size *= easeOutBack(presence);
-          const flash = presence < 1 && state.active ? Math.sin(presence * Math.PI) : 0;
-          size *= 1 + flash * 0.9;
-          alpha += flash * 0.6;
-
-          alpha = Math.min(1, Math.max(0, alpha));
-          if (alpha <= 0.004 || size <= 0.05) continue;
-          ctx.globalAlpha = alpha;
-          ctx.fillRect(x - size * 0.5, y - size * 0.5, size, size);
-        }
+        drawColorGroup(colorIdx, twinkle, frequency);
       }
       ctx.globalAlpha = 1;
       return presenceSum;

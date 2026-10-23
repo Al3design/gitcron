@@ -43,10 +43,49 @@ interface ImportBinding {
   componentName: string;
   source: string;
 }
-
 /**
  * Extrae los imports de componentes en el archivo para resolver de dónde provienen.
  */
+function parseBracedNamedImports(insideBraces: string, source: string, bindings: ImportBinding[]): void {
+  const items = insideBraces.split(',').map((s) => s.trim()).filter(Boolean);
+  for (const item of items) {
+    if (item.startsWith('type ')) continue;
+    const asParts = item.split(/\s+as\s+/);
+    const local = (asParts[1] ?? asParts[0]).trim();
+    if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
+      bindings.push({ componentName: local, source });
+    }
+  }
+}
+
+function parseDefaultOrNamespaceImport(beforeBrace: string, source: string, bindings: ImportBinding[]): void {
+  if (!beforeBrace) return;
+  const nsMatch = /\*\s+as\s+([a-zA-Z0-9_$]+)/.exec(beforeBrace);
+  if (nsMatch) {
+    const local = nsMatch[1].trim();
+    if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
+      bindings.push({ componentName: local, source });
+    }
+    return;
+  }
+  const defMatch = /^([a-zA-Z0-9_$]+)/.exec(beforeBrace);
+  if (defMatch) {
+    const local = defMatch[1].trim();
+    if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
+      bindings.push({ componentName: local, source });
+    }
+  }
+}
+
+function parseImportClause(clause: string, source: string, bindings: ImportBinding[]): void {
+  const braceMatch = /\{([\s\S]*?)\}/.exec(clause);
+  if (braceMatch) {
+    parseBracedNamedImports(braceMatch[1], source, bindings);
+  }
+  const beforeBrace = braceMatch ? clause.slice(0, braceMatch.index).trim().replace(/,$/, '').trim() : clause;
+  parseDefaultOrNamespaceImport(beforeBrace, source, bindings);
+}
+
 function extractImports(fileText: string): ImportBinding[] {
   const bindings: ImportBinding[] = [];
   const importRe = /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
@@ -55,43 +94,7 @@ function extractImports(fileText: string): ImportBinding[] {
   while ((match = importRe.exec(fileText)) !== null) {
     const clause = match[1].trim();
     const source = match[2].trim();
-
-    // Import por omisión o con nombre: `import Foo, { Bar as Baz } from '...'`
-    // Cláusula entre llaves `{ ... }`
-    const braceMatch = /\{([\s\S]*?)\}/.exec(clause);
-    if (braceMatch) {
-      const insideBraces = braceMatch[1];
-      const items = insideBraces.split(',').map((s) => s.trim()).filter(Boolean);
-      for (const item of items) {
-        // Ignorar `type Foo`
-        if (item.startsWith('type ')) continue;
-        const asParts = item.split(/\s+as\s+/);
-        const local = (asParts[1] ?? asParts[0]).trim();
-        if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
-          bindings.push({ componentName: local, source });
-        }
-      }
-    }
-
-    // Parte fuera de llaves (import default o namespace)
-    const beforeBrace = braceMatch ? clause.slice(0, braceMatch.index).trim().replace(/,$/, '').trim() : clause;
-    if (beforeBrace) {
-      const nsMatch = /\*\s+as\s+([a-zA-Z0-9_$]+)/.exec(beforeBrace);
-      if (nsMatch) {
-        const local = nsMatch[1].trim();
-        if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
-          bindings.push({ componentName: local, source });
-        }
-      } else {
-        const defMatch = /^([a-zA-Z0-9_$]+)/.exec(beforeBrace);
-        if (defMatch) {
-          const local = defMatch[1].trim();
-          if (/^[A-Z][a-zA-Z0-9_]*$/.test(local)) {
-            bindings.push({ componentName: local, source });
-          }
-        }
-      }
-    }
+    parseImportClause(clause, source, bindings);
   }
 
   return bindings;
@@ -133,6 +136,52 @@ function resolveImportPath(
   return `${base}.tsx`;
 }
 
+function extractComponentBody(componentName: string, text: string): string | null {
+  const defRe = new RegExp(`(?:function\\s+${componentName}\\s*\\(|const\\s+${componentName}\\s*=)`);
+  const match = defRe.exec(text);
+  if (!match) return null;
+
+  const afterMatch = text.slice(match.index);
+  const lines = afterMatch.split(/\r?\n/);
+  const bodyLines: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    bodyLines.push(lines[i]);
+    if (i > 0 && /^\}\s*;?\s*$/.test(lines[i])) break;
+  }
+  return bodyLines.join('\n');
+}
+
+function collectFilesForJsxTag(
+  tagName: string,
+  normPath: string,
+  text: string,
+  importSourceByComponent: Map<string, string>,
+  knownPathsSet: Set<string>,
+  visited: Set<string>,
+  seenFiles: Set<string>,
+  usedFiles: string[],
+): void {
+  if (new RegExp(`(?:function|const|let|class)\\s+${tagName}\\b`).test(text)) {
+    const inner = extractUsedFilesInComponent(tagName, normPath, text, importSourceByComponent, knownPathsSet, visited);
+    for (const f of inner) {
+      if (!seenFiles.has(f)) {
+        seenFiles.add(f);
+        usedFiles.push(f);
+      }
+    }
+    return;
+  }
+
+  const impSource = importSourceByComponent.get(tagName);
+  if (impSource) {
+    const resolved = resolveImportPath(normPath, impSource, knownPathsSet);
+    if (resolved && !seenFiles.has(resolved)) {
+      seenFiles.add(resolved);
+      usedFiles.push(resolved);
+    }
+  }
+}
+
 /**
  * Para un componente definido en el mismo archivo, busca su cuerpo y extrae
  * los archivos que usa según las etiquetas JSX que dibuja (<Componente />).
@@ -148,24 +197,9 @@ function extractUsedFilesInComponent(
   if (visited.has(componentName)) return [];
   visited.add(componentName);
 
-  // Buscar desde `function Nombre(` o `const Nombre =`
-  const defRe = new RegExp(`(?:function\\s+${componentName}\\s*\\(|const\\s+${componentName}\\s*=)`);
-  const match = defRe.exec(text);
-  if (!match) return [];
+  const body = extractComponentBody(componentName, text);
+  if (!body) return [];
 
-  // El cuerpo termina en la primera llave de cierre AL PRINCIPIO de una línea: una llave con
-  // sangría es de un bloque interno (cortar ahí perdía casi todo el componente; lo midió el
-  // orquestador sobre Graph en carto-05a).
-  const afterMatch = text.slice(match.index);
-  const lines = afterMatch.split(/\r?\n/);
-  const bodyLines: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    bodyLines.push(lines[i]);
-    // Solo una llave sola (o con «;»): `}: Props) {` al principio de línea cierra los parámetros, no la función.
-    if (i > 0 && /^\}\s*;?\s*$/.test(lines[i])) break;
-  }
-
-  const body = bodyLines.join('\n');
   const jsxTagRe = /<([A-Z][a-zA-Z0-9_]*)/g;
   let tagMatch: RegExpExecArray | null;
   const seenTags = new Set<string>();
@@ -176,28 +210,7 @@ function extractUsedFilesInComponent(
     const tagName = tagMatch[1];
     if (seenTags.has(tagName)) continue;
     seenTags.add(tagName);
-
-    // Definido en el mismo archivo: se sigue adentro (Graph dibuja vistas que viven en RepoMainView).
-    if (new RegExp(`(?:function|const|let|class)\\s+${tagName}\\b`).test(text)) {
-      const inner = extractUsedFilesInComponent(tagName, normPath, text, importSourceByComponent, knownPathsSet, visited);
-      for (const f of inner) {
-        if (!seenFiles.has(f)) {
-          seenFiles.add(f);
-          usedFiles.push(f);
-        }
-      }
-      continue;
-    }
-
-    // Se resuelve con los imports del archivo (los paquetes externos no cuentan).
-    const impSource = importSourceByComponent.get(tagName);
-    if (impSource) {
-      const resolved = resolveImportPath(normPath, impSource, knownPathsSet);
-      if (resolved && !seenFiles.has(resolved)) {
-        seenFiles.add(resolved);
-        usedFiles.push(resolved);
-      }
-    }
+    collectFilesForJsxTag(tagName, normPath, text, importSourceByComponent, knownPathsSet, visited, seenFiles, usedFiles);
   }
 
   return usedFiles;
@@ -214,12 +227,10 @@ function entryFor(
   const impSource = importSourceByComponent.get(componentName);
   if (impSource) {
     const resolved = resolveImportPath(normPath, impSource, knownPathsSet);
-    // Un componente de un paquete externo no es un archivo del proyecto.
     return resolved
       ? [{ path: resolved, provenance: 'static', role: 'screen' }]
       : [{ path: componentName, provenance: 'unknown', role: 'screen' }];
   }
-  // Definido en el mismo archivo (en RepoMainView, HistoryTabView y CommitWorkspaceView).
   if (new RegExp(`(?:function|const|let|class)\\s+${componentName}\\b`).test(text)) {
     const usedFiles = extractUsedFilesInComponent(
       componentName,
@@ -248,6 +259,128 @@ interface EarlyReturnMatch {
   index: number;
 }
 
+function matchEarlyReturnCondition(cond: string): { kind: 'equality'; variable: string; value: string } | { kind: 'flag'; flag: string } | null {
+  const eqMatch = /^([a-zA-Z_$][a-zA-Z0-9_$.]*)\s*===\s*['"]([^'"]+)['"]$/.exec(cond);
+  if (eqMatch) {
+    return { kind: 'equality', variable: eqMatch[1], value: eqMatch[2] };
+  }
+  const flagMatch = /^([a-zA-Z_$][a-zA-Z0-9_$]*(?:Active|Open|Mode))$/.exec(cond);
+  if (flagMatch) {
+    return { kind: 'flag', flag: flagMatch[1] };
+  }
+  return null;
+}
+
+function findEarlyReturnMatches(text: string): EarlyReturnMatch[] {
+  const matches: EarlyReturnMatch[] = [];
+  const ifRegex = /if\s*\(([^)]+)\)/g;
+  let ifMatch: RegExpExecArray | null;
+
+  while ((ifMatch = ifRegex.exec(text)) !== null) {
+    const cond = ifMatch[1].trim();
+    const ifEndPos = ifRegex.lastIndex;
+
+    const condition = matchEarlyReturnCondition(cond);
+    if (!condition) continue;
+
+    const lookahead = text.slice(ifEndPos, ifEndPos + 200);
+    const returnCompMatch = /^[\s\r\n{]*return\s*(?:\(\s*)?<([A-Z][a-zA-Z0-9_]*)/.exec(lookahead);
+    if (!returnCompMatch) continue;
+
+    matches.push({
+      ...condition,
+      componentName: returnCompMatch[1],
+      index: ifEndPos,
+    });
+  }
+  return matches;
+}
+
+function findDefaultReturnComponent(text: string, lastMatchIndex: number): string | null {
+  const afterChain = text.slice(lastMatchIndex);
+  const functionEnd = afterChain.search(/\n\}/);
+  const remainder = functionEnd === -1 ? afterChain : afterChain.slice(0, functionEnd);
+
+  const defaultRe = /return\s*(?:\(\s*)?<([A-Z][a-zA-Z0-9_]*)/g;
+  let defMatch: RegExpExecArray | null;
+  let lastDefaultComponent: string | null = null;
+
+  while ((defMatch = defaultRe.exec(remainder)) !== null) {
+    lastDefaultComponent = defMatch[1];
+  }
+  return lastDefaultComponent;
+}
+
+function createViewFromEarlyReturn(
+  m: EarlyReturnMatch,
+  normPath: string,
+  text: string,
+  importSourceByComponent: Map<string, string>,
+  knownPathsSet: Set<string>,
+): DetectedScreen {
+  let name: string;
+  let locator: string;
+
+  if (m.kind === 'equality') {
+    name = formatValueName(m.value!);
+    locator = `${m.variable}=${m.value}`;
+  } else {
+    name = formatFlagName(m.flag!);
+    locator = m.flag!;
+  }
+
+  const entryFiles = entryFor(m.componentName, normPath, text, importSourceByComponent, knownPathsSet);
+
+  return {
+    id: `view:${normPath}#${locator}`,
+    kind: 'view',
+    name,
+    locator,
+    declaredIn: normPath,
+    entryFiles,
+  };
+}
+
+function detectFileStateViews(
+  normPath: string,
+  text: string,
+  knownPathsSet: Set<string>,
+): DetectedScreen[] {
+  const imports = extractImports(text);
+  const importSourceByComponent = new Map<string, string>();
+  for (const imp of imports) {
+    if (!importSourceByComponent.has(imp.componentName)) {
+      importSourceByComponent.set(imp.componentName, imp.source);
+    }
+  }
+
+  const matches = findEarlyReturnMatches(text);
+  if (matches.length < 3) return [];
+
+  const screens: DetectedScreen[] = [];
+  for (const m of matches) {
+    screens.push(createViewFromEarlyReturn(m, normPath, text, importSourceByComponent, knownPathsSet));
+  }
+
+  const lastDefaultComponent = findDefaultReturnComponent(text, matches[matches.length - 1].index);
+  const chainComponents = new Set(matches.map((m) => m.componentName));
+  if (lastDefaultComponent && !chainComponents.has(lastDefaultComponent)) {
+    const defName = formatDefaultComponentName(lastDefaultComponent);
+    const entryFiles = entryFor(lastDefaultComponent, normPath, text, importSourceByComponent, knownPathsSet);
+
+    screens.push({
+      id: `view:${normPath}#default`,
+      kind: 'view',
+      name: defName,
+      locator: 'default',
+      declaredIn: normPath,
+      entryFiles,
+    });
+  }
+
+  return screens;
+}
+
 /**
  * Detecta vistas elegidas por condiciones de estado y retornos tempranos.
  */
@@ -268,124 +401,7 @@ export function detectStateViews(
   for (const file of files) {
     const normPath = file.path.replace(/\\/g, '/');
     if (!normPath.endsWith('.tsx') && !normPath.endsWith('.jsx')) continue;
-
-    const text = file.text;
-    const imports = extractImports(text);
-    const importSourceByComponent = new Map<string, string>();
-    for (const imp of imports) {
-      if (!importSourceByComponent.has(imp.componentName)) {
-        importSourceByComponent.set(imp.componentName, imp.source);
-      }
-    }
-
-    const matches: EarlyReturnMatch[] = [];
-
-    // Buscar condiciones if (...) seguidas a no más de 200 caracteres de <Componente
-    const ifRegex = /if\s*\(([^)]+)\)/g;
-    let ifMatch: RegExpExecArray | null;
-
-    while ((ifMatch = ifRegex.exec(text)) !== null) {
-      const cond = ifMatch[1].trim();
-      const ifEndPos = ifRegex.lastIndex;
-
-      // Evaluar la condición
-      let kind: 'equality' | 'flag' | null = null;
-      let variable: string | undefined;
-      let value: string | undefined;
-      let flag: string | undefined;
-
-      const eqMatch = /^([a-zA-Z_$][a-zA-Z0-9_$.]*)\s*===\s*['"]([^'"]+)['"]$/.exec(cond);
-      if (eqMatch) {
-        kind = 'equality';
-        variable = eqMatch[1];
-        value = eqMatch[2];
-      } else {
-        const flagMatch = /^([a-zA-Z_$][a-zA-Z0-9_$]*(?:Active|Open|Mode))$/.exec(cond);
-        if (flagMatch) {
-          kind = 'flag';
-          flag = flagMatch[1];
-        }
-      }
-
-      if (!kind) continue;
-
-      // Mirar hasta 200 caracteres siguientes buscando `return ... <Componente`
-      const lookahead = text.slice(ifEndPos, ifEndPos + 200);
-      const returnCompMatch = /^[\s\r\n{]*return\s*(?:\(\s*)?<([A-Z][a-zA-Z0-9_]*)/.exec(lookahead);
-      if (!returnCompMatch) continue;
-
-      const componentName = returnCompMatch[1];
-      matches.push({
-        kind,
-        variable,
-        value,
-        flag,
-        componentName,
-        index: ifEndPos,
-      });
-    }
-
-    // Regla: si un archivo tiene 3 o más de estos retornos, es una cadena de vistas
-    if (matches.length < 3) continue;
-
-    // Procesar los retornos encontrados
-    for (const m of matches) {
-      let name: string;
-      let locator: string;
-
-      if (m.kind === 'equality') {
-        name = formatValueName(m.value!);
-        locator = `${m.variable}=${m.value}`;
-      } else {
-        name = formatFlagName(m.flag!);
-        locator = m.flag!;
-      }
-
-      const entryFiles = entryFor(m.componentName, normPath, text, importSourceByComponent, knownPathsSet);
-
-      screens.push({
-        // El archivo va en el id: dos cadenas de vistas pueden usar la misma variable o valor.
-        id: `view:${normPath}#${locator}`,
-        kind: 'view',
-        name,
-        locator,
-        declaredIn: normPath,
-        entryFiles,
-      });
-    }
-
-    // Buscar la vista por omisión: el último return <Componente que aparece después de esos retornos
-    const lastMatchIndex = matches[matches.length - 1].index;
-    // Solo hasta el cierre de la función (la primera llave al principio de una línea): más
-    // allá hay otras funciones del archivo y su último return no es la vista por omisión.
-    const afterChain = text.slice(lastMatchIndex);
-    const functionEnd = afterChain.search(/\n\}/);
-    const remainder = functionEnd === -1 ? afterChain : afterChain.slice(0, functionEnd);
-
-    // Buscar el último `return ... <Componente` en el bloque siguiente
-    const defaultRe = /return\s*(?:\(\s*)?<([A-Z][a-zA-Z0-9_]*)/g;
-    let defMatch: RegExpExecArray | null;
-    let lastDefaultComponent: string | null = null;
-
-    while ((defMatch = defaultRe.exec(remainder)) !== null) {
-      lastDefaultComponent = defMatch[1];
-    }
-
-    // Si la de omisión es una de las de la cadena, ya está: no se repite.
-    const chainComponents = new Set(matches.map((m) => m.componentName));
-    if (lastDefaultComponent && !chainComponents.has(lastDefaultComponent)) {
-      const defName = formatDefaultComponentName(lastDefaultComponent);
-      const entryFiles = entryFor(lastDefaultComponent, normPath, text, importSourceByComponent, knownPathsSet);
-
-      screens.push({
-        id: `view:${normPath}#default`,
-        kind: 'view',
-        name: defName,
-        locator: 'default',
-        declaredIn: normPath,
-        entryFiles,
-      });
-    }
+    screens.push(...detectFileStateViews(normPath, file.text, knownPathsSet));
   }
 
   return screens;

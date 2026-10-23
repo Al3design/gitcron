@@ -40,85 +40,104 @@ export type DetectStartCommandResult =
   | StartCommand
   | { unsupported: 'no-package' | 'no-start-command' | 'not-installed' };
 
+function parsePackage(pkgRaw: string | null): Record<string, any> | null {
+  if (!pkgRaw) return null;
+  try {
+    const pkg = JSON.parse(pkgRaw);
+    return pkg && typeof pkg === 'object' ? pkg : null;
+  } catch {
+    return null;
+  }
+}
+
+async function detectNext(
+  root: string,
+  depsObj: Record<string, unknown>,
+  devDepsObj: Record<string, unknown>,
+  knownPorts: number[],
+  exists: (rel: string) => Promise<boolean>,
+): Promise<StartCommand | { unsupported: 'not-installed' } | null> {
+  if (!('next' in depsObj || 'next' in devDepsObj)) return null;
+  const hasNext = await exists('node_modules/.bin/next');
+  if (!hasNext) return { unsupported: 'not-installed' };
+  return {
+    executable: path.join(root, 'node_modules', '.bin', 'next'),
+    args: ['dev', '-p', '{port}'],
+    portViaEnv: false,
+    display: 'next dev -p <puerto libre>',
+    knownPorts,
+  };
+}
+
+async function detectVite(
+  root: string,
+  depsObj: Record<string, unknown>,
+  devDepsObj: Record<string, unknown>,
+  knownPorts: number[],
+  exists: (rel: string) => Promise<boolean>,
+): Promise<StartCommand | { unsupported: 'not-installed' } | null> {
+  if (!('vite' in depsObj || 'vite' in devDepsObj)) return null;
+  const hasVite = await exists('node_modules/.bin/vite');
+  if (!hasVite) return { unsupported: 'not-installed' };
+  return {
+    executable: path.join(root, 'node_modules', '.bin', 'vite'),
+    args: ['--port', '{port}', '--strictPort'],
+    portViaEnv: false,
+    display: 'vite --port <puerto libre>',
+    knownPorts,
+  };
+}
+
+async function detectPackageManager(exists: (rel: string) => Promise<boolean>): Promise<string> {
+  if (await exists('pnpm-lock.yaml')) return 'pnpm';
+  if (await exists('yarn.lock')) return 'yarn';
+  if ((await exists('bun.lockb')) || (await exists('bun.lock'))) return 'bun';
+  return 'npm';
+}
+
+async function detectScript(
+  scripts: Record<string, unknown>,
+  knownPorts: number[],
+  exists: (rel: string) => Promise<boolean>,
+): Promise<StartCommand | null> {
+  const scriptName = typeof scripts.dev === 'string' ? 'dev' : typeof scripts.start === 'string' ? 'start' : null;
+  if (!scriptName) return null;
+
+  const manager = await detectPackageManager(exists);
+  return {
+    executable: manager,
+    args: ['run', scriptName],
+    portViaEnv: true,
+    // El texto del script va en la orden: el permiso queda atado a lo que se ejecuta de
+    // verdad, y si alguien cambia el script se vuelve a pedir (decisión 11).
+    display: `${manager} run ${scriptName} (${String(scripts[scriptName]).trim()})`,
+    knownPorts,
+  };
+}
+
 export async function detectStartCommand(
   root: string,
   deps: { readFile(rel: string): Promise<string | null>; exists(rel: string): Promise<boolean> },
 ): Promise<DetectStartCommandResult> {
   const pkgRaw = await deps.readFile('package.json');
-  if (!pkgRaw) {
-    return { unsupported: 'no-package' };
-  }
-
-  let pkg: any;
-  try {
-    pkg = JSON.parse(pkgRaw);
-    if (!pkg || typeof pkg !== 'object') {
-      return { unsupported: 'no-package' };
-    }
-  } catch {
+  const pkg = parsePackage(pkgRaw);
+  if (!pkg) {
     return { unsupported: 'no-package' };
   }
 
   const depsObj = typeof pkg.dependencies === 'object' && pkg.dependencies !== null ? pkg.dependencies : {};
   const devDepsObj = typeof pkg.devDependencies === 'object' && pkg.devDependencies !== null ? pkg.devDependencies : {};
-
   const scripts = typeof pkg.scripts === 'object' && pkg.scripts !== null ? pkg.scripts : {};
   const knownPorts = declaredPorts(scripts);
 
-  // 2. next en dependencies o devDependencies
-  if ('next' in depsObj || 'next' in devDepsObj) {
-    const hasNext = await deps.exists('node_modules/.bin/next');
-    if (!hasNext) {
-      return { unsupported: 'not-installed' };
-    }
-    return {
-      executable: path.join(root, 'node_modules', '.bin', 'next'),
-      args: ['dev', '-p', '{port}'],
-      portViaEnv: false,
-      display: 'next dev -p <puerto libre>',
-      knownPorts,
-    };
-  }
+  const nextResult = await detectNext(root, depsObj, devDepsObj, knownPorts, deps.exists);
+  if (nextResult) return nextResult;
 
-  // 3. vite en dependencies o devDependencies
-  if ('vite' in depsObj || 'vite' in devDepsObj) {
-    const hasVite = await deps.exists('node_modules/.bin/vite');
-    if (!hasVite) {
-      return { unsupported: 'not-installed' };
-    }
-    return {
-      executable: path.join(root, 'node_modules', '.bin', 'vite'),
-      args: ['--port', '{port}', '--strictPort'],
-      portViaEnv: false,
-      display: 'vite --port <puerto libre>',
-      knownPorts,
-    };
-  }
+  const viteResult = await detectVite(root, depsObj, devDepsObj, knownPorts, deps.exists);
+  if (viteResult) return viteResult;
 
-  // 4. Script dev (si no, start)
-  const scriptName = typeof scripts.dev === 'string' ? 'dev' : typeof scripts.start === 'string' ? 'start' : null;
+  const scriptResult = await detectScript(scripts, knownPorts, deps.exists);
+  if (scriptResult) return scriptResult;
 
-  if (scriptName) {
-    let manager = 'npm';
-    if (await deps.exists('pnpm-lock.yaml')) {
-      manager = 'pnpm';
-    } else if (await deps.exists('yarn.lock')) {
-      manager = 'yarn';
-    } else if ((await deps.exists('bun.lockb')) || (await deps.exists('bun.lock'))) {
-      manager = 'bun';
-    }
-
-    return {
-      executable: manager,
-      args: ['run', scriptName],
-      portViaEnv: true,
-      // El texto del script va en la orden: el permiso queda atado a lo que se ejecuta de
-      // verdad, y si alguien cambia el script se vuelve a pedir (decisión 11).
-      display: `${manager} run ${scriptName} (${String(scripts[scriptName]).trim()})`,
-      knownPorts,
-    };
-  }
-
-  // 5. Sin comando
   return { unsupported: 'no-start-command' };
 }

@@ -80,6 +80,46 @@ function validateArgs(args: AssistSendArgs): string | null {
   return null;
 }
 
+function describeCartoScreen(
+  selection: Extract<ContextSelection, { kind: 'carto-screen' }>,
+  root?: string,
+  deps?: AssistSendDeps,
+): string {
+  let desc = `Pantalla de la app seleccionada: «${selection.screenName}» (${selection.screenId})`;
+  const screenMap = root && deps?.getCachedScreenMap ? deps.getCachedScreenMap(root) : null;
+  if (!screenMap) return desc;
+
+  const screen = screenMap.screens.find((s) => s.id === selection.screenId);
+  if (!screen?.files || screen.files.length === 0) return desc;
+
+  const files = screen.files.slice(0, 40);
+  const fileLines = files.map((f) => `  - [${f.role}] ${f.path}${f.shared ? ' (compartido)' : ''}`);
+  return `${desc}\nArchivos de la pantalla:\n${fileLines.join('\n')}`;
+}
+
+function describeSelectionKind(
+  selection: ContextSelection,
+  root?: string,
+  deps?: AssistSendDeps,
+): string {
+  switch (selection.kind) {
+    case 'none':
+      return 'Sin elemento seleccionado.';
+    case 'commit':
+      return `Commit seleccionado: ${selection.sha}`;
+    case 'file':
+      return `Archivo seleccionado: ${selection.path} (en ${selection.at})`;
+    case 'change':
+      return `Cambio seleccionado: ${selection.changeId}${selection.taskId ? ` (tarea ${selection.taskId})` : ''}`;
+    case 'temporal-idea':
+      return `Idea temporal seleccionada: corrida ${selection.runId}, rama ${selection.branchId}`;
+    case 'carto-node':
+      return `Nodo de cartografía seleccionado: ${selection.nodeId}`;
+    case 'carto-screen':
+      return describeCartoScreen(selection, root, deps);
+  }
+}
+
 function describeSelection(
   selection: ContextSelection,
   status: string,
@@ -87,40 +127,7 @@ function describeSelection(
   root?: string,
   deps?: AssistSendDeps,
 ): string {
-  let desc = '';
-  switch (selection.kind) {
-    case 'none':
-      desc = 'Sin elemento seleccionado.';
-      break;
-    case 'commit':
-      desc = `Commit seleccionado: ${selection.sha}`;
-      break;
-    case 'file':
-      desc = `Archivo seleccionado: ${selection.path} (en ${selection.at})`;
-      break;
-    case 'change':
-      desc = `Cambio seleccionado: ${selection.changeId}${selection.taskId ? ` (tarea ${selection.taskId})` : ''}`;
-      break;
-    case 'temporal-idea':
-      desc = `Idea temporal seleccionada: corrida ${selection.runId}, rama ${selection.branchId}`;
-      break;
-    case 'carto-node':
-      desc = `Nodo de cartografía seleccionado: ${selection.nodeId}`;
-      break;
-    case 'carto-screen': {
-      desc = `Pantalla de la app seleccionada: «${selection.screenName}» (${selection.screenId})`;
-      const screenMap = root && deps?.getCachedScreenMap ? deps.getCachedScreenMap(root) : null;
-      if (screenMap) {
-        const screen = screenMap.screens.find((s) => s.id === selection.screenId);
-        if (screen && screen.files && screen.files.length > 0) {
-          const files = screen.files.slice(0, 40);
-          const fileLines = files.map((f) => `  - [${f.role}] ${f.path}${f.shared ? ' (compartido)' : ''}`);
-          desc += `\nArchivos de la pantalla:\n${fileLines.join('\n')}`;
-        }
-      }
-      break;
-    }
-  }
+  let desc = describeSelectionKind(selection, root, deps);
   if (status === 'stale' && reason) {
     desc += ` (obsoleta: ${reason})`;
   }

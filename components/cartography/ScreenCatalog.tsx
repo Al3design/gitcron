@@ -152,6 +152,564 @@ function sortScreens(screens: ScreenEntry[]): ScreenEntry[] {
   });
 }
 
+function useCatalogPrefs() {
+  const [cardSize, setCardSizeState] = useState<CartoCardSize>(getInitialCardSize);
+  const [tagFilter, setTagFilterState] = useState<ScreenTag | null>(getInitialTagFilter);
+  const [groupBy, setGroupByState] = useState<'none' | 'tag'>(getInitialGroupBy);
+
+  const handleSizeChange = (newSize: CartoCardSize) => {
+    setCardSizeState(newSize);
+    saveCardSize(newSize);
+  };
+
+  const handleGroupByChange = (newGroupBy: 'none' | 'tag') => {
+    setGroupByState(newGroupBy);
+    saveGroupBy(newGroupBy);
+  };
+
+  const handleTagFilterClick = (clickedTag: ScreenTag | null, effectiveTagFilter: ScreenTag | null) => {
+    if (clickedTag === null || clickedTag === effectiveTagFilter) {
+      setTagFilterState(null);
+      saveTagFilter(null);
+    } else {
+      setTagFilterState(clickedTag);
+      saveTagFilter(clickedTag);
+    }
+  };
+
+  return {
+    cardSize,
+    handleSizeChange,
+    tagFilter,
+    handleTagFilterClick,
+    groupBy,
+    handleGroupByChange,
+  };
+}
+
+function CaptureBannerViewsNotice({
+  hasRecipes,
+  runnerConfig,
+  lastRun,
+  t,
+}: {
+  hasRecipes?: boolean;
+  runnerConfig?: string;
+  lastRun: ReturnType<typeof useScreenCaptures>['lastRun'];
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const skippedViews =
+    lastRun?.skipped?.filter(
+      (s) => s.reason === 'no-recipe' || s.reason === 'runner-missing' || s.reason === 'recipe-failed',
+    ) ?? [];
+
+  if (lastRun && skippedViews.length > 0) {
+    const noRecipe = skippedViews.filter((s) => s.reason === 'no-recipe' || s.reason === 'runner-missing').length;
+    const failed = skippedViews.filter((s) => s.reason === 'recipe-failed').length;
+    return (
+      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+        {t('cartography.screens.captures.viewsSkipped', { noRecipe, failed })}
+      </span>
+    );
+  }
+  if (hasRecipes && runnerConfig) {
+    return (
+      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+        {t('cartography.screens.captures.viewsWithRecipes', { config: runnerConfig })}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
+      {t('cartography.screens.captures.viewsNoRecipes')}
+    </span>
+  );
+}
+
+function CaptureBannerActions({
+  captureRunning,
+  consentStatus,
+  repoPath,
+  onDismissConsent,
+  onGrantAndRun,
+  onRefresh,
+  onRevoke,
+  onCancel,
+  t,
+}: {
+  captureRunning: boolean;
+  consentStatus: string;
+  repoPath: string;
+  onDismissConsent: (repo: string) => void;
+  onGrantAndRun: () => void;
+  onRefresh: () => void;
+  onRevoke: () => void;
+  onCancel: () => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const [captureMenuAt, setCaptureMenuAt] = useState<{ x: number; y: number } | null>(null);
+
+  if (captureRunning) {
+    return (
+      <div className={styles.captureBannerActions}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className={styles.captureActionBtn}
+          data-testid="capture-stop-button"
+        >
+          {t('cartography.screens.captures.stop')}
+        </button>
+      </div>
+    );
+  }
+
+  if (consentStatus === 'needs-consent') {
+    return (
+      <div className={styles.captureBannerActions}>
+        <button
+          type="button"
+          onClick={onGrantAndRun}
+          className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
+          data-testid="capture-allow-button"
+        >
+          {t('cartography.screens.captures.allow')}
+        </button>
+        <button
+          type="button"
+          onClick={() => onDismissConsent(repoPath)}
+          className={styles.captureActionBtn}
+          data-testid="capture-not-now-button"
+        >
+          {t('cartography.screens.captures.notNow')}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.captureBannerActions}>
+      <button
+        type="button"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          setCaptureMenuAt({ x: r.right - 220, y: r.bottom + 4 });
+        }}
+        className={styles.captureActionBtn}
+        title={t('cartography.screens.captures.menu')}
+        aria-label={t('cartography.screens.captures.menu')}
+        aria-haspopup="menu"
+        aria-expanded={captureMenuAt !== null}
+        data-testid="capture-menu-button"
+      >
+        <MoreHorizontal size={14} aria-hidden="true" />
+      </button>
+      {captureMenuAt && (
+        <ContextMenu
+          x={captureMenuAt.x}
+          y={captureMenuAt.y}
+          onClose={() => setCaptureMenuAt(null)}
+          ariaLabel={t('cartography.screens.captures.menu')}
+        >
+          <ContextMenuItem
+            icon={<RefreshCw size={13} />}
+            text={t('cartography.screens.captures.refresh')}
+            onClick={() => {
+              setCaptureMenuAt(null);
+              onRefresh();
+            }}
+          />
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            danger
+            icon={<ShieldOff size={13} />}
+            text={t('cartography.screens.captures.revoke')}
+            onClick={() => {
+              setCaptureMenuAt(null);
+              onRevoke();
+            }}
+          />
+        </ContextMenu>
+      )}
+    </div>
+  );
+}
+
+function CaptureBanner({
+  captureState,
+  captureRunning,
+  hasCaptureItems,
+  captureItems,
+  lastRun,
+  sortedScreensCount,
+  repoPath,
+  dismissedConsentRepo,
+  onDismissConsent,
+  onGrantAndRun,
+  onRefresh,
+  onRevoke,
+  onCancel,
+  t,
+}: {
+  captureState: ReturnType<typeof useScreenCaptures>['state'];
+  captureRunning: boolean;
+  hasCaptureItems: boolean;
+  captureItems: ReturnType<typeof useScreenCaptures>['items'];
+  lastRun: ReturnType<typeof useScreenCaptures>['lastRun'];
+  sortedScreensCount: number;
+  repoPath: string;
+  dismissedConsentRepo: string | null;
+  onDismissConsent: (repo: string) => void;
+  onGrantAndRun: () => void;
+  onRefresh: () => void;
+  onRevoke: () => void;
+  onCancel: () => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (
+    !captureState ||
+    captureState.consent.status === 'unsupported' ||
+    (captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath)
+  ) {
+    return null;
+  }
+
+  return (
+    <div className={styles.captureBanner} data-testid="capture-banner">
+      <div className={styles.captureBannerContent}>
+        {captureRunning ? (
+          hasCaptureItems ? null : (
+            <span className={styles.captureBannerText} data-testid="capture-running-text">
+              {t('cartography.screens.captures.starting')}
+            </span>
+          )
+        ) : captureState.consent.status === 'needs-consent' ? (
+          <span className={styles.captureBannerText}>
+            {t('cartography.screens.captures.needsConsent', {
+              command: captureState.consent.command,
+            })}
+          </span>
+        ) : (
+          <span className={styles.captureBannerText}>
+            {t('cartography.screens.captures.granted', {
+              command: captureState.consent.command,
+            })}
+          </span>
+        )}
+
+        {hasCaptureItems && (
+          <CaptureProgress
+            items={captureItems}
+            running={captureRunning}
+            coverage={{ withPicture: Object.keys(captureState.captures).length, total: sortedScreensCount }}
+          />
+        )}
+
+        {lastRun?.error && (
+          <span className={styles.captureBannerError} data-testid="capture-error-text">
+            {lastRun.error}
+          </span>
+        )}
+
+        {!hasCaptureItems && (
+          <CaptureBannerViewsNotice
+            hasRecipes={captureState.hasRecipes}
+            runnerConfig={captureState.runnerConfig}
+            lastRun={lastRun}
+            t={t}
+          />
+        )}
+      </div>
+
+      <CaptureBannerActions
+        captureRunning={captureRunning}
+        consentStatus={captureState.consent.status}
+        repoPath={repoPath}
+        onDismissConsent={onDismissConsent}
+        onGrantAndRun={onGrantAndRun}
+        onRefresh={onRefresh}
+        onRevoke={onRevoke}
+        onCancel={onCancel}
+        t={t}
+      />
+    </div>
+  );
+}
+function CatalogControls({
+  sortedScreensCount,
+  presentTags,
+  tagCounts,
+  effectiveTagFilter,
+  onTagFilterClick,
+  selectedScreen,
+  groupBy,
+  onGroupByChange,
+  cardSize,
+  onSizeChange,
+  t,
+}: {
+  sortedScreensCount: number;
+  presentTags: ScreenTag[];
+  tagCounts: Partial<Record<ScreenTag, number>>;
+  effectiveTagFilter: ScreenTag | null;
+  onTagFilterClick: (tag: ScreenTag | null) => void;
+  selectedScreen: ScreenEntry | null;
+  groupBy: 'none' | 'tag';
+  onGroupByChange: (groupBy: 'none' | 'tag') => void;
+  cardSize: CartoCardSize;
+  onSizeChange: (size: CartoCardSize) => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <>
+      <div className={styles.filterRow} role="group" aria-label="Filtro por tema">
+        <button
+          type="button"
+          onClick={() => onTagFilterClick(null)}
+          data-testid="screen-tag-filter-all"
+          className={cn(
+            styles.filterChip,
+            effectiveTagFilter === null && styles.filterChipActive,
+          )}
+        >
+          <span>{t('cartography.screens.filterAll')}</span>
+          <span>{sortedScreensCount}</span>
+        </button>
+
+        {presentTags.map((tag) => {
+          const count = tagCounts[tag] ?? 0;
+          const isActive = effectiveTagFilter === tag;
+          return (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => onTagFilterClick(tag)}
+              data-testid={`screen-tag-filter-${tag}`}
+              className={cn(styles.filterChip, isActive && styles.filterChipActive)}
+            >
+              <span className={cn(styles.tagDot, styles[`tag_${tag}`])} />
+              <span>{t(`cartography.screens.tags.${tag}`)}</span>
+              <span>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!selectedScreen && (
+        <div className={styles.headerControls}>
+          <div
+            className={styles.segmentedControl}
+            role="group"
+            aria-label="Agrupado"
+            data-testid="screen-group-control"
+          >
+            <button
+              type="button"
+              onClick={() => onGroupByChange('none')}
+              aria-pressed={groupBy === 'none'}
+              data-testid="screen-group-none"
+              className={cn(
+                styles.segmentedBtn,
+                groupBy === 'none' && styles.segmentedBtnActive,
+              )}
+            >
+              <span>{t('cartography.screens.groupNone')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onGroupByChange('tag')}
+              aria-pressed={groupBy === 'tag'}
+              data-testid="screen-group-tag"
+              className={cn(
+                styles.segmentedBtn,
+                groupBy === 'tag' && styles.segmentedBtnActive,
+              )}
+            >
+              <span>{t('cartography.screens.groupByTag')}</span>
+            </button>
+          </div>
+
+          <div
+            className={styles.segmentedControl}
+            role="group"
+            aria-label={t('cartography.screens.size')}
+            data-testid="card-size-control"
+          >
+            {SIZES.map(({ key, labelKey }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onSizeChange(key)}
+                aria-pressed={cardSize === key}
+                title={t(labelKey)}
+                aria-label={t(labelKey)}
+                data-testid={`card-size-${key}`}
+                className={cn(
+                  styles.segmentedBtn,
+                  cardSize === key && styles.segmentedBtnActive,
+                )}
+              >
+                <LayoutGrid size={13} aria-hidden="true" />
+                <span>{t(labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ScreenSidebar({
+  otherScreens,
+  captureState,
+  shouldReduceMotion,
+  onSelectScreen,
+  t,
+}: {
+  otherScreens: ScreenEntry[];
+  captureState: ReturnType<typeof useScreenCaptures>['state'];
+  shouldReduceMotion: boolean | null;
+  onSelectScreen: (screenId: string) => void;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <aside
+      className={styles.sidebarColumn}
+      data-testid="screen-catalog-sidebar"
+      aria-label="Otras pantallas"
+    >
+      {otherScreens.map((screen) => {
+        const ownCount = screen.files.filter((f) => !f.shared).length;
+        const sharedCount = screen.files.filter((f) => f.shared).length;
+        const displayName = screen.description?.suggestedName || screen.name;
+        const screenCapture = captureState?.captures[screen.id];
+
+        return (
+          <motion.div
+            key={screen.id}
+            layout={shouldReduceMotion ? false : 'position'}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className={styles.sidebarCard}
+            onClick={() => onSelectScreen(screen.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectScreen(screen.id);
+              }
+            }}
+            data-testid={`sidebar-screen-${screen.id}`}
+          >
+            <div className={styles.sidebarThumbnail}>
+              {screenCapture ? (
+                <img src={screenCapture.dataUrl} alt="" className={styles.captureImage} />
+              ) : screen.kind === 'route' ? (
+                <Monitor size={16} aria-hidden="true" />
+              ) : (
+                <PanelsTopLeft size={16} aria-hidden="true" />
+              )}
+            </div>
+
+            <div className={styles.sidebarInfo}>
+              <span
+                className={styles.sidebarName}
+                title={screen.description?.suggestedName ? screen.name : undefined}
+              >
+                {displayName}
+              </span>
+              <span className={styles.sidebarCounts}>
+                {t('cartography.screens.fileCountsShort', {
+                  own: ownCount,
+                  shared: sharedCount,
+                })}
+              </span>
+            </div>
+          </motion.div>
+        );
+      })}
+    </aside>
+  );
+}
+
+function ScreenGrid({
+  groupBy,
+  gridClass,
+  tagSections,
+  filteredScreens,
+  repoPath,
+  captureState,
+  capturingIds,
+  cardSize,
+  onSelectScreen,
+  onExplain,
+}: {
+  groupBy: 'none' | 'tag';
+  gridClass: string;
+  tagSections: { key: string; label: string; screens: ScreenEntry[] }[];
+  filteredScreens: ScreenEntry[];
+  repoPath: string;
+  captureState: ReturnType<typeof useScreenCaptures>['state'];
+  capturingIds: Set<string>;
+  cardSize: CartoCardSize;
+  onSelectScreen: (screenId: string) => void;
+  onExplain: (screen: ScreenEntry) => void;
+}) {
+  if (groupBy === 'tag') {
+    return (
+      <div className={styles.groupedContainer} data-testid="screen-catalog-grouped">
+        {tagSections.map((section) => (
+          <section
+            key={section.key}
+            className={styles.groupSection}
+            data-testid={`screen-group-${section.key}`}
+          >
+            <div className={styles.groupHeader}>
+              <span className={cn(styles.tagDot, styles[`tag_${section.key}`])} />
+              <h4 className={styles.groupTitle}>
+                <span>{section.label}</span>
+                <span className={styles.groupCount}>{section.screens.length}</span>
+              </h4>
+            </div>
+            <div className={`${styles.grid} ${gridClass}`}>
+              {section.screens.map((screen) => (
+                <ScreenCard
+                  key={screen.id}
+                  screen={screen}
+                  repoPath={repoPath}
+                  capture={captureState?.captures[screen.id]}
+                  capturing={capturingIds.has(screen.id)}
+                  size={cardSize}
+                  onSelect={() => onSelectScreen(screen.id)}
+                  onExplain={onExplain}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${styles.grid} ${gridClass}`} data-testid="screen-catalog-grid">
+      {filteredScreens.map((screen) => (
+        <ScreenCard
+          key={screen.id}
+          screen={screen}
+          repoPath={repoPath}
+          capture={captureState?.captures[screen.id]}
+          capturing={capturingIds.has(screen.id)}
+          size={cardSize}
+          onSelect={() => onSelectScreen(screen.id)}
+          onExplain={onExplain}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCatalogProps) {
   const onSelectFile = (arguments[0] as ScreenCatalogProps | undefined)?.onSelectFile;
   const t = useT();
@@ -167,6 +725,15 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     run,
     cancel,
   } = useScreenCaptures(repoPath, map);
+
+  const {
+    cardSize,
+    handleSizeChange,
+    tagFilter,
+    handleTagFilterClick,
+    groupBy,
+    handleGroupByChange,
+  } = useCatalogPrefs();
 
   const handleManual = useCallback(
     async (
@@ -194,7 +761,6 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     [repoPath, replace, t],
   );
 
-  /** «Actualizar capturas» vuelve a sacar todas y avisa el resultado con el aviso de la app. */
   const refreshCaptures = async () => {
     const result = await run(true);
     if (!result) return;
@@ -219,26 +785,12 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null);
   const selectScreen = (id: string) => setSelectedScreenId(id);
-  const [captureMenuAt, setCaptureMenuAt] = useState<{ x: number; y: number } | null>(null);
-  // Las pantallas cuya foto se está sacando ahora: su cuadro muestra el efecto de píxeles.
+  const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
+
   const capturingIds = useMemo(
     () => new Set(captureItems.filter((item) => item.state === 'running').map((item) => item.screenId)),
     [captureItems],
   );
-  const [dismissedConsentRepo, setDismissedConsentRepo] = useState<string | null>(null);
-  const [cardSize, setCardSize] = useState<CartoCardSize>(getInitialCardSize);
-  const [tagFilter, setTagFilter] = useState<ScreenTag | null>(getInitialTagFilter);
-  const [groupBy, setGroupBy] = useState<'none' | 'tag'>(getInitialGroupBy);
-
-  const handleSizeChange = (newSize: CartoCardSize) => {
-    setCardSize(newSize);
-    saveCardSize(newSize);
-  };
-
-  const handleGroupByChange = (newGroupBy: 'none' | 'tag') => {
-    setGroupBy(newGroupBy);
-    saveGroupBy(newGroupBy);
-  };
 
   const coverageNotice = useMemo(() => {
     if (!map) return null;
@@ -250,7 +802,6 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     return sortScreens(map.screens);
   }, [map]);
 
-  // Conteo de pantallas por tema presente (en base a todas las pantallas del mapa)
   const tagCounts = useMemo(() => {
     const counts: Partial<Record<ScreenTag, number>> = {};
     for (const tag of ALL_TAGS) {
@@ -268,21 +819,11 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     return ALL_TAGS.filter((tag) => (tagCounts[tag] ?? 0) > 0);
   }, [tagCounts]);
 
-  // Si el tema guardado ya no está presente, se muestra «Todas»
   const effectiveTagFilter: ScreenTag | null =
     tagFilter && presentTags.includes(tagFilter) ? tagFilter : null;
 
-  const handleTagFilterClick = (clickedTag: ScreenTag | null) => {
-    if (clickedTag === null || clickedTag === effectiveTagFilter) {
-      setTagFilter(null);
-      saveTagFilter(null);
-    } else {
-      setTagFilter(clickedTag);
-      saveTagFilter(clickedTag);
-    }
-  };
+  const onTagFilterClick = (tag: ScreenTag | null) => handleTagFilterClick(tag, effectiveTagFilter);
 
-  // Pantallas filtradas según el tema elegido
   const filteredScreens = useMemo(() => {
     if (!effectiveTagFilter) return sortedScreens;
     return sortedScreens.filter(
@@ -295,7 +836,6 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     return sortedScreens.find((s) => s.id === selectedScreenId) ?? null;
   }, [selectedScreenId, sortedScreens]);
 
-  // Notificar al contenedor sobre la pantalla seleccionada
   useEffect(() => {
     onSelectScreen?.(selectedScreen);
     if (!selectedScreen) {
@@ -303,23 +843,15 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     }
   }, [selectedScreen, onSelectScreen, onSelectFile]);
 
-  // Cerrar detalle con tecla Escape
   useEffect(() => {
     if (!selectedScreenId) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedScreenId(null);
-      }
+      if (e.key === 'Escape') setSelectedScreenId(null);
     };
-
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedScreenId]);
 
-  // El ícono de IA abre el chat general con esa pantalla como tema
   const handleExplain = useCallback(
     (screen: ScreenEntry) => {
       onSelectScreen?.(screen);
@@ -337,7 +869,6 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     [onSelectFile],
   );
 
-  // Secciones por tema principal cuando groupBy === 'tag'
   const tagSections = useMemo(() => {
     if (groupBy !== 'tag') return [];
     const sections: { key: string; label: string; screens: ScreenEntry[] }[] = [];
@@ -376,15 +907,11 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
     );
   }
 
-  if (!map) {
-    return null;
-  }
+  if (!map) return null;
 
   const isNoUi = map.coverage.state === 'unsupported' && map.coverage.reason === 'no-ui';
   const captureRunning = Boolean(captureState?.running || captureActive);
   const hasCaptureItems = captureItems.length > 0;
-
-  // El filtro también se aplica a la columna lateral cuando hay un cuadro abierto
   const otherScreens = filteredScreens.filter((s) => s.id !== selectedScreenId);
 
   const gridClass =
@@ -398,9 +925,7 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
 
   return (
     <div className={styles.container} data-testid="screen-catalog">
-      {/* Cabecera con avisos, franja de captura, filtros por tema y controles */}
       <div className={styles.catalogHeader}>
-        {/* Con un cuadro abierto, la vuelta a la grilla queda siempre a la vista (Alejandro, carto-05e). */}
         {selectedScreen && (
           <button
             type="button"
@@ -422,271 +947,47 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
           </div>
         )}
 
-        {/* Franja de capturas: solo se ve en la grilla y cuando el stack está soportado */}
-        {!selectedScreen &&
-          captureState &&
-          captureState.consent.status !== 'unsupported' &&
-          !(captureState.consent.status === 'needs-consent' && dismissedConsentRepo === repoPath) && (
-            <div className={styles.captureBanner} data-testid="capture-banner">
-              <div className={styles.captureBannerContent}>
-                {captureRunning ? (
-                  // Con el plan a la vista, el avance lo cuenta CaptureProgress, más abajo.
-                  hasCaptureItems ? null : (
-                    <span className={styles.captureBannerText} data-testid="capture-running-text">
-                      {t('cartography.screens.captures.starting')}
-                    </span>
-                  )
-                ) : captureState.consent.status === 'needs-consent' ? (
-                  <span className={styles.captureBannerText}>
-                    {t('cartography.screens.captures.needsConsent', {
-                      command: captureState.consent.command,
-                    })}
-                  </span>
-                ) : (
-                  <span className={styles.captureBannerText}>
-                    {t('cartography.screens.captures.granted', {
-                      command: captureState.consent.command,
-                    })}
-                  </span>
-                )}
+        {!selectedScreen && (
+          <CaptureBanner
+            captureState={captureState}
+            captureRunning={captureRunning}
+            hasCaptureItems={hasCaptureItems}
+            captureItems={captureItems}
+            lastRun={lastRun}
+            sortedScreensCount={sortedScreens.length}
+            repoPath={repoPath}
+            dismissedConsentRepo={dismissedConsentRepo}
+            onDismissConsent={setDismissedConsentRepo}
+            onGrantAndRun={() => void grant().then(() => run())}
+            onRefresh={() => void refreshCaptures()}
+            onRevoke={() => void revoke()}
+            onCancel={() => void cancel()}
+            t={t}
+          />
+        )}
 
-                {/* En el mismo lugar durante la corrida y después: el detalle no se pliega solo */}
-                {hasCaptureItems && (
-                  <CaptureProgress
-                    items={captureItems}
-                    running={captureRunning}
-                    coverage={{ withPicture: Object.keys(captureState.captures).length, total: sortedScreens.length }}
-                  />
-                )}
-
-                {lastRun?.error && (
-                  <span className={styles.captureBannerError} data-testid="capture-error-text">
-                    {lastRun.error}
-                  </span>
-                )}
-
-                {!hasCaptureItems && (() => {
-                  const skippedViews = lastRun?.skipped?.filter(
-                    (s) => s.reason === 'no-recipe' || s.reason === 'runner-missing' || s.reason === 'recipe-failed',
-                  ) ?? [];
-                  if (lastRun && skippedViews.length > 0) {
-                    const noRecipe = skippedViews.filter((s) => s.reason === 'no-recipe' || s.reason === 'runner-missing').length;
-                    const failed = skippedViews.filter((s) => s.reason === 'recipe-failed').length;
-                    return (
-                      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
-                        {t('cartography.screens.captures.viewsSkipped', { noRecipe, failed })}
-                      </span>
-                    );
-                  }
-                  if (captureState.hasRecipes && captureState.runnerConfig) {
-                    return (
-                      <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
-                        {t('cartography.screens.captures.viewsWithRecipes', { config: captureState.runnerConfig })}
-                      </span>
-                    );
-                  }
-                  return (
-                    <span className={styles.captureBannerViewsLater} data-testid="capture-views-notice">
-                      {t('cartography.screens.captures.viewsNoRecipes')}
-                    </span>
-                  );
-                })()}
-              </div>
-
-              <div className={styles.captureBannerActions}>
-                {captureRunning ? (
-                  <button
-                    type="button"
-                    onClick={() => void cancel()}
-                    className={styles.captureActionBtn}
-                    data-testid="capture-stop-button"
-                  >
-                    {t('cartography.screens.captures.stop')}
-                  </button>
-                ) : captureState.consent.status === 'needs-consent' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void grant().then(() => run());
-                      }}
-                      className={`${styles.captureActionBtn} ${styles.captureActionBtnPrimary}`}
-                      data-testid="capture-allow-button"
-                    >
-                      {t('cartography.screens.captures.allow')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDismissedConsentRepo(repoPath)}
-                      className={styles.captureActionBtn}
-                      data-testid="capture-not-now-button"
-                    >
-                      {t('cartography.screens.captures.notNow')}
-                    </button>
-                  </>
-                ) : (
-                  // Las dos acciones van en el menú de la app, con un solo botón arriba a la derecha
-                  // (Alejandro, carto-05e: los botones quedaban flotando en el medio de la franja).
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setCaptureMenuAt({ x: r.right - 220, y: r.bottom + 4 });
-                    }}
-                    className={styles.captureActionBtn}
-                    title={t('cartography.screens.captures.menu')}
-                    aria-label={t('cartography.screens.captures.menu')}
-                    aria-haspopup="menu"
-                    aria-expanded={captureMenuAt !== null}
-                    data-testid="capture-menu-button"
-                  >
-                    <MoreHorizontal size={14} aria-hidden="true" />
-                  </button>
-                )}
-                {captureMenuAt && (
-                  <ContextMenu
-                    x={captureMenuAt.x}
-                    y={captureMenuAt.y}
-                    onClose={() => setCaptureMenuAt(null)}
-                    ariaLabel={t('cartography.screens.captures.menu')}
-                  >
-                    <ContextMenuItem
-                      icon={<RefreshCw size={13} />}
-                      text={t('cartography.screens.captures.refresh')}
-                      onClick={() => {
-                        setCaptureMenuAt(null);
-                        void refreshCaptures();
-                      }}
-                    />
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      danger
-                      icon={<ShieldOff size={13} />}
-                      text={t('cartography.screens.captures.revoke')}
-                      onClick={() => {
-                        setCaptureMenuAt(null);
-                        void revoke();
-                      }}
-                    />
-                  </ContextMenu>
-                )}
-              </div>
-            </div>
-          )}
-
-        {/* Fila de filtros por tema presente y controles de agrupado y tamaño */}
         {!isNoUi && sortedScreens.length > 0 && (
-          <>
-            <div className={styles.filterRow} role="group" aria-label="Filtro por tema">
-              <button
-                type="button"
-                onClick={() => handleTagFilterClick(null)}
-                data-testid="screen-tag-filter-all"
-                className={cn(
-                  styles.filterChip,
-                  effectiveTagFilter === null && styles.filterChipActive,
-                )}
-              >
-                <span>{t('cartography.screens.filterAll')}</span>
-                <span>{sortedScreens.length}</span>
-              </button>
-
-              {presentTags.map((tag) => {
-                const count = tagCounts[tag] ?? 0;
-                const isActive = effectiveTagFilter === tag;
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => handleTagFilterClick(tag)}
-                    data-testid={`screen-tag-filter-${tag}`}
-                    className={cn(styles.filterChip, isActive && styles.filterChipActive)}
-                  >
-                    <span className={cn(styles.tagDot, styles[`tag_${tag}`])} />
-                    <span>{t(`cartography.screens.tags.${tag}`)}</span>
-                    <span>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {!selectedScreen && (
-              <div className={styles.headerControls}>
-                {/* Control segmentado Sin agrupar · Por tema */}
-                <div
-                  className={styles.segmentedControl}
-                  role="group"
-                  aria-label="Agrupado"
-                  data-testid="screen-group-control"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleGroupByChange('none')}
-                    aria-pressed={groupBy === 'none'}
-                    data-testid="screen-group-none"
-                    className={cn(
-                      styles.segmentedBtn,
-                      groupBy === 'none' && styles.segmentedBtnActive,
-                    )}
-                  >
-                    <span>{t('cartography.screens.groupNone')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleGroupByChange('tag')}
-                    aria-pressed={groupBy === 'tag'}
-                    data-testid="screen-group-tag"
-                    className={cn(
-                      styles.segmentedBtn,
-                      groupBy === 'tag' && styles.segmentedBtnActive,
-                    )}
-                  >
-                    <span>{t('cartography.screens.groupByTag')}</span>
-                  </button>
-                </div>
-
-                {/* Control segmentado de tamaño */}
-                <div
-                  className={styles.segmentedControl}
-                  role="group"
-                  aria-label={t('cartography.screens.size')}
-                  data-testid="card-size-control"
-                >
-                  {SIZES.map(({ key, labelKey }) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handleSizeChange(key)}
-                      aria-pressed={cardSize === key}
-                      title={t(labelKey)}
-                      aria-label={t(labelKey)}
-                      data-testid={`card-size-${key}`}
-                      className={cn(
-                        styles.segmentedBtn,
-                        cardSize === key && styles.segmentedBtnActive,
-                      )}
-                    >
-                      <LayoutGrid size={13} aria-hidden="true" />
-                      <span>{t(labelKey)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+          <CatalogControls
+            sortedScreensCount={sortedScreens.length}
+            presentTags={presentTags}
+            tagCounts={tagCounts}
+            effectiveTagFilter={effectiveTagFilter}
+            onTagFilterClick={onTagFilterClick}
+            selectedScreen={selectedScreen}
+            groupBy={groupBy}
+            onGroupByChange={handleGroupByChange}
+            cardSize={cardSize}
+            onSizeChange={handleSizeChange}
+            t={t}
+          />
         )}
       </div>
 
-      {/* Si es repo no-ui, no se dibujan cuadros */}
       {!isNoUi && sortedScreens.length > 0 && (
-        // Un solo grupo para la grilla y el detalle: así el cuadro se agranda hasta el detalle y,
-        // al cerrar, vuelve desde el detalle a su lugar de origen (Alejandro, carto-05e).
         <LayoutGroup id="screen-catalog">
           {selectedScreen ? (
-            /* Vista expandida: Detalle a la izquierda + Columna angosta a la derecha */
             <div className={styles.detailLayout} data-testid="screen-catalog-detail-layout">
               <ScreenDetail
-                // Uno nuevo por pantalla: al cambiar desde la columna no viaja, aparece en su lugar.
                 key={selectedScreen.id}
                 screen={selectedScreen}
                 repoPath={repoPath}
@@ -702,115 +1003,27 @@ export function ScreenCatalog({ repoPath, refreshKey, onSelectScreen }: ScreenCa
                 pending={map?.pending?.filter((p) => p.screenId === selectedScreen.id) ?? []}
               />
 
-              <aside
-                className={styles.sidebarColumn}
-                data-testid="screen-catalog-sidebar"
-                aria-label="Otras pantallas"
-              >
-                {otherScreens.map((screen) => {
-                  const ownCount = screen.files.filter((f) => !f.shared).length;
-                  const sharedCount = screen.files.filter((f) => f.shared).length;
-                  const displayName = screen.description?.suggestedName || screen.name;
-                  const screenCapture = captureState?.captures[screen.id];
-
-                  return (
-                    // Sin layoutId: con él, al cambiar de pantalla desde la columna se cruzaban dos
-                    // viajes (el cuadro tocado hacia el detalle y el detalle anterior hacia la columna)
-                    // y saltaba (Alejandro, carto-05e). Solo se reacomoda cuando entra o sale uno.
-                    <motion.div
-                      key={screen.id}
-                      layout={shouldReduceMotion ? false : 'position'}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={styles.sidebarCard}
-                      onClick={() => selectScreen(screen.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          selectScreen(screen.id);
-                        }
-                      }}
-                      data-testid={`sidebar-screen-${screen.id}`}
-                    >
-                      <div className={styles.sidebarThumbnail}>
-                        {screenCapture ? (
-                          <img src={screenCapture.dataUrl} alt="" className={styles.captureImage} />
-                        ) : screen.kind === 'route' ? (
-                          <Monitor size={16} aria-hidden="true" />
-                        ) : (
-                          <PanelsTopLeft size={16} aria-hidden="true" />
-                        )}
-                      </div>
-
-                      <div className={styles.sidebarInfo}>
-                        <span
-                          className={styles.sidebarName}
-                          title={screen.description?.suggestedName ? screen.name : undefined}
-                        >
-                          {displayName}
-                        </span>
-                        <span className={styles.sidebarCounts}>
-                          {t('cartography.screens.fileCountsShort', {
-                            own: ownCount,
-                            shared: sharedCount,
-                          })}
-                        </span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </aside>
-            </div>
-          ) : groupBy === 'tag' ? (
-            /* Grilla agrupada por tema principal */
-            <div className={styles.groupedContainer} data-testid="screen-catalog-grouped">
-              {tagSections.map((section) => (
-                <section
-                  key={section.key}
-                  className={styles.groupSection}
-                  data-testid={`screen-group-${section.key}`}
-                >
-                  <div className={styles.groupHeader}>
-                    <span className={cn(styles.tagDot, styles[`tag_${section.key}`])} />
-                    <h4 className={styles.groupTitle}>
-                      <span>{section.label}</span>
-                      <span className={styles.groupCount}>{section.screens.length}</span>
-                    </h4>
-                  </div>
-                  <div className={`${styles.grid} ${gridClass}`}>
-                    {section.screens.map((screen) => (
-                      <ScreenCard
-                        key={screen.id}
-                        screen={screen}
-                        repoPath={repoPath}
-                        capture={captureState?.captures[screen.id]}
-                        capturing={capturingIds.has(screen.id)}
-                        size={cardSize}
-                        onSelect={() => selectScreen(screen.id)}
-                        onExplain={handleExplain}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
+              <ScreenSidebar
+                otherScreens={otherScreens}
+                captureState={captureState}
+                shouldReduceMotion={shouldReduceMotion}
+                onSelectScreen={selectScreen}
+                t={t}
+              />
             </div>
           ) : (
-            /* Grilla normal de cuadros compactos */
-            <div className={`${styles.grid} ${gridClass}`} data-testid="screen-catalog-grid">
-              {filteredScreens.map((screen) => (
-                <ScreenCard
-                  key={screen.id}
-                  screen={screen}
-                  repoPath={repoPath}
-                  capture={captureState?.captures[screen.id]}
-                  capturing={capturingIds.has(screen.id)}
-                  size={cardSize}
-                  onSelect={() => selectScreen(screen.id)}
-                  onExplain={handleExplain}
-                />
-              ))}
-            </div>
+            <ScreenGrid
+              groupBy={groupBy}
+              gridClass={gridClass}
+              tagSections={tagSections}
+              filteredScreens={filteredScreens}
+              repoPath={repoPath}
+              captureState={captureState}
+              capturingIds={capturingIds}
+              cardSize={cardSize}
+              onSelectScreen={selectScreen}
+              onExplain={handleExplain}
+            />
           )}
         </LayoutGroup>
       )}

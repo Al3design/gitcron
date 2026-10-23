@@ -19,6 +19,7 @@ import type {
 import {
   detectNextAppRouterScreens,
   detectNextPagesRouterScreens,
+  type DetectedScreen,
 } from './detect-next';
 import { detectStateViews } from './detect-state-views';
 import { roleOf } from './file-roles';
@@ -65,16 +66,44 @@ function isExcludedFileForScreen(filePath: string, screenEntryInElectron: boolea
   return false;
 }
 
-export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Promise<ScreenMap> {
+interface BuildContext {
+  fileContentCache: Map<string, string | null>;
+  statCache: Map<string, { mtimeMs: number } | null>;
+  totalExclusions: number;
+  totalUnresolved: number;
+  indexNotReady: boolean;
+  hasSymbolFallback: boolean;
+  manualBroken: boolean;
+}
+
+interface ScanResult {
+  scan: { paths: string[]; truncated: boolean };
+  manualData: ManualScreenData | null | undefined;
+  normalizedPaths: string[];
+}
+
+// 1. listar y excluir
+async function scanAndExclude(deps: ScreenMapDeps): Promise<ScanResult> {
   const scan = await deps.listFiles();
-  // Las correcciones se leen primero: sus carpetas excluidas no se miran nunca (decisión 17).
-  // `null` = archivo roto: no se aplica nada y la cobertura lo avisa más abajo.
   const manualData = deps.readManual ? await deps.readManual() : undefined;
   const excluded = manualData?.exclude;
   const normalizedPaths = scan.paths
     .map((p) => p.replace(/\\/g, '/'))
     .filter((p) => !isExcluded(p, excluded));
+  return { scan, manualData, normalizedPaths };
+}
 
+interface DetectionResult {
+  detectors: string[];
+  detectedScreens: DetectedScreen[];
+}
+
+// 2. detectar pantallas (rutas y vistas)
+async function detectScreens(
+  normalizedPaths: string[],
+  deps: ScreenMapDeps,
+  ctx: BuildContext,
+): Promise<DetectionResult> {
   const detectors: string[] = [];
   const appScreens = detectNextAppRouterScreens(normalizedPaths);
   const pagesScreens = detectNextPagesRouterScreens(normalizedPaths);
@@ -82,23 +111,19 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
   if (appScreens.length > 0) detectors.push('next-app-router');
   if (pagesScreens.length > 0) detectors.push('next-pages-router');
 
-  // Filtrar archivos UI (.tsx, .jsx) para el detector de vistas por estado
-  const fileContentCache = new Map<string, string | null>();
   const uiCandidates = normalizedPaths.filter((p) => p.endsWith('.tsx') || p.endsWith('.jsx'));
   const stateViewInputFiles: { path: string; text: string }[] = [];
-  let fileExclusionsCount = 0;
 
   for (const relPath of uiCandidates) {
     const content = await deps.readFile(relPath);
-    fileContentCache.set(relPath, content);
+    ctx.fileContentCache.set(relPath, content);
     if (!content) continue;
 
     const byteLen = Buffer.byteLength(content, 'utf8');
     if (byteLen > MAX_READ_BYTES) {
-      fileExclusionsCount++;
+      ctx.totalExclusions++;
       continue;
     }
-
     stateViewInputFiles.push({ path: relPath, text: content });
   }
 
@@ -107,263 +132,428 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
     detectors.push('state-views');
   }
 
-  // Combinar pantallas detectadas (deduplicando por id si coincidiera alguno)
-  const screensById = new Map<string, (typeof appScreens)[number]>();
+  const screensById = new Map<string, DetectedScreen>();
   for (const s of [...appScreens, ...pagesScreens, ...stateScreens]) {
     if (!screensById.has(s.id)) {
       screensById.set(s.id, s);
     }
   }
-  const detectedScreens = Array.from(screensById.values());
+  return {
+    detectors,
+    detectedScreens: Array.from(screensById.values()),
+  };
+}
 
-  // Archivos que declaran una cadena de vistas: el recorrido de otra pantalla no debe entrar en ellos
+function addUsedFilesFromSymbol(
+  usedFiles: string[],
+  fileLinksMap: Map<string, ScreenFileLink>,
+  visited: Set<string>,
+  queue: { path: string; depth: number }[],
+  viewChainFiles: Set<string>,
+  ownChain: string | null,
+  screenEntryInElectron: boolean,
+): number {
+  let screenExclusions = 0;
+  for (const rawDep of usedFiles) {
+    const depPath = rawDep.replace(/\\/g, '/');
+    if (isExcludedFileForScreen(depPath, screenEntryInElectron)) {
+      continue;
+    }
+    if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
+      screenExclusions++;
+      continue;
+    }
+
+    if (!fileLinksMap.has(depPath)) {
+      fileLinksMap.set(depPath, {
+        path: depPath,
+        role: roleOf(depPath),
+        provenance: 'static',
+        shared: false,
+      });
+    }
+
+    if (!visited.has(depPath)) {
+      visited.add(depPath);
+      const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
+      if (!isForeignChain && 1 < MAX_DEPTH) {
+        queue.push({ path: depPath, depth: 1 });
+      }
+    }
+  }
+  return screenExclusions;
+}
+
+function processStaticEntry(
+  entry: DetectedScreen['entryFiles'][number],
+  normEntryPath: string,
+  fileLinksMap: Map<string, ScreenFileLink>,
+  queue: { path: string; depth: number }[],
+  visited: Set<string>,
+  viewChainFiles: Set<string>,
+  ownChain: string | null,
+  screenEntryInElectron: boolean,
+  ctx: BuildContext,
+): number {
+  visited.add(normEntryPath);
+  if (!entry.symbol) {
+    queue.push({ path: normEntryPath, depth: 0 });
+    return 0;
+  }
+
+  const usedFiles = entry.usedFiles ?? [];
+  if (usedFiles.length === 0) {
+    ctx.hasSymbolFallback = true;
+    queue.push({ path: normEntryPath, depth: 0 });
+    return 0;
+  }
+
+  return addUsedFilesFromSymbol(
+    usedFiles,
+    fileLinksMap,
+    visited,
+    queue,
+    viewChainFiles,
+    ownChain,
+    screenEntryInElectron,
+  );
+}
+
+function addEntryFilesToLinks(
+  ds: DetectedScreen,
+  fileLinksMap: Map<string, ScreenFileLink>,
+  queue: { path: string; depth: number }[],
+  visited: Set<string>,
+  viewChainFiles: Set<string>,
+  ownChain: string | null,
+  screenEntryInElectron: boolean,
+  ctx: BuildContext,
+): number {
+  let screenExclusions = 0;
+  for (const entry of ds.entryFiles) {
+    const normEntryPath = entry.path.replace(/\\/g, '/');
+    if (entry.provenance === 'unknown') {
+      ctx.totalUnresolved++;
+    }
+    fileLinksMap.set(normEntryPath, {
+      path: normEntryPath,
+      role: entry.role,
+      provenance: entry.provenance,
+      shared: false,
+    });
+
+    if (entry.provenance === 'static') {
+      screenExclusions += processStaticEntry(
+        entry,
+        normEntryPath,
+        fileLinksMap,
+        queue,
+        visited,
+        viewChainFiles,
+        ownChain,
+        screenEntryInElectron,
+        ctx,
+      );
+    }
+  }
+  return screenExclusions;
+}
+
+function processDirectDeps(
+  directDeps: string[],
+  currentDepth: number,
+  fileLinksMap: Map<string, ScreenFileLink>,
+  visited: Set<string>,
+  queue: { path: string; depth: number }[],
+  excluded: string[] | undefined,
+  viewChainFiles: Set<string>,
+  ownChain: string | null,
+  screenEntryInElectron: boolean,
+): number {
+  let screenExclusions = 0;
+  for (const rawDep of directDeps) {
+    const depPath = rawDep.replace(/\\/g, '/');
+    if (isExcludedFileForScreen(depPath, screenEntryInElectron) || isExcluded(depPath, excluded)) {
+      continue;
+    }
+
+    if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
+      screenExclusions++;
+      continue;
+    }
+
+    if (!fileLinksMap.has(depPath)) {
+      fileLinksMap.set(depPath, {
+        path: depPath,
+        role: roleOf(depPath),
+        provenance: 'static',
+        shared: false,
+      });
+    }
+
+    if (!visited.has(depPath)) {
+      visited.add(depPath);
+      const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
+      if (!isForeignChain && currentDepth + 1 < MAX_DEPTH) {
+        queue.push({ path: depPath, depth: currentDepth + 1 });
+      }
+    }
+  }
+  return screenExclusions;
+}
+
+function traverseDependenciesBfs(
+  queue: { path: string; depth: number }[],
+  fileLinksMap: Map<string, ScreenFileLink>,
+  visited: Set<string>,
+  deps: ScreenMapDeps,
+  excluded: string[] | undefined,
+  viewChainFiles: Set<string>,
+  ownChain: string | null,
+  screenEntryInElectron: boolean,
+  ctx: BuildContext,
+): number {
+  let screenExclusions = 0;
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.depth >= MAX_DEPTH) continue;
+
+    const directDeps = deps.fileDependencies(current.path);
+    if (directDeps === null) {
+      ctx.indexNotReady = true;
+      continue;
+    }
+
+    screenExclusions += processDirectDeps(
+      directDeps,
+      current.depth,
+      fileLinksMap,
+      visited,
+      queue,
+      excluded,
+      viewChainFiles,
+      ownChain,
+      screenEntryInElectron,
+    );
+  }
+  return screenExclusions;
+}
+
+async function inspectDynamicImports(
+  fileLinksMap: Map<string, ScreenFileLink>,
+  screenEntryInElectron: boolean,
+  deps: ScreenMapDeps,
+  ctx: BuildContext,
+): Promise<void> {
+  for (const link of Array.from(fileLinksMap.values())) {
+    if (link.provenance === 'unknown') continue;
+    if (isExcludedFileForScreen(link.path, screenEntryInElectron)) continue;
+
+    let fileText = ctx.fileContentCache.get(link.path);
+    if (fileText === undefined) {
+      fileText = await deps.readFile(link.path);
+      ctx.fileContentCache.set(link.path, fileText);
+    }
+    if (!fileText) continue;
+
+    const dynamicImportRe = /\bimport\s*\(([^)]+)\)/g;
+    let dynMatch: RegExpExecArray | null;
+    while ((dynMatch = dynamicImportRe.exec(fileText)) !== null) {
+      const arg = dynMatch[1];
+      if (!isStaticStringLiteral(arg)) {
+        const rawMatch = dynMatch[0].trim();
+        const fragment = rawMatch.slice(0, 80);
+        const linkKey = `dynamic:${link.path}:${fragment}`;
+
+        if (!fileLinksMap.has(linkKey)) {
+          ctx.totalUnresolved++;
+          fileLinksMap.set(linkKey, {
+            path: fragment,
+            role: 'other',
+            provenance: 'unknown',
+            shared: false,
+            unresolved: fragment,
+          });
+        }
+      }
+    }
+  }
+}
+
+async function buildSingleScreenLinks(
+  ds: DetectedScreen,
+  deps: ScreenMapDeps,
+  excluded: string[] | undefined,
+  viewChainFiles: Set<string>,
+  ctx: BuildContext,
+): Promise<ScreenEntry> {
+  const fileLinksMap = new Map<string, ScreenFileLink>();
+  const ownChain = ds.kind === 'view' ? ds.declaredIn.replace(/\\/g, '/') : null;
+  const screenEntryInElectron = ds.entryFiles.some((e) => e.path.replace(/\\/g, '/').startsWith('electron/'));
+
+  const queue: { path: string; depth: number }[] = [];
+  const visited = new Set<string>();
+
+  const entryExclusions = addEntryFilesToLinks(
+    ds,
+    fileLinksMap,
+    queue,
+    visited,
+    viewChainFiles,
+    ownChain,
+    screenEntryInElectron,
+    ctx,
+  );
+
+  const bfsExclusions = traverseDependenciesBfs(
+    queue,
+    fileLinksMap,
+    visited,
+    deps,
+    excluded,
+    viewChainFiles,
+    ownChain,
+    screenEntryInElectron,
+    ctx,
+  );
+
+  ctx.totalExclusions += entryExclusions + bfsExclusions;
+
+  await inspectDynamicImports(fileLinksMap, screenEntryInElectron, deps, ctx);
+
+  return {
+    id: ds.id,
+    kind: ds.kind,
+    name: ds.name,
+    locator: ds.locator,
+    declaredIn: ds.declaredIn,
+    files: Array.from(fileLinksMap.values()),
+    description: null,
+    tags: [],
+    primaryTag: null,
+    stats: { byRole: {}, lastChangedAt: null },
+    removedByHand: [],
+  };
+}
+
+// 3. armar los vínculos de cada pantalla (punto de entrada y recorrido de dependencias)
+async function buildScreenLinks(
+  detectedScreens: DetectedScreen[],
+  deps: ScreenMapDeps,
+  excluded: string[] | undefined,
+  ctx: BuildContext,
+): Promise<ScreenEntry[]> {
   const viewChainFiles = new Set(
     detectedScreens.filter((s) => s.kind === 'view').map((s) => s.declaredIn.replace(/\\/g, '/')),
   );
 
-  let indexNotReady = false;
-  let hasSymbolFallback = false;
-  let totalExclusions = fileExclusionsCount;
-  let totalUnresolved = 0;
-
   const screens: ScreenEntry[] = [];
-
   for (const ds of detectedScreens) {
-    const fileLinksMap = new Map<string, ScreenFileLink>();
-    let screenExclusions = 0;
-    const ownChain = ds.kind === 'view' ? ds.declaredIn.replace(/\\/g, '/') : null;
-    const screenEntryInElectron = ds.entryFiles.some((e) => e.path.replace(/\\/g, '/').startsWith('electron/'));
+    screens.push(await buildSingleScreenLinks(ds, deps, excluded, viewChainFiles, ctx));
+  }
+  return screens;
+}
 
-    // 1. Agregar entryFiles conservando su rol y procedencia
-    const queue: { path: string; depth: number }[] = [];
-    const visited = new Set<string>();
-
-    for (const entry of ds.entryFiles) {
-      const normEntryPath = entry.path.replace(/\\/g, '/');
-      if (entry.provenance === 'unknown') {
-        totalUnresolved++;
-      }
-      fileLinksMap.set(normEntryPath, {
-        path: normEntryPath,
-        role: entry.role,
-        provenance: entry.provenance,
-        shared: false,
+function applyManualLinks(
+  links: ManualScreenData['links'],
+  screensById: Map<string, ScreenEntry>,
+  repoFiles: Set<string>,
+  pending: PendingManualEntry[],
+): void {
+  for (const link of links) {
+    const screen = screensById.get(link.screenId);
+    if (!screen) {
+      pending.push({
+        kind: 'link',
+        screenId: link.screenId,
+        path: link.path,
+        reason: 'screen-missing',
       });
-
-      if (entry.provenance === 'static') {
-        visited.add(normEntryPath);
-
-        if (entry.symbol) {
-          const usedFiles = entry.usedFiles ?? [];
-          if (usedFiles.length === 0) {
-            hasSymbolFallback = true;
-            queue.push({ path: normEntryPath, depth: 0 });
-          } else {
-            for (const rawDep of usedFiles) {
-              const depPath = rawDep.replace(/\\/g, '/');
-              if (isExcludedFileForScreen(depPath, screenEntryInElectron)) {
-                continue;
-              }
-              if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
-                screenExclusions++;
-                continue;
-              }
-
-              if (!fileLinksMap.has(depPath)) {
-                fileLinksMap.set(depPath, {
-                  path: depPath,
-                  role: roleOf(depPath),
-                  provenance: 'static',
-                  shared: false,
-                });
-              }
-
-              if (!visited.has(depPath)) {
-                visited.add(depPath);
-                // Parada en las cadenas: no entrar en un archivo de otra cadena
-                const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
-                if (!isForeignChain && 1 < MAX_DEPTH) {
-                  queue.push({ path: depPath, depth: 1 });
-                }
-              }
-            }
-          }
-        } else {
-          queue.push({ path: normEntryPath, depth: 0 });
-        }
-      }
+      continue;
     }
 
-    // 2. Recorrer dependencias BFS hasta 4 niveles y hasta 200 archivos por pantalla
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      if (current.depth >= MAX_DEPTH) continue;
-
-      const directDeps = deps.fileDependencies(current.path);
-      if (directDeps === null) {
-        indexNotReady = true;
-        continue;
+    if (link.action === 'remove') {
+      screen.files = screen.files.filter((f) => f.path !== link.path);
+      if (!screen.removedByHand) {
+        screen.removedByHand = [];
       }
-
-      for (const rawDep of directDeps) {
-        const depPath = rawDep.replace(/\\/g, '/');
-        if (isExcludedFileForScreen(depPath, screenEntryInElectron) || isExcluded(depPath, excluded)) {
-          continue;
-        }
-
-        if (fileLinksMap.size >= MAX_FILES_PER_SCREEN) {
-          screenExclusions++;
-          continue;
-        }
-
-        if (!fileLinksMap.has(depPath)) {
-          fileLinksMap.set(depPath, {
-            path: depPath,
-            role: roleOf(depPath),
-            provenance: 'static',
+      if (!screen.removedByHand.includes(link.path)) {
+        screen.removedByHand.push(link.path);
+      }
+    } else if (link.action === 'add') {
+      if (repoFiles.has(link.path)) {
+        if (!screen.files.some((f) => f.path === link.path)) {
+          screen.files.push({
+            path: link.path,
+            role: roleOf(link.path),
+            provenance: 'manual',
             shared: false,
           });
         }
-
-        if (!visited.has(depPath)) {
-          visited.add(depPath);
-          // Parada en las cadenas: no entrar en un archivo que es declaredIn de una cadena de vistas, salvo la propia
-          const isForeignChain = viewChainFiles.has(depPath) && depPath !== ownChain;
-          if (!isForeignChain && current.depth + 1 < MAX_DEPTH) {
-            queue.push({ path: depPath, depth: current.depth + 1 });
-          }
-        }
+      } else {
+        pending.push({
+          kind: 'link',
+          screenId: link.screenId,
+          path: link.path,
+          reason: 'file-missing',
+        });
       }
     }
-
-    totalExclusions += screenExclusions;
-
-    // 3. Inspeccionar imports dinámicos en los archivos alcanzados
-    for (const link of Array.from(fileLinksMap.values())) {
-      if (link.provenance === 'unknown') continue;
-      if (isExcludedFileForScreen(link.path, screenEntryInElectron)) continue;
-
-      let fileText = fileContentCache.get(link.path);
-      if (fileText === undefined) {
-        fileText = await deps.readFile(link.path);
-        fileContentCache.set(link.path, fileText);
-      }
-      if (!fileText) continue;
-
-      const dynamicImportRe = /\bimport\s*\(([^)]+)\)/g;
-      let dynMatch: RegExpExecArray | null;
-      while ((dynMatch = dynamicImportRe.exec(fileText)) !== null) {
-        const arg = dynMatch[1];
-        if (!isStaticStringLiteral(arg)) {
-          const rawMatch = dynMatch[0].trim();
-          const fragment = rawMatch.slice(0, 80);
-          const linkKey = `dynamic:${link.path}:${fragment}`;
-
-          if (!fileLinksMap.has(linkKey)) {
-            totalUnresolved++;
-            fileLinksMap.set(linkKey, {
-              path: fragment,
-              role: 'other',
-              provenance: 'unknown',
-              shared: false,
-              unresolved: fragment,
-            });
-          }
-        }
-      }
-    }
-
-    screens.push({
-      id: ds.id,
-      kind: ds.kind,
-      name: ds.name,
-      locator: ds.locator,
-      declaredIn: ds.declaredIn,
-      files: Array.from(fileLinksMap.values()),
-      description: null,
-      tags: [],
-      primaryTag: null,
-      stats: { byRole: {}, lastChangedAt: null },
-      removedByHand: [],
-    });
   }
+}
 
-  // 3b. Aplicar correcciones manuales antes de calcular compartidos
-  const pending: PendingManualEntry[] = [];
-  let manualBroken = false;
-
-  if (manualData !== undefined) {
-    if (manualData === null) {
-      manualBroken = true;
+function applyManualDescriptions(
+  descriptions: ManualScreenData['descriptions'],
+  screensById: Map<string, ScreenEntry>,
+  pending: PendingManualEntry[],
+): void {
+  for (const [screenId, desc] of Object.entries(descriptions)) {
+    const screen = screensById.get(screenId);
+    if (!screen) {
+      pending.push({
+        kind: 'description',
+        screenId,
+        reason: 'screen-missing',
+      });
     } else {
-      const repoFiles = new Set(normalizedPaths);
-      const screensById = new Map(screens.map((s) => [s.id, s]));
-
-      for (const link of manualData.links) {
-        const screen = screensById.get(link.screenId);
-        if (!screen) {
-          pending.push({
-            kind: 'link',
-            screenId: link.screenId,
-            path: link.path,
-            reason: 'screen-missing',
-          });
-          continue;
-        }
-
-        if (link.action === 'remove') {
-          screen.files = screen.files.filter((f) => f.path !== link.path);
-          if (!screen.removedByHand) {
-            screen.removedByHand = [];
-          }
-          if (!screen.removedByHand.includes(link.path)) {
-            screen.removedByHand.push(link.path);
-          }
-        } else if (link.action === 'add') {
-          if (repoFiles.has(link.path)) {
-            if (!screen.files.some((f) => f.path === link.path)) {
-              screen.files.push({
-                path: link.path,
-                role: roleOf(link.path),
-                provenance: 'manual',
-                shared: false,
-              });
-            }
-          } else {
-            pending.push({
-              kind: 'link',
-              screenId: link.screenId,
-              path: link.path,
-              reason: 'file-missing',
-            });
-          }
-        }
-      }
-
-      for (const [screenId, desc] of Object.entries(manualData.descriptions)) {
-        const screen = screensById.get(screenId);
-        if (!screen) {
-          pending.push({
-            kind: 'description',
-            screenId,
-            reason: 'screen-missing',
-          });
-        } else {
-          screen.description = {
-            text: desc.text,
-            source: 'manual',
-            citedFiles: [],
-            createdAt: desc.updatedAt,
-          };
-          if (desc.name) {
-            screen.name = desc.name;
-          }
-        }
+      screen.description = {
+        text: desc.text,
+        source: 'manual',
+        citedFiles: [],
+        createdAt: desc.updatedAt,
+      };
+      if (desc.name) {
+        screen.name = desc.name;
       }
     }
   }
+}
 
-  // 4. Calcular archivos compartidos (aparecen en 2 o más pantallas)
+// 4. aplicar correcciones a mano
+function applyManualCorrections(
+  screens: ScreenEntry[],
+  manualData: ManualScreenData | null | undefined,
+  normalizedPaths: string[],
+  ctx: BuildContext,
+): PendingManualEntry[] {
+  const pending: PendingManualEntry[] = [];
+  if (manualData === undefined) return pending;
+  if (manualData === null) {
+    ctx.manualBroken = true;
+    return pending;
+  }
+
+  const repoFiles = new Set(normalizedPaths);
+  const screensById = new Map(screens.map((s) => [s.id, s]));
+
+  applyManualLinks(manualData.links, screensById, repoFiles, pending);
+  applyManualDescriptions(manualData.descriptions, screensById, pending);
+
+  return pending;
+}
+
+// 5. marcar compartidos
+function markSharedFiles(screens: ScreenEntry[]): void {
   const screenCountByPath = new Map<string, number>();
   for (const screen of screens) {
     for (const fileLink of screen.files) {
@@ -376,81 +566,140 @@ export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Pro
       fileLink.shared = (screenCountByPath.get(fileLink.path) ?? 0) > 1;
     }
   }
+}
 
-  // 5. Calcular temas y estadísticas para cada pantalla (una sola lectura por archivo)
-  const statCache = new Map<string, { mtimeMs: number } | null>();
-
-  // Asegurar que el contenido de todos los archivos de las pantallas esté en caché
+async function ensureScreenFilesCached(
+  screens: ScreenEntry[],
+  deps: ScreenMapDeps,
+  ctx: BuildContext,
+): Promise<void> {
   for (const screen of screens) {
     for (const link of screen.files) {
-      if (link.provenance !== 'unknown' && !fileContentCache.has(link.path)) {
+      if (link.provenance !== 'unknown' && !ctx.fileContentCache.has(link.path)) {
         const text = await deps.readFile(link.path);
-        fileContentCache.set(link.path, text);
+        ctx.fileContentCache.set(link.path, text);
+      }
+    }
+  }
+}
+
+async function computeScreenStats(
+  screen: ScreenEntry,
+  deps: ScreenMapDeps,
+  ctx: BuildContext,
+): Promise<{ byRole: Partial<Record<ScreenFileRole, number>>; lastChangedAt: string | null }> {
+  const byRole: Partial<Record<ScreenFileRole, number>> = {};
+  let maxMtime: number | null = null;
+
+  for (const link of screen.files) {
+    byRole[link.role] = (byRole[link.role] ?? 0) + 1;
+
+    if (link.provenance !== 'unknown') {
+      let st = ctx.statCache.get(link.path);
+      if (st === undefined) {
+        st = await deps.statFile(link.path);
+        ctx.statCache.set(link.path, st);
+      }
+      if (st && typeof st.mtimeMs === 'number') {
+        if (maxMtime === null || st.mtimeMs > maxMtime) {
+          maxMtime = st.mtimeMs;
+        }
       }
     }
   }
 
-  const contentOf = (p: string) => fileContentCache.get(p) ?? null;
+  return {
+    byRole,
+    lastChangedAt: maxMtime !== null ? new Date(maxMtime).toISOString() : null,
+  };
+}
+
+// 6. temas y estadísticas
+async function computeThemesAndStats(
+  screens: ScreenEntry[],
+  deps: ScreenMapDeps,
+  ctx: BuildContext,
+): Promise<void> {
+  await ensureScreenFilesCached(screens, deps, ctx);
+
+  const contentOf = (p: string) => ctx.fileContentCache.get(p) ?? null;
 
   for (const screen of screens) {
     const { tags, primaryTag } = screenTags(screen.files, contentOf, screen.name);
     screen.tags = tags;
     screen.primaryTag = primaryTag;
-
-    const byRole: Partial<Record<ScreenFileRole, number>> = {};
-    let maxMtime: number | null = null;
-
-    for (const link of screen.files) {
-      byRole[link.role] = (byRole[link.role] ?? 0) + 1;
-
-      if (link.provenance !== 'unknown') {
-        let st = statCache.get(link.path);
-        if (st === undefined) {
-          st = await deps.statFile(link.path);
-          statCache.set(link.path, st);
-        }
-        if (st && typeof st.mtimeMs === 'number') {
-          if (maxMtime === null || st.mtimeMs > maxMtime) {
-            maxMtime = st.mtimeMs;
-          }
-        }
-      }
-    }
-
-    screen.stats = {
-      byRole,
-      lastChangedAt: maxMtime !== null ? new Date(maxMtime).toISOString() : null,
-    };
+    screen.stats = await computeScreenStats(screen, deps, ctx);
   }
+}
 
-  // 6. Determinar la cobertura
+// 7. cobertura
+function computeCoverage(
+  screens: ScreenEntry[],
+  normalizedPaths: string[],
+  scanTruncated: boolean,
+  ctx: BuildContext,
+): ScreenMapCoverage {
   const coverageErrors: string[] = [];
-  if (indexNotReady) {
+  if (ctx.indexNotReady) {
     coverageErrors.push('El índice de Cartografía todavía no está listo: faltan los archivos que usa cada pantalla.');
   }
-  if (hasSymbolFallback) {
+  if (ctx.hasSymbolFallback) {
     coverageErrors.push('Algunas vistas muestran todo el archivo que las declara: el índice no encontró su componente.');
   }
-  if (manualBroken) {
+  if (ctx.manualBroken) {
     coverageErrors.push('El archivo .gitcron/pantallas.json tiene un error y no se pudo leer.');
   }
 
-  let coverage: ScreenMapCoverage;
   if (screens.length === 0) {
     const hasUI = normalizedPaths.some((p) => /\.(?:tsx|jsx|vue|svelte)$/i.test(p));
-    coverage = hasUI
+    return hasUI
       ? { state: 'unsupported', reason: 'unknown-stack' }
       : { state: 'unsupported', reason: 'no-ui' };
-  } else if (coverageErrors.length > 0 || totalUnresolved > 0 || totalExclusions > 0 || scan.truncated) {
-    coverage = {
+  }
+
+  if (coverageErrors.length > 0 || ctx.totalUnresolved > 0 || ctx.totalExclusions > 0 || scanTruncated) {
+    return {
       state: 'partial',
-      unresolved: totalUnresolved,
-      excluded: totalExclusions,
+      unresolved: ctx.totalUnresolved,
+      excluded: ctx.totalExclusions,
       errors: coverageErrors,
     };
-  } else {
-    coverage = { state: 'complete' };
   }
+
+  return { state: 'complete' };
+}
+
+export async function buildScreenMap(repoPath: string, deps: ScreenMapDeps): Promise<ScreenMap> {
+  const ctx: BuildContext = {
+    fileContentCache: new Map(),
+    statCache: new Map(),
+    totalExclusions: 0,
+    totalUnresolved: 0,
+    indexNotReady: false,
+    hasSymbolFallback: false,
+    manualBroken: false,
+  };
+
+  // 1. listar y excluir
+  const { scan, manualData, normalizedPaths } = await scanAndExclude(deps);
+
+  // 2. detectar pantallas (rutas y vistas)
+  const { detectors, detectedScreens } = await detectScreens(normalizedPaths, deps, ctx);
+
+  // 3. armar los vínculos de cada pantalla (punto de entrada y recorrido de dependencias)
+  const screens = await buildScreenLinks(detectedScreens, deps, manualData?.exclude, ctx);
+
+  // 4. aplicar correcciones a mano
+  const pending = applyManualCorrections(screens, manualData, normalizedPaths, ctx);
+
+  // 5. marcar compartidos
+  markSharedFiles(screens);
+
+  // 6. temas y estadísticas
+  await computeThemesAndStats(screens, deps, ctx);
+
+  // 7. cobertura
+  const coverage = computeCoverage(screens, normalizedPaths, scan.truncated, ctx);
 
   return {
     repoPath,

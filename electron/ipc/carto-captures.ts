@@ -23,7 +23,7 @@ import { findRunningServer, startDevServer, type DevServerHandle } from '../cart
 import { captureUrl } from '../carto/screen-capture/capture-page';
 import { screenContentKey } from '../carto/screen-capture/content-key';
 import { runScreenCaptures, type CaptureRunDeps } from '../carto/screen-capture/run';
-import { readRecipes } from '../carto/screen-capture/recipes';
+import { readRecipes, type CaptureRecipes } from '../carto/screen-capture/recipes';
 import { runViewCaptures, viewRunnerAvailable } from '../carto/screen-capture/view-runner';
 import type {
   CaptureItem,
@@ -35,6 +35,7 @@ import type {
   ScreenCaptureSkipReason,
   ScreenCaptureState,
   ScreenEntry,
+  ScreenMap,
 } from '../../types/screen-map';
 
 export type Result<T> = { success: boolean; data?: T; error?: string };
@@ -292,6 +293,271 @@ async function handleCartoCapturesRevoke(
   }
 }
 
+interface CapturePlan {
+  routeCandidates: ScreenEntry[];
+  viewCandidates: { screen: ScreenEntry; contentKey: string }[];
+  skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[];
+  planItems: CaptureItem[];
+}
+
+async function findRouteCandidates(
+  screens: ScreenEntry[],
+  statFn: (relPath: string) => Promise<{ mtimeMs: number; size: number } | null>,
+  storedMap: Map<string, { contentKey: string }>,
+): Promise<ScreenEntry[]> {
+  const routeCandidates: ScreenEntry[] = [];
+  for (const screen of screens) {
+    if (screen.kind === 'route' && !screen.locator.includes('[')) {
+      const key = await screenContentKey(screen, statFn);
+      if (storedMap.get(screen.id)?.contentKey !== key) {
+        routeCandidates.push(screen);
+      }
+    }
+  }
+  return routeCandidates;
+}
+
+async function findViewCandidates(
+  screens: ScreenEntry[],
+  statFn: (relPath: string) => Promise<{ mtimeMs: number; size: number } | null>,
+  storedMap: Map<string, { contentKey: string }>,
+  recipes: CaptureRecipes | null,
+  runnerAvailable: boolean,
+): Promise<{
+  viewCandidates: { screen: ScreenEntry; contentKey: string }[];
+  skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[];
+}> {
+  const viewCandidates: { screen: ScreenEntry; contentKey: string }[] = [];
+  const skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] = [];
+
+  for (const screen of screens) {
+    if (screen.kind !== 'view') continue;
+    const hasRecipe = Boolean(recipes && recipes.screens[screen.id]);
+    if (!recipes || !hasRecipe) {
+      skippedViews.push({ screenId: screen.id, reason: 'no-recipe' });
+    } else if (!runnerAvailable) {
+      skippedViews.push({ screenId: screen.id, reason: 'runner-missing' });
+    } else {
+      const key = await screenContentKey(screen, statFn);
+      if (storedMap.get(screen.id)?.contentKey !== key) {
+        viewCandidates.push({ screen, contentKey: key });
+      }
+    }
+  }
+  return { viewCandidates, skippedViews };
+}
+
+function assemblePlanItems(
+  routeCandidates: ScreenEntry[],
+  viewCandidates: { screen: ScreenEntry; contentKey: string }[],
+  skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[],
+  screenById: Map<string, ScreenEntry>,
+): CaptureItem[] {
+  return [
+    ...routeCandidates.map((screen): CaptureItem => ({
+      screenId: screen.id,
+      name: screenDisplayName(screen),
+      via: 'route',
+      state: 'pending',
+    })),
+    ...viewCandidates.map(({ screen }): CaptureItem => ({
+      screenId: screen.id,
+      name: screenDisplayName(screen),
+      via: 'view',
+      state: 'pending',
+    })),
+    ...skippedViews.flatMap((skippedView): CaptureItem[] => {
+      const screen = screenById.get(skippedView.screenId);
+      if (!screen) return [];
+      return [{
+        screenId: screen.id,
+        name: screenDisplayName(screen),
+        via: 'view',
+        state: 'skipped',
+        detail: skippedViewDetail(skippedView.reason),
+      }];
+    }),
+  ];
+}
+
+async function buildCapturePlan(
+  map: ScreenMap,
+  statFn: (relPath: string) => Promise<{ mtimeMs: number; size: number } | null>,
+  storedMap: Map<string, { contentKey: string }>,
+  cmdInfo: Awaited<ReturnType<typeof resolveCaptureCommand>>,
+  root: string,
+): Promise<CapturePlan> {
+  const routeCandidates = await findRouteCandidates(map.screens, statFn, storedMap);
+
+  const recipesResult = cmdInfo.recipesResult;
+  const recipes = recipesResult?.ok ? recipesResult.recipes : null;
+  const runnerAvailable = recipes ? viewRunnerAvailable(root, recipes) : false;
+
+  const { viewCandidates, skippedViews } = await findViewCandidates(
+    map.screens,
+    statFn,
+    storedMap,
+    recipes,
+    runnerAvailable,
+  );
+
+  const screenById = new Map<string, ScreenEntry>(map.screens.map((s: ScreenEntry) => [s.id, s]));
+  const planItems = assemblePlanItems(routeCandidates, viewCandidates, skippedViews, screenById);
+
+  return { routeCandidates, viewCandidates, skippedViews, planItems };
+}
+
+async function executeRouteCaptures(
+  map: ScreenMap,
+  root: string,
+  cmdInfo: Awaited<ReturnType<typeof resolveCaptureCommand>>,
+  controller: AbortController,
+  statFn: (relPath: string) => Promise<{ mtimeMs: number; size: number } | null>,
+  force: boolean,
+  options: CartoCapturesOptions | undefined,
+  routeCandidates: ScreenEntry[],
+  itemStates: Map<string, CaptureItemState>,
+  sendItem: (screenId: string, state: CaptureItemState, detail?: string) => void,
+  runner: typeof runScreenCaptures,
+): Promise<ScreenCaptureRunResult> {
+  const deps: CaptureRunDeps = {
+    startServer: async () => {
+      if ('unsupported' in cmdInfo.startCmd) {
+        throw new Error('Comando de arranque no disponible');
+      }
+      const running = await findRunningServer(cmdInfo.startCmd.knownPorts ?? []);
+      if (running) return running;
+      const server = await startDevServer(root, cmdInfo.startCmd, { signal: controller.signal });
+      activeServers.set(root, server);
+      return server;
+    },
+    capture: (url, allowedOrigin) => captureUrl(url, { allowedOrigin }),
+    contentKey: (screen) => screenContentKey(screen, statFn),
+    stored: async () => {
+      const captures = force ? [] : getScreenCaptures(root, options);
+      return new Map(captures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
+    },
+    save: async (screenId, contentKey, image) => {
+      upsertScreenCapture({ repoPath: root, screenId, contentKey, image }, options);
+    },
+  };
+
+  const routeResult = await runner(map, deps, {
+    signal: controller.signal,
+    onScreen(screenId, state, detail) {
+      sendItem(screenId, state, detail);
+    },
+  });
+
+  if (routeResult.error) {
+    for (const screen of routeCandidates) {
+      if (itemStates.get(screen.id) === 'pending') {
+        sendItem(screen.id, 'failed', routeResult.error);
+      }
+    }
+  }
+
+  return routeResult;
+}
+
+interface ViewExecutionResult {
+  captured: number;
+  viewError?: string;
+  skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[];
+}
+
+async function executeViewCaptures(
+  root: string,
+  viewCandidates: { screen: ScreenEntry; contentKey: string }[],
+  recipes: CaptureRecipes,
+  controller: AbortController,
+  options: CartoCapturesOptions | undefined,
+  itemStates: Map<string, CaptureItemState>,
+  sendItem: (screenId: string, state: CaptureItemState, detail?: string) => void,
+  viewRunner: typeof runViewCaptures,
+): Promise<ViewExecutionResult> {
+  if (viewCandidates.length === 0 || controller.signal.aborted) {
+    return { captured: 0, skipped: [] };
+  }
+
+  const candidateById = new Map(viewCandidates.map((c) => [c.screen.id, c]));
+  const savedViews = new Set<string>();
+  let captured = 0;
+  const skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] = [];
+
+  const saveViewImage = (screenId: string, png: Buffer) => {
+    const candidate = candidateById.get(screenId);
+    if (!candidate || savedViews.has(screenId)) return;
+    const jpeg = nativeImage.createFromBuffer(png).resize({ width: 960 }).toJPEG(75);
+    upsertScreenCapture(
+      { repoPath: root, screenId, contentKey: candidate.contentKey, image: jpeg },
+      options,
+    );
+    savedViews.add(screenId);
+    captured++;
+  };
+
+  const screensForRunner = viewCandidates.map((c) => ({ id: c.screen.id, name: c.screen.name }));
+  const viewResult = await viewRunner(root, recipes, screensForRunner, {
+    signal: controller.signal,
+    onEvent(viewEvent) {
+      if (!candidateById.has(viewEvent.screenId)) return;
+      if (viewEvent.image) saveViewImage(viewEvent.screenId, viewEvent.image);
+      sendItem(viewEvent.screenId, viewEvent.state, viewEvent.detail);
+    },
+  });
+
+  for (const candidate of viewCandidates) {
+    const png = viewResult.images.get(candidate.screen.id);
+    if (png && !savedViews.has(candidate.screen.id)) {
+      saveViewImage(candidate.screen.id, png);
+      sendItem(candidate.screen.id, 'done');
+    }
+  }
+
+  for (const failItem of viewResult.failed) {
+    if (controller.signal.aborted && itemStates.get(failItem.screenId) !== 'failed') continue;
+    skipped.push({
+      screenId: failItem.screenId,
+      reason: 'recipe-failed',
+      detail: failItem.detail,
+    });
+    if (itemStates.get(failItem.screenId) !== 'failed') {
+      sendItem(failItem.screenId, 'failed', failItem.detail);
+    }
+  }
+
+  return { captured, viewError: viewResult.error, skipped };
+}
+
+function buildFinalCaptureResult(
+  routeResult: ScreenCaptureRunResult,
+  viewRes: ViewExecutionResult,
+  skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[],
+  recipesResult: Awaited<ReturnType<typeof resolveCaptureCommand>>['recipesResult'],
+  aborted: boolean,
+): ScreenCaptureRunResult {
+  const totalCaptured = routeResult.captured + viewRes.captured;
+  const skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] =
+    routeResult.skipped.filter((s) => s.reason !== 'view');
+  skipped.push(...skippedViews);
+  skipped.push(...viewRes.skipped);
+
+  let finalError = routeResult.error;
+  if (recipesResult && !recipesResult.ok) {
+    finalError = recipesResult.error;
+  } else if (!finalError && viewRes.viewError && totalCaptured === 0) {
+    finalError = viewRes.viewError;
+  }
+
+  return {
+    captured: totalCaptured,
+    skipped,
+    cancelled: routeResult.cancelled || aborted,
+    error: finalError,
+  };
+}
+
 export async function handleCartoCapturesRun(
   payload: unknown,
   event?: Electron.IpcMainInvokeEvent,
@@ -341,189 +607,53 @@ export async function handleCartoCapturesRun(
           getCachedScreenMap(root) ??
           (await buildScreenMap(root, createScreenMapDeps(root)));
         const statFn = createStatFn(root);
-        // «Actualizar capturas» vuelve a sacar todas: se hace como si no hubiera ninguna guardada
-        // (Alejandro, carto-05e: con todo al día el botón no hacía nada).
         const storedCaptures = force ? [] : getScreenCaptures(root, options);
         const storedMap = new Map(storedCaptures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
 
-        // Las direcciones que se van a capturar, para el plan
-        const routeCandidates: ScreenEntry[] = [];
-        for (const screen of map.screens) {
-          if (screen.kind === 'route' && !screen.locator.includes('[')) {
-            const key = await screenContentKey(screen, statFn);
-            if (storedMap.get(screen.id)?.contentKey !== key) {
-              routeCandidates.push(screen);
-            }
-          }
-        }
+        const plan = await buildCapturePlan(map, statFn, storedMap, cmdInfo, root);
+        for (const item of plan.planItems) itemStates.set(item.screenId, item.state);
+        sendProgress({ repoPath: root, kind: 'plan', items: plan.planItems });
 
-        // 1. Recetas y vistas
-        const recipesResult = cmdInfo.recipesResult;
-        const recipes = recipesResult?.ok ? recipesResult.recipes : null;
-        const runnerAvailable = recipes ? viewRunnerAvailable(root, recipes) : false;
+        const routeResult = await executeRouteCaptures(
+          map,
+          root,
+          cmdInfo,
+          controller,
+          statFn,
+          force,
+          options,
+          plan.routeCandidates,
+          itemStates,
+          sendItem,
+          injectedRunner,
+        );
 
-        const viewCandidates: { screen: ScreenEntry; contentKey: string }[] = [];
-        const skippedViews: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] = [];
-
-        for (const screen of map.screens) {
-          if (screen.kind === 'view') {
-            const hasRecipe = Boolean(recipes && recipes.screens[screen.id]);
-            if (!recipes || !hasRecipe) {
-              skippedViews.push({ screenId: screen.id, reason: 'no-recipe' });
-            } else if (!runnerAvailable) {
-              skippedViews.push({ screenId: screen.id, reason: 'runner-missing' });
-            } else {
-              const key = await screenContentKey(screen, statFn);
-              if (storedMap.get(screen.id)?.contentKey === key) {
-                // Ya al día
-                continue;
-              }
-              viewCandidates.push({ screen, contentKey: key });
-            }
-          }
-        }
-
-        // 2. El plan, antes de arrancar nada
-        const screenById = new Map(map.screens.map((s) => [s.id, s]));
-        const planItems: CaptureItem[] = [
-          ...routeCandidates.map((screen): CaptureItem => ({
-            screenId: screen.id,
-            name: screenDisplayName(screen),
-            via: 'route',
-            state: 'pending',
-          })),
-          ...viewCandidates.map(({ screen }): CaptureItem => ({
-            screenId: screen.id,
-            name: screenDisplayName(screen),
-            via: 'view',
-            state: 'pending',
-          })),
-          ...skippedViews.flatMap((skippedView): CaptureItem[] => {
-            const screen = screenById.get(skippedView.screenId);
-            if (!screen) return [];
-            return [{
-              screenId: screen.id,
-              name: screenDisplayName(screen),
-              via: 'view',
-              state: 'skipped',
-              detail: skippedViewDetail(skippedView.reason),
-            }];
-          }),
-        ];
-        for (const item of planItems) itemStates.set(item.screenId, item.state);
-        sendProgress({ repoPath: root, kind: 'plan', items: planItems });
-
-        const deps: CaptureRunDeps = {
-          startServer: async () => {
-            if ('unsupported' in cmdInfo.startCmd) {
-              throw new Error('Comando de arranque no disponible');
-            }
-            const running = await findRunningServer(cmdInfo.startCmd.knownPorts ?? []);
-            if (running) return running;
-            const server = await startDevServer(root, cmdInfo.startCmd, { signal: controller.signal });
-            activeServers.set(root, server);
-            return server;
-          },
-          capture: (url, allowedOrigin) => captureUrl(url, { allowedOrigin }),
-          contentKey: (screen) => screenContentKey(screen, statFn),
-          stored: async () => {
-            const captures = force ? [] : getScreenCaptures(root, options);
-            return new Map(captures.map((c) => [c.screenId, { contentKey: c.contentKey }]));
-          },
-          save: async (screenId, contentKey, image) => {
-            upsertScreenCapture({ repoPath: root, screenId, contentKey, image }, options);
-          },
-        };
-
-        const routeResult = await injectedRunner(map, deps, {
-          signal: controller.signal,
-          onScreen(screenId, state, detail) {
-            sendItem(screenId, state, detail);
-          },
-        });
-        // El servidor no arrancó: las direcciones que quedaron sin empezar no se capturan.
-        if (routeResult.error) {
-          for (const screen of routeCandidates) {
-            if (itemStates.get(screen.id) === 'pending') sendItem(screen.id, 'failed', routeResult.error);
-          }
-        }
-
-        let totalCaptured = routeResult.captured;
-        const skipped: { screenId: string; reason: ScreenCaptureSkipReason; detail?: string }[] =
-          routeResult.skipped.filter((s) => s.reason !== 'view');
-        skipped.push(...skippedViews);
-
-        // Vistas
-        let viewError: string | undefined;
-        if (viewCandidates.length > 0 && !controller.signal.aborted) {
-          const candidateById = new Map(viewCandidates.map((c) => [c.screen.id, c]));
-          const savedViews = new Set<string>();
-          // Cada foto se pasa a JPEG y se guarda en el momento en que llega, para que aparezca en
-          // su cuadro sin esperar al final.
-          const saveViewImage = (screenId: string, png: Buffer) => {
-            const candidate = candidateById.get(screenId);
-            if (!candidate || savedViews.has(screenId)) return;
-            const jpeg = nativeImage.createFromBuffer(png).resize({ width: 960 }).toJPEG(75);
-            upsertScreenCapture(
-              { repoPath: root, screenId, contentKey: candidate.contentKey, image: jpeg },
+        const recipes = cmdInfo.recipesResult?.ok ? cmdInfo.recipesResult.recipes : null;
+        const viewRes = recipes
+          ? await executeViewCaptures(
+              root,
+              plan.viewCandidates,
+              recipes,
+              controller,
               options,
-            );
-            savedViews.add(screenId);
-            totalCaptured++;
-          };
-
-          const screensForRunner = viewCandidates.map((c) => ({ id: c.screen.id, name: c.screen.name }));
-          const viewResult = await injectedViewRunner(root, recipes!, screensForRunner, {
-            signal: controller.signal,
-            onEvent(viewEvent) {
-              if (!candidateById.has(viewEvent.screenId)) return;
-              if (viewEvent.image) saveViewImage(viewEvent.screenId, viewEvent.image);
-              sendItem(viewEvent.screenId, viewEvent.state, viewEvent.detail);
-            },
-          });
-
-          viewError = viewResult.error;
-
-          // Las fotos que no estaban escritas al avisar la pantalla se completan acá.
-          for (const candidate of viewCandidates) {
-            const png = viewResult.images.get(candidate.screen.id);
-            if (png && !savedViews.has(candidate.screen.id)) {
-              saveViewImage(candidate.screen.id, png);
-              sendItem(candidate.screen.id, 'done');
-            }
-          }
-
-          for (const failItem of viewResult.failed) {
-            // Detenida por la persona: lo que no había fallado antes no es una falla de la receta
-            // (auditoría de carto-05e: con Detener, diez vistas figuraban como «fallaron»).
-            if (controller.signal.aborted && itemStates.get(failItem.screenId) !== 'failed') continue;
-            skipped.push({
-              screenId: failItem.screenId,
-              reason: 'recipe-failed',
-              detail: failItem.detail,
-            });
-            if (itemStates.get(failItem.screenId) !== 'failed') {
-              sendItem(failItem.screenId, 'failed', failItem.detail);
-            }
-          }
-        }
+              itemStates,
+              sendItem,
+              injectedViewRunner,
+            )
+          : { captured: 0, skipped: [] };
 
         const currentScreenIds = map.screens.map((s) => s.id);
         deleteScreenCapturesNotIn(root, currentScreenIds, options);
 
-        let finalError = routeResult.error;
-        if (recipesResult && !recipesResult.ok) {
-          finalError = recipesResult.error;
-        } else if (!finalError && viewError && totalCaptured === 0) {
-          finalError = viewError;
-        }
+        const finalResult = buildFinalCaptureResult(
+          routeResult,
+          viewRes,
+          plan.skippedViews,
+          cmdInfo.recipesResult,
+          controller.signal.aborted,
+        );
 
-        return ok({
-          captured: totalCaptured,
-          skipped,
-          cancelled: routeResult.cancelled || controller.signal.aborted,
-          error: finalError,
-        });
+        return ok(finalResult);
       } catch (err) {
         return fail(err);
       } finally {
@@ -540,7 +670,6 @@ export async function handleCartoCapturesRun(
         activePromises.delete(root);
       }
     })();
-
     activePromises.set(root, runPromise);
     return await runPromise;
   } catch (error) {

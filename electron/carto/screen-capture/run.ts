@@ -18,6 +18,117 @@ export interface CaptureRunDeps {
   save(screenId: string, contentKey: string, image: Buffer): Promise<void>;
 }
 
+interface Candidate {
+  screen: ScreenEntry;
+  contentKey: string;
+}
+
+interface SkippedEntry {
+  screenId: string;
+  reason: ScreenCaptureSkipReason;
+}
+
+async function selectCandidates(
+  screens: ScreenEntry[],
+  deps: CaptureRunDeps,
+): Promise<{ candidates: Candidate[]; skipped: SkippedEntry[] }> {
+  const skipped: SkippedEntry[] = [];
+  const stored = await deps.stored();
+  const candidates: Candidate[] = [];
+
+  for (const screen of screens) {
+    if (screen.kind === 'view') {
+      skipped.push({ screenId: screen.id, reason: 'view' });
+    } else if (screen.kind === 'route') {
+      if (screen.locator.includes('[')) {
+        skipped.push({ screenId: screen.id, reason: 'dynamic-route' });
+      } else {
+        const key = await deps.contentKey(screen);
+        if (stored.get(screen.id)?.contentKey !== key) {
+          candidates.push({ screen, contentKey: key });
+        }
+      }
+    }
+  }
+
+  return { candidates, skipped };
+}
+
+async function captureOneScreen(
+  candidate: Candidate,
+  serverUrl: string,
+  allowedOrigin: string,
+  deps: CaptureRunDeps,
+  options: {
+    signal?: AbortSignal;
+    onScreen?(screenId: string, state: 'running' | 'done' | 'failed', detail?: string): void;
+  },
+): Promise<{ success: true } | { success: false; reason: ScreenCaptureSkipReason } | { aborted: true }> {
+  const { screen, contentKey } = candidate;
+  options.onScreen?.(screen.id, 'running');
+  try {
+    const targetUrl = new URL(screen.locator, serverUrl).toString();
+    const image = await deps.capture(targetUrl, allowedOrigin);
+    await deps.save(screen.id, contentKey, image);
+    options.onScreen?.(screen.id, 'done');
+    return { success: true };
+  } catch (err) {
+    if (options.signal?.aborted) {
+      return { aborted: true };
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason: ScreenCaptureSkipReason = /timeout|tiempo de espera/i.test(msg)
+      ? 'timeout'
+      : 'load-failed';
+    options.onScreen?.(screen.id, 'failed', msg);
+    return { success: false, reason };
+  }
+}
+
+async function iterateCaptures(
+  candidates: Candidate[],
+  server: DevServerHandle,
+  allowedOrigin: string,
+  deps: CaptureRunDeps,
+  options: {
+    signal?: AbortSignal;
+    onScreen?(screenId: string, state: 'running' | 'done' | 'failed', detail?: string): void;
+  },
+  skipped: SkippedEntry[],
+): Promise<{ captured: number; cancelled: boolean }> {
+  let captured = 0;
+  let cancelled = false;
+
+  for (const candidate of candidates) {
+    if (options.signal?.aborted) {
+      cancelled = true;
+      break;
+    }
+
+    const res = await captureOneScreen(candidate, server.url, allowedOrigin, deps, options);
+    if ('aborted' in res) {
+      cancelled = true;
+      break;
+    }
+    if (res.success) {
+      captured++;
+    } else {
+      skipped.push({ screenId: candidate.screen.id, reason: res.reason });
+    }
+  }
+
+  return { captured, cancelled };
+}
+
+function safeStopServer(server: DevServerHandle | null): void {
+  if (!server) return;
+  try {
+    server.stop();
+  } catch {
+    // Ignorar fallo al detener servidor ya cerrado
+  }
+}
+
 export async function runScreenCaptures(
   map: ScreenMap,
   deps: CaptureRunDeps,
@@ -27,27 +138,7 @@ export async function runScreenCaptures(
     onScreen?(screenId: string, state: 'running' | 'done' | 'failed', detail?: string): void;
   } = {},
 ): Promise<ScreenCaptureRunResult> {
-  const skipped: { screenId: string; reason: ScreenCaptureSkipReason }[] = [];
-  const stored = await deps.stored();
-
-  const candidates: { screen: ScreenEntry; contentKey: string }[] = [];
-
-  for (const screen of map.screens) {
-    if (screen.kind === 'view') {
-      skipped.push({ screenId: screen.id, reason: 'view' });
-    } else if (screen.kind === 'route') {
-      if (screen.locator.includes('[')) {
-        skipped.push({ screenId: screen.id, reason: 'dynamic-route' });
-      } else {
-        const key = await deps.contentKey(screen);
-        if (stored.get(screen.id)?.contentKey === key) {
-          // Ya está al día, no requiere captura
-          continue;
-        }
-        candidates.push({ screen, contentKey: key });
-      }
-    }
-  }
+  const { candidates, skipped } = await selectCandidates(map.screens, deps);
 
   // Si no queda ninguna candidata, no se arranca el servidor
   if (candidates.length === 0) {
@@ -78,9 +169,6 @@ export async function runScreenCaptures(
     };
   }
 
-  let captured = 0;
-  let cancelled = false;
-  const total = candidates.length;
   let allowedOrigin = '';
   try {
     allowedOrigin = new URL(server.url).origin;
@@ -89,46 +177,20 @@ export async function runScreenCaptures(
   }
 
   try {
-    for (let i = 0; i < total; i++) {
-      if (options.signal?.aborted) {
-        cancelled = true;
-        break;
-      }
-
-      const { screen, contentKey } = candidates[i];
-      options.onScreen?.(screen.id, 'running');
-      try {
-        const targetUrl = new URL(screen.locator, server.url).toString();
-        const image = await deps.capture(targetUrl, allowedOrigin);
-        await deps.save(screen.id, contentKey, image);
-        captured++;
-        options.onScreen?.(screen.id, 'done');
-      } catch (err) {
-        if (options.signal?.aborted) {
-          cancelled = true;
-          break;
-        }
-        const msg = err instanceof Error ? err.message : String(err);
-        const reason: ScreenCaptureSkipReason = /timeout|tiempo de espera/i.test(msg)
-          ? 'timeout'
-          : 'load-failed';
-        skipped.push({ screenId: screen.id, reason });
-        options.onScreen?.(screen.id, 'failed', msg);
-      }
-    }
+    const { captured, cancelled } = await iterateCaptures(
+      candidates,
+      server,
+      allowedOrigin,
+      deps,
+      options,
+      skipped,
+    );
+    return {
+      captured,
+      skipped,
+      cancelled,
+    };
   } finally {
-    if (server) {
-      try {
-        server.stop();
-      } catch {
-        // Ignorar fallo al detener servidor ya cerrado
-      }
-    }
+    safeStopServer(server);
   }
-
-  return {
-    captured,
-    skipped,
-    cancelled,
-  };
 }

@@ -762,84 +762,21 @@ function DetailDiffView({
 
 const DETAIL_LAYOUT_TRANSITION = { duration: 0.3, ease: 'easeOut' } as const;
 
-function DetailFilesSection({
-  screen,
-  files,
+function DetailAddFileSection({
+  screenId,
   repoPath,
-  onAskFile,
   onManual,
-  shouldReduceMotion,
   t,
 }: {
-  screen: ScreenEntry;
-  files: ScreenFileLink[];
+  screenId: string;
   repoPath: string;
-  onAskFile?: (path: string) => void;
   onManual?: (op: ManualOp) => void | Promise<void>;
-  shouldReduceMotion?: boolean | null;
   t: (k: string, vars?: Record<string, string | number>) => string;
 }) {
-  const filesByRole = useMemo(() => groupFilesByRole(files), [files]);
-
-  const availableRoles = useMemo(() => {
-    return ROLE_ORDER.filter((role) => (filesByRole.get(role)?.length ?? 0) > 0);
-  }, [filesByRole]);
-
-  const [activeRole, setActiveRole] = useState<ScreenFileRole>(
-    availableRoles[0] ?? 'screen',
-  );
-
-  const [diffFor, setDiffFor] = useState<{ path: string; diff: string | null; error: string | null } | null>(null);
   const [isAddingFile, setIsAddingFile] = useState(false);
   const [addFilePath, setAddFilePath] = useState('');
   const [repoFiles, setRepoFiles] = useState<string[] | null>(null);
   const [addFileError, setAddFileError] = useState<string | null>(null);
-  const [removedOpen, setRemovedOpen] = useState(false);
-
-  const effectiveRole: ScreenFileRole = availableRoles.includes(activeRole)
-    ? activeRole
-    : (availableRoles[0] ?? 'screen');
-
-  const currentRoleFiles = filesByRole.get(effectiveRole) ?? [];
-
-  const handleSelectRole = (role: ScreenFileRole) => {
-    setActiveRole(role);
-    setDiffFor(null);
-  };
-
-  const handleToggleDiff = useCallback(
-    async (filePath: string) => {
-      if (diffFor?.path === filePath) {
-        setDiffFor(null);
-        return;
-      }
-      setDiffFor({ path: filePath, diff: null, error: null });
-      try {
-        const res = await window.api.gitDiff(repoPath, filePath);
-        setDiffFor((current) => {
-          if (current?.path !== filePath) return current;
-          if (res.success) {
-            return { path: filePath, diff: res.data ?? '', error: null };
-          }
-          return {
-            path: filePath,
-            diff: null,
-            error: res.error || t('cartography.screens.fileDiffError'),
-          };
-        });
-      } catch (err) {
-        setDiffFor((current) => {
-          if (current?.path !== filePath) return current;
-          return {
-            path: filePath,
-            diff: null,
-            error: err instanceof Error ? err.message : String(err),
-          };
-        });
-      }
-    },
-    [diffFor?.path, repoPath, t],
-  );
 
   const handleStartAddFile = async () => {
     setIsAddingFile(true);
@@ -865,7 +802,7 @@ function DetailFilesSection({
     }
     onManual?.({
       type: 'link',
-      screenId: screen.id,
+      screenId,
       path: trimmed,
       action: 'add',
     });
@@ -874,15 +811,8 @@ function DetailFilesSection({
     setAddFileError(null);
   };
 
-  const removedCount = screen.removedByHand?.length ?? 0;
-
   return (
-    <motion.section
-      layout={shouldReduceMotion ? false : 'position'}
-      transition={DETAIL_LAYOUT_TRANSITION}
-      className={styles.detailFilesSection}
-      aria-label="Archivos"
-    >
+    <>
       <div className={styles.filesHeaderRow}>
         <h4 className={styles.sectionLabel}>Archivos</h4>
         {!isAddingFile && (
@@ -955,6 +885,146 @@ function DetailFilesSection({
           )}
         </div>
       )}
+    </>
+  );
+}
+
+function DetailRemovedSection({
+  screen,
+  onManual,
+  t,
+}: {
+  screen: ScreenEntry;
+  onManual?: (op: ManualOp) => void | Promise<void>;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const [removedOpen, setRemovedOpen] = useState(false);
+  const removedCount = screen.removedByHand?.length ?? 0;
+  if (removedCount === 0) return null;
+
+  return (
+    <div className={styles.removedSection} data-testid="removed-by-hand-section">
+      <button
+        type="button"
+        className={styles.removedHeaderBtn}
+        onClick={() => setRemovedOpen(!removedOpen)}
+        aria-expanded={removedOpen}
+        data-testid="removed-by-hand-toggle"
+      >
+        <span>{t('cartography.screens.manual.removedByHand', { n: removedCount })}</span>
+      </button>
+      {removedOpen && (
+        <ul className={styles.removedList} data-testid="removed-by-hand-list">
+          {(screen.removedByHand ?? []).map((rPath) => (
+            <li key={rPath} className={styles.removedItem}>
+              <span className={styles.fileName} title={rPath}>
+                {rPath}
+              </span>
+              <button
+                type="button"
+                className={styles.restoreBtn}
+                onClick={() => onManual?.({ type: 'unlink', screenId: screen.id, path: rPath })}
+                title={t('cartography.screens.manual.restore')}
+                data-testid={`restore-${rPath}`}
+              >
+                <Undo2 size={12} aria-hidden="true" />
+                <span>{t('cartography.screens.manual.restore')}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function DetailFilesSection({
+  screen,
+  files,
+  repoPath,
+  onAskFile,
+  onManual,
+  shouldReduceMotion,
+  t,
+}: {
+  screen: ScreenEntry;
+  files: ScreenFileLink[];
+  repoPath: string;
+  onAskFile?: (path: string) => void;
+  onManual?: (op: ManualOp) => void | Promise<void>;
+  shouldReduceMotion?: boolean | null;
+  t: (k: string, vars?: Record<string, string | number>) => string;
+}) {
+  const filesByRole = useMemo(() => groupFilesByRole(files), [files]);
+
+  const availableRoles = useMemo(() => {
+    return ROLE_ORDER.filter((role) => (filesByRole.get(role)?.length ?? 0) > 0);
+  }, [filesByRole]);
+
+  const [activeRole, setActiveRole] = useState<ScreenFileRole>(
+    availableRoles[0] ?? 'screen',
+  );
+
+  const [diffFor, setDiffFor] = useState<{ path: string; diff: string | null; error: string | null } | null>(null);
+
+  const effectiveRole: ScreenFileRole = availableRoles.includes(activeRole)
+    ? activeRole
+    : (availableRoles[0] ?? 'screen');
+
+  const currentRoleFiles = filesByRole.get(effectiveRole) ?? [];
+
+  const handleSelectRole = (role: ScreenFileRole) => {
+    setActiveRole(role);
+    setDiffFor(null);
+  };
+
+  const handleToggleDiff = useCallback(
+    async (filePath: string) => {
+      if (diffFor?.path === filePath) {
+        setDiffFor(null);
+        return;
+      }
+      setDiffFor({ path: filePath, diff: null, error: null });
+      try {
+        const res = await window.api.gitDiff(repoPath, filePath);
+        setDiffFor((current) => {
+          if (current?.path !== filePath) return current;
+          if (res.success) {
+            return { path: filePath, diff: res.data ?? '', error: null };
+          }
+          return {
+            path: filePath,
+            diff: null,
+            error: res.error || t('cartography.screens.fileDiffError'),
+          };
+        });
+      } catch (err) {
+        setDiffFor((current) => {
+          if (current?.path !== filePath) return current;
+          return {
+            path: filePath,
+            diff: null,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        });
+      }
+    },
+    [diffFor?.path, repoPath, t],
+  );
+
+  return (
+    <motion.section
+      layout={shouldReduceMotion ? false : 'position'}
+      transition={DETAIL_LAYOUT_TRANSITION}
+      className={styles.detailFilesSection}
+      aria-label="Archivos"
+    >
+      <DetailAddFileSection
+        screenId={screen.id}
+        repoPath={repoPath}
+        onManual={onManual}
+        t={t}
+      />
 
       {availableRoles.length > 0 && (
         <div
@@ -1000,40 +1070,11 @@ function DetailFilesSection({
         />
       )}
 
-      {removedCount > 0 && (
-        <div className={styles.removedSection} data-testid="removed-by-hand-section">
-          <button
-            type="button"
-            className={styles.removedHeaderBtn}
-            onClick={() => setRemovedOpen(!removedOpen)}
-            aria-expanded={removedOpen}
-            data-testid="removed-by-hand-toggle"
-          >
-            <span>{t('cartography.screens.manual.removedByHand', { n: removedCount })}</span>
-          </button>
-          {removedOpen && (
-            <ul className={styles.removedList} data-testid="removed-by-hand-list">
-              {(screen.removedByHand ?? []).map((rPath) => (
-                <li key={rPath} className={styles.removedItem}>
-                  <span className={styles.fileName} title={rPath}>
-                    {rPath}
-                  </span>
-                  <button
-                    type="button"
-                    className={styles.restoreBtn}
-                    onClick={() => onManual?.({ type: 'unlink', screenId: screen.id, path: rPath })}
-                    title={t('cartography.screens.manual.restore')}
-                    data-testid={`restore-${rPath}`}
-                  >
-                    <Undo2 size={12} aria-hidden="true" />
-                    <span>{t('cartography.screens.manual.restore')}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <DetailRemovedSection
+        screen={screen}
+        onManual={onManual}
+        t={t}
+      />
     </motion.section>
   );
 }
