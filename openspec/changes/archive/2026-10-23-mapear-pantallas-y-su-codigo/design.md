@@ -1,0 +1,176 @@
+# Entender pantallas a través del código que las construye
+
+## Context
+
+graph-engine combina snapshot CodeGraph con scanRepoFilePaths; node detail ya consulta callers/callees/impact. GitCron cambia superficies en RepoMainView sin necesitar una ruta web distinta por pantalla: un detector basado sólo en rutas omitiría varias vistas.
+
+Ver proposal.md para alcance y dependencias; specs/ contiene los contratos observables.
+
+## Goals / Non-Goals
+
+**Goals:** completar el recorrido descrito reutilizando servicios y superficies existentes; separar contratos, integración y presentación para que cada tanda local tenga un resultado verificable.
+
+**Non-Goals:** reescribir el cliente Git, alterar la geometría del Cronométrico, introducir WebMCP/MCP Apps como dependencia o ejecutar implementación al redactar estos artefactos.
+
+## Decisions
+
+### 1. Decisión de implementación
+
+Agregar adaptadores de descubrimiento por stack, empezando por Next/React y switches de vistas de GitCron, con contrato de cobertura explícito. Resolver estáticamente imports/rutas cuando posible; condiciones runtime y composición dinámica permanecen desconocidas o requieren asociación manual.
+
+### 2. Decisión de implementación
+
+Catálogo por nombre de producto; una pantalla puede usar muchos archivos y un archivo muchas pantallas. Mostrar piezas compartidas separadas de específicas, no asignar propiedad exclusiva a la primera coincidencia.
+
+### 3. Decisión de implementación
+
+Mantener asociaciones manuales portables y auditables con origen manual, separadas de resultados generados. IA puede sugerir asociaciones con fuentes, pero no elevar una sugerencia a relación comprobada.
+
+### 4. Decisión de implementación
+
+Navegación catálogo→detalle→relaciones/impacto→archivo/diff mediante rutas existentes. Mostrar conteos de cobertura, excluidos y errores; cero relaciones observadas no significa inexistencia de dependencias.
+
+### 5. Decisión de implementación
+
+Indexado reutiliza motor y cache existentes, incremental y cancelable; invalidar por cambios de archivos/HEAD. No iniciar app externa, capturar pantalla ni ejecutar código del repo para completar el mapa.
+
+### 6. Decisión de Alejandro (2026-10-13)
+
+La vista se rehace para alguien que no programa. La entrada es el catálogo de pantallas en cuadros; cada cuadro dice en una o dos frases qué hace esa pantalla, en lenguaje llano, y cuántos y cuáles archivos la forman, separando los propios de los compartidos. La descripción puede venir de la IA (uso `gitcron-cartography`), pero se marca como sugerida y cita los archivos en que se basa; una descripción manual la reemplaza. El mapa técnico de símbolos y relaciones queda como profundización, no como primera pantalla.
+
+La columna derecha del chat se quita: preguntar sobre una pantalla o un archivo se hace en el panel de Centauro de retomar, donde Cartografía publica su selección y sus acciones por el registro de contribuciones (`lib/assist/view-contributions.ts`). La estética se rediseña entera con módulos CSS y tokens de `@theme`, como el resto de la app; un componente de Cartografía con Tailwind se pasa a módulos cuando se toca.
+
+### 7. Contrato pantalla ↔ archivos (tarea 1.1, 2026-10-16)
+
+El contrato está en `types/screen-map.ts`. Una pantalla (`ScreenEntry`) es una ruta web (`kind: 'route'`) o una vista elegida por estado sin URL propia (`kind: 'view'`, como Graph, SDD o Cartografía en GitCron, que se eligen con `activeView`/`activeTab`). Tiene un nombre legible, el lugar donde se declara y una lista de vínculos a archivos (`ScreenFileLink`). La relación es de muchos a muchos: `shared` lo calcula el catálogo cuando un archivo aparece en más de una pantalla, y ninguna pantalla «se queda» con un compartido. Cada vínculo dice su procedencia: `static` (leído en el código), `inferred` (por una regla que puede fallar), `manual` (lo puso una persona; ninguna regla lo pisa) o `unknown` (un import dinámico o una ruta calculada que no se resolvió, con el texto de lo que faltó). El rol del archivo (`screen`, `component`, `style`, `data`, `logic`, `text`, `other`) es la categoría que se muestra en el cuadro, en palabras de todos los días. La descripción en lenguaje llano es manual o sugerida por IA; la sugerida guarda modelo, fecha y archivos citados, y sin citas no se muestra. La cobertura (`ScreenMapCoverage`) distingue completo, parcial (con no resueltos, excluidos y errores), no aplicable (repo sin interfaz o stack desconocido) e indexando: un vacío nunca se lee como respuesta. Las asociaciones manuales (`ManualScreenLink`) viven fuera de la caché regenerable y, si su pantalla o archivo desaparecen, quedan pendientes en vez de reasignarse solas.
+
+### 8. Cuadros de pantallas (tanda 03, 2026-10-16)
+
+El selector Simple/Técnico que ya tenía Cartografía decide la entrada: en Simple (el de omisión) se ve el catálogo de cuadros; en Técnico, el panorama y el grafo de siempre. Cada cuadro lleva el nombre, dónde se elige (la ruta, o «Vista dentro de la app»), qué hace y qué archivos la forman, con los propios separados de los compartidos y agrupados por rol en palabras de todos los días. La explicación de qué hace la pide la persona con un botón (no se llama sola, y por ser un pedido explícito no depende del interruptor de IA de Cartografía); usa el uso `gitcron-cartography`, manda un contexto acotado (los archivos y el comienzo de hasta tres archivos de entrada, 12.000 caracteres como tope), exige JSON con texto y archivos citados que sean de esa pantalla, y se guarda en la caché de Cartografía por contenido, así que no se vuelve a pedir mientras los archivos no cambien. Una explicación sin citas válidas no se muestra. La descripción manual y las asociaciones manuales llegan con la tanda 04 (tarea 1.5).
+
+### 9. Cuadros que se expanden, IA por el chat general y capturas reales (Alejandro, 2026-10-16)
+
+Al ver la tanda 03, Alejandro pidió:
+
+- **Interacción:** los cuadros no se empujan entre sí. Al tocar uno, se expande a la izquierda como detalle y el resto pasa a una columna angosta a la derecha, uno debajo del otro; tocar otro de la columna lo cambia, y cerrar vuelve a la grilla. Sin modal y con animación (que respeta el movimiento reducido). La lista de archivos vive dentro del detalle, con su propio desplazamiento y agrupada por rol, nunca empujando la página.
+- **IA:** nada de un botón grande repetido en cada cuadro. Un ícono de IA chico arriba a la derecha de cada cuadro, con la ayuda «Explicar qué hace», **abre el chat general** (el panel de abajo, el de toda la app) con esa pantalla como tema. Para eso se suma el destino `carto-screen` al contrato de contexto de la asistencia. No hay un chat por cuadro.
+- **Captura de cada pantalla, automática:** cada cuadro muestra cómo se ve la pantalla. Una captura real exige que la app esté corriendo, y por eso esta decisión **reemplaza** lo de «no iniciar la app externa» de la decisión 5, con un resguardo: GitCron pide permiso **una vez por proyecto** antes de arrancarlo. Las pantallas con dirección se capturan arrancando el proyecto con su propio comando de inicio y visitando cada dirección en una ventana oculta de Electron; las vistas sin dirección, con las pruebas de pantalla que tenga el proyecto (como las e2e de GitCron) o pidiéndole a la IA que llegue a esa pantalla navegando la app. Las capturas se guardan y solo se rehacen cuando cambian los archivos de esa pantalla. Es la tanda 05; la 04 deja el lugar de la captura listo.
+
+### 10. Qué archivos son de una pantalla (2026-10-16, medido sobre GitCron)
+
+Una sonda sobre el mapa real mostró que Graph listaba 55 archivos y ninguno era suyo: faltaban `CommitGraph` y `ChronometricGraph`, y aparecían archivos del proceso principal, pruebas y scripts. Dos causas. Primera: para una vista definida en el mismo archivo que la elige, se usaron las llamadas del índice, y el índice resuelve una llamada por su nombre (`get`, `run`) hacia cualquier archivo; desde ahora el primer nivel sale de lo que **dibuja** el componente (sus etiquetas JSX resueltas por los imports del archivo), que es exacto. Segunda: el índice cuenta los `import type`, y una pantalla parecía usar el proceso principal; desde ahora una pantalla nunca suma archivos de prueba, `scripts/` ni, si su entrada no está en `electron/`, nada del proceso principal. Además, a pedido de Alejandro: los cuadros llevan el efecto de píxeles de React Bits (Pixel Card, MIT + Commons Clause: se usa dentro de GitCron, no se redistribuye suelto) con los colores de la IA y respetando el movimiento reducido, y la grilla tiene cuatro tamaños de cuadro que se recuerdan.
+
+### 11. Capturas reales de las pantallas con dirección (tanda 05b, 2026-10-16)
+
+Concreta la parte de capturas de la decisión 9. Se capturan primero las pantallas con dirección (`kind: 'route'` sin partes variables como `[id]`); las vistas sin dirección y las direcciones variables quedan con el ícono y llegan en otra tanda (tarea 2.8), porque necesitan navegar la app.
+
+- **Cómo se arranca el proyecto:** si usa Next, con su propio `next dev -p <puerto libre>` desde `node_modules/.bin`; si usa Vite, `vite --port <puerto> --strictPort`; si no, su script `dev` (o `start`) con el gestor de paquetes que indique su archivo de bloqueo y `PORT` en el entorno. Si no hay nada de eso, no se ofrece capturar. **Si el proyecto ya está corriendo** en un puerto que declaran sus scripts (`-p 3001`, `--port`, `PORT=`), se usa ese servidor y no se apaga: en la auditoría de 05b, arrancar un segundo `next dev` sobre la carpeta de GitCron rompió el que estaba abierto (la app volvió a «Iniciando GitCron…»). En un script genérico, el texto del script forma parte de la orden del permiso.
+- **Permiso:** una vez por proyecto y atado a la orden exacta que se muestra. Si la orden cambia (por ejemplo, cambió el script), se vuelve a pedir. El permiso se puede quitar (control completo). Se pide en una franja dentro del catálogo, no en un modal.
+- **Captura:** cada dirección se abre en una ventana oculta de Electron sin acceso al sistema (sandbox, sin preload, partición propia, sin ventanas nuevas, sin salir del servidor local, permisos denegados). Se guarda en JPEG achicado en la base de GitCron (tabla nueva, fuera del repo). El servidor se detiene siempre al terminar, al cancelar y al cerrar GitCron.
+- **Cuándo se rehace:** cada captura guarda una clave hecha con tamaño y fecha de cambio de los archivos de esa pantalla. Si cambia, la captura sigue mostrándose marcada como vieja y se rehace. Con permiso dado, al abrir el catálogo se capturan solas las que falten o estén viejas; también hay un botón para actualizarlas y otro para detener.
+
+### 12. Cuadros modernos, temas con color y filtros (Alejandro, 2026-10-17)
+
+Alejandro vio los cuadros con captura y pidió que se vean actuales y que ayuden a entender de qué va el proyecto de un vistazo.
+
+- **El cuadro:**
+  - La captura ocupa todo el ancho, de borde a borde, arriba y sin relleno alrededor.
+  - Encima de la imagen van las acciones (el ícono de IA), con fondo translúcido, y arriba a la izquierda el tema principal con su color.
+  - Debajo, el nombre y dónde se elige, los temas en chips de color y datos que sirven: una barra de composición (qué parte son pantalla y componentes, estilos, datos, lógica, textos), cuántos archivos tiene, cuántos son propios y cuándo cambió por última vez.
+  - En tamaño Mínimo quedan la captura y el nombre.
+- **Temas:** cada pantalla lleva los temas que se leen en su código, con la evidencia guardada (qué archivo lo dijo). Son Gráficos, Datos, IA, Git, Configuración, Contenido, Cuentas y Pagos. Cada tema tiene una regla de imports y rutas en un solo archivo, fácil de extender. El tema principal es el que tiene más evidencia entre los archivos propios; si no hay ninguno, la pantalla es «General». Los colores salen de los tokens del tema visual, nunca escritos a mano.
+- **Filtros y agrupado:** arriba de la grilla, chips por tema con su cantidad («Todas» vuelve a mostrar todo; tocar un chip activo lo apaga) y un control «Sin agrupar / Por tema» que separa la grilla en secciones con título. Las dos cosas se recuerdan.
+
+Las capturas de las vistas sin dirección (tarea 2.8) pasan a la tanda siguiente.
+
+### 13. Capturas de las vistas sin dirección: recetas y pruebas del proyecto (Alejandro, 2026-10-19)
+
+A una vista sin dirección (Graph, SDD, Ajustes en GitCron) se llega tocando botones, y en una app de escritorio hace falta la app real abierta. Alejandro eligió **recetas** antes que una IA que navegue cada vez: cada vista tiene una lista corta de pasos (tocar «Graph», elegir «History»). Los pasos se corren con el sistema de pruebas de pantalla del propio proyecto, que ya sabe abrirlo (en GitCron, la app de escritorio real, con su `e2e/e2e.config.ts`).
+
+- **Dónde viven:** en el repo, en `.gitcron/capturas.json`, para que se vean, se revisen y viajen con el proyecto.
+  - `runner` dice qué sistema de pruebas y qué configuración usar.
+  - `setup` son los pasos comunes desde la app recién abierta.
+  - `screens` tiene los pasos de cada pantalla, por su id.
+  - `{{repoPath}}` se reemplaza por el repo que se mira.
+  - Los pasos son pocos y declarativos: `click`, `waitFor`, `pause`, `reload` y `evaluate`. Este último es código del propio repo, que corre en las propias pruebas del repo.
+- **Cómo se corre:** con el permiso del proyecto, que ahora nombra también la orden de pruebas, GitCron genera una prueba temporal con las recetas, la corre una vez con el CLI del proyecto, toma las imágenes, las guarda como las de las direcciones (misma tabla, misma clave por archivos) y borra la prueba temporal.
+- **Lo que falta y lo que falla:** una vista sin receta queda con el ícono y el motivo «sin receta». Una receta que falla queda «la receta no llegó», con el paso que falló.
+- **Medido en la auditoría de 05d:**
+  - **La variable `ELECTRON_RUN_AS_NODE`:** las pruebas del proyecto la heredan al abrir la app, y con ella Electron arranca como consola, sin ventana. Las 12 recetas fallaban por «starting an attempt timed out». Ahora el motor corre el CLI con el `node` del sistema y nunca pasa esa variable; además, el lanzador de pruebas de GitCron la borra.
+  - **El manejo de una receta rota usaba una variable fuera de su alcance:** la primera falla cortaba toda la prueba. Hay una prueba que ejecuta el código generado con una receta rota.
+  - **Una prueba de pantalla que abre GitCron no puede probar la captura de vistas de GitCron:** las dos copias de la app terminan recibiendo los clics cruzados. Esto se comprueba corriendo el motor directo sobre el repo, y la interfaz se mira con capturas ya guardadas.
+  - **Archivados y Empezar un cambio de SDD no tienen receta:** su selector está plegado e inactivo hasta abrir otro panel.
+- **Sugerencias de recetas con IA:** quedan para otra tanda. Las recetas de GitCron las escribió el orquestador mirando la app.
+
+### 14. Capturas de fondo y progreso en vivo (Alejandro, 2026-10-19)
+
+Al probarlo, Alejandro vio abrirse otra ventana de GitCron para sacar las fotos de las vistas: «es contraintuitivo». Pidió que todo pase de fondo y que la franja muestre el avance con un círculo o una barra, la foto que se está sacando, y un detalle desplegable.
+
+- **De fondo:** GitCron les pasa `GITCRON_CAPTURE=1` en el entorno a las pruebas del proyecto. Un proyecto puede usarla para no mostrar nada.
+  - GitCron mismo la usa: con esa variable, la ventana principal se abre fuera de la pantalla (`x`/`y` lejos del escritorio, 1440×900), sin pantalla de inicio, sin barra de tareas y sin tomar el foco. Se sigue dibujando, que es lo que necesitan las fotos; con `show: false` Chromium deja de pintar.
+  - No es una rama «si estoy en pruebas»: es un modo del producto, el de GitCron capturándose a sí mismo, y lo pide el permiso del usuario.
+- **Progreso en vivo:**
+  - La prueba temporal escribe `GITCRON_RECIPE_START <id>` y `GITCRON_RECIPE_DONE <id>` al empezar y terminar cada vista. GitCron lee esa salida mientras corre.
+  - Las direcciones avisan una por una.
+  - El canal manda primero el plan (todas las pantallas que se van a capturar) y después el estado de cada una: pendiente, en curso, lista, falló con su motivo, o sin receta.
+  - Cada foto lista se guarda y aparece en su cuadro al momento, sin esperar al final.
+- **La franja:**
+  - Un círculo de progreso con «Capturando “Configuración”… 4 de 12» y un botón para desplegar el detalle, que se puede plegar de nuevo (control completo). El detalle es la lista de pantallas con su estado.
+  - Al terminar, la franja resume («10 listas · 2 sin receta») y el detalle sigue desplegable.
+  - **Detener** sigue estando.
+
+### 15. De la pantalla al archivo: abrir, ver cambios y preguntar (tarea 2.3, 2026-10-20)
+
+En el detalle de una pantalla, cada archivo de la lista ofrece tres acciones, con íconos que aparecen al pasar el mouse o con foco de teclado (siempre visibles en la fila elegida):
+
+- **Preguntar a la IA:** el archivo pasa a ser el tema del chat general (selección `file`, `at: 'worktree'`, con el commit en que se eligió), con la pregunta «¿Qué hace este archivo en esta pantalla?». Si el repo cambió de commit desde que se eligió, el chat ya rechaza la selección vieja.
+- **Ver cambios:** solo si el archivo tiene cambios sin guardar (está en la lista de modificados de Git). Se despliega debajo de la lista con el visor de diferencias que ya usa la app (`DiffViewer`), en modo lectura. Se pliega con el mismo botón.
+- **Abrir:** con el programa que el sistema tiene para ese archivo (`shellOpenItem`). Si falla (por ejemplo, el archivo ya no está), se avisa con el aviso de la app.
+
+Cada fila dice además de dónde salió el vínculo, en palabras: «leído en el código» (`static`), «deducido» (`inferred`) o «puesto a mano» (`manual`). Así la persona y la IA distinguen lo comprobado de lo supuesto.
+
+### 16. Correcciones a mano: archivos y descripción (tarea 1.5, 2026-10-20)
+
+Lo que GitCron deduce del código puede estar mal o incompleto. La persona puede corregirlo, y la corrección no se pierde al volver a leer el código.
+
+- **Dónde vive:** en el repo, en `.gitcron/pantallas.json`, al lado de las recetas de capturas. Viaja con el proyecto, se ve en Git como cualquier cambio y otra persona del equipo ve lo mismo (decisión 3: portable y auditable, fuera de la caché que se regenera).
+  - Guarda `links`: agregar o quitar un archivo de una pantalla, con fecha.
+  - Guarda `descriptions`: el texto y, si se quiere, un nombre propio, por pantalla.
+  - Si queda vacío, el archivo se borra.
+- **Al leer el mapa:**
+  - un archivo **agregado** a mano entra con procedencia `manual`, aunque el código no lo use;
+  - uno **quitado** a mano no aparece, aunque el código lo use;
+  - una corrección cuya pantalla o archivo ya no existen no se reasigna sola: queda **pendiente**, a la vista, para borrarla.
+  - La caché del mapa tiene en cuenta el contenido de ese archivo, así que un cambio hecho a mano en el archivo, o traído con un pull, se ve enseguida.
+- **Descripción a mano:** reemplaza a la sugerida por la IA y se marca «escrita a mano». «Volver a la sugerida» la borra (control completo).
+- **En el detalle:**
+  - «Qué hace» se puede escribir o editar ahí mismo;
+  - la lista de archivos ofrece «Agregar archivo» (con sugerencias de los archivos del repo) y, en cada fila, «Quitar de esta pantalla»;
+  - lo quitado a mano queda en un grupo plegado «Quitados a mano», con «Devolver»;
+  - las correcciones pendientes se avisan arriba del detalle, con «Borrar».
+
+### 17. Lectura del mapa: sin trabajo repetido ni resultados de otra rama (tarea 1.6, 2026-10-21)
+
+Medido sobre GitCron: el mapa de pantallas se arma en unos 100 ms y lee 210 archivos, cada uno una sola vez. Una caché incremental por archivo no se justifica a este tamaño; lo que la tarea pide se resuelve así:
+
+- **Sin trabajo repetido:** dos pedidos del mapa del mismo repo con la misma clave (commit, índice y correcciones) comparten la misma lectura en curso.
+- **Sin resultados de otra rama:** si el commit cambió mientras se armaba el mapa, ese resultado no se guarda en la caché y se arma de nuevo, una vez. En la interfaz, `useScreenMap` ya descarta la respuesta de un repo o pedido anterior.
+- **Exclusiones:** `.gitcron/pantallas.json` acepta `exclude`, una lista de carpetas (por ejemplo `docs/`, `scripts/legacy/`) que nunca se miran para armar pantallas; se suman a las que ya se excluyen siempre (`node_modules`, la salida de compilación y lo de `.gitignore`).
+- **Medida en un proyecto grande:** una prueba arma un repo de mentira con 5000 archivos y 60 pantallas, comprueba que el mapa sale en pocos segundos, que ningún archivo se lee dos veces y que lo excluido no se lee.
+
+### Alternativas
+
+Se descarta construir un subsistema paralelo porque las operaciones y evidencias actuales ya cubren parte del recorrido.
+
+## Risks / Trade-offs
+
+- Heurísticas por framework son parciales: fixtures cubren repos con rutas, vistas por estado, imports dinámicos y no-UI; fallback técnico y asociación manual.
+- Un canvas grande vuelve a esconder lo importante: catálogo/lista y detalle legibles por defecto, grafo técnico a demanda.
+
+## Migration Plan
+
+Entrada nueva sobre Cartografía existente; conservar preferencia de vista técnica y referencias a nodos. Cache versionada regenerable, asociaciones manuales fuera de la cache. Sin migrar código de repos analizados.
+
+## Open Questions
+
+Repositorios sin interfaz muestran módulos/funciones y cobertura no aplicable; no se inventan pantallas. Inspección visual futura requiere diseño de instrumentación y consentimiento separado.

@@ -1,0 +1,24 @@
+/* components/ui/PixelCard.module.css */
+
+.pixelCard {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Sin peso propio (:where): un hijo que se ubica solo (como el ícono de IA, absoluto arriba a la
+   derecha) conserva su posición; los demás quedan encima del lienzo. */
+:where(.pixelCard > :not(.canvas)) {
+  position: relative;
+  z-index: 1;
+}

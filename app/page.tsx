@@ -275,6 +275,8 @@ export default function GitCronPage() {
   const handleTabChange = (tab: string) => {
     setIsTabChanging(true);
     setActiveView('repository');
+    // Elegir otra vista en el menú sale de Cartografía, que ahora está en ese mismo menú.
+    if (useGitStore.getState().getActiveRepo()?.inCartography) updateActiveRepo({ inCartography: false });
     setActiveTab(tab);
     setTimeout(() => {
       setIsTabChanging(false);

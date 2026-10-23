@@ -107,6 +107,14 @@ function parseCartoNodeSelection(input: Record<string, unknown>): ContextSelecti
   return { kind: 'carto-node', nodeId, takenAtHead };
 }
 
+function parseCartoScreenSelection(input: Record<string, unknown>): ContextSelection | null {
+  const screenId = input.screenId;
+  const screenName = input.screenName;
+  const takenAtHead = input.takenAtHead;
+  if (!isBoundedText(screenId) || !isBoundedText(screenName) || !isSha(takenAtHead)) return null;
+  return { kind: 'carto-screen', screenId, screenName, takenAtHead };
+}
+
 /** Valida la forma de lo que manda el renderer. `null` si no es una selección válida. */
 export function parseContextSelection(input: unknown): ContextSelection | null {
   if (!isRecord(input)) return null;
@@ -123,6 +131,8 @@ export function parseContextSelection(input: unknown): ContextSelection | null {
       return parseTemporalIdeaSelection(input);
     case 'carto-node':
       return parseCartoNodeSelection(input);
+    case 'carto-screen':
+      return parseCartoScreenSelection(input);
     default:
       return null;
   }
@@ -295,6 +305,14 @@ async function resolveCartoNodeSelection(
   return ok(ctx, selection);
 }
 
+async function resolveCartoScreenSelection(
+  selection: { kind: 'carto-screen'; screenId: string; screenName: string; takenAtHead: string },
+  ctx: ResolutionContext,
+): Promise<ContextResolution> {
+  if (selection.takenAtHead !== ctx.head.sha) return stale('head-moved', ctx, selection);
+  return ok(ctx, selection);
+}
+
 /** Decide si la referencia se puede usar. */
 export async function resolveContextReference(
   repoPath: unknown,
@@ -327,6 +345,8 @@ export async function resolveContextReference(
       return resolveChangeSelection(selection, ctx);
     case 'carto-node':
       return resolveCartoNodeSelection(selection, ctx);
+    case 'carto-screen':
+      return resolveCartoScreenSelection(selection, ctx);
     default:
       return rejected('invalid-selection');
   }

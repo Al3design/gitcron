@@ -77,6 +77,8 @@ function formatSelectionTarget(
       return t('assist.target.temporal');
     case 'carto-node':
       return t('assist.target.carto', { nodeId: sel.nodeId });
+    case 'carto-screen':
+      return t('assist.target.cartoScreen', { screenName: sel.screenName });
     case 'none':
     default:
       return '';
@@ -713,6 +715,8 @@ export function AssistChat({
   const chatListWidth = useAssistDockStore((s) => s.chatListWidth);
   const setChatListOpen = useAssistDockStore((s) => s.setChatListOpen);
   const setChatListWidth = useAssistDockStore((s) => s.setChatListWidth);
+  const pendingPrompt = useAssistDockStore((s) => s.pendingPrompt);
+  const setPendingPrompt = useAssistDockStore((s) => s.setPendingPrompt);
 
   const { startListResize, onListResizeKey } = useChatListResizer(chatListWidth, setChatListWidth);
 
@@ -720,6 +724,17 @@ export function AssistChat({
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistMessage[]>([]);
   const [question, setQuestion] = useState('');
+
+  // La pregunta que deja otra pantalla (Cartografía) pasa al campo fuera del cuerpo del efecto
+  // (react-hooks/set-state-in-effect), como en use-screen-captures.
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    const prompt = pendingPrompt;
+    void Promise.resolve().then(() => {
+      setQuestion(prompt);
+      setPendingPrompt(null);
+    });
+  }, [pendingPrompt, setPendingPrompt]);
   // El pedido en curso, con el repo y la conversación de donde salió: sólo ahí se muestra.
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<AssistConversationSummary | null>(null);

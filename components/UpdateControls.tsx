@@ -64,7 +64,7 @@ export function UpdateControls({
       )}
       <button
         type="button"
-        onClick={() => window.api.shellOpenExternal('https://github.com/alejandropd-1/gitcron/releases/')}
+        onClick={() => window.api.shellOpenExternal('https://github.com/Al3design/gitcron/releases/')}
         title="GitHub Releases"
         className="w-8 h-8 shrink-0 flex items-center justify-center text-text-secondary hover:text-secondary hover:bg-bg-overlay/70 rounded transition-colors"
       >

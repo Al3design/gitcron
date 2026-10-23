@@ -37,6 +37,7 @@
 // porque `next dev` y el build usan la misma carpeta `.next`.
 
 import { spawnSync } from 'node:child_process';
+import { huellaDelCodigo } from './huella.mjs';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -58,9 +59,20 @@ const ES_PRUEBA = /(^|\/)__tests__\/|\.test\.(ts|tsx)$/;
 /** El catálogo de textos y las pruebas que lo cuidan (ver el filtro de `vitest related`). */
 const ES_CATALOGO_TEXTOS = (f) => f === 'lib/i18n.ts' || f.startsWith('lib/i18n/');
 /** Pruebas que recorren los archivos de estilos por ruta (paleta, sintaxis, escala, tamaños). */
-const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
+const PRUEBAS_ESTILOS = ['lib/__tests__/ui-color-scan.test.ts', 'lib/__tests__/css-syntax-scan.test.ts', 'lib/__tests__/css-parse-scan.test.ts', 'lib/__tests__/visual-scale-scan.test.ts', 'lib/__tests__/target-size.test.ts', 'lib/__tests__/tailwind-token-classes.test.ts'];
 const PRUEBAS_TEXTOS = ['lib/__tests__/i18n-claves-usadas.test.ts', 'components/pipeline/__tests__/pipeline-i18n.test.ts'];
 const base = args.includes('--desde') ? args[args.indexOf('--desde') + 1] : 'HEAD';
+/**
+ * `--tanda <nombre>` (2026-10-17, Ale: volver a verificar por tanda, sin bucles y ahorrando
+ * al auditor): cuenta los intentos y deja el resumen con la huella del código en
+ * tmp/reportes/<tanda>.verificacion.txt. Con la huella el auditor sabe en un segundo
+ * (`--sello <tanda>`) si lo verificado es lo que se entrega, sin volver a correr nada.
+ */
+const tanda = args.includes('--tanda') ? args[args.indexOf('--tanda') + 1] : null;
+const selloPedido = args.includes('--sello') ? args[args.indexOf('--sello') + 1] : null;
+const orquestador = args.includes('--orquestador');
+/** Dos intentos por tanda: el primero y uno después de corregir. El tercero lo pide el orquestador. */
+const MAX_INTENTOS = 2;
 
 const CODIGOS_ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`, 'g');
 
@@ -258,6 +270,9 @@ function trampas() {
       avisos.push(`${archivo}: rama de pruebas en código de producción (NODE_ENV / .mock / vi.fn)`);
     }
     if (/!important/.test(texto)) avisos.push(`${archivo}: !important agregado`);
+    // Medido en carto-05c: con un backdrop-filter en cada cuadro de la grilla, Chromium dejaba
+    // cuadros a medio pintar (sin texto, sin ícono). Las pruebas unitarias no lo ven.
+    if (/backdrop-filter/.test(texto)) avisos.push(`${archivo}: backdrop-filter agregado → en piezas que se repiten (cuadros, filas) Chromium las deja a medio pintar; usar un fondo casi opaco`);
     // Silenciar una regla de lint es tapar un error, no arreglarlo. Medido en
     // la tanda 4d: dos disables para esconder setState en efecto y deps faltantes.
     if (/eslint-disable/.test(texto)) avisos.push(`${archivo}: eslint-disable agregado`);
@@ -416,14 +431,79 @@ function archivosConLogica(tocados) {
   });
 }
 
+/**
+ * Huella del código que se entrega: el diff contra la base más el contenido de los
+ * archivos nuevos. Si cambia un byte después de verificar, la huella cambia.
+ */
+function huella() {
+  return huellaDelCodigo(base);
+}
+
+function rutaSello(nombre) {
+  return `tmp/reportes/${nombre}.verificacion.txt`;
+}
+
+/** `--sello <tanda>`: compara la huella guardada con la del código de ahora. No corre nada más. */
+function comprobarSello(nombre) {
+  const ruta = rutaSello(nombre);
+  if (!existsSync(ruta)) {
+    console.warn(`SELLO AUSENTE: no hay ${ruta} (la tanda no corrió \`pnpm verificar --tanda ${nombre}\`)`);
+    process.exitCode = 1;
+    return;
+  }
+  const { guardada, resultado, intentos } = leerSello(readFileSync(ruta, 'utf8'));
+  const actual = huella();
+  const vigente = guardada === actual;
+  console.warn(vigente
+    ? `SELLO VIGENTE (${actual}) · intento ${intentos} · ${resultado}`
+    : `SELLO VENCIDO: el código cambió después de verificar (guardada ${guardada}, ahora ${actual}) · ${resultado}`);
+  if (!vigente) process.exitCode = 1;
+}
+
+function leerSello(texto) {
+  const campo = (re, siFalta) => texto.match(re)?.[1] ?? siFalta;
+  return {
+    guardada: campo(/^huella: (\w+)/m, '-'),
+    resultado: campo(/^(RESULTADO: .*)$/m, 'RESULTADO: (no figura)'),
+    intentos: campo(/^intento: (.*)$/m, '?'),
+  };
+}
+
+/** Suma un intento y dice si se puede correr. */
+function registrarIntento(nombre) {
+  const ruta = `tmp/reportes/${nombre}.intentos`;
+  const previos = existsSync(ruta) ? Number(readFileSync(ruta, 'utf8').trim()) || 0 : 0;
+  if (previos >= MAX_INTENTOS && !orquestador) {
+    console.warn(`ALTO: \`pnpm verificar --tanda ${nombre}\` ya corrió ${previos} veces. No se repite: anotá en «Dudas» qué falla y entregá (AGENTS.md §4).`);
+    return null;
+  }
+  writeFileSync(ruta, String(previos + 1), 'utf8');
+  return previos + 1;
+}
+
 function main() {
   mkdirSync('tmp', { recursive: true });
+  if (selloPedido) {
+    comprobarSello(selloPedido);
+    return;
+  }
+  let intento = null;
+  if (tanda) {
+    mkdirSync('tmp/reportes', { recursive: true });
+    intento = registrarIntento(tanda);
+    if (intento === null) {
+      process.exitCode = 2;
+      return;
+    }
+  }
   const registro = [];
   const renglones = [];
   const fallidos = [];
   const inicioTotal = Date.now();
   const tocados = archivosTocados();
-  const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f));
+  // Solo los que siguen existiendo: con --desde, un archivo borrado en el cambio hacía fallar eslint
+  // entero («No files matching the pattern»), medido en la verificación final de Cartografía.
+  const tocadosTs = tocados.filter((f) => /\.(ts|tsx)$/.test(f) && existsSync(f));
   // Para `vitest related`: código y estilos que siguen existiendo (un archivo
   // borrado no tiene pruebas que dependan de él).
   const tocadosCodigoTodos = tocados.filter((f) => /\.(ts|tsx|mjs|js|css)$/.test(f) && existsSync(f));
@@ -572,9 +652,14 @@ function main() {
     fallidos.length === 0
       ? `RESULTADO: OK (${total} s)${avisos.length ? ' — con avisos' : ''}`
       : `RESULTADO: FALLÓ ${fallidos.join(', ')} (${total} s) — detalle en tmp/verificacion.log`;
-  console.warn(
-    ['', `VERIFICACIÓN  rama ${git('rev-parse --abbrev-ref HEAD')} · HEAD ${git('rev-parse --short HEAD')} · ${tocados.length} archivos tocados${base === 'HEAD' ? '' : ` desde ${base}`}${tocadosSolo ? ' · modo --tocados' : ''}`, ...renglones, '', resultadoFinal].join('\n'),
-  );
+  const resumen = ['', `VERIFICACIÓN  rama ${git('rev-parse --abbrev-ref HEAD')} · HEAD ${git('rev-parse --short HEAD')} · ${tocados.length} archivos tocados${base === 'HEAD' ? '' : ` desde ${base}`}${tocadosSolo ? ' · modo --tocados' : ''}`, ...renglones, '', resultadoFinal].join('\n');
+  console.warn(resumen);
+  if (tanda) {
+    // La huella se toma al final: es la del código que se verificó.
+    const sello = [`tanda: ${tanda}`, `intento: ${intento} de ${MAX_INTENTOS}`, `huella: ${huella()}`, `base: ${base}`, `fecha: ${new Date().toISOString()}`, resumen].join('\n');
+    writeFileSync(rutaSello(tanda), `${sello}\n`, 'utf8');
+    console.warn(`\nSello: ${rutaSello(tanda)} (pegalo en «Verificación» del reporte)`);
+  }
   process.exitCode = fallidos.length === 0 ? 0 : 1;
 }
 

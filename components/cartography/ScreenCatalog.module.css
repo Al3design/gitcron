@@ -1,0 +1,1733 @@
+/* components/cartography/ScreenCatalog.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.coverageBanner {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.4;
+}
+
+.catalogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.segmentedControl {
+  background: color-mix(in srgb, var(--color-bg-base) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 30%, transparent);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  padding: var(--space-1);
+  margin-left: auto;
+}
+
+.segmentedBtn {
+  position: relative;
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  gap: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.segmentedBtn:hover:not(.segmentedBtnActive) {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.segmentedBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.segmentedBtnActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.grid_large {
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+}
+
+.grid_medium {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+.grid_small {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.grid_minimal {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.grid_minimal .cardSubtitle,
+.grid_minimal .cardFiles {
+  display: none;
+}
+
+/* ── Cuadro compacto en grilla ── */
+.card {
+  position: relative;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-top: 2px solid var(--tag-color, var(--color-border-subtle));
+  border-radius: var(--radius-default);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.card:hover {
+  border-color: var(--tag-color, var(--color-border-subtle));
+}
+
+.card:hover .captureImage,
+.card:hover .thumbnailIcon {
+  transform: scale(1.03);
+}
+
+.captureImage,
+.thumbnailIcon {
+  transition: transform 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .captureImage,
+  .card:hover .thumbnailIcon {
+    transform: none;
+  }
+}
+
+.card:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* El lienzo de píxeles ocupa el cuadro entero; la captura va de borde a borde arriba y el cuerpo lleva relleno. */
+.cardInner {
+  height: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cardMedia {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: var(--color-bg-base);
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.cardThumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: var(--color-bg-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.mediaTag {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  /* Sin backdrop-filter: con muchos cuadros, Chromium dejaba cuadros a medio pintar (auditoría de 05c). */
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--color-border-subtle)) 40%, transparent);
+  pointer-events: none;
+}
+
+.mediaActions {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.thumbnailIcon {
+  color: var(--color-text-secondary);
+}
+
+.aiIconButton {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Sin backdrop-filter: con muchos cuadros, Chromium dejaba cuadros a medio pintar (auditoría de 05c). */
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
+  color: var(--color-ai);
+  border: 1px solid color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aiIconButton::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.aiIconButton:hover {
+  background: color-mix(in srgb, var(--color-bg-base) 90%, transparent);
+  border-color: color-mix(in srgb, var(--color-ai-violet) 50%, transparent);
+}
+
+.aiIconButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Sin fondo propio: el efecto de píxeles se ve detrás (Ale). */
+.cardBody {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: transparent;
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.cardTitle {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardSubtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardFiles {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Detalle + Columna lateral ── */
+.detailLayout {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.detailColumn {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-default);
+  padding: var(--space-4);
+  gap: var(--space-3);
+  overflow-y: auto;
+  /* Lugar reservado para la barra: si aparecía con mucho contenido, la captura se achicaba un
+     poco y se movía (Alejandro, carto-05e). */
+  scrollbar-gutter: stable;
+}
+
+/* El efecto de píxeles encima de la imagen mientras se saca su foto (Alejandro, carto-05e):
+   sobre la captura, debajo del tema y del ícono de IA. */
+/* Con el contenedor delante, gana siempre a `.pixelCard { position: relative }` del efecto. */
+.cardMedia .capturingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  /* Velo sobre la captura: sin él, los cuadraditos se perdían en la imagen. */
+  background: color-mix(in srgb, var(--color-bg-base) 55%, transparent);
+}
+
+/* Detalle en dos columnas (Alejandro, carto-05e): la captura a la izquierda queda a la vista
+   mientras se lee y se baja por lo de la derecha. Angosto, una sola columna. */
+/* La captura y, a su derecha, la composición y «Qué hace». Con la captura agrandada, una sola
+   columna: la información pasa abajo. El movimiento lo anima motion (layout), de ida y de vuelta. */
+.detailBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.detailBodyExpanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 1000px) {
+  .detailBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.detailMediaCol {
+  position: relative;
+  min-width: 0;
+}
+
+/* Solapas de archivos como las de SDD (OpenSpecDashboard .tabs): texto, sin fondo, y una raya
+   del color principal debajo de la elegida. */
+.fileTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  user-select: none;
+}
+
+.fileTabs button {
+  position: relative;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  cursor: pointer;
+}
+
+.fileTabs button:hover {
+  color: var(--color-text-primary);
+}
+
+.fileTabs button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.fileTabs button[aria-selected='true'] {
+  color: var(--color-primary);
+}
+
+.fileTabs button[aria-selected='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--color-primary);
+  content: '';
+}
+
+.captureZoomBtn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-bg-base) 85%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.captureZoomBtn:hover {
+  border-color: var(--color-primary);
+}
+
+.captureZoomBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.detailInfoCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Siempre arriba aunque se baje en el detalle: la X para volver a la grilla no se pierde. */
+.detailHeader {
+  position: sticky;
+  top: calc(-1 * var(--space-4));
+  z-index: 3;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  border-radius: var(--radius-default) var(--radius-default) 0 0;
+  background: var(--color-bg-overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.detailTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.detailActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.aiIconButtonVisible {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-ai-violet) 15%, var(--color-bg-surface));
+  color: var(--color-ai);
+  border: 1px solid color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.aiIconButtonVisible::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.aiIconButtonVisible:hover {
+  background: color-mix(in srgb, var(--color-ai-violet) 25%, var(--color-bg-surface));
+  border-color: color-mix(in srgb, var(--color-ai-violet) 50%, transparent);
+}
+
+.aiIconButtonVisible:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.closeButton {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.closeButton::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+.closeButton:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+.closeButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.detailCapture {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.detailCaptureReason {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  margin: var(--space-1) 0 0 0;
+  line-height: 1.4;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sectionLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+  user-select: none;
+}
+
+.descriptionBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.aiBadgeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.descriptionText {
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.citedSources {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.sourcePill {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  background-color: var(--color-bg-base);
+  color: var(--color-text-secondary);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.askAiHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.detailFilesSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: none;
+  /* Lugar para el botón «Abrir panel de asistencia», que flota abajo al centro. */
+  padding-bottom: var(--space-8);
+}
+
+.segmentedControl {
+  display: inline-flex;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1);
+  gap: var(--space-1);
+  align-self: flex-start;
+  flex-wrap: wrap;
+}
+
+.segmentedBtn {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.segmentedBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.segmentedBtnActive {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font-weight: 500;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-bg-base) 40%, transparent);
+}
+
+/* Altura propia: dentro de una columna que ya se desplaza, `flex: 1` la achicaba a cero y la
+   lista de archivos no se veía (Alejandro, carto-05e). */
+.filesScrollContainer {
+  flex: none;
+  max-height: 22rem;
+  min-height: 6rem;
+  overflow-y: auto;
+  /* Sin fondo ni recuadro, como el contenido de las solapas de SDD (Alejandro, carto-05e). */
+  background: transparent;
+  border: 0;
+  padding: var(--space-2) 0;
+}
+
+.fileList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fileItem {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  gap: var(--space-2);
+  min-height: 38px;
+}
+
+.fileItem:hover {
+  background: var(--color-bg-surface);
+}
+
+.fileItem[aria-current='true'] {
+  background: var(--color-bg-surface);
+}
+
+.fileItemLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fileNameRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fileProvenance {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  line-height: 1.2;
+}
+
+.fileActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  flex-shrink: 0;
+}
+
+.fileItem:hover .fileActions,
+.fileItem:focus-within .fileActions,
+.fileItem[aria-current='true'] .fileActions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.fileActionButton {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.fileActionButton:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.fileActionButton:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.fileActionButtonActive {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.fileAskButton {
+  background: color-mix(in srgb, var(--color-ai-violet) 15%, var(--color-bg-surface));
+  color: var(--color-ai);
+  border-color: color-mix(in srgb, var(--color-ai-violet) 30%, transparent);
+}
+
+.fileAskButton:hover {
+  background: color-mix(in srgb, var(--color-ai-violet) 25%, var(--color-bg-surface));
+  border-color: color-mix(in srgb, var(--color-ai-violet) 50%, transparent);
+}
+
+.diffContainer {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-2);
+}
+
+.diffHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diffTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.diffCloseBtn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.diffCloseBtn:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+.diffCloseBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.diffViewerWrapper {
+  max-height: 24rem;
+  overflow-y: auto;
+  background: transparent;
+}
+
+.diffLoading,
+.diffError {
+  font-size: var(--font-size-xs);
+  padding: var(--space-3);
+  text-align: center;
+}
+
+.diffLoading {
+  color: var(--color-text-secondary);
+}
+
+.diffError {
+  color: var(--color-error);
+}
+
+.fileName {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.fileDir {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sharedBadge {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  flex-shrink: 0;
+}
+
+.unknownFile {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  font-style: italic;
+}
+
+/* ── Columna lateral de tarjetas mínimas ── */
+.sidebarColumn {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebarCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+}
+
+.sidebarCard:hover {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-subtle);
+}
+
+.sidebarCard:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.sidebarThumbnail {
+  position: relative;
+  width: 48px;
+  aspect-ratio: 16 / 10;
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sidebarInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.sidebarName {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarCounts {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loadingState,
+.emptyState,
+.errorState {
+  padding: var(--space-6);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.errorState {
+  color: var(--color-error);
+}
+
+/* ── Capturas reales de pantallas (decisión 11) ── */
+.captureImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.staleBadge {
+  position: absolute;
+  bottom: var(--space-2);
+  left: var(--space-2);
+  z-index: 2;
+  font-size: var(--font-size-2xs);
+  font-weight: 600;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 15%, var(--color-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-0) var(--space-1);
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.captureBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.4;
+  /* Siempre una fila propia, de todo el ancho: con `auto` se angostaba mientras capturaba y los
+     filtros se le subían al lado (auditoría de carto-05e). */
+  flex: 1 1 100%;
+}
+
+.captureBannerContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
+/* ── Avance de las capturas dentro de la franja (decisión 14) ── */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.progressBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.progressRing {
+  transform: rotate(-90deg);
+}
+
+.progressRingTrack,
+.progressRingArc {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.progressRingTrack {
+  stroke: var(--color-border-subtle);
+}
+
+.progressRingArc {
+  stroke: var(--color-primary);
+  stroke-linecap: round;
+  transition: stroke-dasharray 300ms ease;
+}
+
+.progressFailCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-warning);
+  color: var(--color-warning);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.progressToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-1);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.progressToggle:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.progressToggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.progressChevron {
+  transition: transform 160ms ease;
+}
+
+.progressChevronOpen {
+  transform: rotate(180deg);
+}
+
+.progressList {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+  animation: progressListOpen 200ms ease-out;
+}
+
+@keyframes progressListOpen {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 240px;
+    opacity: 1;
+  }
+}
+
+.progressItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.progressItemName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressItemDetail {
+  margin-left: auto;
+  padding-left: var(--space-2);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressIcon {
+  flex-shrink: 0;
+}
+
+.progressIconMuted {
+  color: var(--color-text-secondary);
+}
+
+.progressIconDone {
+  color: var(--color-git-add);
+}
+
+.progressIconFailed {
+  color: var(--color-warning);
+}
+
+.progressSpin {
+  color: var(--color-primary);
+  animation: progressSpin 1s linear infinite;
+}
+
+@keyframes progressSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressList,
+  .progressSpin {
+    animation: none;
+  }
+
+  .progressRingArc,
+  .progressChevron {
+    transition: none;
+  }
+}
+
+.captureBannerText {
+  color: var(--color-text-primary);
+}
+
+.captureBannerViewsLater {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+}
+
+.captureBannerError {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+}
+
+/* Arriba a la derecha: con el detalle desplegado, los botones quedaban en el medio de la franja. */
+.captureBannerActions {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.captureActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 60%, transparent);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  flex-shrink: 0;
+}
+
+.captureActionBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-border-subtle) 40%, transparent);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.captureActionBtn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.captureActionBtnPrimary {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.captureActionBtnPrimary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  color: var(--color-text-primary);
+}
+
+/* ── Temas con color y variables semánticas (carto-05c) ── */
+.tag_graphics { --tag-color: var(--color-ai-blue); }
+.tag_data { --tag-color: var(--color-carto-role-database); }
+.tag_ai { --tag-color: var(--color-ai-violet); }
+.tag_git { --tag-color: var(--color-git-add); }
+.tag_settings { --tag-color: var(--color-carto-role-config); }
+.tag_content { --tag-color: var(--color-ai-teal); }
+.tag_accounts { --tag-color: var(--color-warning); }
+.tag_payments { --tag-color: var(--color-ai-rose); }
+.tag_general { --tag-color: var(--color-text-secondary); }
+
+.tagDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--tag-color, var(--color-text-secondary));
+  flex-shrink: 0;
+}
+
+.cardTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-2xs);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--tag-color, var(--color-text-secondary)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color, var(--color-text-secondary)) 30%, transparent);
+  line-height: 1.3;
+}
+
+.tagChipMore {
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-secondary);
+  padding: var(--space-0) var(--space-1);
+}
+
+/* ── Barra de composición ── */
+.compositionBar {
+  display: flex;
+  height: 6px;
+  width: 100%;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-border-subtle) 40%, transparent);
+}
+
+.barSegment {
+  height: 100%;
+}
+
+.barSegment_ui {
+  background-color: var(--color-carto-role-ui);
+}
+
+.barSegment_styles {
+  background-color: var(--color-carto-role-styles);
+}
+
+.barSegment_database {
+  background-color: var(--color-carto-role-database);
+}
+
+.barSegment_logic {
+  background-color: var(--color-carto-role-logic);
+}
+
+.barSegment_config {
+  background-color: var(--color-carto-role-config);
+}
+
+.barSegment_other {
+  background-color: var(--color-carto-role-other);
+}
+
+.cardStats {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ── Filtros por tema y agrupado ── */
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 1.75rem;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.filterChip:hover:not(.filterChipActive) {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
+}
+
+.filterChip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.filterChipActive {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.headerControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.groupedContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.groupSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.groupCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+/* ── Detalle: chips de tema y barra con leyenda ── */
+.detailTagsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.detailComposition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.compositionLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legendDot {
+  width: 8px;
+
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.manualTextBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.manualTextBtn:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.manualTextBtn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.descriptionEditBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.descriptionTextarea {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.descriptionTextarea:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.descriptionNameInput {
+  width: 100%;
+  height: 32px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+
+.descriptionNameInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.descriptionEditActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.manualDescRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-1);
+}
+
+.byHandBadge {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.manualDescActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pendingNotice {
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-surface));
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pendingTitle {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-warning);
+  margin: 0;
+}
+
+.pendingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pendingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.pendingDeleteBtn {
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.pendingDeleteBtn:hover {
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+}
+
+.filesHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.addFileForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.addFileInputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.addFileInput {
+  flex: 1;
+  height: 32px;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+
+.addFileInput:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-primary);
+}
+
+.addFileError {
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+}
+
+.removedSection {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.removedHeaderBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: none;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  text-align: left;
+}
+
+.removedHeaderBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.removedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.removedItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  /* Sin fondo propio, como la lista de archivos (Alejandro, carto-05e). */
+  background: transparent;
+  font-size: var(--font-size-xs);
+}
+
+.restoreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.restoreBtn:hover {
+  background: var(--color-bg-base);
+  border-color: var(--color-primary);
+}

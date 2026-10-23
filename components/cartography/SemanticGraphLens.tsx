@@ -25,6 +25,8 @@ import {
 } from '@/lib/carto-roles';
 import type { CartoGraph, CartoGraphStatus, CartoNode } from '@/lib/carto-types';
 import { useGitStore } from '@/lib/git-store';
+import { cn } from '@/lib/utils';
+import styles from './SemanticGraphLens.module.css';
 
 const MAX_FLOW_EDGES = 160;
 const MAX_OVERVIEW_NODES_PER_ROLE = 8;
@@ -91,6 +93,13 @@ type GraphModel = {
   groupModel: CartoGroupModel;
 };
 
+type GraphFetchState = {
+  key: string;
+  graph: CartoGraph | null;
+  error: string | null;
+  loading: boolean;
+};
+
 const nodeTypes: NodeTypes = {
   cartoSemanticFile: SemanticFileNode,
   cartoSemanticGroup: SemanticGroupNode,
@@ -104,10 +113,29 @@ export function SemanticGraphLens({
   onSelectNode,
 }: SemanticGraphLensProps) {
   const t = useT();
-  const [graph, setGraph] = useState<CartoGraph | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [manualPositions, setManualPositions] = useState<Map<string, { x: number; y: number }>>(() => new Map());
+
+  const fetchKey = `${repoPath ?? ''}:${refreshKey}:${status?.state ?? ''}`;
+  const shouldFetch = Boolean(repoPath && status?.state === 'ready');
+
+  const [fetchState, setFetchState] = useState<GraphFetchState>({
+    key: '',
+    graph: null,
+    error: null,
+    loading: false,
+  });
+
+  const resetKey = `${repoPath ?? ''}:${refreshKey}`;
+  const emptyPositions = useMemo(() => new Map<string, { x: number; y: number }>(), []);
+  const [manualPositionsEntry, setManualPositionsEntry] = useState<{
+    key: string;
+    positions: Map<string, { x: number; y: number }>;
+  }>({
+    key: resetKey,
+    positions: new Map(),
+  });
+
+  const manualPositions = manualPositionsEntry.key === resetKey ? manualPositionsEntry.positions : emptyPositions;
+
   const expandedRoles = useGitStore((s) => {
     const repo = s.getActiveRepo();
     return repo?.path === repoPath ? repo.cartographyExpandedRoles : [];
@@ -115,56 +143,42 @@ export function SemanticGraphLens({
   const updateRepoByPath = useGitStore((s) => s.updateRepoByPath);
 
   useEffect(() => {
-    if (!repoPath) {
-      setGraph(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    if (status?.state === 'error') {
-      setGraph(null);
-      setError(status.error ?? t('cartography.graph.error'));
-      setLoading(false);
-      return;
-    }
-    if (status?.state !== 'ready') {
-      setGraph(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
+    if (!repoPath || status?.state !== 'ready') return;
 
     let active = true;
-    setLoading(true);
-    setError(null);
     void window.api.cartoGraph
       .snapshot(repoPath)
       .then((res) => {
         if (!active) return;
         if (res.success && res.data) {
-          setGraph(res.data);
+          setFetchState({ key: fetchKey, graph: res.data, error: null, loading: false });
         } else {
-          setGraph(null);
-          setError(res.error ?? t('cartography.graph.error'));
+          setFetchState({ key: fetchKey, graph: null, error: res.error ?? t('cartography.graph.error'), loading: false });
         }
       })
       .catch((err) => {
         if (!active) return;
-        setGraph(null);
-        setError(err instanceof Error ? err.message : t('cartography.graph.error'));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        setFetchState({
+          key: fetchKey,
+          graph: null,
+          error: err instanceof Error ? err.message : t('cartography.graph.error'),
+          loading: false,
+        });
       });
 
     return () => {
       active = false;
     };
-  }, [repoPath, refreshKey, status?.state, status?.error, t]);
+  }, [fetchKey, repoPath, status?.state, t]);
 
-  useEffect(() => {
-    setManualPositions(new Map());
-  }, [repoPath, refreshKey]);
+  const graph = shouldFetch && fetchState.key === fetchKey ? fetchState.graph : null;
+  const loading = shouldFetch ? (fetchState.key === fetchKey ? fetchState.loading : true) : false;
+  const error =
+    status?.state === 'error'
+      ? (status.error ?? t('cartography.graph.error'))
+      : shouldFetch && fetchState.key === fetchKey
+        ? fetchState.error
+        : null;
 
   const expandedRoleSet = useMemo(() => new Set<CartoRoleId>(expandedRoles), [expandedRoles]);
   const model = useMemo(() => buildGraphModel(graph, t), [graph, t]);
@@ -183,12 +197,14 @@ export function SemanticGraphLens({
     () => buildFlow(graph, model, expandedRoleSet, manualPositions, selectedNodeId, toggleGroup, t),
     [graph, model, expandedRoleSet, manualPositions, selectedNodeId, toggleGroup, t],
   );
+
   const handleNodesChange = useCallback(
     (changes: NodeChange<SemanticFlowNode>[]) => {
-      setManualPositions((current) => {
+      setManualPositionsEntry((current) => {
+        const base = current.key === resetKey ? current.positions : new Map<string, { x: number; y: number }>();
         let next: Map<string, { x: number; y: number }> | null = null;
         const ensureNext = () => {
-          next ??= new Map(current);
+          next ??= new Map(base);
           return next;
         };
 
@@ -201,10 +217,11 @@ export function SemanticGraphLens({
           }
         }
 
-        return next ?? current;
+        if (!next) return current;
+        return { key: resetKey, positions: next };
       });
     },
-    [],
+    [resetKey],
   );
 
   if (!repoPath) {
@@ -213,7 +230,7 @@ export function SemanticGraphLens({
   if (status?.state === 'indexing' || status?.state === 'idle') {
     return (
       <GraphHint
-        icon={<Loader2 size={18} className="animate-spin" />}
+        icon={<Loader2 size={18} className={styles.spinner} />}
         text={t('cartography.graph.indexing')}
       />
     );
@@ -230,7 +247,7 @@ export function SemanticGraphLens({
   if (loading) {
     return (
       <GraphHint
-        icon={<Loader2 size={18} className="animate-spin" />}
+        icon={<Loader2 size={18} className={styles.spinner} />}
         text={t('cartography.semantic.loading')}
       />
     );
@@ -243,7 +260,7 @@ export function SemanticGraphLens({
   }
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden bg-carto-canvas">
+    <div className={styles.canvasRoot}>
       <ReactFlow<SemanticFlowNode, FlowEdge>
         className="carto-semantic-flow"
         nodes={flow.nodes}
@@ -269,10 +286,10 @@ export function SemanticGraphLens({
         <Controls className="carto-semantic-controls" showInteractive={false} />
       </ReactFlow>
 
-      <div className="pointer-events-none absolute left-3 top-3 flex max-w-[min(60rem,calc(100%-1.5rem))] flex-wrap items-center gap-2">
-        <div className="pointer-events-auto flex items-center gap-2 rounded border border-carto-accent/25 bg-carto-canvas/90 px-2.5 py-1.5 text-[length:var(--font-size-xs)] text-carto-text-muted shadow-lg shadow-black/20">
-          <Layers3 size={13} className="text-carto-accent" />
-          <span className="font-mono">
+      <div className={styles.hudOverlay}>
+        <div className={styles.hudPill}>
+          <Layers3 size={13} className={styles.hudPillIcon} />
+          <span className={styles.hudPillText}>
             {t('cartography.semantic.groupStats', {
               groups: model.groups.length,
               nodes: flow.nodes.filter((node) => node.data.kind === 'file').length,
@@ -280,13 +297,13 @@ export function SemanticGraphLens({
             })}
           </span>
         </div>
-        <div className="pointer-events-auto rounded border border-carto-grid bg-carto-canvas/90 px-2.5 py-1.5 text-[length:var(--font-size-2xs)] font-semibold text-carto-text-muted">
+        <div className={styles.hudPillSecondary}>
           {expandedRoles.length > 0
             ? t('cartography.semantic.expandedGroups', { count: expandedRoles.length })
             : t('cartography.semantic.groupOverview')}
         </div>
         {graph.truncated || flow.edges.length >= MAX_FLOW_EDGES ? (
-          <div className="pointer-events-auto rounded border border-carto-accent/25 bg-carto-accent/10 px-2.5 py-1.5 text-[length:var(--font-size-2xs)] font-semibold text-carto-accent">
+          <div className={styles.hudPillWarning}>
             {t('cartography.semantic.limited')}
           </div>
         ) : null}
@@ -355,7 +372,7 @@ function buildFlow(
   const visibleFileIds = new Set<string>();
   const groupPositions = buildGroupPositions(model.groups, expandedRoles);
 
-  model.groups.forEach((group, index) => {
+  model.groups.forEach((group) => {
     const position = groupPositions.get(group.role.id) ?? { x: 0, y: 0 };
     const expanded = expandedRoles.has(group.role.id);
     const visibleGroupNodes = expanded ? group.nodes.slice(0, MAX_OVERVIEW_NODES_PER_ROLE) : [];
@@ -538,44 +555,44 @@ function expandedFilePosition(group: { x: number; y: number }, index: number): {
 function SemanticGroupNode({ data }: NodeProps<SemanticGroupFlowNode>) {
   return (
     <div
-      className={`carto-semantic-group ${data.expanded ? 'is-expanded' : ''}`}
+      className={cn('carto-semantic-group', styles.groupCard, data.expanded && 'is-expanded')}
       style={{ '--carto-role-color': data.role.color } as CSSProperties}
       title={data.actionLabel}
       data-testid={`carto-group-${data.role.id}`}
     >
       <Handle type="target" position={Position.Left} isConnectable={false} />
-      <div className="flex min-w-0 items-start gap-2.5">
+      <div className={styles.groupHeader}>
         <span className="carto-semantic-node__icon">
           <Layers3 size={15} />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className="truncate text-sm font-bold text-carto-text">{data.roleLabel}</p>
+        <div className={styles.groupTitleWrapper}>
+          <div className={styles.groupTitleRow}>
+            <p className={styles.groupTitle}>{data.roleLabel}</p>
             <span className="carto-semantic-node__count">{data.count}</span>
           </div>
-          <p className="mt-1 line-clamp-2 text-[length:var(--font-size-xs)] leading-snug text-carto-text-muted">
+          <p className={styles.groupDescription}>
             {data.summary ?? data.roleDescription}
           </p>
         </div>
       </div>
 
-      <div className="mt-3 border-t border-carto-grid/70 pt-2">
-        <p className="mb-1.5 text-[length:var(--font-size-2xs)] font-bold uppercase text-carto-text-muted">{data.keyFilesLabel}</p>
-        <ul className="space-y-1">
+      <div className={styles.groupKeyFiles}>
+        <p className={styles.keyFilesTitle}>{data.keyFilesLabel}</p>
+        <ul className={styles.keyFilesList}>
           {data.keyFiles.slice(0, 3).map((file) => (
-            <li key={file.node.id} className="flex min-w-0 items-center gap-1.5 text-[length:var(--font-size-xs)]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: data.role.color }} />
-              <span className="min-w-0 flex-1 truncate font-mono text-carto-text">{file.node.filePath}</span>
-              <span className="shrink-0 font-mono text-carto-text-muted">{file.degree}</span>
+            <li key={file.node.id} className={styles.keyFileItem}>
+              <span className={styles.keyFileDot} style={{ background: data.role.color }} />
+              <span className={styles.keyFilePath}>{file.node.filePath}</span>
+              <span className={styles.keyFileDegree}>{file.degree}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 text-[length:var(--font-size-2xs)] font-bold uppercase text-carto-accent">
+      <div className={styles.groupFooter}>
         <button
           type="button"
-          className="nodrag nopan flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-carto-accent/10 hover:text-carto-text focus:outline-none focus:ring-1 focus:ring-carto-accent/55"
+          className={cn('nodrag nopan', styles.expandButton)}
           title={data.actionLabel}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
@@ -587,7 +604,7 @@ function SemanticGroupNode({ data }: NodeProps<SemanticGroupFlowNode>) {
           {data.actionLabel}
         </button>
         {data.expanded && data.hiddenCount > 0 ? (
-          <span className="nodrag nopan font-mono text-carto-text-muted/80" title={data.moreLabel}>
+          <span className={cn('nodrag nopan', styles.hiddenCount)} title={data.moreLabel}>
             {data.moreLabel}
           </span>
         ) : null}
@@ -604,23 +621,23 @@ function SemanticFileNode({ data, selected }: NodeProps<SemanticFileFlowNode>) {
 
   return (
     <div
-      className={`carto-semantic-node ${selected ? 'is-selected' : ''}`}
+      className={cn('carto-semantic-node', styles.fileCard, selected && 'is-selected')}
       style={{ '--carto-role-color': data.role.color } as CSSProperties}
       title={node.filePath}
       data-testid={`carto-file-${node.id}`}
     >
       <Handle type="target" position={Position.Left} isConnectable={false} />
-      <div className="flex min-w-0 items-center gap-2">
+      <div className={styles.fileHeader}>
         <span className="carto-semantic-node__icon">
           <FileCode size={14} />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-mono text-[length:var(--font-size-xs)] font-bold text-carto-text">{file}</p>
-          <p className="truncate font-mono text-[length:var(--font-size-xs)] text-carto-text-muted">{dir}</p>
+        <div className={styles.fileTitleWrapper}>
+          <p className={styles.fileName}>{file}</p>
+          <p className={styles.fileDir}>{dir}</p>
         </div>
         <span className="carto-semantic-node__count">{data.relationCount}</span>
       </div>
-      <p className="mt-1 truncate text-[length:var(--font-size-2xs)] font-bold uppercase text-carto-text-muted">
+      <p className={styles.fileRole}>
         {data.roleLabel}
       </p>
       <Handle type="source" position={Position.Right} isConnectable={false} />
@@ -640,14 +657,10 @@ function GraphHint({
   tone?: 'muted' | 'error';
 }) {
   return (
-    <div
-      className={`flex h-full min-h-[14rem] flex-col items-center justify-center gap-2 px-6 text-center text-xs ${
-        tone === 'error' ? 'text-error' : 'text-carto-text-muted'
-      }`}
-    >
+    <div className={cn(styles.hintContainer, tone === 'error' && styles.hintError)}>
       {icon}
-      <p className="max-w-md leading-relaxed">{text}</p>
-      {detail && <p className="max-w-md leading-relaxed text-carto-text-muted/70">{detail}</p>}
+      <p className={styles.hintMessage}>{text}</p>
+      {detail && <p className={styles.hintDetail}>{detail}</p>}
     </div>
   );
 }

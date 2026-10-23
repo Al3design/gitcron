@@ -49,7 +49,7 @@ export const LEGACY_PROVIDER_BLOCKS: Readonly<Record<'lmstudio' | 'openrouter' |
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: '{env:OPENROUTER_API_KEY}',
       // La atribución que mandaban los adaptadores de antes (opcional en OpenRouter).
-      headers: { 'HTTP-Referer': 'https://github.com/alejandropd-1/gitcron', 'X-Title': 'GitCron' },
+      headers: { 'HTTP-Referer': 'https://github.com/Al3design/gitcron', 'X-Title': 'GitCron' },
     },
   },
   anthropic: {

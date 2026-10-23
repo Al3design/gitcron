@@ -12,7 +12,7 @@ El orquestador ya leyó el código. El prompt (pegado, o la ruta `tmp/prompts/<t
 2. **Leer:** lista cerrada de archivos, con los rangos de líneas. Si la tanda es para una ejecutora de ventana grande, el prompt puede declararla **abierta** y nombrar las carpetas o archivos modelo que se pueden leer enteros; aun así, nada fuera de lo nombrado.
 3. **Qué se hace:** el objetivo, y las firmas, tipos, imports y el esqueleto ya resueltos, con las reglas de negocio decididas.
 4. **Criterios de aceptación.**
-5. **Comprobación:** por omisión, ninguna (ver punto 4). Solo si el prompt la pide explícitamente, el comando exacto. Las capturas de pantalla las saca el orquestador, no la ejecutora.
+5. **Comprobación:** siempre `pnpm verificar --tanda <tanda>` (ver punto 4). Si el prompt trae «Captura», también `pnpm captura <tanda>`, con la prueba que ya dejó escrita el orquestador.
 6. **Cierre:** la ruta del reporte, si se marca la tarea en `tasks.md` y si hay revisión.
 
 Si a tu prompt le falta una de estas partes y no podés seguir sin ella, no la inventes: pará, anotalo en «Dudas» y marcá la tanda INCOMPLETA.
@@ -30,14 +30,19 @@ Tu ventana es chica (o el prompt te la trata como chica). Leé **solo** los arch
 - No agregues dependencias salvo que el prompt lo pida.
 - Si algo no sale en dos intentos, pará y documentalo (qué intentaste y qué error dio) en vez de probar variantes.
 
-## 4. Sin verificaciones, salvo que el prompt las pida
+## 4. Verificar y capturar: una vez, con tope
 
-Desde el 2026-10-16 (decisión de Alejandro), la ejecutora **no corre verificaciones**: ni `pnpm verificar`, ni pruebas, ni tsc, ni eslint, ni e2e, ni capturas. Se verifica una vez, al final del cambio de OpenSpec, cuando se terminaron todas sus tareas. Hasta ese día cada tanda corría `pnpm verificar` y, ante un fallo, lo repetía entero: vueltas de 10 minutos con la máquina cargada, que gastaban la ventana y los tokens de la ejecutora.
+Cada tanda se entrega verificada (Alejandro, 2026-10-17). Entre el 2026-10-16 y el 2026-10-17 las tandas se entregaron sin verificar, y la auditoría encontró en cada una pruebas que no compilaban, errores de lint y fallas que antes atajaba el script. Antes del 2026-10-16 el problema era el contrario: la ejecutora repetía la verificación entera ante cada fallo, en vueltas de 10 minutos. Por eso ahora hay tope.
 
-- Escribí el código y las pruebas que pida el prompt, sin correrlas.
-- Si el prompt pide explícitamente una verificación, corré **solo** ese comando, una vez. Si falla, no lo repitas: anotá el error en «Dudas» y entregá.
-- Nunca `pnpm verificar --completa` ni `--todo`: son del orquestador.
-- Lo que vale igual sin sensor: no aflojar protecciones, no tragar errores, no `eslint-disable`, no `.skip`/`.only`, estilos en módulos CSS con tokens (sin `className="…"` ni `style={{…}}` nuevos, salvo un valor que se calcula al dibujar), y nada de ramas «si estoy en pruebas». Lo que no puedas cumplir, en «Dudas».
+- **Al terminar el código y las pruebas:** `pnpm verificar --tanda <tanda>`. Corre solo lo tocado (pruebas relacionadas, tsc, eslint, openspec, Fallow, trampas), en uno o dos minutos, y deja el resumen con la huella del código en `tmp/reportes/<tanda>.verificacion.txt`.
+- **Si da `XX`:** corregí lo que dice y corrélo **una vez más**. El script corta solo en el tercer intento («ALTO»). Si sigue fallando, no pruebes variantes: anotá en «Dudas» qué falla, qué intentaste y la salida, y entregá.
+- **Cuidá el sello:** no toques ningún archivo después de la última verificación. Tampoco después de un «ALTO»: si en el segundo intento algo falló, lo dejás como está y lo describís en «Dudas». En carto-05c y carto-05d la ejecutora siguió corrigiendo después del tope, sin verificar, y el auditor tuvo que rehacer la revisión entera. El auditor compara la huella con el código entregado (`--sello`), y si no coincide vuelve a revisar todo.
+- **Si el prompt trae «Captura»:** después de verificar, `pnpm captura <tanda>`, una sola vez. Corre la prueba de pantalla que escribió el orquestador (`tmp/prompts/<tanda>.captura.e2e.ts`) y deja las imágenes y un manifiesto en `tmp/reportes/<tanda>/capturas/`. No escribas otra prueba de captura, no edites la del orquestador y no armes imágenes a mano. Si falla, anotalo en «Dudas» con la ruta de `screen.txt` que da el script.
+- **Nunca** `pnpm verificar --completa` ni `--todo`: son del orquestador.
+- Cada aviso de «trampas» se corrige o se explica en «Dudas».
+- Una prueba nueva va en una carpeta que Vitest corre: mirá el `include` de `vitest.config.ts`; si la carpeta no está, poné la prueba en una que esté (por ejemplo `electron/__tests__/`). Medido en carto-02: las 21 pruebas nuevas quedaron en `electron/carto/` y `electron/ipc/`, que Vitest no mira, y nadie se enteraba.
+- Un comentario de bloque (`/* … */` o `/** … */`) no puede contener `*/`: un patrón como `app/**/page` cierra el comentario en el medio y el archivo deja de compilar (pasó en carto-02). Escribilo de otra forma (`app/<carpetas>/page`).
+- Lo que el script no ve y vale igual: no aflojar protecciones, no tragar errores, no `eslint-disable`, no `.skip`/`.only`, estilos en módulos CSS con tokens (sin `className="…"` ni `style={{…}}` nuevos, salvo un valor que se calcula al dibujar), y nada de ramas «si estoy en pruebas». Lo que no puedas cumplir, en «Dudas».
 
 ## 5. Reporte
 
@@ -53,7 +58,7 @@ uno por línea, con qué cambió
 ✓/✗ por cada criterio de aceptación y por cada punto del cierre del prompt
 
 ## Verificación
-solo si el prompt pidió una verificación: su salida tal cual; si no, «sin verificación (no la pidió el prompt)»
+el contenido de tmp/reportes/<tanda>.verificacion.txt tal cual (el último intento) y, si hubo captura, la última parte de lo que imprimió `pnpm captura`
 
 ## Dudas
 dudas y decisiones; nada más

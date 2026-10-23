@@ -19,7 +19,7 @@ const openRouter = (apiKey: string): TextClientConfig => ({
   baseUrl: 'https://openrouter.ai/api/v1',
   apiKey,
   providerLabel: 'OpenRouter',
-  headers: { 'HTTP-Referer': 'https://github.com/alejandropd-1/gitcron', 'X-Title': 'GitCron' },
+  headers: { 'HTTP-Referer': 'https://github.com/Al3design/gitcron', 'X-Title': 'GitCron' },
   friendlyConnError: 'OpenRouter no responde en https://openrouter.ai/api/v1.',
 });
 const unsloth = (o: { apiKey: string; id: string; secret: string }): TextClientConfig => ({
@@ -110,7 +110,7 @@ describe('Cliente unificado de texto (Grupo 9b)', () => {
       expect(calledUrl).toBe('https://openrouter.ai/api/v1/chat/completions');
       expect(calledInit.headers['content-type']).toBe('application/json');
       expect(calledInit.headers.authorization).toBe('Bearer sk-or-v1-secret-token-12345');
-      expect(calledInit.headers['HTTP-Referer']).toBe('https://github.com/alejandropd-1/gitcron');
+      expect(calledInit.headers['HTTP-Referer']).toBe('https://github.com/Al3design/gitcron');
       expect(calledInit.headers['X-Title']).toBe('GitCron');
 
       const body = JSON.parse(calledInit.body);

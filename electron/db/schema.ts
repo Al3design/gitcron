@@ -3,8 +3,6 @@ export interface Migration {
   statements: string[];
 }
 
-export const LATEST_SCHEMA_VERSION = 10;
-
 export const PREDICTION_RUN_TABLE = 'prediction_run';
 export const SPECULATIVE_BRANCH_TABLE = 'speculative_branch';
 export const BRANCH_DECISION_TABLE = 'branch_decision';
@@ -340,4 +338,27 @@ export const MIGRATIONS: Migration[] = [
       'ALTER TABLE assist_conversation ADD COLUMN archived_at TEXT;',
     ],
   },
+  {
+    // Capturas reales de pantallas de Cartografía (tarea 2.7).
+    version: 11,
+    statements: [
+      `CREATE TABLE carto_screen_capture (
+  repo_path   TEXT NOT NULL,
+  screen_id   TEXT NOT NULL,
+  content_key TEXT NOT NULL,
+  image       BLOB NOT NULL,
+  captured_at TEXT NOT NULL,
+  PRIMARY KEY (repo_path, screen_id)
+) STRICT;`,
+      `CREATE TABLE carto_capture_consent (
+  repo_path  TEXT PRIMARY KEY,
+  command    TEXT NOT NULL,
+  granted_at TEXT NOT NULL
+) STRICT;`,
+    ],
+  },
 ];
+
+// Sale de la lista: escrita a mano quedó en 10 cuando la migración 11 ya existía (capturas de
+// Cartografía), y las pruebas de la base fallaron en la verificación final.
+export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

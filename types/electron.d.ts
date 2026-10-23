@@ -30,6 +30,7 @@ import type {
   CartoAskResult,
   CartoPanoramaResult,
 } from './carto-ai';
+import type { ScreenMap, ScreenCaptureState, ScreenCaptureRunResult, CaptureProgressEvent } from './screen-map';
 import type {
   AssistConversationDetail,
   AssistConversationSummary,
@@ -525,6 +526,33 @@ interface ElectronAPI {
     onProgress(cb: (payload: { repoPath: string; status: CartoGraphStatus }) => void): () => void;
     /** El watch re-sincronizó el índice del repo (relaciones frescas). Devuelve un disposer. */
     onUpdated(cb: (payload: { repoPath: string }) => void): () => void;
+  };
+  cartoScreens: {
+    get(repoPath: string): Promise<GitResult<ScreenMap>>;
+    describe(args: {
+      repoPath: string;
+      screenId: string;
+      language: 'es' | 'en' | 'zh';
+      cacheOnly?: boolean;
+    }): Promise<GitResult<{ status: 'ok'; description: ScreenDescription } | { status: 'unavailable'; message: string } | null>>;
+    manual(args: {
+      repoPath: string;
+      op:
+        | { type: 'link'; screenId: string; path: string; action: 'add' | 'remove' }
+        | { type: 'unlink'; screenId: string; path: string }
+        | { type: 'describe'; screenId: string; text: string; name?: string }
+        | { type: 'undescribe'; screenId: string };
+    }): Promise<GitResult<ScreenMap>>;
+    files(repoPath: string): Promise<GitResult<string[]>>;
+  };
+  cartoCaptures: {
+    get(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
+    consent(args: { repoPath: string; command: string }): Promise<GitResult<ScreenCaptureState>>;
+    revoke(repoPath: string): Promise<GitResult<ScreenCaptureState>>;
+    /** `force`: vuelve a sacar todas, aunque estén al día («Actualizar capturas»). */
+    run(repoPath: string, options?: { force?: boolean }): Promise<GitResult<ScreenCaptureRunResult>>;
+    cancel(repoPath: string): Promise<GitResult<boolean>>;
+    onProgress(cb: (payload: CaptureProgressEvent) => void): () => void;
   };
   /**
    * Cartografía Fase 4: capa de proveedor de IA (local LM Studio / online).

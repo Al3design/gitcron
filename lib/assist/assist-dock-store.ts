@@ -33,6 +33,8 @@ export interface AssistDockState {
   setSlot: (el: HTMLElement | null) => void;
   rememberConversation: (repoPath: string, conversationId: string) => void;
   setTemporalIdea: (idea: TemporalIdeaRef | null) => void;
+  pendingPrompt: string | null;
+  setPendingPrompt: (prompt: string | null) => void;
 }
 
 const DEFAULT_TAB: AssistDockTab = { id: 'chat', labelKey: 'assist.tabChat' };
@@ -182,4 +184,7 @@ export const useAssistDockStore = create<AssistDockState>((set) => ({
 
   temporalIdea: null,
   setTemporalIdea: (temporalIdea) => set({ temporalIdea }),
+
+  pendingPrompt: null,
+  setPendingPrompt: (pendingPrompt) => set({ pendingPrompt }),
 }));

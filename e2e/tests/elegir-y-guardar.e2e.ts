@@ -29,8 +29,8 @@ test('Elegir y guardar: seleccionar un modelo y verificar que la fila cerrada lo
   const modeloElegido = await selectModelo.inputValue();
   expect(modeloElegido.length).toBeGreaterThan(0);
 
-  // Guardar la elección
-  await picker.getByRole('button', /Guardar/i).click();
+  // Guardar la elección (el botón se llama «Usar este modelo» desde retomar 4.1)
+  await picker.getByRole('button', /Usar este modelo|Guardar/i).click();
 
   // El selector se cierra
   await expect(picker).toBeHidden();

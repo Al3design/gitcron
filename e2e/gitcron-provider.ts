@@ -22,6 +22,12 @@ const CONFIG_DIR = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta
 const GITCRON_DIR = path.resolve(CONFIG_DIR, '..');
 const RENDERER = process.env.GITCRON_RENDERER ?? 'http://localhost:3001';
 
+function withoutRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const copy = { ...env };
+  delete copy.ELECTRON_RUN_AS_NODE;
+  return copy;
+}
+
 interface Running {
   child: ChildProcess;
   profile: string;
@@ -176,7 +182,9 @@ export function gitcronProvider(options: { fixture?: (homeDir: string) => void; 
       const port = await freePort();
       const child = spawn(ELECTRON, ['.', `--remote-debugging-port=${port}`, `--gitcron-e2e-run=${tag}`], {
         cwd: GITCRON_DIR,
-        env: { ...process.env, ...fixtureEnv, GITCRON_PROFILE_DIR: profile },
+        // Sin ELECTRON_RUN_AS_NODE: si quien corre las pruebas la tiene (Cartografía, al capturar
+      // vistas desde GitCron), Electron arrancaría como consola y sin ventana.
+      env: { ...withoutRunAsNode(process.env), ...fixtureEnv, GITCRON_PROFILE_DIR: profile },
         stdio: 'ignore',
         detached: process.platform !== 'win32',
         windowsHide: false,

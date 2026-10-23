@@ -1,0 +1,79 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { ScreenMap } from '@/types/screen-map';
+
+interface ScreenMapResult {
+  /** De qué pedido es la respuesta: repo y vuelta de actualización. */
+  key: string;
+  map: ScreenMap | null;
+  error: string | null;
+}
+
+/**
+ * Lee el mapa de pantallas del repo (carto-screens:get). «Cargando» se deduce de que la
+ * última respuesta todavía no es la del pedido actual: así el efecto no cambia el estado
+ * de golpe al arrancar (regla react-hooks/set-state-in-effect).
+ */
+export function useScreenMap(
+  repoPath: string | null,
+  refreshKey: number,
+): {
+  map: ScreenMap | null;
+  loading: boolean;
+  error: string | null;
+  replace: (map: ScreenMap) => void;
+} {
+  const requestKey = repoPath ? `${repoPath}#${refreshKey}` : '';
+  const [result, setResult] = useState<ScreenMapResult | null>(null);
+
+  const replace = useCallback(
+    (newMap: ScreenMap) => {
+      if (!repoPath) return;
+      setResult({ key: `${repoPath}#${refreshKey}`, map: newMap, error: null });
+    },
+    [repoPath, refreshKey],
+  );
+
+  useEffect(() => {
+    if (!repoPath) return;
+    let active = true;
+    const key = `${repoPath}#${refreshKey}`;
+    const api = typeof window !== 'undefined' ? window.api : undefined;
+    if (!api?.cartoScreens?.get) {
+      void Promise.resolve().then(() => {
+        if (active) setResult({ key, map: null, error: 'La lectura de pantallas no está disponible.' });
+      });
+      return () => {
+        active = false;
+      };
+    }
+
+    api.cartoScreens
+      .get(repoPath)
+      .then((res) => {
+        if (!active) return;
+        if (res.success && res.data) setResult({ key, map: res.data, error: null });
+        else setResult({ key, map: null, error: res.error ?? 'No se pudo cargar el mapa de pantallas.' });
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setResult({ key, map: null, error: err instanceof Error ? err.message : String(err) });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [repoPath, refreshKey]);
+
+  if (!repoPath) return { map: null, loading: false, error: null, replace };
+  const current = result?.key === requestKey ? result : null;
+  // Mientras se relee (el índice se actualiza con cada archivo que cambia), se sigue mostrando el
+  // mapa anterior del mismo repo: si se vaciara, se perdería la pantalla elegida y el chat se
+  // quedaría sin tema (lo vio el orquestador en carto-04).
+  const previous = !current && result?.key.startsWith(`${repoPath}#`) ? result : null;
+  return {
+    map: current?.map ?? previous?.map ?? null,
+    loading: current === null,
+    error: current?.error ?? null,
+    replace,
+  };
+}

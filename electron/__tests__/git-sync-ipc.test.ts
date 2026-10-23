@@ -59,7 +59,7 @@ describe('git remote IPC handlers', { timeout: 15_000 }, () => {
     expect(r0.data).toEqual([]);
 
     // Add a remote
-    const r1 = await addRemote(null, tempDir, 'origin', 'https://github.com/alejandropd-1/gitcron.git') as { success: boolean };
+    const r1 = await addRemote(null, tempDir, 'origin', 'https://github.com/Al3design/gitcron.git') as { success: boolean };
     expect(r1.success).toBe(true);
 
     // List remotes
@@ -68,8 +68,8 @@ describe('git remote IPC handlers', { timeout: 15_000 }, () => {
     expect(r2.data).toEqual([
       {
         name: 'origin',
-        fetchUrl: 'https://github.com/alejandropd-1/gitcron.git',
-        pushUrl: 'https://github.com/alejandropd-1/gitcron.git',
+        fetchUrl: 'https://github.com/Al3design/gitcron.git',
+        pushUrl: 'https://github.com/Al3design/gitcron.git',
       }
     ]);
 
@@ -81,8 +81,8 @@ describe('git remote IPC handlers', { timeout: 15_000 }, () => {
     expect(r4.data).toEqual([
       {
         name: 'upstream',
-        fetchUrl: 'https://github.com/alejandropd-1/gitcron.git',
-        pushUrl: 'https://github.com/alejandropd-1/gitcron.git',
+        fetchUrl: 'https://github.com/Al3design/gitcron.git',
+        pushUrl: 'https://github.com/Al3design/gitcron.git',
       }
     ]);
 

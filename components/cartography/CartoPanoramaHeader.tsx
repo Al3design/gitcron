@@ -5,8 +5,10 @@ import { AlertTriangle, Blocks, Loader2, Sparkles } from 'lucide-react';
 import { useT } from '@/hooks/use-translation';
 import { buildCartoPanorama } from '@/lib/carto-panorama';
 import type { CartoGraph, CartoGraphStatus } from '@/lib/carto-types';
+import { cn } from '@/lib/utils';
 import { AiUseLine } from '../ai/AiUseLine';
 import { AiSentDetails } from '../ai/AiSentDetails';
+import styles from './CartoPanoramaHeader.module.css';
 
 type CartoPanoramaHeaderProps = {
   repoPath: string | null;
@@ -15,11 +17,15 @@ type CartoPanoramaHeaderProps = {
   aiEnabled?: boolean;
 };
 
+type GraphFetchState = {
+  key: string;
+  graph: CartoGraph | null;
+  error: string | null;
+  loading: boolean;
+};
+
 export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: propAiEnabled }: CartoPanoramaHeaderProps) {
   const t = useT();
-  const [graph, setGraph] = useState<CartoGraph | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [internalAiEnabled, setInternalAiEnabled] = useState(false);
 
   useEffect(() => {
@@ -36,50 +42,62 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: p
   }, [propAiEnabled]);
 
   const aiEnabled = propAiEnabled ?? internalAiEnabled;
+  const fetchKey = `${repoPath ?? ''}:${refreshKey}:${status?.state ?? ''}`;
+  const shouldFetch = Boolean(repoPath && status?.state === 'ready');
+
+  const [state, setState] = useState<GraphFetchState>({
+    key: '',
+    graph: null,
+    error: null,
+    loading: false,
+  });
 
   useEffect(() => {
-    if (!repoPath || status?.state !== 'ready') {
-      setGraph(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
+    if (!repoPath || status?.state !== 'ready') return;
 
     let active = true;
-    setLoading(true);
-    setError(null);
     void window.api.cartoGraph
       .snapshot(repoPath)
       .then((res) => {
         if (!active) return;
-        if (res.success && res.data) setGraph(res.data);
-        else setError(res.error ?? t('cartography.graph.error'));
+        if (res.success && res.data) {
+          setState({ key: fetchKey, graph: res.data, error: null, loading: false });
+        } else {
+          setState({ key: fetchKey, graph: null, error: res.error ?? t('cartography.graph.error'), loading: false });
+        }
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : t('cartography.graph.error'));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (!active) return;
+        setState({
+          key: fetchKey,
+          graph: null,
+          error: err instanceof Error ? err.message : t('cartography.graph.error'),
+          loading: false,
+        });
       });
 
     return () => {
       active = false;
     };
-  }, [repoPath, refreshKey, status?.state, t]);
+  }, [fetchKey, repoPath, status?.state, t]);
+
+  const graph = shouldFetch && state.key === fetchKey ? state.graph : null;
+  const loading = shouldFetch ? (state.key === fetchKey ? state.loading : true) : false;
+  const error = shouldFetch && state.key === fetchKey ? state.error : null;
 
   const panorama = useMemo(() => (graph ? buildCartoPanorama(graph) : null), [graph]);
 
   if (!repoPath) return null;
 
   return (
-    <details className="shrink-0 border-b border-carto-grid bg-carto-canvas/95">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors hover:bg-carto-node/[0.035] [&::-webkit-details-marker]:hidden">
-        <span className={`flex min-w-0 items-center gap-2 text-[length:var(--font-size-2xs)] font-bold uppercase tracking-widest ${aiEnabled ? 'text-[var(--color-ai)]' : 'text-carto-accent'}`}>
+    <details className={styles.container}>
+      <summary className={styles.summary}>
+        <span className={cn(styles.summaryLabel, aiEnabled && styles.summaryLabelAi)}>
           <Sparkles size={14} />
           {t('cartography.panorama.summary')}
         </span>
         {panorama ? (
-          <span className="truncate font-mono text-[length:var(--font-size-xs)] text-carto-text-muted/75">
+          <span className={styles.summaryStats}>
             {t('cartography.panorama.structure', { hash: panorama.structureHash })}
             {' · '}
             {t('cartography.panorama.deterministicStats', {
@@ -89,9 +107,9 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: p
           </span>
         ) : null}
       </summary>
-      <section className={`mx-4 mb-3 p-4 ${aiEnabled ? 'ai-surface ai-panel' : 'rounded-lg border border-carto-accent/25 bg-carto-node/[0.035]'}`}>
+      <section className={cn(styles.section, aiEnabled ? 'ai-surface ai-panel' : styles.sectionDefault)}>
         {aiEnabled && (
-          <div className="mb-3 flex flex-col gap-1.5 border-b border-carto-grid pb-2">
+          <div className={styles.aiHeader}>
             <AiUseLine use="gitcron-cartography" repoPath={repoPath} />
             <AiSentDetails use="gitcron-cartography" busy={loading} />
           </div>
@@ -99,10 +117,10 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: p
         {status?.state === 'engine-unavailable' ? (
           <HeaderHint icon={<AlertTriangle size={16} />} text={t('cartography.graph.engineUnavailable')} />
         ) : status?.state === 'indexing' || status?.state === 'idle' ? (
-          <HeaderHint icon={<Loader2 size={16} className="animate-spin" />} text={t('cartography.graph.indexing')} />
+          <HeaderHint icon={<Loader2 size={16} className={styles.spinner} />} text={t('cartography.graph.indexing')} />
         ) : loading ? (
           <HeaderHint
-            icon={<Loader2 size={16} className={`animate-spin ${aiEnabled ? 'text-[var(--color-ai)]' : ''}`} />}
+            icon={<Loader2 size={16} className={cn(styles.spinner, aiEnabled && styles.hintIconAi)} />}
             text={
               aiEnabled ? (
                 <span>
@@ -117,12 +135,12 @@ export function CartoPanoramaHeader({ repoPath, status, refreshKey, aiEnabled: p
           <HeaderHint icon={<AlertTriangle size={16} />} text={error} tone="error" />
         ) : panorama ? (
           <>
-            <p className="max-w-4xl text-sm leading-relaxed text-carto-text-muted">
+            <p className={styles.mapReadyText}>
               {t('cartography.panorama.mapReady')}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[length:var(--font-size-xs)] text-carto-text-muted/75">
+            <div className={styles.statsRow}>
               <span>{t('cartography.panorama.structure', { hash: panorama.structureHash })}</span>
-              <span className="flex items-center gap-1 rounded border border-carto-grid px-1.5 py-0.5">
+              <span className={styles.statsBadge}>
                 <Blocks size={10} />
                 {t('cartography.panorama.deterministicStats', {
                   groups: panorama.groups.length,
@@ -149,8 +167,8 @@ function HeaderHint({
   tone?: 'muted' | 'error';
 }) {
   return (
-    <div className={`flex items-center gap-2 text-xs ${tone === 'error' ? 'text-error' : 'text-carto-text-muted'}`}>
-      <span className={tone === 'error' ? 'text-error' : 'text-carto-accent'}>{icon}</span>
+    <div className={cn(styles.hint, tone === 'error' && styles.hintError)}>
+      <span className={cn(styles.hintIcon, tone === 'error' && styles.hintIconError)}>{icon}</span>
       <span>{text}</span>
     </div>
   );

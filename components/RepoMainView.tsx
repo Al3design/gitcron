@@ -187,7 +187,7 @@ export function RepoMainView({
     && typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).has('pipelineFixture');
 
-  if (cartographyActive) return <CartographyView repoPath={cartographyRepoPath} onExit={onExitCartography} />;
+  if (cartographyActive) return <CartographyView key={cartographyRepoPath ?? 'none'} repoPath={cartographyRepoPath} onExit={onExitCartography} />;
   if (interactiveRebase.interactiveRebaseFrom) {
     return (
       <InteractiveRebasePanel

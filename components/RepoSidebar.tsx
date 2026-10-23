@@ -529,21 +529,39 @@ export function RepoSidebar({
     { key: 'Pipeline', label: t('tab.pipeline'), icon: <Zap size={14} />, shortcut: 'Ctrl + Shift + O' },
     { key: 'AiHistory', label: t('tab.aiHistory'), icon: <Sparkles size={14} /> },
   ];
-  const currentView = viewOptions.find((v) => v.key === activeTab) ?? viewOptions[0];
+  // Cartografía va en el mismo menú que las demás vistas (Alejandro, 2026-10-20; antes era un
+  // botón abajo). Solo aparece con Cartografía activada en Configuración y un repo abierto.
+  const cartographyOption = { key: 'Cartography', label: t('cartography.title'), icon: <Map size={14} /> };
+  const currentView = cartographyActive
+    ? cartographyOption
+    : viewOptions.find((v) => v.key === activeTab) ?? viewOptions[0];
 
-  const viewMenuItems: DropdownMenuItem[] = viewOptions.map((v) => ({
-    id: v.key,
-    label: v.label,
-    icon: v.icon,
-    shortcut: v.shortcut,
-    active: v.key === activeTab,
-    onClick: () => {
-      if (activeView !== 'repository') {
-        onViewChange('repository');
-      }
-      onTabChange(v.key);
-    },
-  }));
+  const viewMenuItems: DropdownMenuItem[] = [
+    ...viewOptions.map((v) => ({
+      id: v.key,
+      label: v.label,
+      icon: v.icon,
+      shortcut: v.shortcut,
+      active: !cartographyActive && v.key === activeTab,
+      onClick: () => {
+        if (activeView !== 'repository') {
+          onViewChange('repository');
+        }
+        onTabChange(v.key);
+      },
+    })),
+    ...(enableCartography && repoPath
+      ? [{
+          id: cartographyOption.key,
+          label: cartographyOption.label,
+          icon: cartographyOption.icon,
+          active: cartographyActive,
+          onClick: () => {
+            if (!cartographyActive) onToggleCartography();
+          },
+        }]
+      : []),
+  ];
 
   // Filtrado de ramas por texto
   const filterLower = (filterText || '').toLowerCase().trim();
@@ -1202,21 +1220,6 @@ export function RepoSidebar({
           >
             <HelpCircle size={17} />
           </button>
-          {enableCartography && repoPath && (
-            <button
-              type="button"
-              onClick={onToggleCartography}
-              title={cartographyActive ? t('cartography.backToGraph') : t('cartography.open')}
-              className={cn(
-                'h-11 w-11 min-h-[44px] min-w-[44px] rounded-lg flex items-center justify-center transition-colors',
-                cartographyActive
-                  ? 'bg-secondary/10 text-secondary'
-                  : 'bg-text-primary/[0.035] text-text-secondary hover:bg-text-primary/10 hover:text-secondary'
-              )}
-            >
-              <Map size={17} />
-            </button>
-          )}
           <UpdateControls
             updateStatus={updateStatus}
             updateInfo={updateInfo}

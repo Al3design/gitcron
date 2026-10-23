@@ -202,6 +202,92 @@ describe('resolveContextReference', () => {
       selection: { kind: 'carto-node', nodeId: 'n-1', takenAtHead },
     });
   });
+
+  it('carto-screen válido pasa', async () => {
+    const { deps } = fakeDeps();
+    const selection = {
+      kind: 'carto-screen',
+      screenId: 'route:/settings',
+      screenName: 'Ajustes',
+      takenAtHead: HEAD.sha,
+    };
+
+    const result = await resolveContextReference(ROOT, selection, deps);
+
+    expect(result).toEqual({
+      status: 'ok',
+      checkoutPath: ROOT,
+      head: HEAD,
+      selection,
+    });
+  });
+
+  it('carto-screen con otro HEAD queda viejo', async () => {
+    const { deps } = fakeDeps();
+    const result = await resolveContextReference(
+      ROOT,
+      {
+        kind: 'carto-screen',
+        screenId: 'route:/settings',
+        screenName: 'Ajustes',
+        takenAtHead: 'b'.repeat(40),
+      },
+      deps,
+    );
+
+    expect(result).toEqual({
+      status: 'stale',
+      reason: 'head-moved',
+      checkoutPath: ROOT,
+      head: HEAD,
+      selection: {
+        kind: 'carto-screen',
+        screenId: 'route:/settings',
+        screenName: 'Ajustes',
+        takenAtHead: 'b'.repeat(40),
+      },
+    });
+  });
+
+  it('carto-screen con textos fuera de tope se rechaza', async () => {
+    const { deps } = fakeDeps();
+
+    const tooLongId = await resolveContextReference(
+      ROOT,
+      {
+        kind: 'carto-screen',
+        screenId: 'x'.repeat(201),
+        screenName: 'Ajustes',
+        takenAtHead: HEAD.sha,
+      },
+      deps,
+    );
+    expect(tooLongId).toEqual({ status: 'rejected', reason: 'invalid-selection' });
+
+    const tooLongName = await resolveContextReference(
+      ROOT,
+      {
+        kind: 'carto-screen',
+        screenId: 'route:/settings',
+        screenName: 'x'.repeat(201),
+        takenAtHead: HEAD.sha,
+      },
+      deps,
+    );
+    expect(tooLongName).toEqual({ status: 'rejected', reason: 'invalid-selection' });
+
+    const emptyName = await resolveContextReference(
+      ROOT,
+      {
+        kind: 'carto-screen',
+        screenId: 'route:/settings',
+        screenName: '',
+        takenAtHead: HEAD.sha,
+      },
+      deps,
+    );
+    expect(emptyName).toEqual({ status: 'rejected', reason: 'invalid-selection' });
+  });
 });
 
 describe('parseContextSelection', () => {
